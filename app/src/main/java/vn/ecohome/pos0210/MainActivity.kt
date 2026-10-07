@@ -190,6 +190,7 @@ fun Tables(vm: PosViewModel) {
         }
     }
     val current by vm.currentEmployee.collectAsState()
+    var assignmentTarget by remember { mutableStateOf("KITCHEN") }
     val canReport = current?.role == "ADMIN" || current?.canViewReport == true
     val waitingOrdered = waiting.sortedWith(compareBy<OrderBatchEntity> { it.serviceNo }.thenBy { it.createdAt })
     val waitingRankById = waitingOrdered.mapIndexed { index, batch -> batch.id to index }.toMap()
@@ -625,7 +626,8 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
     val qrInfo = "${setting("qr_prefix").ifBlank { "0210" }} $shortTable ${validPaymentSession?.paymentCode.orEmpty()}".trim()
     val checkoutKey="${s.id}:${preview.total}:$qrInfo"
     val billPrinted=printedCheckoutKey==checkoutKey
-    val checkoutPrintTestMode = setting("checkout_print_test_mode")=="true" && e?.role=="ADMIN"
+    val checkoutTestEnabled by vm.checkoutPrintTestMode.collectAsState()
+    val checkoutPrintTestMode = checkoutTestEnabled && e?.role=="ADMIN"
     val qrConfigured = setting("bank_name").isNotBlank() && setting("bank_account").isNotBlank()
     val ambiguousEvent=bankEvents.firstOrNull{it.matchStatus=="AMBIGUOUS"&&it.amount==preview.total&&it.receivedAt>=s.openedAt}
 
@@ -754,7 +756,7 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                         else vm.printCheckoutBill(preview,qrInfo,matchedCustomer?.name?:customerName)
                     },
                     modifier=Modifier.fillMaxWidth(),
-                    enabled=preview.total>0&&pendingDelivery.isEmpty()&&validPaymentSession!=null&&(checkoutPrintTestMode||qrConfigured)
+                    enabled=preview.total>0&&pendingDelivery.isEmpty()&&validPaymentSession!=null
                 ){
                     Text(
                         if(pendingDelivery.isNotEmpty())"CHƯA GIAO ĐỦ · CHƯA THỂ IN BILL"
@@ -1142,12 +1144,6 @@ fun Manage(vm: PosViewModel) {
     val employee by vm.currentEmployee.collectAsState()
     val context = LocalContext.current
     val packageInfo = remember { context.packageManager.getPackageInfo(context.packageName, 0) }
-    val displayVersionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-        packageInfo.longVersionCode
-    } else {
-        @Suppress("DEPRECATION")
-        packageInfo.versionCode.toLong()
-    }
     Column {
         Header("Quản lý") { vm.screen.value = "TABLES" }
         Column(
@@ -1185,7 +1181,7 @@ fun Manage(vm: PosViewModel) {
                 Rowx("Nhật ký hệ thống", "Audit thao tác · người thực hiện · thời điểm · dữ liệu thay đổi") { vm.screen.value = "SETTINGS" }
             }
             HorizontalDivider(Modifier.padding(vertical = 12.dp))
-            Text("POS0210 v${packageInfo.versionName} · versionCode $displayVersionCode", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text("POS0210 v${packageInfo.versionName} · versionCode ${packageInfo.longVersionCode}", fontSize = 12.sp, fontWeight = FontWeight.Bold)
             Text("Tương thích Android 8.0 (API 26) trở lên · Thiết bị hiện tại: Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})", fontSize = 11.sp)
             if (Build.VERSION.SDK_INT < 26) Text("Thiết bị không được hỗ trợ. Cần Android 8.0 trở lên.", color = Color.Red, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(30.dp))
@@ -2678,16 +2674,21 @@ fun Printer(vm: PosViewModel) {
     val mode = settings.firstOrNull { it.key == "printer_mode" }?.value ?: "TEST"
     val selectedMac = settings.firstOrNull { it.key == "printer_mac" }?.value ?: ""
     val selectedName = settings.firstOrNull { it.key == "printer_name" }?.value ?: ""
+    val kitchenMac = settings.firstOrNull { it.key == "kitchen_printer_mac" }?.value?.ifBlank { selectedMac } ?: selectedMac
+    val kitchenName = settings.firstOrNull { it.key == "kitchen_printer_name" }?.value?.ifBlank { selectedName } ?: selectedName
+    val receiptMac = settings.firstOrNull { it.key == "receipt_printer_mac" }?.value?.ifBlank { selectedMac } ?: selectedMac
+    val receiptName = settings.firstOrNull { it.key == "receipt_printer_name" }?.value?.ifBlank { selectedName } ?: selectedName
     val paperMm = settings.firstOrNull { it.key == "printer_paper_mm" }?.value ?: "58"
-    val checkoutTestMode = settings.firstOrNull { it.key == "checkout_print_test_mode" }?.value == "true"
+    val checkoutTestMode by vm.checkoutPrintTestMode.collectAsState()
     val current by vm.currentEmployee.collectAsState()
+    var assignmentTarget by remember { mutableStateOf("KITCHEN") }
     val hasPermission = remember(permissionTick) { BluetoothPrinter.hasPermission(context) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissionTick++ }
 
-    val paired = remember(permissionTick, selectedMac, mode) {
+    val paired = remember(permissionTick, kitchenMac, receiptMac, mode) {
         if (BluetoothPrinter.hasPermission(context)) BluetoothPrinter.pairedDevices(context) else emptyList()
     }
 
@@ -2724,7 +2725,7 @@ fun Printer(vm: PosViewModel) {
                                     Text("QA · BILL TEST KHÔNG IN THẬT",fontWeight=FontWeight.Black)
                                     Text("Chỉ dùng khi kiểm thử luồng thanh toán. Khi bật, Admin có thể xác nhận bước 'đã in bill' mà không cần máy in vật lý.",fontSize=11.sp)
                                 }
-                                Switch(checked=checkoutTestMode,onCheckedChange={vm.saveSetting("checkout_print_test_mode",it.toString())})
+                                Switch(checked=checkoutTestMode,onCheckedChange={vm.setCheckoutPrintTestMode(it)})
                             }
                             if(checkoutTestMode)Text("⚠ ĐANG BẬT CHẾ ĐỘ TEST · Tắt trước khi vận hành thật.",fontSize=12.sp,fontWeight=FontWeight.Black,color=Color(0xFF9A4B3D))
                         }
@@ -2734,9 +2735,15 @@ fun Printer(vm: PosViewModel) {
                 if (mode == "BLUETOOTH") {
                     Card(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                         Column(Modifier.padding(14.dp)) {
-                            Text("Máy đang chọn", fontWeight = FontWeight.Bold)
-                            Text(if (selectedMac.isBlank()) "CHƯA CHỌN" else "${selectedName.ifBlank { "Bluetooth printer" }} · $selectedMac")
+                            Text("PHÂN CÔNG MÁY IN", fontWeight = FontWeight.Bold)
+                            Text("Phiếu bếp: ${if(kitchenMac.isBlank()) "CHƯA CHỌN" else "${kitchenName.ifBlank { "Bluetooth printer" }} · $kitchenMac"}",fontSize=12.sp)
+                            Text("Bill thanh toán: ${if(receiptMac.isBlank()) "CHƯA CHỌN" else "${receiptName.ifBlank { "Bluetooth printer" }} · $receiptMac"}",fontSize=12.sp)
                             Spacer(Modifier.height(8.dp))
+                            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                                FilterChip(selected=assignmentTarget=="KITCHEN",onClick={assignmentTarget="KITCHEN"},label={Text("GÁN PHIẾU BẾP")})
+                                FilterChip(selected=assignmentTarget=="RECEIPT",onClick={assignmentTarget="RECEIPT"},label={Text("GÁN BILL")})
+                            }
+                            Spacer(Modifier.height(4.dp))
 
                             if (!hasPermission) {
                                 Button(
@@ -2760,17 +2767,21 @@ fun Printer(vm: PosViewModel) {
                                         Row(
                                             Modifier.fillMaxWidth()
                                                 .clickable {
-                                                    vm.saveSetting("printer_mac",d.address)
-                                                    vm.saveSetting("printer_name",d.name)
+                                                    val macKey=if(assignmentTarget=="KITCHEN") "kitchen_printer_mac" else "receipt_printer_mac"
+                                                    val nameKey=if(assignmentTarget=="KITCHEN") "kitchen_printer_name" else "receipt_printer_name"
+                                                    vm.saveSetting(macKey,d.address)
+                                                    vm.saveSetting(nameKey,d.name)
                                                 }
                                                 .padding(vertical = 8.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             RadioButton(
-                                                selected = selectedMac == d.address,
+                                                selected = (if(assignmentTarget=="KITCHEN") kitchenMac else receiptMac) == d.address,
                                                 onClick = {
-                                                    vm.saveSetting("printer_mac",d.address)
-                                                    vm.saveSetting("printer_name",d.name)
+                                                    val macKey=if(assignmentTarget=="KITCHEN") "kitchen_printer_mac" else "receipt_printer_mac"
+                                                    val nameKey=if(assignmentTarget=="KITCHEN") "kitchen_printer_name" else "receipt_printer_name"
+                                                    vm.saveSetting(macKey,d.address)
+                                                    vm.saveSetting(nameKey,d.name)
                                                 }
                                             )
                                             Column {
@@ -2789,11 +2800,10 @@ fun Printer(vm: PosViewModel) {
                                 modifier = Modifier.fillMaxWidth()
                             ) { Text("MỞ CÀI ĐẶT BLUETOOTH") }
 
-                            Button(
-                                onClick = { vm.testBluetoothPrint() },
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = hasPermission && selectedMac.isNotBlank()
-                            ) { Text("TEST IN") }
+                            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                                Button(onClick={vm.testKitchenBluetoothPrint()},modifier=Modifier.weight(1f),enabled=hasPermission&&kitchenMac.isNotBlank()){Text("TEST BẾP")}
+                                Button(onClick={vm.testBluetoothPrint()},modifier=Modifier.weight(1f),enabled=hasPermission&&receiptMac.isNotBlank()){Text("TEST BILL")}
+                            }
                         }
                     }
                 }

@@ -27,7 +27,6 @@ object BluetoothPrinter {
         Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
             ContextCompat.checkSelfPermission(context,Manifest.permission.BLUETOOTH_CONNECT)==PackageManager.PERMISSION_GRANTED
 
-    // Guarded immediately below and SecurityException remains a runtime fallback.
     @SuppressLint("MissingPermission")
     fun pairedDevices(context:Context):List<PrinterDevice>{
         if(!hasPermission(context)) return emptyList()
@@ -42,13 +41,10 @@ object BluetoothPrinter {
     fun printBitmap(context:Context,address:String,bitmap:Bitmap,profile:PrinterProfile=PrinterProfile.MM58,jobType:PrintJobType=PrintJobType.TEST):Result<Unit> =
         synchronized(PRINT_LOCK){printBitmapLocked(context,address,bitmap,profile,jobType)}
 
-    // Permission is checked before this method and SecurityException is still
-    // translated below in case Android revokes it between check and use.
     @SuppressLint("MissingPermission")
-    private fun printBitmapLocked(context:Context,address:String,bitmap:Bitmap,profile:PrinterProfile,jobType:PrintJobType):Result<Unit> {
-        if(!hasPermission(context))return permissionRevokedFailure()
-        return runCatching {
+    private fun printBitmapLocked(context:Context,address:String,bitmap:Bitmap,profile:PrinterProfile,jobType:PrintJobType):Result<Unit> = runCatching {
         require(address.isNotBlank()){"Chưa chọn máy in Bluetooth"}
+        require(hasPermission(context)){"Chưa cấp quyền Bluetooth"}
         val adapter=(context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
             ?: error("Thiết bị không hỗ trợ Bluetooth")
         val device=adapter.getRemoteDevice(address)
@@ -75,15 +71,7 @@ object BluetoothPrinter {
             Log.e(TAG,"PRINT FAILURE printer=${device.name ?: "unknown"} mac=$address profile=${profile.label} type=$jobType stripe=${transport?.stripeIndex ?: -1} sent=${transport?.bytesSent ?: 0} totalBytes=$totalBytes",t)
             throw t
         }
-        Unit
-    }.recoverCatching { error ->
-        if(error is SecurityException)throw IllegalStateException("BLUETOOTH_PERMISSION_REVOKED",error)
-        throw error
     }
-    }
-
-    internal fun permissionRevokedFailure():Result<Unit> =
-        Result.failure(IllegalStateException("BLUETOOTH_PERMISSION_REVOKED"))
 }
 
 data class PrintTransportStats(val stripeCount:Int,val burstCount:Int,val totalBytesSent:Int)

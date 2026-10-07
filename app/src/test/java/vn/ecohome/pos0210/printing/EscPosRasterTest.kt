@@ -8,11 +8,6 @@ import java.io.ByteArrayOutputStream
 import java.io.OutputStream
 
 class EscPosRasterTest{
-    @Test fun revokedBluetoothPermissionProducesStableFailureCode(){
-        val error=BluetoothPrinter.permissionRevokedFailure().exceptionOrNull()
-        assertEquals("BLUETOOTH_PERMISSION_REVOKED",error?.message)
-    }
-
     @Test fun profilesExposeIndependentPrintableWidths(){
         assertEquals(384,PrinterProfile.MM58.printableWidthDots)
         assertEquals(576,PrinterProfile.MM80.printableWidthDots)

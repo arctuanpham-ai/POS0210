@@ -18,6 +18,8 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import vn.ecohome.pos0210.data.CloudSyncStateEntity
 import vn.ecohome.pos0210.data.PosDao
 import vn.ecohome.pos0210.data.PosDatabase
@@ -34,6 +36,8 @@ object CloudSyncPolicy{
     val safeSettingKeys=setOf("bank_name","bank_account","bank_holder","qr_prefix","printer_paper_mm","loyalty_auto_tier","member_discount_percent","vip_min_points","vip_discount_percent","vvip_min_points","vvip_discount_percent")
     fun shouldUploadSetting(key:String)=key in safeSettingKeys
 }
+
+internal object CloudOperationGuard { val mutex=Mutex() }
 
 object FirebaseCloudSync {
     private const val APP_NAME="pos0210-cloud"
@@ -60,14 +64,14 @@ object FirebaseCloudSync {
     private suspend fun <T> stage(name:String,block:suspend()->T):T =
         try{ block() }catch(e:Throwable){ throw IllegalStateException("$name: ${e.message}",e) }
 
-    suspend fun backupNow(context:Context):Result<CloudBackupInfo> = runCatching{
+    suspend fun backupNow(context:Context):Result<CloudBackupInfo> = CloudOperationGuard.mutex.withLock { runCatching{
         val c=config(context);require(c.valid){"Chưa cấu hình Firebase"}
         val app=firebaseApp(context,c)
         val uid=FirebaseAuth.getInstance(app).currentUser?.uid?:error("Chưa đăng nhập Firebase")
         FirestorePrivateBackup.upload(context,FirebaseFirestore.getInstance(app),uid,System.currentTimeMillis())
-    }
+    }}
 
-    suspend fun syncNow(context:Context):Result<Unit> = runCatching{
+    suspend fun syncNow(context:Context):Result<Unit> = CloudOperationGuard.mutex.withLock { runCatching{
         val db=PosDatabase.get(context);val dao=db.dao();val old=dao.cloudSyncStateSnapshot()?:CloudSyncStateEntity()
         dao.saveCloudSyncState(old.copy(lastAttemptAt=System.currentTimeMillis(),lastError=null))
         val c=config(context);require(c.valid){"Chưa cấu hình Firebase"};val firebaseApp=firebaseApp(context,c);val uid=FirebaseAuth.getInstance(firebaseApp).currentUser?.uid?:error("Chưa đăng nhập Firebase")
@@ -96,9 +100,9 @@ object FirebaseCloudSync {
         dao.saveCloudSyncState(old.copy(enabled=true,dirty=false,lastAttemptAt=now,lastSuccessAt=now,lastError=backupError?.let{"PRIVATE_BACKUP_ONLY: $it"},syncedUid=uid))
     }.onFailure{e->
         val dao=PosDatabase.get(context).dao();val old=dao.cloudSyncStateSnapshot()?:CloudSyncStateEntity();dao.saveCloudSyncState(old.copy(lastAttemptAt=System.currentTimeMillis(),lastError=e.message?.take(300)))
-    }
+    }}
 
-    suspend fun syncDashboardNow(context:Context):Result<Unit> = runCatching{
+    suspend fun syncDashboardNow(context:Context):Result<Unit> = CloudOperationGuard.mutex.withLock { runCatching{
         val db=PosDatabase.get(context);val dao=db.dao();val c=config(context);require(c.valid){"Chưa cấu hình Firebase"};val firebaseApp=firebaseApp(context,c);val uid=FirebaseAuth.getInstance(firebaseApp).currentUser?.uid?:error("Chưa đăng nhập Firebase")
         val fs=FirebaseFirestore.getInstance(firebaseApp);val root=fs.collection("users").document(uid).collection("stores").document("0210")
         stage("PULL_FINANCE"){pullCloudFinance(root,dao)}
@@ -112,7 +116,7 @@ object FirebaseCloudSync {
         writeMaps(fs,root.collection("sessions"),sessions.map{s->s.id to mapOf("id" to s.id,"tableId" to s.tableId,"openedAt" to s.openedAt,"openedBy" to s.openedBy,"status" to s.status,"version" to s.version)})
         writeMaps(fs,root.collection("orderBatches"),batches.map{b->b.id to mapOf("id" to b.id,"sessionId" to b.sessionId,"sequence" to b.sequence,"ordererId" to b.ordererId,"createdAt" to b.createdAt,"sentAt" to b.sentAt,"status" to b.status,"serviceNo" to b.serviceNo,"deliveredAt" to b.deliveredAt,"deliveredBy" to b.deliveredBy)})
         writeMaps(fs,root.collection("orderItems"),items.map{i->i.id to mapOf("id" to i.id,"batchId" to i.batchId,"menuItemId" to i.menuItemId,"itemName" to i.itemNameSnapshot,"unitPrice" to i.unitPriceSnapshot,"qty" to i.qty,"note" to i.note,"adjustmentOfItemId" to i.adjustmentOfItemId)})
-    }
+    }}
 
     private suspend fun pullCloudFinance(root:com.google.firebase.firestore.DocumentReference,dao:PosDao){
         val remotePurchases=root.collection("purchases").get().await().documents

@@ -36,6 +36,16 @@ object AiBusinessExport {
         val paidSessionIds=bills.map{it.sessionId}.toSet()
         val sold=items.filter{batchById[it.batchId]?.sessionId in paidSessionIds && batchById[it.batchId]?.status!="CANCELLED"}
         val revenue=bills.sumOf{it.total}; val avg=if(bills.isEmpty())0 else revenue/bills.size
+        val hourFmt=SimpleDateFormat("HH",Locale.US)
+        val weekdayFmt=SimpleDateFormat("EEE",Locale.US)
+        val salesByHour=bills.groupBy{hourFmt.format(Date(it.closedAt?:it.openedAt))}.map{(hour,rows)->
+            JSONObject().put("hour",hour).put("bills",rows.size).put("revenue",rows.sumOf{it.total})
+                .put("average_bill",if(rows.isEmpty())0 else rows.sumOf{it.total}/rows.size)
+        }.sortedBy{it.getString("hour")}
+        val salesByWeekday=bills.groupBy{weekdayFmt.format(Date(it.closedAt?:it.openedAt))}.map{(d,rows)->
+            JSONObject().put("weekday",d).put("bills",rows.size).put("revenue",rows.sumOf{it.total})
+                .put("average_bill",if(rows.isEmpty())0 else rows.sumOf{it.total}/rows.size)
+        }
         val itemSummary=sold.groupBy{it.itemNameSnapshot}.map{(name,rows)->
             JSONObject().put("name",name).put("qty",rows.sumOf{it.qty}).put("revenue",rows.sumOf{it.qty*it.unitPriceSnapshot})
                 .put("avg_unit_price",if(rows.sumOf{it.qty}==0)0 else rows.sumOf{it.qty*it.unitPriceSnapshot}/rows.sumOf{it.qty})
@@ -51,7 +61,7 @@ object AiBusinessExport {
             .put("transfer_revenue",payments.filter{it.billId in bills.map{b->b.id}.toSet()&&it.method=="TRANSFER"}.sumOf{it.amount})
             .put("purchase_total",purchases.sumOf{it.total}).put("asset_original_cost",assets.sumOf{it.totalCost})
             .put("estimated_accumulated_depreciation",depreciation).put("estimated_remaining_asset_value",remainingAssetValue)
-            .put("item_sales",JSONArray(itemSummary)).put("purchase_by_category",JSONArray(purchaseByCategory))
+            .put("item_sales",JSONArray(itemSummary)).put("sales_by_hour",JSONArray(salesByHour)).put("sales_by_weekday",JSONArray(salesByWeekday)).put("purchase_by_category",JSONArray(purchaseByCategory))
         val root=JSONObject().put("format","POS0210_AI_BUSINESS_EXPORT_V1")
             .put("instructions_for_ai","Analyze business performance, sales mix, pricing, average bill, hourly/day trends, purchasing, operating costs, assets/depreciation, cash flow, profitability and actionable strategy. Treat transaction snapshots as historical truth. Amounts are VND.")
             .put("summary_all_time",summary)

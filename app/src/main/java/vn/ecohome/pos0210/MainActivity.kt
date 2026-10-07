@@ -1260,12 +1260,12 @@ fun CloudSyncSettings(vm:PosViewModel){
             MetricCard("Doanh thu tháng",money(dashboard.monthRevenue));MetricCard("Lợi nhuận vận hành",dashboard.operatingProfit?.let(::money)?:"Chưa có giá vốn");MetricCard("Tiền cuối kỳ tạm tính",money(dashboard.closingCash));MetricCard("Tổng vốn đầu tư",money(dashboard.initialInvestment));MetricCard("Đã xác định thu hồi",money(dashboard.recoveredCapital));MetricCard("Tiến độ hoàn vốn","${dashboard.paybackBasisPoints/100.0}%")
             Text("Dashboard chỉ đọc số liệu Firestore; không có quyền sửa order, đóng bill hoặc xác nhận thanh toán.",fontSize=11.sp,fontWeight=FontWeight.Bold)
             if(dashboard.online)Text("● Đang nhận dữ liệu Firestore realtime",color=Color(0xFF41633A),fontWeight=FontWeight.Bold) else Text(dashboard.error?:"Chưa kết nối realtime",color=Color(0xFF9A4B3D))
-            Text("Backup riêng tư lưu dữ liệu kinh doanh, cấu hình và nhân viên/PIN để khôi phục máy mới. Không lưu ảnh món/ảnh hóa đơn, URI thiết bị/lưu trữ, log ngân hàng hay lịch sử in.",fontSize=11.sp)
+            Text("Backup DB riêng tư lưu dữ liệu kinh doanh, cấu hình và nhân viên/PIN. Ảnh món/combo được đồng bộ và khôi phục riêng qua Cloud Storage. URI thiết bị/máy in, log ngân hàng và lịch sử in không được sao chép sang máy mới.",fontSize=11.sp)
         }
         if(confirmRestore)AlertDialog(
             onDismissRequest={confirmRestore=false},
             title={Text("Khôi phục cloud backup?")},
-            text={Text("Dữ liệu POS hiện tại sẽ được lưu một bản an toàn trên máy rồi thay bằng bản cloud mới nhất. Ảnh/media không được khôi phục. Ứng dụng sẽ mở lại sau khi hoàn tất.")},
+            text={Text("Dữ liệu POS hiện tại sẽ được lưu một bản an toàn trên máy rồi thay bằng bản cloud mới nhất. Sau khi DB phục hồi, ảnh món/combo sẽ được khôi phục riêng từ Cloud Storage nếu có. Cấu hình máy in/thiết bị vẫn giữ riêng theo từng máy.")},
             confirmButton={Button({confirmRestore=false;vm.restoreFirebaseBackup()}){Text("KHÔI PHỤC")}},
             dismissButton={OutlinedButton({confirmRestore=false}){Text("HỦY")}}
         )

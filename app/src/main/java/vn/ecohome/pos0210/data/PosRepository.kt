@@ -247,6 +247,16 @@ class PosRepository(private val db:PosDatabase){
         changed
     }
 
+    suspend fun clearTestData():Int = db.withTransaction {
+        dao.deleteTestBillAdjustments()
+        dao.deleteTestPayments()
+        val bills=dao.deleteTestBills()
+        dao.deleteTestOrderItems()
+        dao.deleteTestBatches()
+        dao.deleteTestSessions()
+        bills
+    }
+
     suspend fun resetPreOpeningSales(actorId:String,autoTier:Boolean,vipMinPoints:Int,vvipMinPoints:Int):Int {
         val targets=dao.allPaidBillsSnapshot()
         if(targets.isEmpty()) return 0

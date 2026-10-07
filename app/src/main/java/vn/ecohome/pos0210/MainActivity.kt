@@ -1974,6 +1974,7 @@ fun ComboEditDialog(
 fun PricingManager(vm: PosViewModel) {
     val rules by vm.pricingRules.collectAsState()
     var showAdd by remember { mutableStateOf(false) }
+    var deleteTarget by remember { mutableStateOf<PricingRuleEntity?>(null) }
     Column {
         Header("Ưu đãi & điều chỉnh giá") { vm.screen.value = "MANAGE" }
         Button(onClick = { showAdd = true }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
@@ -1990,11 +1991,23 @@ fun PricingManager(vm: PosViewModel) {
                             val mode = if (rule.autoApply) "Tự động" else "Theo mã"
                             Text(mode, fontSize = 11.sp)
                         }
-                        Switch(checked = rule.active, onCheckedChange = { vm.togglePricingRule(rule) })
+                        Column(horizontalAlignment = Alignment.End) {
+                            Switch(checked = rule.active, onCheckedChange = { vm.togglePricingRule(rule) })
+                            TextButton(onClick = { deleteTarget = rule }) { Text("XÓA") }
+                        }
                     }
                 }
             }
         }
+    }
+    deleteTarget?.let { rule ->
+        AlertDialog(
+            onDismissRequest = { deleteTarget = null },
+            title = { Text("Xóa chương trình giá?") },
+            text = { Text("Chương trình sẽ ngừng áp dụng cho bill mới. Bill lịch sử đã dùng chương trình này vẫn được giữ nguyên.") },
+            confirmButton = { Button(onClick = { vm.deletePricingRule(rule); deleteTarget = null }) { Text("XÓA") } },
+            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("HỦY") } }
+        )
     }
     if (showAdd) {
         PricingRuleDialog(onDismiss = { showAdd = false }) { name, code, kind, percent, startAt, endAt, startMin, endMin, autoApply ->

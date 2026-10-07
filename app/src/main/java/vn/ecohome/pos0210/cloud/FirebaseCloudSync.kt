@@ -80,14 +80,29 @@ object FirebaseCloudSync {
         // bundled defaults or an empty local database before remote state is inspected.
         // Full business-data bootstrap is handled by the restore/pull path; until that
         // path marks READY we fail closed and leave local operation untouched.
-        if(old.bootstrapState!="READY"){
-            val remoteExists=stage("BOOTSTRAP_CHECK"){root.get().await().exists()}
-            if(remoteExists){
-                dao.updateBootstrapState("NEEDS_PULL",null,System.currentTimeMillis())
-                error("BOOTSTRAP_PULL_REQUIRED")
+        when(old.bootstrapState){
+            "NEEDS_PULL" -> {
+                val remoteExists=stage("BOOTSTRAP_CHECK"){root.get().await().exists()}
+                if(remoteExists){
+                    // Restore the latest verified A/B Room snapshot before any local snapshot
+                    // is allowed to reach Firestore. restoreLatest closes/reopens Room itself.
+                    stage("BOOTSTRAP_RESTORE"){FirestorePrivateBackup.restoreLatest(context)}
+                    val restoredDao=PosDatabase.get(context).dao()
+                    val bootstrapNow=System.currentTimeMillis()
+                    restoredDao.updateBootstrapState("READY",bootstrapNow,bootstrapNow)
+                    return@runCatching
+                }
+                val bootstrapNow=System.currentTimeMillis()
+                dao.updateBootstrapState("READY",bootstrapNow,bootstrapNow)
             }
-            val bootstrapNow=System.currentTimeMillis()
-            dao.updateBootstrapState("READY",bootstrapNow,bootstrapNow)
+            "LEGACY_LOCAL" -> {
+                // Upgrade from candidate31: local operational data is authoritative and must
+                // never be overwritten automatically. Mark reconciled and continue normal sync.
+                val bootstrapNow=System.currentTimeMillis()
+                dao.updateBootstrapState("READY",bootstrapNow,bootstrapNow)
+            }
+            "READY" -> Unit
+            else -> error("BOOTSTRAP_STATE_INVALID: undefined")
         }
         stage("PULL_FINANCE"){pullCloudFinance(root,dao)}
         stage("WRITE_FINANCE"){writeFinanceMirror(fs,root,dao)}

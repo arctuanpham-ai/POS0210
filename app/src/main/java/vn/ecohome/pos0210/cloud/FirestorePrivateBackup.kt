@@ -335,7 +335,7 @@ object FirestorePrivateBackup {
                 if(cursor.moveToFirst())cursor.getString(0) else ""
             }
             require(integrity.equals("ok",ignoreCase=true)){"DB sau restore integrity_check lỗi: $integrity"}
-            require(live.version==19){"DB sau restore sai schema: v${live.version}"}
+            require(live.version==20){"DB sau restore sai schema: v${live.version}"}
         }catch(e:Throwable){
             PosDatabase.closeForRestore()
             File(target.path+"-wal").delete()

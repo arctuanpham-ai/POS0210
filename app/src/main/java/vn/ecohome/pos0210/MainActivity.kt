@@ -113,6 +113,7 @@ fun App(vm: PosViewModel = viewModel()) {
         "LOYALTY_CONFIG" -> LoyaltyConfig(vm)
         "FINANCE_PEOPLE" -> FinancePeopleManager(vm)
         "EMP" -> Employees(vm)
+        "PAYROLL" -> PayrollManager(vm)
         "PURCHASE" -> Purchases(vm)
         "VIETQR" -> VietQr(vm)
         "PRINTER" -> Printer(vm)
@@ -1172,6 +1173,7 @@ fun Manage(vm: PosViewModel) {
             if (employee?.role == "ADMIN") {
                 Rowx("Cấu hình hạng thành viên", "Ngưỡng điểm · tự nâng hạng · % ưu đãi Member/VIP/VVIP") { vm.screen.value = "LOYALTY_CONFIG" }
                 Rowx("Nhân viên", "Thêm · khóa · phân quyền") { vm.screen.value = "EMP" }
+                Rowx("Chấm công & Bảng lương", "Giờ vào/ra · tổng giờ · lương theo tháng") { vm.screen.value = "PAYROLL" }
             }
             if (employee?.role == "ADMIN" || employee?.canManageSystem == true) {
                 Rowx("Bàn & khu vực", "Thêm · sửa · Trong nhà / Ngoài trời") { vm.screen.value = "TABLE_ADMIN" }
@@ -1199,6 +1201,39 @@ fun Manage(vm: PosViewModel) {
             Text("Tương thích Android 8.0 (API 26) trở lên · Thiết bị hiện tại: Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})", fontSize = 11.sp)
             if (Build.VERSION.SDK_INT < 26) Text("Thiết bị không được hỗ trợ. Cần Android 8.0 trở lên.", color = Color.Red, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(30.dp))
+        }
+    }
+}
+
+@Composable
+fun PayrollManager(vm:PosViewModel){
+    val employee by vm.currentEmployee.collectAsState()
+    val employees by vm.employees.collectAsState()
+    val days by vm.payrollDays.collectAsState()
+    val label by vm.payrollPeriodLabel.collectAsState()
+    val cal=remember{Calendar.getInstance()};var year by remember{mutableIntStateOf(cal.get(Calendar.YEAR))};var month by remember{mutableIntStateOf(cal.get(Calendar.MONTH)+1)}
+    LaunchedEffect(year,month){vm.loadPayrollMonth(year,month)}
+    if(employee?.role!="ADMIN"&&employee?.role!="MANAGER"){Column{Header("Bảng lương"){vm.screen.value="MANAGE"};Text("Chỉ ADMIN/MANAGER được xem bảng lương.",Modifier.padding(20.dp))};return}
+    val grouped=days.groupBy{it.employeeId}
+    Column{
+        Header("Chấm công & Bảng lương"){vm.screen.value="MANAGE"}
+        Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween){
+            OutlinedButton({if(month==1){month=12;year--}else month--}){Text("‹")}
+            Text("THÁNG $label",fontWeight=FontWeight.Black,fontSize=18.sp)
+            OutlinedButton({if(month==12){month=1;year++}else month++}){Text("›")}
+        }
+        LazyColumn(Modifier.fillMaxSize().padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
+            items(employees.filter{grouped[it.id]?.isNotEmpty()==true}){emp->
+                val rows=grouped[emp.id].orEmpty();val mins=rows.sumOf{it.minutes};val total=rows.sumOf{it.amount}
+                Card(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(4.dp)){
+                    Text(emp.name,fontWeight=FontWeight.Black,fontSize=17.sp)
+                    Text("Tổng: ${mins/60}h ${mins%60}p · ${money(total)}",fontWeight=FontWeight.Bold)
+                    rows.sortedByDescending{it.date}.forEach{d->
+                        Text("${d.date.substring(8,10)}/${d.date.substring(5,7)} · ${d.minutes/60}h ${d.minutes%60}p · ${money(d.hourlyRate)}/h × ${"%.2f".format(d.multiplierBasisPoints/10000.0)} · ${money(d.amount)}",fontSize=11.sp)
+                    }
+                }}
+            }
+            if(days.isEmpty())item{Text("Chưa có dữ liệu chấm công trong tháng này.",Modifier.padding(12.dp))}
         }
     }
 }

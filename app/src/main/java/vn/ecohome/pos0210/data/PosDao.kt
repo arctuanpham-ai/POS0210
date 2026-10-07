@@ -3,6 +3,12 @@ import androidx.room.*
 import kotlinx.coroutines.flow.Flow
 data class TableServiceTimingRow(val sessionId:String,val firstOrderAt:Long?,val lastOrderSentAt:Long?,val sentBatchCount:Int,val waitingBatchCount:Int)
 @Dao interface PosDao{
+@Insert(onConflict=OnConflictStrategy.ABORT) suspend fun insertAttendanceSession(v:AttendanceSessionEntity)
+@Query("SELECT * FROM AttendanceSessionEntity WHERE employeeId=:employeeId AND status='OPEN' ORDER BY checkInAt DESC LIMIT 1") suspend fun openAttendance(employeeId:String):AttendanceSessionEntity?
+@Query("SELECT * FROM AttendanceSessionEntity WHERE status='OPEN' ORDER BY checkInAt") fun openAttendances():Flow<List<AttendanceSessionEntity>>
+@Query("SELECT * FROM AttendanceSessionEntity WHERE employeeId=:employeeId ORDER BY checkInAt DESC") fun attendanceHistory(employeeId:String):Flow<List<AttendanceSessionEntity>>
+@Query("UPDATE AttendanceSessionEntity SET checkOutAt=:at,status='CLOSED',updatedAt=:at WHERE id=:id AND status='OPEN'") suspend fun closeAttendance(id:String,at:Long):Int
+
 @Query("SELECT * FROM AreaEntity WHERE active=1 ORDER BY sortOrder,name") fun areas():Flow<List<AreaEntity>>
 @Query("SELECT * FROM DiningTableEntity WHERE active=1 ORDER BY sortOrder,name") fun tables():Flow<List<DiningTableEntity>>
 @Query("SELECT * FROM MenuCategoryEntity WHERE active=1 ORDER BY sortOrder,name") fun categories():Flow<List<MenuCategoryEntity>>

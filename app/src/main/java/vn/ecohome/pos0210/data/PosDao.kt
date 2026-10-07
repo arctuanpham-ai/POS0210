@@ -124,6 +124,14 @@ WHERE s.status='OPEN' GROUP BY s.id""") fun tableServiceTimings():Flow<List<Tabl
 @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun saveSetting(v:AppSettingEntity)
 @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun saveCloudSyncState(v:CloudSyncStateEntity)
 @Query("UPDATE CloudSyncStateEntity SET dirty=1 WHERE id='firebase'") suspend fun markCloudDirty():Int
+@Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun enqueueSync(v:SyncQueueEntity)
+@Query("SELECT * FROM SyncQueueEntity WHERE status='PENDING' AND nextAttemptAt<=:now ORDER BY createdAt LIMIT :limit") suspend fun pendingSync(now:Long,limit:Int=100):List<SyncQueueEntity>
+@Query("UPDATE SyncQueueEntity SET status='IN_FLIGHT',attempts=attempts+1,updatedAt=:now WHERE id=:id AND status='PENDING'") suspend fun claimSync(id:String,now:Long):Int
+@Query("DELETE FROM SyncQueueEntity WHERE id=:id") suspend fun completeSync(id:String):Int
+@Query("UPDATE SyncQueueEntity SET status='PENDING',nextAttemptAt=:nextAttemptAt,updatedAt=:now,lastError=:error WHERE id=:id") suspend fun retrySync(id:String,nextAttemptAt:Long,now:Long,error:String?):Int
+@Query("UPDATE SyncQueueEntity SET status='PENDING' WHERE status='IN_FLIGHT'") suspend fun recoverInflightSync():Int
+@Query("SELECT COUNT(*) FROM SyncQueueEntity WHERE status IN ('PENDING','IN_FLIGHT')") suspend fun pendingSyncCount():Int
+@Query("UPDATE CloudSyncStateEntity SET bootstrapState=:state,bootstrapCompletedAt=:completedAt,lastPullAt=:lastPullAt WHERE id='firebase'") suspend fun updateBootstrapState(state:String,completedAt:Long?,lastPullAt:Long?):Int
 @Insert(onConflict=OnConflictStrategy.ABORT) suspend fun insertPaymentSession(v:PaymentSessionEntity)
 @Insert(onConflict=OnConflictStrategy.IGNORE) suspend fun insertBankNotification(v:BankNotificationEventEntity):Long
 @Query("UPDATE PaymentSessionEntity SET status='CANCELLED' WHERE tableSessionId=:tableSessionId AND status IN ('WAITING','PAYMENT_DETECTED')") suspend fun cancelPaymentSessions(tableSessionId:String):Int

@@ -1,0 +1,37 @@
+name: POS0210 Build
+on:
+  push:
+    branches: [ main, offline-first ]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Temporary CI signing key when legacy key is not imported yet
+        run: |
+          if [ ! -f app/pos0210-debug.keystore ]; then
+            keytool -genkeypair -v -keystore app/pos0210-debug.keystore -storepass 0210debug -alias pos0210debug -keypass 0210debug -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=POS0210 CI"
+          fi
+      - name: Unit tests and APK
+        run: gradle --no-daemon testDebugUnitTest :app:assembleDebug --stacktrace
+      - name: Verify APK
+        run: |
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          $ANDROID_HOME/build-tools/35.0.0/apksigner verify --verbose --print-certs app/build/outputs/apk/debug/app-debug.apk
+          sha256sum app/build/outputs/apk/debug/app-debug.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: POS0210-debug-${{ github.sha }}
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

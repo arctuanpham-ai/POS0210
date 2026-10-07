@@ -66,6 +66,15 @@ WHERE s.status='OPEN' GROUP BY s.id""") fun tableServiceTimings():Flow<List<Tabl
 @Query("SELECT * FROM PurchaseCategoryEntity ORDER BY sortOrder,name") suspend fun allPurchaseCategoriesSnapshot():List<PurchaseCategoryEntity>
 @Query("SELECT * FROM PurchaseItemEntity WHERE purchaseId=:purchaseId") fun purchaseItems(purchaseId:String):Flow<List<PurchaseItemEntity>>
 @Query("SELECT * FROM MonthlyAccountingEntity") fun monthlyAccounting():Flow<List<MonthlyAccountingEntity>>
+@Query("SELECT * FROM MonthlyAccountingEntity ORDER BY monthKey") suspend fun allMonthlyAccountingSnapshot():List<MonthlyAccountingEntity>
+@Query("SELECT * FROM PaymentEntity ORDER BY paidAt DESC") suspend fun allPaymentsSnapshot():List<PaymentEntity>
+@Query("SELECT * FROM TableSessionEntity ORDER BY openedAt DESC") suspend fun allSessionsSnapshot():List<TableSessionEntity>
+@Query("SELECT * FROM OrderBatchEntity ORDER BY createdAt") suspend fun allOrderBatchesSnapshot():List<OrderBatchEntity>
+@Query("SELECT * FROM OrderItemEntity") suspend fun allOrderItemsSnapshot():List<OrderItemEntity>
+@Query("SELECT * FROM AssetEntity ORDER BY purchaseDate DESC,name") suspend fun allAssetsSnapshot():List<AssetEntity>
+@Query("SELECT * FROM AssetValuationEntity ORDER BY changedAt DESC") suspend fun allAssetValuationsSnapshot():List<AssetValuationEntity>
+@Query("SELECT * FROM FinancialMovementEntity ORDER BY occurredAt DESC") suspend fun allFinancialMovementsSnapshot():List<FinancialMovementEntity>
+@Query("SELECT * FROM OpeningCashAdjustmentEntity ORDER BY changedAt DESC") suspend fun allOpeningCashAdjustmentsSnapshot():List<OpeningCashAdjustmentEntity>
 @Query("SELECT * FROM ProfitPartnerEntity WHERE active=1 ORDER BY sortOrder,name") fun profitPartners():Flow<List<ProfitPartnerEntity>>
 @Query("SELECT * FROM ProfitPartnerEntity ORDER BY sortOrder,name") suspend fun allProfitPartnersSnapshot():List<ProfitPartnerEntity>
 @Query("SELECT * FROM AssetCategoryEntity WHERE active=1 ORDER BY sortOrder,name") fun assetCategories():Flow<List<AssetCategoryEntity>>

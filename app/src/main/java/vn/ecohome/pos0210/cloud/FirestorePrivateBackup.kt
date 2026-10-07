@@ -267,7 +267,7 @@ object FirestorePrivateBackup {
             val version=db.rawQuery("PRAGMA user_version",null).use{cursor->
                 if(cursor.moveToFirst())cursor.getInt(0) else 0
             }
-            require(version in 3..19){"Cloud backup DB schema không được hỗ trợ: v$version"}
+            require(version in 3..20){"Cloud backup DB schema không được hỗ trợ: v$version"}
             val required=setOf("BillEntity","PaymentEntity","OrderBatchEntity","PurchaseEntity","EmployeeEntity","AppSettingEntity")
             val found=mutableSetOf<String>()
             db.rawQuery("SELECT name FROM sqlite_master WHERE type='table'",null).use{cursor->

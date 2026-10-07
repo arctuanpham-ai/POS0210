@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
 import vn.ecohome.pos0210.data.CloudSyncStateEntity
 import vn.ecohome.pos0210.data.PosDao
 import vn.ecohome.pos0210.data.PosDatabase
@@ -72,8 +73,8 @@ object FirebaseCloudSync {
     fun reset(context:Context){runCatching{FirebaseApp.getApps(context).firstOrNull{it.name==APP_NAME}?.delete()}}
     fun currentUid(context:Context):String?=runCatching{FirebaseApp.getApps(context).firstOrNull{it.name==APP_NAME}?.let{FirebaseAuth.getInstance(it).currentUser?.uid}}.getOrNull()
 
-    private suspend fun <T> stage(name:String,block:suspend()->T):T =
-        try{ block() }catch(e:Throwable){ throw IllegalStateException("$name: ${e.message}",e) }
+    private suspend fun <T> stage(name:String,timeoutMs:Long=25_000L,block:suspend()->T):T =
+        try{ withTimeout(timeoutMs){block()} }catch(e:Throwable){ throw IllegalStateException("$name: ${e.message}",e) }
 
     suspend fun backupNow(context:Context):Result<CloudBackupInfo> = CloudOperationGuard.mutex.withLock { runCatching{
         val c=config(context);require(c.valid){"Chưa cấu hình Firebase"}
@@ -97,7 +98,7 @@ object FirebaseCloudSync {
                 if(remoteExists){
                     // Restore the latest verified A/B Room snapshot before any local snapshot
                     // is allowed to reach Firestore. restoreLatest closes/reopens Room itself.
-                    stage("BOOTSTRAP_RESTORE"){FirestorePrivateBackup.restoreLatest(context)}
+                    stage("BOOTSTRAP_RESTORE",60_000L){FirestorePrivateBackup.restoreLatest(context)}
                     val restoredDao=PosDatabase.get(context).dao()
                     val bootstrapNow=System.currentTimeMillis()
                     // DB is the operational prerequisite. Media is best-effort: a Storage/network

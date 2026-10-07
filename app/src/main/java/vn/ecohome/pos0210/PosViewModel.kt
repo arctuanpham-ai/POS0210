@@ -641,6 +641,24 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    }
   }
  }
+ fun reprintKitchenBatch(b:OrderBatchEntity){
+  val e=currentEmployee.value?:return
+  if(!e.canSendKitchen&&e.role!="ADMIN"&&e.role!="MANAGER"){printerMessage.value="KHÔNG CÓ QUYỀN IN LẠI PHIẾU BẾP";return}
+  viewModelScope.launch(Dispatchers.IO){
+   if(printerMode()!="BLUETOOTH"){printerMessage.value="CHỈ IN LẠI KHI ĐANG DÙNG MÁY IN BLUETOOTH";return@launch}
+   val mac=kitchenPrinterMac();if(mac.isBlank()){printerMessage.value="CHƯA CHỌN MÁY IN BẾP";return@launch}
+   val session=dao.sessionSnapshotById(b.sessionId)
+   val tableName=session?.let{s->dao.allTablesSnapshot().firstOrNull{it.id==s.tableId}?.name}?:"Bàn"
+   val items=dao.batchItems(b.id).first().map{Triple(it.itemNameSnapshot,it.qty,it.note)}
+   val profile=printerProfile()
+   val job=PrintJobEntity(UUID.randomUUID().toString(),b.id,null,"KITCHEN_REPRINT",createdAt=System.currentTimeMillis())
+   dao.insertPrintJob(job)
+   if(!repo.claimPrint(job.id,"ANDROID")){printerMessage.value="KHÔNG NHẬN ĐƯỢC LỆNH IN LẠI";return@launch}
+   val result=BluetoothPrinter.printBitmap(getApplication(),mac,ReceiptRenderer.kitchen(tableName,b.sequence,b.serviceNo,"${e.name} · IN LẠI",items,profile),profile,vn.ecohome.pos0210.printing.PrintJobType.KITCHEN)
+   if(result.isSuccess){dao.markPrintSuccess(job.id,System.currentTimeMillis());audit("PRINT",b.id,"KITCHEN_REPRINTED","printer=${kitchenPrinterName()},operator=${e.name},job=${job.id}");printerMessage.value="ĐÃ IN LẠI PHIẾU BẾP #${b.serviceNo}"}
+   else{dao.markPrintFailed(job.id,result.exceptionOrNull()?.message?:"UNKNOWN");audit("PRINT",b.id,"KITCHEN_REPRINT_FAILED","job=${job.id}");printerMessage.value="IN LẠI PHIẾU BẾP LỖI · ${result.exceptionOrNull()?.message?:"Thử lại"}"}
+  }
+ }
  fun markDelivered(b:OrderBatchEntity){
   val e=currentEmployee.value?:return
   viewModelScope.launch{

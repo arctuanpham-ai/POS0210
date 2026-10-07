@@ -49,6 +49,8 @@ object FirebaseCloudSync {
     private const val DEFAULT_APPLICATION_ID="1:734292261602:android:c60646ce0c9ed4c3f67cbb"
     private const val DEFAULT_API_KEY="AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk"
 
+    fun defaultConfig()=FirebaseConfig(DEFAULT_PROJECT_ID,DEFAULT_APPLICATION_ID,DEFAULT_API_KEY)
+
     suspend fun config(context:Context):FirebaseConfig{
         val settings=PosDatabase.get(context).dao().allSettingsSnapshot().associate{it.key to it.value}
         return FirebaseConfig(

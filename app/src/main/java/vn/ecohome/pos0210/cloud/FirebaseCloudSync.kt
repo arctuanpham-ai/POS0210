@@ -124,8 +124,10 @@ object FirebaseCloudSync {
         val settings=dao.allSettingsSnapshot().filter{CloudSyncPolicy.shouldUploadSetting(it.key)}.associate{it.key to it.value};root.collection("config").document("safe").set(settings+mapOf("updatedAt" to now)).await()
         // Realtime/business sync must not fail just because the independent private backup fails.
         // Backup is handled separately and keeps its own status/error.
-        val backupError=runCatching{FirestorePrivateBackup.upload(context,fs,uid,now)}.exceptionOrNull()?.message?.take(180)\n        val mediaError=runCatching{CloudMediaSync.uploadLocal(context,fs,uid)}.exceptionOrNull()?.message?.take(120)
-        val currentState=dao.cloudSyncStateSnapshot()?:old\n        dao.saveCloudSyncState(currentState.copy(enabled=true,dirty=false,lastAttemptAt=now,lastSuccessAt=now,lastError=listOfNotNull(backupError?.let{"PRIVATE_BACKUP_ONLY: $it"},mediaError?.let{"MEDIA_SYNC_ONLY: $it"}).takeIf{it.isNotEmpty()}?.joinToString(" · "),syncedUid=uid))
+        val backupError=runCatching{FirestorePrivateBackup.upload(context,fs,uid,now)}.exceptionOrNull()?.message?.take(180)
+        val mediaError=runCatching{CloudMediaSync.uploadLocal(context,fs,uid)}.exceptionOrNull()?.message?.take(120)
+        val currentState=dao.cloudSyncStateSnapshot()?:old
+        dao.saveCloudSyncState(currentState.copy(enabled=true,dirty=false,lastAttemptAt=now,lastSuccessAt=now,lastError=listOfNotNull(backupError?.let{"PRIVATE_BACKUP_ONLY: $it"},mediaError?.let{"MEDIA_SYNC_ONLY: $it"}).takeIf{it.isNotEmpty()}?.joinToString(" · "),syncedUid=uid))
     }.onFailure{e->
         val dao=PosDatabase.get(context).dao();val old=dao.cloudSyncStateSnapshot()?:CloudSyncStateEntity();dao.saveCloudSyncState(old.copy(lastAttemptAt=System.currentTimeMillis(),lastError=e.message?.take(300)))
     }}

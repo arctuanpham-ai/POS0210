@@ -43,10 +43,19 @@ object FirebaseCloudSync {
     private const val APP_NAME="pos0210-cloud"
     private const val WORK_NAME="pos0210-firebase-periodic"
     private const val BACKUP_WORK_NAME="pos0210-firebase-hourly-backup"
+    // Public Firebase client identifiers bundled so a fresh install can reach the production cloud.
+    // Local settings remain an explicit override for recovery/migration.
+    private const val DEFAULT_PROJECT_ID="pos0210-17ce4"
+    private const val DEFAULT_APPLICATION_ID="1:734292261602:android:c60646ce0c9ed4c3f67cbb"
+    private const val DEFAULT_API_KEY="AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk"
 
     suspend fun config(context:Context):FirebaseConfig{
         val settings=PosDatabase.get(context).dao().allSettingsSnapshot().associate{it.key to it.value}
-        return FirebaseConfig(settings["firebase_project_id"].orEmpty(),settings["firebase_application_id"].orEmpty(),settings["firebase_api_key"].orEmpty())
+        return FirebaseConfig(
+            settings["firebase_project_id"].orEmpty().ifBlank{DEFAULT_PROJECT_ID},
+            settings["firebase_application_id"].orEmpty().ifBlank{DEFAULT_APPLICATION_ID},
+            settings["firebase_api_key"].orEmpty().ifBlank{DEFAULT_API_KEY}
+        )
     }
     internal fun firebaseApp(context:Context,c:FirebaseConfig):FirebaseApp{
         FirebaseApp.getApps(context).firstOrNull{it.name==APP_NAME}?.let{return it}

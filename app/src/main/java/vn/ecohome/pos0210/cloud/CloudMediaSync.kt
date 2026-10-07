@@ -5,6 +5,7 @@ import android.net.Uri
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeout
 import vn.ecohome.pos0210.data.PosDatabase
 import java.io.File
 import java.security.MessageDigest
@@ -13,6 +14,8 @@ data class CloudMediaResult(val uploaded:Int=0,val downloaded:Int=0,val skipped:
 
 object CloudMediaSync {
     private const val STORE_ID="0210"
+    private const val MANIFEST_TIMEOUT_MS=15_000L
+    private const val ITEM_TIMEOUT_MS=20_000L
     private const val MAX_MEDIA_BYTES=12L*1024L*1024L
 
     private fun sha256(bytes:ByteArray)=MessageDigest.getInstance("SHA-256").digest(bytes).joinToString(""){"%02x".format(it)}
@@ -44,11 +47,11 @@ object CloudMediaSync {
                 val hash=sha256(bytes)
                 val mediaId="${type}_${id}"
                 val doc=manifest.document(mediaId)
-                val old=doc.get().await()
+                val old=withTimeout(MANIFEST_TIMEOUT_MS){doc.get().await()}
                 if(old.getString("sha256")==hash){skipped++;return@runCatching}
                 val ext=safeExt(uri);val cloudPath="users/$uid/stores/$STORE_ID/media/$mediaId.$ext"
-                storage.child(cloudPath).putBytes(bytes).await()
-                doc.set(mapOf("mediaId" to mediaId,"entityType" to type,"entityId" to id,"cloudPath" to cloudPath,"sha256" to hash,"bytes" to bytes.size,"version" to ((old.getLong("version")?:0L)+1L),"updatedAt" to System.currentTimeMillis())).await()
+                withTimeout(ITEM_TIMEOUT_MS){storage.child(cloudPath).putBytes(bytes).await()}
+                withTimeout(MANIFEST_TIMEOUT_MS){doc.set(mapOf("mediaId" to mediaId,"entityType" to type,"entityId" to id,"cloudPath" to cloudPath,"sha256" to hash,"bytes" to bytes.size,"version" to ((old.getLong("version")?:0L)+1L),"updatedAt" to System.currentTimeMillis())).await()}
                 uploaded++
             }.onFailure{errors++}
         }
@@ -57,7 +60,7 @@ object CloudMediaSync {
 
     suspend fun restoreMissing(context:Context,fs:FirebaseFirestore,uid:String):CloudMediaResult {
         val dao=PosDatabase.get(context).dao()
-        val docs=fs.collection("users").document(uid).collection("stores").document(STORE_ID).collection("media").get().await().documents
+        val docs=withTimeout(MANIFEST_TIMEOUT_MS){fs.collection("users").document(uid).collection("stores").document(STORE_ID).collection("media").get().await().documents}
         val app=FirebaseCloudSync.firebaseApp(context,FirebaseCloudSync.config(context))
         val storage=FirebaseStorage.getInstance(app).reference
         val dir=File(context.filesDir,"managed_media").apply{mkdirs()}
@@ -74,7 +77,7 @@ object CloudMediaSync {
                 if(current!=null&&sha256(current)==expected){skipped++}
                 else{
                     val max=doc.getLong("bytes")?.coerceAtMost(MAX_MEDIA_BYTES)?:MAX_MEDIA_BYTES
-                    val bytes=storage.child(cloudPath).getBytes(max.coerceAtLeast(1L)).await()
+                    val bytes=withTimeout(ITEM_TIMEOUT_MS){storage.child(cloudPath).getBytes(max.coerceAtLeast(1L)).await()}
                     require(sha256(bytes)==expected){"MEDIA_HASH_MISMATCH"}
                     val tmp=File(dir,target.name+".tmp");tmp.writeBytes(bytes)
                     if(target.exists())target.delete()

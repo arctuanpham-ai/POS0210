@@ -123,6 +123,7 @@ fun App(vm: PosViewModel = viewModel()) {
         "BANK_PAYMENT_SETTINGS" -> BankPaymentSettings(vm)
         "BANK_NOTIFICATION_TEST" -> BankNotificationTest(vm)
         "CLOUD" -> CloudSyncSettings(vm)
+        "RESET_PREOPENING_SALES" -> ResetPreOpeningSales(vm)
     }
 }
 
@@ -1177,6 +1178,7 @@ fun Manage(vm: PosViewModel) {
             }
             if (employee?.role == "ADMIN") {
                 Rowx("Kiểm tra dữ liệu", "Đối soát Payment · Bill · Customer · điểm · trạng thái bàn") { vm.screen.value = "HEALTH" }
+                Rowx("Xóa dữ liệu bán thử trước khai trương", "Chỉ xóa Bill bán thử · GIỮ NGUYÊN nhập hàng, chi phí, tài sản") { vm.screen.value = "RESET_PREOPENING_SALES" }
                 Rowx("Cloud & Manager realtime", "Firebase backup · trạng thái bàn · doanh thu trực tiếp") { vm.screen.value = "CLOUD" }
                 Rowx("Nhật ký hệ thống", "Audit thao tác · người thực hiện · thời điểm · dữ liệu thay đổi") { vm.screen.value = "SETTINGS" }
             }
@@ -1185,6 +1187,34 @@ fun Manage(vm: PosViewModel) {
             Text("Tương thích Android 8.0 (API 26) trở lên · Thiết bị hiện tại: Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})", fontSize = 11.sp)
             if (Build.VERSION.SDK_INT < 26) Text("Thiết bị không được hỗ trợ. Cần Android 8.0 trở lên.", color = Color.Red, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(30.dp))
+        }
+    }
+}
+
+@Composable
+fun ResetPreOpeningSales(vm:PosViewModel){
+    val employee by vm.currentEmployee.collectAsState()
+    val bills by vm.bills.collectAsState()
+    var confirmText by remember { mutableStateOf("") }
+    if(employee?.role!="ADMIN"){
+        Column{ Header("Reset bán thử"){vm.screen.value="MANAGE"}; Text("Chỉ ADMIN được thực hiện.",Modifier.padding(20.dp),fontWeight=FontWeight.Bold) }
+        return
+    }
+    Column{
+        Header("Reset bán thử"){vm.screen.value="MANAGE"}
+        Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)){
+            Text("XÓA DỮ LIỆU BÁN THỬ TRƯỚC KHAI TRƯƠNG",fontWeight=FontWeight.Black,fontSize=18.sp)
+            Text("Hiện có ${bills.size} bill PAID sẽ bị loại khỏi doanh thu.",fontWeight=FontWeight.Bold)
+            Text("GIỮ NGUYÊN: nhập hàng, chi phí đầu tư, nhà cung cấp, tài sản, menu, giá, bàn, nhân viên, cấu hình Cloud và media.")
+            Text("Bill được chuyển sang DELETED thay vì xóa vật lý để còn audit. Điểm/tổng chi tiêu khách liên quan sẽ được tính lại.")
+            Text("Trước khi thao tác, nên tạo Cloud Backup mới nhất. Sau reset hệ thống sẽ tự backup lại trạng thái mới.",fontSize=12.sp)
+            OutlinedTextField(confirmText,{confirmText=it.uppercase().take(16)},Modifier.fillMaxWidth(),label={Text("Nhập XOA BILL TEST để xác nhận")},singleLine=true)
+            Button(
+                onClick={vm.resetPreOpeningSales();confirmText=""},
+                modifier=Modifier.fillMaxWidth(),
+                enabled=bills.isNotEmpty()&&confirmText=="XOA BILL TEST"
+            ){Text("XÁC NHẬN XÓA BILL BÁN THỬ")}
+            Text("Không thao tác vào Purchase/Expense/Asset.",fontSize=11.sp,fontWeight=FontWeight.Bold)
         }
     }
 }

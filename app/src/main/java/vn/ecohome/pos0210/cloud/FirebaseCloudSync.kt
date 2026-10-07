@@ -152,9 +152,23 @@ object FirebaseCloudSync {
         val mediaAttempt=runCatching{CloudMediaSync.uploadLocal(context,fs,uid)}
         val mediaResult=mediaAttempt.getOrNull()
         val mediaError=mediaAttempt.exceptionOrNull()?.message?.take(120) ?: mediaResult?.takeIf{it.errors>0}?.let{"${it.errors} media item(s) failed"}
+        dao.recoverInflightSync()
         val queued=dao.pendingSync(System.currentTimeMillis(),500)
-        queued.filter{it.entityType=="MENU_ITEM"}.forEach{dao.completeSync(it.id)}
-        if(mediaResult!=null&&mediaResult.errors==0) queued.filter{it.entityType=="MEDIA"}.forEach{dao.completeSync(it.id)}
+        queued.forEach { q ->
+            if(dao.claimSync(q.id,System.currentTimeMillis())==1){
+                val ok=when(q.entityType){
+                    "MENU_ITEM" -> true // menu mirror write above completed successfully
+                    "MEDIA" -> mediaResult!=null&&mediaResult.errors==0
+                    else -> false
+                }
+                if(ok) dao.completeSync(q.id) else {
+                    val attempts=(q.attempts+1).coerceAtMost(10)
+                    val delayMs=(15_000L shl attempts.coerceAtMost(8)).coerceAtMost(60L*60L*1000L)
+                    dao.retrySync(q.id,System.currentTimeMillis()+delayMs,System.currentTimeMillis(),
+                        mediaError ?: "SYNC_QUEUE_UNSUPPORTED_OR_RETRY")
+                }
+            }
+        }
         val currentState=dao.cloudSyncStateSnapshot()?:old
         dao.saveCloudSyncState(currentState.copy(enabled=true,dirty=false,lastAttemptAt=now,lastSuccessAt=now,lastError=listOfNotNull(backupError?.let{"PRIVATE_BACKUP_ONLY: $it"},mediaError?.let{"MEDIA_SYNC_ONLY: $it"}).takeIf{it.isNotEmpty()}?.joinToString(" · "),syncedUid=uid))
     }.onFailure{e->

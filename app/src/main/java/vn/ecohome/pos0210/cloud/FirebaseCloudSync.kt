@@ -115,6 +115,13 @@ object FirebaseCloudSync {
                         lastError=mediaRestoreError?.let{"MEDIA_RESTORE_ONLY: $it"},
                         syncedUid=uid
                     ))
+                    // Room was physically replaced. The caller ViewModel still owns DAO/Flow
+                    // instances from the pre-restore Room, so continuing in-process can show
+                    // stale Cloud/menu/media state. Restart and bind the whole UI to restored DB.
+                    val launch=context.packageManager.getLaunchIntentForPackage(context.packageName)
+                        ?.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                    if(launch!=null) context.startActivity(launch)
+                    android.os.Process.killProcess(android.os.Process.myPid())
                     return@runCatching
                 }
                 val bootstrapNow=System.currentTimeMillis()

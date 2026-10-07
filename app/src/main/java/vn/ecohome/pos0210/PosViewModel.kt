@@ -800,6 +800,19 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    if(changed>0) autoBackup()
   }
  }
+ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
+  val e=currentEmployee.value?:return
+  if(e.role!="ADMIN"&&!e.canViewReport){printerMessage.value="KHÔNG CÓ QUYỀN XUẤT DỮ LIỆU";return}
+  viewModelScope.launch(Dispatchers.IO){
+   runCatching{
+    val file=AiBusinessExport.create(getApplication(),dao)
+    AiBusinessExport.uri(getApplication(),file) to file.name
+   }.onSuccess{(uri,name)->
+    printerMessage.value="ĐÃ TẠO $name"
+    kotlinx.coroutines.withContext(Dispatchers.Main){onReady(uri,name)}
+   }.onFailure{printerMessage.value="XUẤT DỮ LIỆU LỖI · ${it.message?:"UNKNOWN"}"}
+  }
+ }
  fun resetPreOpeningSales(){
   val e=currentEmployee.value?:return
   if(e.role!="ADMIN"){printerMessage.value="CHỈ ADMIN ĐƯỢC XÓA DỮ LIỆU BÁN THỬ";return}

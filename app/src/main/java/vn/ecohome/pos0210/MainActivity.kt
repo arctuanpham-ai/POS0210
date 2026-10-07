@@ -3644,6 +3644,12 @@ fun BillBatchDetail(vm: PosViewModel, batch: OrderBatchEntity, employees: List<E
                 Text("${line.qty} × ${line.itemNameSnapshot} · ${money(line.unitPriceSnapshot * line.qty)}")
                 if (line.note.isNotBlank()) Text("  Ghi chú: ${line.note}", fontSize = 12.sp)
             }
+            if (batch.status != "DRAFT" && batch.status != "CANCELLED") {
+                OutlinedButton(
+                    onClick = { vm.reprintKitchenBatch(batch) },
+                    modifier = Modifier.padding(top = 8.dp)
+                ) { Text("IN LẠI PHIẾU BẾP") }
+            }
         }
     }
 }

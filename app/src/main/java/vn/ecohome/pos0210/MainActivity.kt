@@ -3259,6 +3259,9 @@ fun Report(vm: PosViewModel) {
                                             Text("${bill.closedAt?.let { time(it) } ?: "--"} · ${money(bill.total)}")
                                             Text(if (p?.method == "TRANSFER") "Chuyển khoản" else "Tiền mặt", fontSize = 12.sp)
                                         }
+                                        if (current?.canCheckout == true || current?.role == "ADMIN") {
+                                            OutlinedButton(onClick = { vm.reprintPaidBill(bill.id) }) { Text("IN LẠI") }
+                                        }
                                     }
                                 }
                             }

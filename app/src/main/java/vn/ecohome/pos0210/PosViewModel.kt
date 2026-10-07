@@ -833,6 +833,39 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    }
   }
  }
+ fun reprintPaidBill(billId:String){
+  val employee=currentEmployee.value?:return
+  if(!employee.canCheckout&&employee.role!="ADMIN"){printerMessage.value="KHÔNG CÓ QUYỀN IN LẠI BILL";return}
+  viewModelScope.launch(Dispatchers.IO){
+   if(printerMode()!="BLUETOOTH"||receiptPrinterMac().isBlank()){printerMessage.value="CHƯA CẤU HÌNH MÁY IN BILL";return@launch}
+   val bill=dao.billById(billId)?:run{printerMessage.value="KHÔNG TÌM THẤY BILL";return@launch}
+   if(bill.status!="PAID"){printerMessage.value="CHỈ IN LẠI BILL ĐÃ THANH TOÁN";return@launch}
+   val session=dao.sessionSnapshotById(bill.sessionId)?:run{printerMessage.value="THIẾU DỮ LIỆU PHIÊN BÁN";return@launch}
+   val tableName=dao.allTablesSnapshot().firstOrNull{it.id==session.tableId}?.name?:"Bàn"
+   val batches=dao.batches(session.id).first().filter{it.status!="CANCELLED"}
+   val lines=mutableListOf<Triple<String,Int,Long>>()
+   batches.forEach{batch->dao.batchItems(batch.id).first().forEach{item->lines.add(Triple(item.itemNameSnapshot,item.qty,item.unitPriceSnapshot))}}
+   val adjustments=dao.adjustmentsByBillId(bill.id)
+   val surcharge=adjustments.filter{it.kind=="SURCHARGE"}.sumOf{it.amount}
+   val discount=adjustments.filter{it.kind=="DISCOUNT"}.sumOf{kotlin.math.abs(it.amount)}
+   val adjustmentLines=mutableListOf("BẢN IN LẠI · ${bill.billNo}")
+   adjustments.forEach{a->adjustmentLines.add(when(a.kind){"SURCHARGE"->"PHỤ THU ${a.name}  +${a.percent}%";"DISCOUNT"->"ƯU ĐÃI ${a.name}  -${a.percent}%";else->a.name})}
+   val payment=dao.paymentByBillId(bill.id)
+   val method=when(payment?.method){"CASH"->"TIỀN MẶT";"TRANSFER"->"CHUYỂN KHOẢN";null->"ĐÃ THANH TOÁN";else->payment.method}
+   val customer=bill.customerId?.let{dao.customerById(it)}
+   val period="${java.text.SimpleDateFormat("HH:mm",java.util.Locale.getDefault()).format(java.util.Date(bill.openedAt))}–${java.text.SimpleDateFormat("HH:mm",java.util.Locale.getDefault()).format(java.util.Date(bill.closedAt?:bill.openedAt))}"
+   val profile=printerProfile()
+   val bitmap=ReceiptRenderer.bill(tableName,period,lines,bill.subtotal,surcharge,discount,bill.total,adjustmentLines,customer?.name?.ifBlank{"KHÁCH THÀNH VIÊN"}?:"KHÁCH LẠ",customer?.tier,0,0,customer?.points?:0,method,null,profile)
+   val now=System.currentTimeMillis()
+   val job=PrintJobEntity(UUID.randomUUID().toString(),null,bill.id,"BILL_REPRINT",createdAt=now)
+   dao.insertPrintJob(job)
+   if(repo.claimPrint(job.id,"ANDROID")){
+    val result=BluetoothPrinter.printBitmap(getApplication(),receiptPrinterMac(),bitmap,profile,vn.ecohome.pos0210.printing.PrintJobType.PAYMENT)
+    if(result.isSuccess){dao.markPrintSuccess(job.id,System.currentTimeMillis());audit("PRINT",bill.id,"BILL_REPRINTED","printer=${receiptPrinterName()},job=${job.id},operator=${employee.id}");printerMessage.value="ĐÃ IN LẠI · ${bill.billNo}"}
+    else{dao.markPrintFailed(job.id,result.exceptionOrNull()?.message?:"UNKNOWN");audit("PRINT",bill.id,"BILL_REPRINT_FAILED","job=${job.id}");printerMessage.value="IN LẠI LỖI · ${result.exceptionOrNull()?.message?:"Thử lại"}"}
+   }
+  }
+ }
  fun close(method:String,preview:PricingPreview,customerPhone:String="",customerName:String=""){
   val session=currentSession.value?:return
   val employee=currentEmployee.value?:return

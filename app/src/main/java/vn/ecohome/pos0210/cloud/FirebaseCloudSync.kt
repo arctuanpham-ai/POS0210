@@ -125,7 +125,12 @@ object FirebaseCloudSync {
         // Realtime/business sync must not fail just because the independent private backup fails.
         // Backup is handled separately and keeps its own status/error.
         val backupError=runCatching{FirestorePrivateBackup.upload(context,fs,uid,now)}.exceptionOrNull()?.message?.take(180)
-        val mediaError=runCatching{CloudMediaSync.uploadLocal(context,fs,uid)}.exceptionOrNull()?.message?.take(120)
+        val mediaAttempt=runCatching{CloudMediaSync.uploadLocal(context,fs,uid)}
+        val mediaResult=mediaAttempt.getOrNull()
+        val mediaError=mediaAttempt.exceptionOrNull()?.message?.take(120) ?: mediaResult?.takeIf{it.errors>0}?.let{"${it.errors} media item(s) failed"}
+        val queued=dao.pendingSync(System.currentTimeMillis(),500)
+        queued.filter{it.entityType=="MENU_ITEM"}.forEach{dao.completeSync(it.id)}
+        if(mediaResult!=null&&mediaResult.errors==0) queued.filter{it.entityType=="MEDIA"}.forEach{dao.completeSync(it.id)}
         val currentState=dao.cloudSyncStateSnapshot()?:old
         dao.saveCloudSyncState(currentState.copy(enabled=true,dirty=false,lastAttemptAt=now,lastSuccessAt=now,lastError=listOfNotNull(backupError?.let{"PRIVATE_BACKUP_ONLY: $it"},mediaError?.let{"MEDIA_SYNC_ONLY: $it"}).takeIf{it.isNotEmpty()}?.joinToString(" · "),syncedUid=uid))
     }.onFailure{e->

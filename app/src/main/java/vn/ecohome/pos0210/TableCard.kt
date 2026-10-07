@@ -29,15 +29,14 @@ data class TableGridSpec(val columns:Int,val minCardHeight:Dp,val gap:Dp,val com
 
 fun tableGridSpec(tableCount:Int,availableWidthDp:Float):TableGridSpec {
     val columns=when {
-        tableCount<=4 -> if(availableWidthDp<320f) 1 else 2
-        tableCount<=9 -> if(availableWidthDp<340f) 2 else 3
-        tableCount<=16 -> if(availableWidthDp<360f) 3 else 4
-        availableWidthDp>=700f -> 6
-        availableWidthDp>=480f -> 5
-        else -> 4
+        availableWidthDp<300f -> 2
+        availableWidthDp<480f -> 3
+        availableWidthDp<700f -> 4
+        availableWidthDp<900f -> 5
+        else -> 6
     }
-    val compact=tableCount>16||columns>=5
-    return TableGridSpec(columns,when{columns<=2->132.dp;columns==3->122.dp;columns==4->114.dp;else->108.dp},if(compact)6.dp else 8.dp,compact)
+    val compact=columns>=4||tableCount>16
+    return TableGridSpec(columns,when{columns<=2->120.dp;columns==3->104.dp;columns==4->100.dp;else->96.dp},if(compact)6.dp else 8.dp,compact)
 }
 
 @Composable

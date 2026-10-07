@@ -98,7 +98,7 @@ object FirebaseCloudSync {
                 if(remoteExists){
                     // Restore the latest verified A/B Room snapshot before any local snapshot
                     // is allowed to reach Firestore. restoreLatest closes/reopens Room itself.
-                    stage("BOOTSTRAP_RESTORE",60_000L){FirestorePrivateBackup.restoreLatest(context)}
+                    stage("BOOTSTRAP_RESTORE",60_000L){FirestorePrivateBackup.restoreLatestInsideCloudOperation(context)}
                     val restoredDao=PosDatabase.get(context).dao()
                     val bootstrapNow=System.currentTimeMillis()
                     // DB is the operational prerequisite. Media is best-effort: a Storage/network

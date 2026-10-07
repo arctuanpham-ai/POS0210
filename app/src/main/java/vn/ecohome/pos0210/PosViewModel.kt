@@ -314,6 +314,15 @@ class PosViewModel(app:Application):AndroidViewModel(app){
   if(e.role!="ADMIN")return
   viewModelScope.launch{dao.setPricingRuleActive(rule.id,!rule.active);audit("PRICING",rule.id,"ACTIVE",(!rule.active).toString());autoBackup();autoMasterConfig()}
  }
+ fun deletePricingRule(rule:PricingRuleEntity){
+  val e=currentEmployee.value?:return
+  if(e.role!="ADMIN")return
+  viewModelScope.launch{
+   dao.setPricingRuleActive(rule.id,false)
+   audit("PRICING",rule.id,"DELETE_SOFT","pricing_rule_archived")
+   autoBackup();autoMasterConfig()
+  }
+ }
 fun saveLoyaltyConfig(auto:Boolean,memberDiscount:Int,vipPoints:Int,vipDiscount:Int,vvipPoints:Int,vvipDiscount:Int){
   val e=currentEmployee.value?:return
   if(e.role!="ADMIN")return

@@ -207,7 +207,13 @@ object ConfigBackup {
             }
         }
 
-        val root = JSONObject(requireNotNull(jsonText) { "File .0210 không hợp lệ: thiếu config.json" })
+        if(jsonText==null){
+            // Legacy/partial .0210 archives may contain media only. They are not a valid
+            // MASTER config, but must not destroy or deactivate the current embedded/local config.
+            if(extracted.isNotEmpty()) return@runCatching
+            error("File .0210 không chứa dữ liệu cấu hình có thể nhập")
+        }
+        val root = JSONObject(jsonText!!)
         require(root.optString("format") == "POS0210_MASTER_CONFIG") { "Không đúng file cấu hình 0210" }
         require(root.optInt("version", 0) in 1..CONFIG_VERSION) { "Phiên bản cấu hình chưa được hỗ trợ" }
 

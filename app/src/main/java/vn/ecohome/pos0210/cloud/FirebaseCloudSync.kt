@@ -158,6 +158,7 @@ object FirebaseCloudSync {
             if(dao.claimSync(q.id,System.currentTimeMillis())==1){
                 val ok=when(q.entityType){
                     "MENU_ITEM" -> true // menu mirror write above completed successfully
+                    "COMBO" -> true // combo metadata is covered by private snapshot; media has its own intent
                     "MEDIA" -> mediaResult!=null&&mediaResult.errors==0
                     else -> false
                 }

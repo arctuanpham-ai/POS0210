@@ -108,6 +108,16 @@ class PosViewModel(app:Application):AndroidViewModel(app){
   }
  }
 
+ fun clearBusinessTestData(){
+  val e=currentEmployee.value?:return
+  if(e.role!="ADMIN"){printerMessage.value="CHỈ ADMIN ĐƯỢC XÓA DỮ LIỆU TEST";return}
+  if(currentSession.value!=null){printerMessage.value="HÃY KẾT THÚC BÀN ĐANG MỞ TRƯỚC";return}
+  viewModelScope.launch(Dispatchers.IO){
+   val n=repo.clearTestData()
+   audit("SYSTEM","TEST_DATA","CLEAR_TEST_DATA","bills=$n")
+   printerMessage.value="ĐÃ XÓA DỮ LIỆU TEST · $n BILL · LIVE GIỮ NGUYÊN"
+  }
+ }
  fun setBusinessTestMode(enabled:Boolean){
   val e=currentEmployee.value?:return
   if(e.role!="ADMIN"&&e.role!="MANAGER"){printerMessage.value="CHỈ ADMIN/MANAGER ĐƯỢC BẬT TEST MODE";return}

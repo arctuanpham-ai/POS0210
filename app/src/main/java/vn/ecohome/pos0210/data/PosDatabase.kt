@@ -183,7 +183,7 @@ abstract class PosDatabase:RoomDatabase(){
   }
   private val MIGRATION_19_20=object:Migration(19,20){
    override fun migrate(db:SupportSQLiteDatabase){
-    db.execSQL("ALTER TABLE CloudSyncStateEntity ADD COLUMN bootstrapState TEXT NOT NULL DEFAULT 'NEEDS_PULL'")
+    db.execSQL("ALTER TABLE CloudSyncStateEntity ADD COLUMN bootstrapState TEXT NOT NULL DEFAULT 'LEGACY_LOCAL'")
     db.execSQL("ALTER TABLE CloudSyncStateEntity ADD COLUMN bootstrapCompletedAt INTEGER")
     db.execSQL("ALTER TABLE CloudSyncStateEntity ADD COLUMN lastPullAt INTEGER")
     db.execSQL("CREATE TABLE IF NOT EXISTS SyncQueueEntity (id TEXT NOT NULL, entityType TEXT NOT NULL, entityId TEXT NOT NULL, operation TEXT NOT NULL, payload TEXT NOT NULL, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL, attempts INTEGER NOT NULL, nextAttemptAt INTEGER NOT NULL, status TEXT NOT NULL, lastError TEXT, PRIMARY KEY(id))")

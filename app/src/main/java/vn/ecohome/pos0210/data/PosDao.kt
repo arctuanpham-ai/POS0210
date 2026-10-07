@@ -112,7 +112,7 @@ WHERE s.status='OPEN' GROUP BY s.id""") fun tableServiceTimings():Flow<List<Tabl
 @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun saveArea(v:AreaEntity)
 @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun saveTable(v:DiningTableEntity)
 @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun saveCategory(v:MenuCategoryEntity)
-@Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun saveMenuItem(v:MenuItemEntity)
+@Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun saveMenuItem(v:MenuItemEntity)\n@Query("UPDATE MenuItemEntity SET imageUri=:uri WHERE id=:id") suspend fun updateMenuImage(id:String,uri:String?)\n@Query("UPDATE ComboEntity SET imageUri=:uri WHERE id=:id") suspend fun updateComboImage(id:String,uri:String?)
 @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun saveCombo(v:ComboEntity)
 @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun saveComboItem(v:ComboItemEntity)
 @Query("DELETE FROM ComboItemEntity WHERE comboId=:comboId") suspend fun deleteComboItems(comboId:String)

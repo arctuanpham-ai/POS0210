@@ -1193,7 +1193,7 @@ fun Manage(vm: PosViewModel) {
 fun CloudSyncSettings(vm:PosViewModel){
     val settings by vm.settings.collectAsState();val state by vm.cloudSyncState.collectAsState();val message by vm.cloudMessage.collectAsState();val dashboard by vm.cloudDashboard.collectAsState()
     fun current(key:String)=settings.firstOrNull{it.key==key}?.value.orEmpty()
-    var projectId by remember(settings){mutableStateOf(current("firebase_project_id"))};var applicationId by remember(settings){mutableStateOf(current("firebase_application_id"))};var apiKey by remember(settings){mutableStateOf(current("firebase_api_key"))}
+    val firebaseDefaults=vn.ecohome.pos0210.cloud.FirebaseCloudSync.defaultConfig();var projectId by remember(settings){mutableStateOf(current("firebase_project_id").ifBlank{firebaseDefaults.projectId})};var applicationId by remember(settings){mutableStateOf(current("firebase_application_id").ifBlank{firebaseDefaults.applicationId})};var apiKey by remember(settings){mutableStateOf(current("firebase_api_key").ifBlank{firebaseDefaults.apiKey})}
     var email by remember(settings){mutableStateOf(current("firebase_email"))};var password by remember{mutableStateOf("")};var confirmRestore by remember{mutableStateOf(false)}
     LaunchedEffect(Unit){vm.reconcileFirebaseSession()}
     LaunchedEffect(state?.syncedUid){if(state?.syncedUid!=null)vm.observeCloudDashboard()}

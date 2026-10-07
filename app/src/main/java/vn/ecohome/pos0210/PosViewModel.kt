@@ -800,6 +800,21 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    if(changed>0) autoBackup()
   }
  }
+ fun resetPreOpeningSales(){
+  val e=currentEmployee.value?:return
+  if(e.role!="ADMIN"){printerMessage.value="CHỈ ADMIN ĐƯỢC XÓA DỮ LIỆU BÁN THỬ";return}
+  viewModelScope.launch(Dispatchers.IO){
+   val changed=repo.resetPreOpeningSales(
+    actorId=e.id,
+    autoTier=setting("loyalty_auto_tier").ifBlank{"true"}.toBoolean(),
+    vipMinPoints=setting("vip_min_points").toIntOrNull() ?: 200,
+    vvipMinPoints=setting("vvip_min_points").toIntOrNull() ?: 500
+   )
+   audit("SYSTEM","PREOPENING_SALES","RESET_PREOPENING_SALES","bills=$changed,operator=${e.name}")
+   printerMessage.value=if(changed>0)"ĐÃ XÓA $changed BILL BÁN THỬ · DỮ LIỆU NHẬP HÀNG GIỮ NGUYÊN" else "KHÔNG CÓ BILL ĐÃ THANH TOÁN ĐỂ XÓA"
+   if(changed>0) autoBackup()
+  }
+ }
  fun setCheckoutPrintTestMode(enabled:Boolean){
   val employee=currentEmployee.value
   if(employee?.role!="ADMIN"){checkoutPrintTestMode.value=false;return}

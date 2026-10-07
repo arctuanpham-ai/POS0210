@@ -150,9 +150,16 @@ object FirebaseCloudSync {
         // Realtime/business sync must not fail just because the independent private backup fails.
         // Backup is handled separately and keeps its own status/error.
         val backupError=runCatching{FirestorePrivateBackup.upload(context,fs,uid,now)}.exceptionOrNull()?.message?.take(180)
-        val mediaAttempt=runCatching{CloudMediaSync.uploadLocal(context,fs,uid)}
-        val mediaResult=mediaAttempt.getOrNull()
-        val mediaError=mediaAttempt.exceptionOrNull()?.message?.take(120) ?: mediaResult?.takeIf{it.errors>0}?.let{"${it.errors} media item(s) failed"}
+        // Reconcile both directions on every normal sync. A fresh device may have missed
+        // Storage during bootstrap; READY must therefore keep retrying missing media.
+        val mediaUploadAttempt=runCatching{CloudMediaSync.uploadLocal(context,fs,uid)}
+        val mediaResult=mediaUploadAttempt.getOrNull()
+        val mediaRestoreAttempt=runCatching{CloudMediaSync.restoreMissing(context,fs,uid)}
+        val mediaRestoreResult=mediaRestoreAttempt.getOrNull()
+        val mediaErrors=(mediaResult?.errors?:0)+(mediaRestoreResult?.errors?:0)
+        val mediaError=mediaUploadAttempt.exceptionOrNull()?.message?.take(100)
+            ?:mediaRestoreAttempt.exceptionOrNull()?.message?.take(100)
+            ?:mediaErrors.takeIf{it>0}?.let{"$it media item(s) failed"}
         dao.recoverInflightSync()
         val queued=dao.pendingSync(System.currentTimeMillis(),500)
         queued.forEach { q ->
@@ -160,7 +167,7 @@ object FirebaseCloudSync {
                 val ok=when(q.entityType){
                     "MENU_ITEM" -> true // menu mirror write above completed successfully
                     "COMBO" -> true // combo metadata is covered by private snapshot; media has its own intent
-                    "MEDIA" -> mediaResult!=null&&mediaResult.errors==0
+                    "MEDIA" -> mediaResult!=null&&mediaResult.errors==0&&mediaRestoreAttempt.isSuccess
                     else -> false
                 }
                 if(ok) dao.completeSync(q.id) else {

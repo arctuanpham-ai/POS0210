@@ -102,7 +102,7 @@ object FirebaseCloudSync {
                     val bootstrapNow=System.currentTimeMillis()
                     // DB is the operational prerequisite. Media is best-effort: a Storage/network
                     // failure must never keep a freshly restored POS from becoming usable.
-                    val mediaRestoreError=runCatching{CloudMediaSync.restoreRemote(context,fs,uid)}
+                    val mediaRestoreError=runCatching{CloudMediaSync.restoreMissing(context,fs,uid)}
                         .exceptionOrNull()?.message?.take(180)
                     restoredDao.updateBootstrapState("READY",bootstrapNow,bootstrapNow)
                     val restoredState=restoredDao.cloudSyncStateSnapshot()?:CloudSyncStateEntity()

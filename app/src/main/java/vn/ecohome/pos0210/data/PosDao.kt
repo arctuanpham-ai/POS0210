@@ -35,6 +35,13 @@ WHERE s.status='OPEN' GROUP BY s.id""") fun tableServiceTimings():Flow<List<Tabl
 @Query("SELECT COALESCE(SUM(qty*unitPriceSnapshot),0) FROM OrderItemEntity WHERE batchId IN (SELECT id FROM OrderBatchEntity WHERE sessionId=:sessionId AND status!='CANCELLED')") suspend fun sessionTotalSnapshot(sessionId:String):Long
 @Query("SELECT * FROM BillEntity WHERE status='PAID' AND dataScope='LIVE' ORDER BY closedAt DESC") fun paidBills():Flow<List<BillEntity>>
 @Query("SELECT * FROM BillEntity WHERE status='PAID' AND dataScope='LIVE' ORDER BY closedAt DESC") suspend fun allPaidBillsSnapshot():List<BillEntity>
+@Query("SELECT * FROM BillEntity WHERE status='PAID' AND dataScope='TEST' ORDER BY closedAt DESC") fun testPaidBills():Flow<List<BillEntity>>
+@Query("DELETE FROM PaymentEntity WHERE dataScope='TEST'") suspend fun deleteTestPayments():Int
+@Query("DELETE FROM BillAdjustmentEntity WHERE billId IN (SELECT id FROM BillEntity WHERE dataScope='TEST')") suspend fun deleteTestBillAdjustments():Int
+@Query("DELETE FROM BillEntity WHERE dataScope='TEST'") suspend fun deleteTestBills():Int
+@Query("DELETE FROM OrderItemEntity WHERE batchId IN (SELECT ob.id FROM OrderBatchEntity ob INNER JOIN TableSessionEntity s ON s.id=ob.sessionId WHERE s.dataScope='TEST')") suspend fun deleteTestOrderItems():Int
+@Query("DELETE FROM OrderBatchEntity WHERE sessionId IN (SELECT id FROM TableSessionEntity WHERE dataScope='TEST')") suspend fun deleteTestBatches():Int
+@Query("DELETE FROM TableSessionEntity WHERE dataScope='TEST'") suspend fun deleteTestSessions():Int
 @Query("SELECT * FROM BillEntity WHERE id=:id LIMIT 1") suspend fun billById(id:String):BillEntity?
 @Query("SELECT * FROM TableSessionEntity WHERE id=:id LIMIT 1") suspend fun sessionSnapshotById(id:String):TableSessionEntity?
 @Query("SELECT * FROM PaymentEntity WHERE billId=:billId LIMIT 1") suspend fun paymentByBillId(billId:String):PaymentEntity?

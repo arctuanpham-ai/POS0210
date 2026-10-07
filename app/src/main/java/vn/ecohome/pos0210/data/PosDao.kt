@@ -59,6 +59,8 @@ WHERE s.status='OPEN' GROUP BY s.id""") fun tableServiceTimings():Flow<List<Tabl
 @Query("SELECT * FROM CustomerPointTransactionEntity WHERE customerId=:customerId ORDER BY createdAt DESC") fun customerPoints(customerId:String):Flow<List<CustomerPointTransactionEntity>>
 @Query("SELECT b.customerId AS customerId, oi.itemNameSnapshot AS name, oi.qty AS qty FROM BillEntity b INNER JOIN OrderBatchEntity ob ON ob.sessionId=b.sessionId INNER JOIN OrderItemEntity oi ON oi.batchId=ob.id WHERE b.status='PAID' AND b.dataScope='LIVE' AND b.customerId IS NOT NULL AND ob.status!='CANCELLED'") fun customerItemStats():Flow<List<CustomerItemStatRow>>
 @Query("SELECT COALESCE(SUM(delta),0) FROM CustomerPointTransactionEntity WHERE billId=:billId") suspend fun pointDeltaForBill(billId:String):Int
+@Query("SELECT * FROM LoyaltyCampaignEntity WHERE active=1 ORDER BY createdAt") suspend fun activeLoyaltyCampaignsSnapshot():List<LoyaltyCampaignEntity>
+@Query("SELECT COUNT(*) FROM CustomerRewardEntity WHERE customerId=:customerId AND campaignId=:campaignId AND status IN ('AVAILABLE','REDEEMED')") suspend fun issuedRewardCount(customerId:String,campaignId:String):Int
 @Query("SELECT COALESCE(SUM(total),0) FROM BillEntity WHERE customerId=:customerId AND status='PAID' AND dataScope='LIVE'") suspend fun paidSpendForCustomer(customerId:String):Long
 @Query("SELECT COUNT(*) FROM BillEntity WHERE customerId=:customerId AND status='PAID' AND dataScope='LIVE'") suspend fun paidVisitCountForCustomer(customerId:String):Int
 @Query("SELECT MAX(closedAt) FROM BillEntity WHERE customerId=:customerId AND status='PAID' AND dataScope='LIVE'") suspend fun lastPaidVisitForCustomer(customerId:String):Long?

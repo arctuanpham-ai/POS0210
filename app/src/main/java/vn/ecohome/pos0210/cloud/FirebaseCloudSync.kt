@@ -76,6 +76,19 @@ object FirebaseCloudSync {
         dao.saveCloudSyncState(old.copy(lastAttemptAt=System.currentTimeMillis(),lastError=null))
         val c=config(context);require(c.valid){"Chưa cấu hình Firebase"};val firebaseApp=firebaseApp(context,c);val uid=FirebaseAuth.getInstance(firebaseApp).currentUser?.uid?:error("Chưa đăng nhập Firebase")
         val fs=FirebaseFirestore.getInstance(firebaseApp);val root=fs.collection("users").document(uid).collection("stores").document("0210")
+        // OFFLINE-FIRST bootstrap safety: a fresh/restored install must never publish
+        // bundled defaults or an empty local database before remote state is inspected.
+        // Full business-data bootstrap is handled by the restore/pull path; until that
+        // path marks READY we fail closed and leave local operation untouched.
+        if(old.bootstrapState!="READY"){
+            val remoteExists=stage("BOOTSTRAP_CHECK"){root.get().await().exists()}
+            if(remoteExists){
+                dao.updateBootstrapState("NEEDS_PULL",null,System.currentTimeMillis())
+                error("BOOTSTRAP_PULL_REQUIRED")
+            }
+            val bootstrapNow=System.currentTimeMillis()
+            dao.updateBootstrapState("READY",bootstrapNow,bootstrapNow)
+        }
         stage("PULL_FINANCE"){pullCloudFinance(root,dao)}
         stage("WRITE_FINANCE"){writeFinanceMirror(fs,root,dao)}
         val tables=dao.cloudTablesSnapshot();val sessions=dao.cloudSessionsSnapshot();val bills=dao.cloudBillsSnapshot();val payments=dao.cloudPaymentsSnapshot()

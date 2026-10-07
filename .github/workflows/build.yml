@@ -1,4 +1,5 @@
 name: POS0210 Build
+# legacy signing secrets configured
 on:
   push:
     branches: [ main, offline-first ]

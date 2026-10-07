@@ -21,6 +21,31 @@ class PosRepository(private val db:PosDatabase){
     suspend fun saveSupplier(v:SupplierEntity)=dao.saveSupplier(v)
     suspend fun savePurchaseCategory(v:PurchaseCategoryEntity)=dao.savePurchaseCategory(v)
 
+    suspend fun evaluateLoyalty(customerId:String,sourceBillId:String):List<CustomerRewardEntity>{
+        val now=System.currentTimeMillis()
+        val visits=dao.paidVisitCountForCustomer(customerId).toLong()
+        val spend=dao.paidSpendForCustomer(customerId)
+        val points=dao.pointBalanceForCustomer(customerId).toLong()
+        val earned=mutableListOf<CustomerRewardEntity>()
+        db.withTransaction {
+            dao.activeLoyaltyCampaignsSnapshot().forEach { campaign ->
+                if(campaign.threshold<=0)return@forEach
+                val progress=when(campaign.triggerType){"BILL_COUNT"->visits;"SPEND"->spend;"POINTS"->points;else->0L}
+                val eligible=if(campaign.cycleMode=="REPEAT") progress/campaign.threshold else if(progress>=campaign.threshold) 1L else 0L
+                val issued=dao.issuedRewardCount(customerId,campaign.id).toLong()
+                if(eligible>issued && dao.rewardExists(customerId,campaign.id,sourceBillId)==0){
+                    val expires=campaign.expiresDays?.let{now+it*86_400_000L}
+                    val snapshot=campaign.name+"|"+campaign.rewardType+"|"+campaign.rewardValue+"|"+(campaign.rewardMenuItemId?:"")+"|"+(campaign.rewardCategoryId?:"")
+                    val reward=CustomerRewardEntity(UUID.randomUUID().toString(),customerId,campaign.id,sourceBillId,"AVAILABLE",now,expires,rewardSnapshot=snapshot)
+                    dao.insertCustomerReward(reward)
+                    dao.enqueueSync(SyncQueueEntity(UUID.randomUUID().toString(),"CUSTOMER_REWARD",reward.id,"UPSERT","",now,now))
+                    earned+=reward
+                }
+            }
+        }
+        return earned
+    }
+
     suspend fun openSession(tableId:String,employeeId:String,dataScope:String="LIVE"):TableSessionEntity {
         val now=System.currentTimeMillis(); require(dataScope=="LIVE"||dataScope=="TEST"); val s=TableSessionEntity(UUID.randomUUID().toString(),tableId,now,employeeId,dataScope=dataScope)
         db.withTransaction { dao.insertSession(s); dao.audit(AuditEventEntity(UUID.randomUUID().toString(),"SESSION",s.id,"OPEN",employeeId,null,now,tableId)) }

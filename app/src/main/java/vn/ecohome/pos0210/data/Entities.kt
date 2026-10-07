@@ -48,6 +48,12 @@ data class AttendanceSessionEntity(
  val updatedAt:Long=System.currentTimeMillis()
 )
 
+@Entity(indices=[Index("active"),Index("triggerType")])
+data class LoyaltyCampaignEntity(@PrimaryKey val id:String,val name:String,val triggerType:String,val threshold:Long,val rewardType:String,val rewardValue:Long=0,val rewardMenuItemId:String?=null,val rewardCategoryId:String?=null,val cycleMode:String="REPEAT",val expiresDays:Int?=null,val active:Boolean=true,val createdAt:Long,val updatedAt:Long)
+
+@Entity(indices=[Index("customerId"),Index("campaignId"),Index("status"),Index("earnedAt")])
+data class CustomerRewardEntity(@PrimaryKey val id:String,val customerId:String,val campaignId:String,val sourceBillId:String?,val status:String="AVAILABLE",val earnedAt:Long,val expiresAt:Long?=null,val redeemedAt:Long?=null,val redeemedBillId:String?=null,val rewardSnapshot:String="")
+
 @Entity(indices=[Index("status"),Index("nextAttemptAt"),Index(value=["entityType","entityId"],unique=true)])
 data class SyncQueueEntity(@PrimaryKey val id:String,val entityType:String,val entityId:String,val operation:String="UPSERT",val payload:String="",val createdAt:Long,val updatedAt:Long,val attempts:Int=0,val nextAttemptAt:Long=0,val status:String="PENDING",val lastError:String?=null)
 @Entity(indices=[Index("tableSessionId"),Index(value=["paymentCode"],unique=true),Index("status"),Index("expiresAt")])

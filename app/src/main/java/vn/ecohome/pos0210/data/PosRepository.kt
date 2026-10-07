@@ -246,6 +246,19 @@ class PosRepository(private val db:PosDatabase){
         changed
     }
 
+    suspend fun resetPreOpeningSales(actorId:String,autoTier:Boolean,vipMinPoints:Int,vvipMinPoints:Int):Int {
+        val targets=dao.allPaidBillsSnapshot()
+        if(targets.isEmpty()) return 0
+        return deleteBillsAtomic(
+            targets=targets,
+            reason="RESET_BAN_THU_TRUOC_KHAI_TRUONG",
+            actorId=actorId,
+            autoTier=autoTier,
+            vipMinPoints=vipMinPoints,
+            vvipMinPoints=vvipMinPoints
+        )
+    }
+
     suspend fun deletePurchaseAudited(purchase:PurchaseEntity,reason:String,actorId:String,linkedAssetId:String?=null):Boolean =
         db.withTransaction {
             val changed=dao.softDeletePurchase(purchase.id)

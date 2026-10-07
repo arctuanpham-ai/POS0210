@@ -9,7 +9,14 @@ class PosRepository(private val db:PosDatabase){
     suspend fun saveArea(v:AreaEntity)=dao.saveArea(v)
     suspend fun saveTable(v:DiningTableEntity)=dao.saveTable(v)
     suspend fun saveCategory(v:MenuCategoryEntity)=dao.saveCategory(v)
-    suspend fun saveMenuItem(v:MenuItemEntity)=dao.saveMenuItem(v)
+    suspend fun saveMenuItem(v:MenuItemEntity){
+        val now=System.currentTimeMillis()
+        db.withTransaction {
+            dao.saveMenuItem(v)
+            dao.enqueueSync(SyncQueueEntity(UUID.randomUUID().toString(),"MENU_ITEM",v.id,"UPSERT","",now,now))
+            if(!v.imageUri.isNullOrBlank()) dao.enqueueSync(SyncQueueEntity(UUID.randomUUID().toString(),"MEDIA","menu_"+v.id,"UPSERT",v.imageUri,now,now))
+        }
+    }
     suspend fun saveEmployee(v:EmployeeEntity)=dao.saveEmployee(v)
     suspend fun saveSupplier(v:SupplierEntity)=dao.saveSupplier(v)
     suspend fun savePurchaseCategory(v:PurchaseCategoryEntity)=dao.savePurchaseCategory(v)

@@ -34,6 +34,11 @@ object CloudMediaSync {
         }
     }.getOrNull()?.takeIf{it.isNotEmpty()&&it.size<=MAX_MEDIA_BYTES}
 
+    suspend fun cloudManifestCount(context:Context,fs:FirebaseFirestore,uid:String):Int =
+        withTimeout(MANIFEST_TIMEOUT_MS){
+            fs.collection("users").document(uid).collection("stores").document(STORE_ID).collection("media").get().await().size()
+        }
+
     suspend fun uploadLocal(context:Context,fs:FirebaseFirestore,uid:String):CloudMediaResult {
         val dao=PosDatabase.get(context).dao()
         val items=dao.allMenuSnapshot().mapNotNull{m->m.imageUri?.takeIf(String::isNotBlank)?.let{Triple("menu",m.id,it)}}

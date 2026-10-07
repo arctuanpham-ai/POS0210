@@ -2995,6 +2995,19 @@ fun Report(vm: PosViewModel) {
     var selectedBillIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var showBulkDelete by remember { mutableStateOf(false) }
     var bulkDeleteReason by remember { mutableStateOf("") }
+    val reportContext = LocalContext.current
+    fun shareAiExport(){
+        vm.exportAiBusinessData { uri, name ->
+            val intent=Intent(Intent.ACTION_SEND).apply{
+                type="application/json"
+                putExtra(Intent.EXTRA_STREAM,uri)
+                putExtra(Intent.EXTRA_SUBJECT,"POS0210 · Dữ liệu kinh doanh cho AI")
+                putExtra(Intent.EXTRA_TEXT,"Phân tích file dữ liệu POS0210 đính kèm: doanh thu, bill trung bình, món/giá/số lượng, xu hướng theo thời gian, nhập hàng, chi phí, tài sản/khấu hao, dòng tiền và đề xuất chiến lược kinh doanh.")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            reportContext.startActivity(Intent.createChooser(intent,"Gửi $name để AI phân tích"))
+        }
+    }
 
     fun periodStart(days: Int): Long {
         return Calendar.getInstance().apply {
@@ -3108,6 +3121,10 @@ fun Report(vm: PosViewModel) {
             FilterChip(section == "PURCHASES", { section = "PURCHASES" }, { Text("CHI / NGƯỜI CHI") })
             FilterChip(section == "MONTHLY", { section = "MONTHLY" }, { Text("BÁO CÁO THÁNG") })
         }
+        OutlinedButton(
+            onClick={shareAiExport()},
+            modifier=Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=4.dp)
+        ){ Text("XUẤT DỮ LIỆU CHO AI") }
 
         if(section == "PURCHASES") {
             Row(

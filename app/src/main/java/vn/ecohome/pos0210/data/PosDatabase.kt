@@ -197,10 +197,7 @@ abstract class PosDatabase:RoomDatabase(){
     db.execSQL("ALTER TABLE TableSessionEntity ADD COLUMN dataScope TEXT NOT NULL DEFAULT 'LIVE'")
     db.execSQL("ALTER TABLE BillEntity ADD COLUMN dataScope TEXT NOT NULL DEFAULT 'LIVE'")
     db.execSQL("ALTER TABLE PaymentEntity ADD COLUMN dataScope TEXT NOT NULL DEFAULT 'LIVE'")
-    db.execSQL("CREATE INDEX IF NOT EXISTS index_TableSessionEntity_dataScope ON TableSessionEntity(dataScope)")
-    db.execSQL("CREATE INDEX IF NOT EXISTS index_BillEntity_dataScope ON BillEntity(dataScope)")
-    db.execSQL("CREATE INDEX IF NOT EXISTS index_PaymentEntity_dataScope ON PaymentEntity(dataScope)")
-   }
+       }
   }
   fun get(context:Context):PosDatabase=instance?:synchronized(this){
    instance?:Room.databaseBuilder(context.applicationContext,PosDatabase::class.java,"pos0210.db")

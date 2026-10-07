@@ -190,6 +190,14 @@ WHERE s.status='OPEN' GROUP BY s.id""") fun tableServiceTimings():Flow<List<Tabl
 @Insert(onConflict=OnConflictStrategy.ABORT) suspend fun insertOpeningCashAdjustment(v:OpeningCashAdjustmentEntity)
 @Insert(onConflict=OnConflictStrategy.ABORT) suspend fun audit(v:AuditEventEntity)
 @Query("UPDATE MenuItemEntity SET active=:active WHERE id=:id") suspend fun setMenuActive(id:String,active:Boolean)
+@Query("SELECT * FROM LoyaltyCampaignEntity WHERE active=1 ORDER BY createdAt") fun activeLoyaltyCampaigns():Flow<List<LoyaltyCampaignEntity>>
+@Query("SELECT * FROM LoyaltyCampaignEntity ORDER BY active DESC,createdAt DESC") fun allLoyaltyCampaigns():Flow<List<LoyaltyCampaignEntity>>
+@Query("SELECT * FROM CustomerRewardEntity WHERE customerId=:customerId AND status='AVAILABLE' ORDER BY earnedAt") fun availableRewards(customerId:String):Flow<List<CustomerRewardEntity>>
+@Query("SELECT COUNT(*) FROM CustomerRewardEntity WHERE customerId=:customerId AND campaignId=:campaignId AND sourceBillId=:billId") suspend fun rewardExists(customerId:String,campaignId:String,billId:String):Int
+@Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun upsertLoyaltyCampaign(v:LoyaltyCampaignEntity)
+@Insert(onConflict=OnConflictStrategy.ABORT) suspend fun insertCustomerReward(v:CustomerRewardEntity)
+@Query("UPDATE LoyaltyCampaignEntity SET active=:active,updatedAt=:at WHERE id=:id") suspend fun setLoyaltyCampaignActive(id:String,active:Boolean,at:Long)
+@Query("UPDATE CustomerRewardEntity SET status='REDEEMED',redeemedAt=:at,redeemedBillId=:billId WHERE id=:id AND status='AVAILABLE'") suspend fun redeemReward(id:String,billId:String,at:Long):Int
 @Query("UPDATE MenuCategoryEntity SET active=:active WHERE id=:id") suspend fun setCategoryActive(id:String,active:Boolean)
 @Query("UPDATE PurchaseCategoryEntity SET active=:active WHERE id=:id") suspend fun setPurchaseCategoryActive(id:String,active:Boolean)
 @Query("UPDATE CostCodeEntity SET active=:active WHERE id=:id") suspend fun setCostCodeActive(id:String,active:Boolean)

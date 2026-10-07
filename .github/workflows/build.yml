@@ -18,20 +18,33 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Temporary CI signing key when legacy key is not imported yet
+      - name: Restore legacy POS0210 signing key
+        env:
+          POS0210_KEYSTORE_BASE64: ${{ secrets.POS0210_KEYSTORE_BASE64 }}
+          POS0210_KEYSTORE_PASSWORD: ${{ secrets.POS0210_KEYSTORE_PASSWORD }}
+          POS0210_KEY_ALIAS: ${{ secrets.POS0210_KEY_ALIAS }}
         run: |
-          if [ ! -f app/pos0210-debug.keystore ]; then
-            keytool -genkeypair -v -keystore app/pos0210-debug.keystore -storepass 0210debug -alias pos0210debug -keypass 0210debug -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=POS0210 CI"
-          fi
+          test -n "$POS0210_KEYSTORE_BASE64"
+          test -n "$POS0210_KEYSTORE_PASSWORD"
+          test -n "$POS0210_KEY_ALIAS"
+          printf '%s' "$POS0210_KEYSTORE_BASE64" | base64 --decode > app/pos0210-debug.keystore
+          test -s app/pos0210-debug.keystore
+          keytool -list -v -keystore app/pos0210-debug.keystore -storepass "$POS0210_KEYSTORE_PASSWORD" -alias "$POS0210_KEY_ALIAS" | grep -E 'Alias name:|Entry type:|SHA256:'
       - name: Unit tests and APK
+        env:
+          POS0210_KEYSTORE_PASSWORD: ${{ secrets.POS0210_KEYSTORE_PASSWORD }}
+          POS0210_KEY_ALIAS: ${{ secrets.POS0210_KEY_ALIAS }}
+          POS0210_KEY_PASSWORD: ${{ secrets.POS0210_KEY_PASSWORD }}
         run: gradle --no-daemon testDebugUnitTest :app:assembleDebug --stacktrace
-      - name: Verify APK
+      - name: Verify APK and legacy certificate
         run: |
           test -s app/build/outputs/apk/debug/app-debug.apk
-          $ANDROID_HOME/build-tools/35.0.0/apksigner verify --verbose --print-certs app/build/outputs/apk/debug/app-debug.apk
+          CERT="$($ANDROID_HOME/build-tools/35.0.0/apksigner verify --verbose --print-certs app/build/outputs/apk/debug/app-debug.apk)"
+          echo "$CERT"
+          echo "$CERT" | grep -qi 'f552d0f158efb1a3573060ce496b3bf456ab005d20df0f7d893d9ec3bca11fe3'
           sha256sum app/build/outputs/apk/debug/app-debug.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: POS0210-debug-${{ github.sha }}
+          name: POS0210-signed-${{ github.sha }}
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error

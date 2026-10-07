@@ -21,8 +21,8 @@ class PosRepository(private val db:PosDatabase){
     suspend fun saveSupplier(v:SupplierEntity)=dao.saveSupplier(v)
     suspend fun savePurchaseCategory(v:PurchaseCategoryEntity)=dao.savePurchaseCategory(v)
 
-    suspend fun openSession(tableId:String,employeeId:String):TableSessionEntity {
-        val now=System.currentTimeMillis(); val s=TableSessionEntity(UUID.randomUUID().toString(),tableId,now,employeeId)
+    suspend fun openSession(tableId:String,employeeId:String,dataScope:String="LIVE"):TableSessionEntity {
+        val now=System.currentTimeMillis(); require(dataScope=="LIVE"||dataScope=="TEST"); val s=TableSessionEntity(UUID.randomUUID().toString(),tableId,now,employeeId,dataScope=dataScope)
         db.withTransaction { dao.insertSession(s); dao.audit(AuditEventEntity(UUID.randomUUID().toString(),"SESSION",s.id,"OPEN",employeeId,null,now,tableId)) }
         return s
     }
@@ -114,7 +114,8 @@ class PosRepository(private val db:PosDatabase){
         require(preview.subtotal>=0L && preview.total>=0L && preview.surcharge>=0L && preview.discount>=0L) { "INVALID_PAYMENT_AMOUNT" }
         require(preview.total == (preview.subtotal + preview.surcharge - preview.discount).coerceAtLeast(0L)) { "PRICING_TOTAL_MISMATCH" }
         val now=System.currentTimeMillis()
-        val normalizedPhone=customerPhone.filter(Char::isDigit).take(15)
+        val isTest=session.dataScope=="TEST"
+        val normalizedPhone=if(isTest) "" else customerPhone.filter(Char::isDigit).take(15)
         if(normalizedPhone.isNotBlank()) require(normalizedPhone.length>=9) { "INVALID_CUSTOMER_PHONE" }
         return db.withTransaction {
             if(dao.unfulfilledCountForSession(session.id)>0) error("PENDING_ORDER_NOT_COMPLETED")
@@ -154,12 +155,12 @@ class PosRepository(private val db:PosDatabase){
 
             val bill=BillEntity(
                 UUID.randomUUID().toString(),session.id,billNo,session.openedAt,now,
-                preview.subtotal,preview.total,"PAID",customer?.id
+                preview.subtotal,preview.total,"PAID",customer?.id,dataScope=session.dataScope
             )
 
             if(dao.closeSession(session.id,session.version)!=1) error("SESSION_ALREADY_CLOSED_OR_CHANGED")
             dao.insertBill(bill)
-            dao.insertPayment(PaymentEntity(UUID.randomUUID().toString(),bill.id,method,preview.total,cashierId,now))
+            dao.insertPayment(PaymentEntity(UUID.randomUUID().toString(),bill.id,method,preview.total,cashierId,now,dataScope=session.dataScope))
 
             customer?.let { cu ->
                 dao.saveCustomer(cu)
@@ -192,7 +193,7 @@ class PosRepository(private val db:PosDatabase){
 
             dao.audit(AuditEventEntity(
                 UUID.randomUUID().toString(),"BILL",bill.id,"PAID",cashierId,null,now,
-                "method=$method,subtotal=${preview.subtotal},total=${preview.total},customer=${customer?.id.orEmpty()}"
+                "method=$method,subtotal=${preview.subtotal},total=${preview.total},customer=${customer?.id.orEmpty()},scope=${session.dataScope}"
             ))
 
             PaymentCommitResult(bill,customer,pointsBefore,pointsEarned,pointsAfter,tier)

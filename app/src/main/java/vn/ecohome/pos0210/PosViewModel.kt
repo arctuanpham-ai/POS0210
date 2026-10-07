@@ -273,6 +273,9 @@ class PosViewModel(app:Application):AndroidViewModel(app){
    val cleanItems=items.filterValues{it>0}
    db.withTransaction {
     dao.saveCombo(ComboEntity(id,name.trim(),price,managed,initial?.sortOrder?:combos.value.size+1,initial?.active?:true,description.trim()))
+    val queueNow=System.currentTimeMillis()
+    dao.enqueueSync(SyncQueueEntity(UUID.randomUUID().toString(),"COMBO",id,"UPSERT","",queueNow,queueNow))
+    if(!managed.isNullOrBlank()) dao.enqueueSync(SyncQueueEntity(UUID.randomUUID().toString(),"MEDIA","combo_"+id,"UPSERT",managed,queueNow,queueNow))
     if(initial!=null)dao.deleteComboItems(id)
     cleanItems.forEach{(menuItemId,qty)->
      dao.saveComboItem(ComboItemEntity(UUID.randomUUID().toString(),id,menuItemId,qty))

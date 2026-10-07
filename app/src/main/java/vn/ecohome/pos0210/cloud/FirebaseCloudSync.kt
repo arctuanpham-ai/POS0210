@@ -125,7 +125,7 @@ object FirebaseCloudSync {
         // Realtime/business sync must not fail just because the independent private backup fails.
         // Backup is handled separately and keeps its own status/error.
         val backupError=runCatching{FirestorePrivateBackup.upload(context,fs,uid,now)}.exceptionOrNull()?.message?.take(240)
-        dao.saveCloudSyncState(old.copy(enabled=true,dirty=false,lastAttemptAt=now,lastSuccessAt=now,lastError=backupError?.let{"PRIVATE_BACKUP_ONLY: $it"},syncedUid=uid))
+        val currentState=dao.cloudSyncStateSnapshot()?:old\n        dao.saveCloudSyncState(currentState.copy(enabled=true,dirty=false,lastAttemptAt=now,lastSuccessAt=now,lastError=backupError?.let{"PRIVATE_BACKUP_ONLY: $it"},syncedUid=uid))
     }.onFailure{e->
         val dao=PosDatabase.get(context).dao();val old=dao.cloudSyncStateSnapshot()?:CloudSyncStateEntity();dao.saveCloudSyncState(old.copy(lastAttemptAt=System.currentTimeMillis(),lastError=e.message?.take(300)))
     }}

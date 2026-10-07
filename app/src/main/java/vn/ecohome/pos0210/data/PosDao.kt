@@ -33,28 +33,28 @@ WHERE s.status='OPEN' GROUP BY s.id""") fun tableServiceTimings():Flow<List<Tabl
 @Query("SELECT * FROM OrderItemEntity WHERE batchId=:batchId") fun batchItems(batchId:String):Flow<List<OrderItemEntity>>
 @Query("SELECT COALESCE(SUM(qty*unitPriceSnapshot),0) FROM OrderItemEntity WHERE batchId IN (SELECT id FROM OrderBatchEntity WHERE sessionId=:sessionId AND status!='CANCELLED')") fun sessionTotal(sessionId:String):Flow<Long>
 @Query("SELECT COALESCE(SUM(qty*unitPriceSnapshot),0) FROM OrderItemEntity WHERE batchId IN (SELECT id FROM OrderBatchEntity WHERE sessionId=:sessionId AND status!='CANCELLED')") suspend fun sessionTotalSnapshot(sessionId:String):Long
-@Query("SELECT * FROM BillEntity WHERE status='PAID' ORDER BY closedAt DESC") fun paidBills():Flow<List<BillEntity>>
-@Query("SELECT * FROM BillEntity WHERE status='PAID' ORDER BY closedAt DESC") suspend fun allPaidBillsSnapshot():List<BillEntity>
+@Query("SELECT * FROM BillEntity WHERE status='PAID' AND dataScope='LIVE' ORDER BY closedAt DESC") fun paidBills():Flow<List<BillEntity>>
+@Query("SELECT * FROM BillEntity WHERE status='PAID' AND dataScope='LIVE' ORDER BY closedAt DESC") suspend fun allPaidBillsSnapshot():List<BillEntity>
 @Query("SELECT * FROM BillEntity WHERE id=:id LIMIT 1") suspend fun billById(id:String):BillEntity?
 @Query("SELECT * FROM TableSessionEntity WHERE id=:id LIMIT 1") suspend fun sessionSnapshotById(id:String):TableSessionEntity?
 @Query("SELECT * FROM PaymentEntity WHERE billId=:billId LIMIT 1") suspend fun paymentByBillId(billId:String):PaymentEntity?
 @Query("SELECT * FROM BillAdjustmentEntity WHERE billId=:billId ORDER BY appliedAt") suspend fun adjustmentsByBillId(billId:String):List<BillAdjustmentEntity>
-@Query("SELECT * FROM PaymentEntity ORDER BY paidAt DESC") fun payments():Flow<List<PaymentEntity>>
+@Query("SELECT * FROM PaymentEntity WHERE dataScope='LIVE' ORDER BY paidAt DESC") fun payments():Flow<List<PaymentEntity>>
 @Query("SELECT * FROM CustomerEntity WHERE active=1 ORDER BY lastVisitAt DESC") fun customers():Flow<List<CustomerEntity>>
 @Query("SELECT * FROM CustomerEntity WHERE phone=:phone AND active=1 LIMIT 1") suspend fun customerByPhone(phone:String):CustomerEntity?
 @Query("SELECT * FROM CustomerEntity WHERE id=:id LIMIT 1") suspend fun customerById(id:String):CustomerEntity?
 @Query("SELECT * FROM CustomerPointTransactionEntity WHERE customerId=:customerId ORDER BY createdAt DESC") fun customerPoints(customerId:String):Flow<List<CustomerPointTransactionEntity>>
-@Query("SELECT b.customerId AS customerId, oi.itemNameSnapshot AS name, oi.qty AS qty FROM BillEntity b INNER JOIN OrderBatchEntity ob ON ob.sessionId=b.sessionId INNER JOIN OrderItemEntity oi ON oi.batchId=ob.id WHERE b.status='PAID' AND b.customerId IS NOT NULL AND ob.status!='CANCELLED'") fun customerItemStats():Flow<List<CustomerItemStatRow>>
+@Query("SELECT b.customerId AS customerId, oi.itemNameSnapshot AS name, oi.qty AS qty FROM BillEntity b INNER JOIN OrderBatchEntity ob ON ob.sessionId=b.sessionId INNER JOIN OrderItemEntity oi ON oi.batchId=ob.id WHERE b.status='PAID' AND b.dataScope='LIVE' AND b.customerId IS NOT NULL AND ob.status!='CANCELLED'") fun customerItemStats():Flow<List<CustomerItemStatRow>>
 @Query("SELECT COALESCE(SUM(delta),0) FROM CustomerPointTransactionEntity WHERE billId=:billId") suspend fun pointDeltaForBill(billId:String):Int
-@Query("SELECT COALESCE(SUM(total),0) FROM BillEntity WHERE customerId=:customerId AND status='PAID'") suspend fun paidSpendForCustomer(customerId:String):Long
-@Query("SELECT COUNT(*) FROM BillEntity WHERE customerId=:customerId AND status='PAID'") suspend fun paidVisitCountForCustomer(customerId:String):Int
-@Query("SELECT MAX(closedAt) FROM BillEntity WHERE customerId=:customerId AND status='PAID'") suspend fun lastPaidVisitForCustomer(customerId:String):Long?
+@Query("SELECT COALESCE(SUM(total),0) FROM BillEntity WHERE customerId=:customerId AND status='PAID' AND dataScope='LIVE'") suspend fun paidSpendForCustomer(customerId:String):Long
+@Query("SELECT COUNT(*) FROM BillEntity WHERE customerId=:customerId AND status='PAID' AND dataScope='LIVE'") suspend fun paidVisitCountForCustomer(customerId:String):Int
+@Query("SELECT MAX(closedAt) FROM BillEntity WHERE customerId=:customerId AND status='PAID' AND dataScope='LIVE'") suspend fun lastPaidVisitForCustomer(customerId:String):Long?
 @Query("SELECT COALESCE(SUM(delta),0) FROM CustomerPointTransactionEntity WHERE customerId=:customerId") suspend fun pointBalanceForCustomer(customerId:String):Int
 @Query("SELECT * FROM PricingRuleEntity ORDER BY name") fun pricingRules():Flow<List<PricingRuleEntity>>
 @Query("SELECT * FROM PricingRuleEntity WHERE active=1") suspend fun activePricingRulesSnapshot():List<PricingRuleEntity>
 @Query("SELECT * FROM PricingRuleEntity ORDER BY name") suspend fun allPricingRulesSnapshot():List<PricingRuleEntity>
 @Query("SELECT * FROM BillAdjustmentEntity ORDER BY appliedAt DESC") fun billAdjustments():Flow<List<BillAdjustmentEntity>>
-@Query("SELECT oi.itemNameSnapshot AS name, oi.qty AS qty, ob.sessionId AS sessionId FROM OrderItemEntity oi INNER JOIN OrderBatchEntity ob ON ob.id=oi.batchId INNER JOIN BillEntity b ON b.sessionId=ob.sessionId WHERE b.status='PAID' AND ob.status!='CANCELLED'") fun paidItemSales():Flow<List<ItemSaleRow>>
+@Query("SELECT oi.itemNameSnapshot AS name, oi.qty AS qty, ob.sessionId AS sessionId FROM OrderItemEntity oi INNER JOIN OrderBatchEntity ob ON ob.id=oi.batchId INNER JOIN BillEntity b ON b.sessionId=ob.sessionId WHERE b.status='PAID' AND b.dataScope='LIVE' AND ob.status!='CANCELLED'") fun paidItemSales():Flow<List<ItemSaleRow>>
 @Query("SELECT * FROM PurchaseEntity WHERE status='ACTIVE' ORDER BY purchasedAt DESC") fun purchases():Flow<List<PurchaseEntity>>
 @Query("SELECT * FROM PurchaseEntity ORDER BY purchasedAt DESC") suspend fun allPurchasesSnapshot():List<PurchaseEntity>
 @Query("SELECT pi.purchaseId AS purchaseId, pi.categoryId AS categoryId, pi.amount AS amount, p.purchasedAt AS purchasedAt FROM PurchaseItemEntity pi INNER JOIN PurchaseEntity p ON p.id=pi.purchaseId WHERE p.status='ACTIVE'") fun purchaseCosts():Flow<List<PurchaseCostRow>>
@@ -67,7 +67,7 @@ WHERE s.status='OPEN' GROUP BY s.id""") fun tableServiceTimings():Flow<List<Tabl
 @Query("SELECT * FROM PurchaseItemEntity WHERE purchaseId=:purchaseId") fun purchaseItems(purchaseId:String):Flow<List<PurchaseItemEntity>>
 @Query("SELECT * FROM MonthlyAccountingEntity") fun monthlyAccounting():Flow<List<MonthlyAccountingEntity>>
 @Query("SELECT * FROM MonthlyAccountingEntity ORDER BY monthKey") suspend fun allMonthlyAccountingSnapshot():List<MonthlyAccountingEntity>
-@Query("SELECT * FROM PaymentEntity ORDER BY paidAt DESC") suspend fun allPaymentsSnapshot():List<PaymentEntity>
+@Query("SELECT * FROM PaymentEntity WHERE dataScope='LIVE' ORDER BY paidAt DESC") suspend fun allPaymentsSnapshot():List<PaymentEntity>
 @Query("SELECT * FROM TableSessionEntity ORDER BY openedAt DESC") suspend fun allSessionsSnapshot():List<TableSessionEntity>
 @Query("SELECT * FROM OrderBatchEntity ORDER BY createdAt") suspend fun allOrderBatchesSnapshot():List<OrderBatchEntity>
 @Query("SELECT * FROM OrderItemEntity") suspend fun allOrderItemsSnapshot():List<OrderItemEntity>
@@ -109,7 +109,7 @@ WHERE s.status='OPEN' GROUP BY s.id""") fun tableServiceTimings():Flow<List<Tabl
 @Query("SELECT * FROM OrderBatchEntity ORDER BY createdAt") suspend fun cloudOrderBatchesSnapshot():List<OrderBatchEntity>
 @Query("SELECT * FROM OrderItemEntity") suspend fun cloudOrderItemsSnapshot():List<OrderItemEntity>
 @Query("SELECT * FROM BillEntity ORDER BY openedAt DESC") suspend fun cloudBillsSnapshot():List<BillEntity>
-@Query("SELECT * FROM PaymentEntity ORDER BY paidAt DESC") suspend fun cloudPaymentsSnapshot():List<PaymentEntity>
+@Query("SELECT * FROM PaymentEntity WHERE dataScope='LIVE' ORDER BY paidAt DESC") suspend fun cloudPaymentsSnapshot():List<PaymentEntity>
 @Query("SELECT * FROM PurchaseEntity ORDER BY purchasedAt DESC") suspend fun cloudPurchasesSnapshot():List<PurchaseEntity>
 @Query("SELECT * FROM MonthlyAccountingEntity ORDER BY monthKey") suspend fun cloudAccountingSnapshot():List<MonthlyAccountingEntity>
 @Query("SELECT * FROM AssetEntity ORDER BY purchaseDate") suspend fun cloudAssetsSnapshot():List<AssetEntity>

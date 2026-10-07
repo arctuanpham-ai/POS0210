@@ -1207,7 +1207,7 @@ fun TestModeManager(vm:PosViewModel){
             Text("CHẾ ĐỘ TEST BÁN HÀNG",fontSize=18.sp,fontWeight=FontWeight.Black)
             Text("Order → gửi bếp → thanh toán → in/reprint vẫn hoạt động. Bill TEST không tính vào doanh thu LIVE, không cộng điểm khách.")
             Row(verticalAlignment=Alignment.CenterVertically){
-                Text(if(enabled)"TEST MODE ĐANG BẬT":"ĐANG Ở CHẾ ĐỘ LIVE",Modifier.weight(1f),fontWeight=FontWeight.Bold,color=if(enabled)Color.Red else Color.Unspecified)
+                Text(if(enabled) "TEST MODE ĐANG BẬT" else "ĐANG Ở CHẾ ĐỘ LIVE",Modifier.weight(1f),fontWeight=FontWeight.Bold,color=if(enabled) Color.Red else Color.Unspecified)
                 Switch(enabled,{vm.setBusinessTestMode(it)})
             }
             Text("Bill TEST đã thanh toán: ${testBills.size}")

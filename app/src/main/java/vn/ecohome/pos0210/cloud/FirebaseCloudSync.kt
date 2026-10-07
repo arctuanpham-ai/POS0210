@@ -100,7 +100,20 @@ object FirebaseCloudSync {
                     stage("BOOTSTRAP_RESTORE"){FirestorePrivateBackup.restoreLatest(context)}
                     val restoredDao=PosDatabase.get(context).dao()
                     val bootstrapNow=System.currentTimeMillis()
+                    // DB is the operational prerequisite. Media is best-effort: a Storage/network
+                    // failure must never keep a freshly restored POS from becoming usable.
+                    val mediaRestoreError=runCatching{CloudMediaSync.restoreRemote(context,fs,uid)}
+                        .exceptionOrNull()?.message?.take(180)
                     restoredDao.updateBootstrapState("READY",bootstrapNow,bootstrapNow)
+                    val restoredState=restoredDao.cloudSyncStateSnapshot()?:CloudSyncStateEntity()
+                    restoredDao.saveCloudSyncState(restoredState.copy(
+                        enabled=true,
+                        dirty=false,
+                        lastAttemptAt=bootstrapNow,
+                        lastSuccessAt=bootstrapNow,
+                        lastError=mediaRestoreError?.let{"MEDIA_RESTORE_ONLY: $it"},
+                        syncedUid=uid
+                    ))
                     return@runCatching
                 }
                 val bootstrapNow=System.currentTimeMillis()

@@ -34,6 +34,20 @@ import androidx.room.PrimaryKey
 @Entity(indices=[Index("entityId")]) data class AuditEventEntity(@PrimaryKey val id:String,val entityType:String,val entityId:String,val action:String,val actorId:String?,val deviceId:String?,val occurredAt:Long,val payload:String="")
 @Entity data class AppSettingEntity(@PrimaryKey val key:String,val value:String)
 @Entity data class CloudSyncStateEntity(@PrimaryKey val id:String="firebase",val enabled:Boolean=false,val dirty:Boolean=true,val lastAttemptAt:Long?=null,val lastSuccessAt:Long?=null,val lastError:String?=null,val syncedUid:String?=null,val bootstrapState:String="NEEDS_PULL",val bootstrapCompletedAt:Long?=null,val lastPullAt:Long?=null)
+@Entity(indices=[Index("employeeId"),Index("checkInAt"),Index("status")])
+data class AttendanceSessionEntity(
+ @PrimaryKey val id:String,
+ val employeeId:String,
+ val checkInAt:Long,
+ val checkOutAt:Long?=null,
+ val status:String="OPEN",
+ val hourlyRate:Long=0,
+ val multiplierBasisPoints:Int=10000,
+ val note:String="",
+ val createdAt:Long=System.currentTimeMillis(),
+ val updatedAt:Long=System.currentTimeMillis()
+)
+
 @Entity(indices=[Index("status"),Index("nextAttemptAt"),Index(value=["entityType","entityId"],unique=true)])
 data class SyncQueueEntity(@PrimaryKey val id:String,val entityType:String,val entityId:String,val operation:String="UPSERT",val payload:String="",val createdAt:Long,val updatedAt:Long,val attempts:Int=0,val nextAttemptAt:Long=0,val status:String="PENDING",val lastError:String?=null)
 @Entity(indices=[Index("tableSessionId"),Index(value=["paymentCode"],unique=true),Index("status"),Index("expiresAt")])

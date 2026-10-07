@@ -124,6 +124,7 @@ fun App(vm: PosViewModel = viewModel()) {
         "BANK_NOTIFICATION_TEST" -> BankNotificationTest(vm)
         "CLOUD" -> CloudSyncSettings(vm)
         "RESET_PREOPENING_SALES" -> ResetPreOpeningSales(vm)
+        "TEST_MODE" -> TestModeManager(vm)
     }
 }
 
@@ -191,6 +192,7 @@ fun Tables(vm: PosViewModel) {
         }
     }
     val current by vm.currentEmployee.collectAsState()
+    val testMode by vm.businessTestMode.collectAsState()
     var assignmentTarget by remember { mutableStateOf("KITCHEN") }
     val canReport = current?.role == "ADMIN" || current?.canViewReport == true
     val waitingOrdered = waiting.sortedWith(compareBy<OrderBatchEntity> { it.serviceNo }.thenBy { it.createdAt })
@@ -199,6 +201,7 @@ fun Tables(vm: PosViewModel) {
     Column {
         Header()
         Operator(vm)
+        if(testMode) Surface(Modifier.fillMaxWidth(),color=Color(0xFFFFD8D8)){Text("TEST MODE · KHÔNG TÍNH DOANH THU",Modifier.fillMaxWidth().padding(8.dp),textAlign=TextAlign.Center,fontWeight=FontWeight.Black,color=Color.Red)}
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -1178,6 +1181,7 @@ fun Manage(vm: PosViewModel) {
             }
             if (employee?.role == "ADMIN") {
                 Rowx("Kiểm tra dữ liệu", "Đối soát Payment · Bill · Customer · điểm · trạng thái bàn") { vm.screen.value = "HEALTH" }
+                Rowx("TEST MODE", "Test order · bếp · thanh toán · in bill nhưng KHÔNG tính doanh thu") { vm.screen.value = "TEST_MODE" }
                 Rowx("Xóa dữ liệu bán thử trước khai trương", "Chỉ xóa Bill bán thử · GIỮ NGUYÊN nhập hàng, chi phí, tài sản") { vm.screen.value = "RESET_PREOPENING_SALES" }
                 Rowx("Cloud & Manager realtime", "Firebase backup · trạng thái bàn · doanh thu trực tiếp") { vm.screen.value = "CLOUD" }
                 Rowx("Nhật ký hệ thống", "Audit thao tác · người thực hiện · thời điểm · dữ liệu thay đổi") { vm.screen.value = "SETTINGS" }
@@ -1187,6 +1191,31 @@ fun Manage(vm: PosViewModel) {
             Text("Tương thích Android 8.0 (API 26) trở lên · Thiết bị hiện tại: Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})", fontSize = 11.sp)
             if (Build.VERSION.SDK_INT < 26) Text("Thiết bị không được hỗ trợ. Cần Android 8.0 trở lên.", color = Color.Red, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(30.dp))
+        }
+    }
+}
+
+@Composable
+fun TestModeManager(vm:PosViewModel){
+    val employee by vm.currentEmployee.collectAsState()
+    val enabled by vm.businessTestMode.collectAsState()
+    val testBills by vm.testBills.collectAsState()
+    var confirm by remember{mutableStateOf("")}
+    Column{
+        Header("TEST MODE"){vm.screen.value="MANAGE"}
+        Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)){
+            Text("CHẾ ĐỘ TEST BÁN HÀNG",fontSize=18.sp,fontWeight=FontWeight.Black)
+            Text("Order → gửi bếp → thanh toán → in/reprint vẫn hoạt động. Bill TEST không tính vào doanh thu LIVE, không cộng điểm khách.")
+            Row(verticalAlignment=Alignment.CenterVertically){
+                Text(if(enabled)"TEST MODE ĐANG BẬT":"ĐANG Ở CHẾ ĐỘ LIVE",Modifier.weight(1f),fontWeight=FontWeight.Bold,color=if(enabled)Color.Red else Color.Unspecified)
+                Switch(enabled,{vm.setBusinessTestMode(it)})
+            }
+            Text("Bill TEST đã thanh toán: ${testBills.size}")
+            HorizontalDivider()
+            Text("XÓA DỮ LIỆU TEST",fontWeight=FontWeight.Black)
+            Text("Chỉ xóa Session/Order/Bill/Payment thuộc TEST. Không đụng dữ liệu LIVE, nhập hàng, chi phí hay tài sản.",fontSize=12.sp)
+            OutlinedTextField(confirm,{confirm=it.uppercase().take(8)},Modifier.fillMaxWidth(),label={Text("Nhập XOA TEST")},singleLine=true)
+            Button({vm.clearBusinessTestData();confirm=""},Modifier.fillMaxWidth(),enabled=employee?.role=="ADMIN"&&confirm=="XOA TEST"){Text("XÁC NHẬN XÓA DỮ LIỆU TEST")}
         }
     }
 }

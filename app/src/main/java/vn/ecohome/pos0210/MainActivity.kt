@@ -173,7 +173,15 @@ fun Login(vm: PosViewModel) {
 @Composable
 fun Operator(vm: PosViewModel) {
     val e by vm.currentEmployee.collectAsState()
-    AssistChip(onClick = { vm.logout() }, label = { Text("🔒 ${e?.name} · Đổi người") })
+    val attendance by vm.myAttendance.collectAsState()
+    Row(Modifier.fillMaxWidth().padding(horizontal=12.dp),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically){
+        AssistChip(onClick = { vm.logout() }, label = { Text("🔒 ${e?.name} · Đổi người") })
+        if(attendance==null){
+            AssistChip(onClick={vm.checkIn()},label={Text("CHECK-IN")})
+        }else{
+            AssistChip(onClick={vm.checkOut()},label={Text("CHECK-OUT · ĐANG TRONG CA")})
+        }
+    }
 }
 
 @Composable

@@ -373,7 +373,7 @@ fun Order(vm: PosViewModel, t: DiningTableEntity) {
             Text(money(total), fontWeight = FontWeight.Black)
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { voucherDialog = true }, modifier = Modifier.weight(1f)) { Text(if(selectedVoucher==null)"ĐỔI VOUCHER" else "ĐÃ CHỌN VOUCHER") }
+            OutlinedButton(onClick = { }, modifier = Modifier.weight(1f), enabled=false) { Text("VOUCHER TẠM KHÓA") }
             OutlinedButton(onClick = { showCart = true }, modifier = Modifier.weight(1f)) { Text("GIỎ HÀNG") }
             Button(onClick = { vm.sendBatch() }, modifier = Modifier.weight(1f), enabled = cart.isNotEmpty()||selectedVoucher!=null) { Text("GỬI BẾP") }
         }
@@ -662,13 +662,25 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
         newMember = matchedCustomer == null && normalizedPhone.length >= 9
     )
     val loyaltyRule = tierDiscountRule(effectiveTier, settings)
+    val rewardFlow = remember(matchedCustomer?.id) { matchedCustomer?.id?.let { vm.customerRewards(it) } }
+    val availableRewards by (rewardFlow ?: kotlinx.coroutines.flow.flowOf(emptyList<CustomerRewardEntity>())).collectAsState(initial=emptyList())
+    val billReward = availableRewards.firstOrNull {
+        it.rewardSnapshot.split("|").getOrNull(1)=="BILL_DISCOUNT" &&
+        it.rewardSnapshot.split("|").getOrNull(2)?.toLongOrNull()==30000L &&
+        (it.expiresAt==null || it.expiresAt>System.currentTimeMillis())
+    }
+    var applyBillReward by remember(s.id,matchedCustomer?.id) { mutableStateOf(false) }
     val manualVoucher=if(voucherDiscount>0L) voucherDiscount else buyGetDiscount
     val manualLabel=if(voucherDiscount>0L) "Voucher 0210" else "Mua X tặng Y"
     // Both voucher and buy-get gift lines have already been persisted in the order.
     // Never replace their 100% gift discount with a percentage rule at checkout:
     // that would charge for a promised gift and leave the redeemed reward locked.
     val eligibleRules = if (manualVoucher > 0L) rules.filter { it.kind == "SURCHARGE" } else rules + listOfNotNull(loyaltyRule)
-    val preview = calculatePricing(subtotal, eligibleRules, appliedCode, buyGetDiscount = manualVoucher, buyGetLabel = manualLabel)
+    val applyReward = applyBillReward && billReward!=null && manualVoucher==0L && s.dataScope=="LIVE"
+    val rewardDiscount = if(applyReward)minOf(30000L,subtotal) else 0L
+    val preview = calculatePricing(subtotal,if(applyReward)emptyList() else eligibleRules,appliedCode,
+        buyGetDiscount=if(applyReward)rewardDiscount else manualVoucher,
+        buyGetLabel=if(applyReward)"100 điểm · giảm 30.000đ" else manualLabel)
     val paymentSession by vm.paymentSession(s.id).collectAsState(initial = null)
     val printedCheckoutKey by vm.printedCheckoutKey.collectAsState()
     val bankEvents by vm.recentBankNotifications.collectAsState()
@@ -772,6 +784,12 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                 )
                 Text("Khách mới · sau thanh toán sẽ tạo Member", fontSize = 11.sp)
             }
+            if(billReward!=null && manualVoucher==0L && s.dataScope=="LIVE"){
+                Row(verticalAlignment=Alignment.CenterVertically){
+                    Checkbox(checked=applyBillReward,onCheckedChange={applyBillReward=it})
+                    Text("Dùng quyền lợi 100 điểm: giảm 30.000đ một lần",fontWeight=FontWeight.Bold,fontSize=12.sp)
+                }
+            }
             Text("Tích điểm: 10.000đ thực trả = 1 điểm", fontSize = 11.sp)
 
             Text("🔒 Thu tiền: ${e?.name}", Modifier.padding(vertical = 14.dp))
@@ -826,8 +844,8 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                 )
             }else{
                 Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)){
-                    OutlinedButton(onClick={vm.close("CASH",preview,customerPhone,customerName)},modifier=Modifier.weight(1f)){Text("XÁC NHẬN\nTIỀN MẶT",textAlign=TextAlign.Center)}
-                    Button(onClick={vm.close("TRANSFER",preview,customerPhone,customerName)},modifier=Modifier.weight(1f)){Text("XÁC NHẬN\nCHUYỂN KHOẢN",textAlign=TextAlign.Center)}
+                    OutlinedButton(onClick={vm.close("CASH",preview,customerPhone,customerName,if(applyReward)billReward?.id else null)},modifier=Modifier.weight(1f)){Text("XÁC NHẬN\nTIỀN MẶT",textAlign=TextAlign.Center)}
+                    Button(onClick={vm.close("TRANSFER",preview,customerPhone,customerName,if(applyReward)billReward?.id else null)},modifier=Modifier.weight(1f)){Text("XÁC NHẬN\nCHUYỂN KHOẢN",textAlign=TextAlign.Center)}
                 }
             }
         }

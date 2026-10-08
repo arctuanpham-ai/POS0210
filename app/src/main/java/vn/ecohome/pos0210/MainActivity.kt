@@ -631,6 +631,7 @@ private fun calculatePricing(subtotal: Long, rules: List<PricingRuleEntity>, ent
 fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
     val subtotal by vm.total(s.id).collectAsState(initial = 0)
     val buyGetDiscount by vm.buyGetDiscount(s.id).collectAsState(initial = 0L)
+    val voucherDiscount by vm.voucherDiscount(s.id).collectAsState(initial = 0L)
     val rules by vm.pricingRules.collectAsState()
     val e by vm.currentEmployee.collectAsState()
     val settings by vm.settings.collectAsState()
@@ -650,7 +651,9 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
         newMember = matchedCustomer == null && normalizedPhone.length >= 9
     )
     val loyaltyRule = tierDiscountRule(effectiveTier, settings)
-    val preview = calculatePricing(subtotal, rules + listOfNotNull(loyaltyRule), appliedCode, buyGetDiscount = buyGetDiscount, buyGetLabel = "Mua X tặng Y")
+    val manualVoucher=if(voucherDiscount>0L) voucherDiscount else buyGetDiscount
+    val manualLabel=if(voucherDiscount>0L) "Voucher 0210" else "Mua X tặng Y"
+    val preview = calculatePricing(subtotal, rules + listOfNotNull(loyaltyRule), appliedCode, buyGetDiscount = manualVoucher, buyGetLabel = manualLabel)
     val paymentSession by vm.paymentSession(s.id).collectAsState(initial = null)
     val printedCheckoutKey by vm.printedCheckoutKey.collectAsState()
     val bankEvents by vm.recentBankNotifications.collectAsState()

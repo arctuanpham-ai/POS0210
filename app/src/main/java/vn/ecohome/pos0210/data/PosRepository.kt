@@ -134,7 +134,8 @@ class PosRepository(private val db:PosDatabase){
         autoTier:Boolean=true,
         vipMinPoints:Int=200,
         vvipMinPoints:Int=500,
-        loyaltyRewardId:String?=null
+        loyaltyRewardId:String?=null,
+        pointUnitVnd:Long=10000L
     ):PaymentCommitResult {
         require(method=="CASH" || method=="TRANSFER") { "INVALID_PAYMENT_METHOD" }
         require(preview.subtotal>=0L && preview.total>=0L && preview.surcharge>=0L && preview.discount>=0L) { "INVALID_PAYMENT_AMOUNT" }
@@ -161,7 +162,7 @@ class PosRepository(private val db:PosDatabase){
                     tier="MEMBER"
                 )
                 pointsBefore=current.points
-                pointsEarned=(preview.total/10000L).toInt()
+                pointsEarned=(preview.total/pointUnitVnd.coerceIn(1000L,10000000L)).toInt()
                 pointsAfter=pointsBefore+pointsEarned
                 val safeVvip=vvipMinPoints.coerceAtLeast(vipMinPoints)
                 tier=if(current.tierManual||!autoTier) current.tier else when {

@@ -206,6 +206,7 @@ WHERE s.status='OPEN' GROUP BY s.id""") fun tableServiceTimings():Flow<List<Tabl
 @Insert(onConflict=OnConflictStrategy.ABORT) suspend fun audit(v:AuditEventEntity)
 @Query("UPDATE MenuItemEntity SET active=:active WHERE id=:id") suspend fun setMenuActive(id:String,active:Boolean)
 @Query("SELECT * FROM CustomerRewardEntity WHERE customerId=:customerId AND status='AVAILABLE' AND (expiresAt IS NULL OR expiresAt>:now) ORDER BY earnedAt") suspend fun availableRewardsSnapshot(customerId:String,now:Long):List<CustomerRewardEntity>
+@Query("SELECT * FROM CustomerRewardEntity WHERE id LIKE \'%\' || :suffix AND status=\'AVAILABLE\' AND (expiresAt IS NULL OR expiresAt>:now) LIMIT 1") suspend fun availableVoucherBySuffix(suffix:String,now:Long):CustomerRewardEntity?
 @Query("SELECT * FROM LoyaltyCampaignEntity WHERE id=:id LIMIT 1") suspend fun loyaltyCampaignById(id:String):LoyaltyCampaignEntity?
 @Query("SELECT * FROM LoyaltyCampaignEntity WHERE active=1 ORDER BY createdAt") fun activeLoyaltyCampaigns():Flow<List<LoyaltyCampaignEntity>>
 @Query("SELECT * FROM LoyaltyCampaignEntity ORDER BY active DESC,createdAt DESC") fun allLoyaltyCampaigns():Flow<List<LoyaltyCampaignEntity>>

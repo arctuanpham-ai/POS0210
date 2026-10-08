@@ -2198,7 +2198,8 @@ fun MenuManager(vm: PosViewModel) {
         LazyColumn {
             items(menu) { m ->
                 Card(Modifier.fillMaxWidth().padding(6.dp)) {
-                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.padding(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                         if (!m.imageUri.isNullOrBlank()) {
                             AsyncImage(
                                 model = m.imageUri,
@@ -2223,12 +2224,15 @@ fun MenuManager(vm: PosViewModel) {
                             if (m.description.isNotBlank()) Text(m.description, fontSize = 12.sp, maxLines = 2)
                             if (!m.active) Text("TẠM NGƯNG BÁN", color = Color(0xFF9A3412), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         TextButton(onClick = { editTarget = m }) { Text("SỬA") }
                         TextButton(onClick = {
                             imageTarget = m
                             picker.launch(arrayOf("image/*"))
                         }) { Text(if (m.imageUri.isNullOrBlank()) "＋ ẢNH" else "ĐỔI ẢNH") }
                         TextButton(onClick = { if (m.active) deleteTarget = m else vm.toggleMenu(m) }) { Text(if(m.active) "TẠM NGƯNG" else "BẬT BÁN") }
+                        }
                     }
                 }
             }

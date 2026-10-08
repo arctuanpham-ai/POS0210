@@ -69,6 +69,10 @@ WHERE s.status='OPEN' GROUP BY s.id""") fun tableServiceTimings():Flow<List<Tabl
 @Query("SELECT MAX(closedAt) FROM BillEntity WHERE customerId=:customerId AND status='PAID' AND dataScope='LIVE'") suspend fun lastPaidVisitForCustomer(customerId:String):Long?
 @Query("SELECT COALESCE(SUM(delta),0) FROM CustomerPointTransactionEntity WHERE customerId=:customerId") suspend fun pointBalanceForCustomer(customerId:String):Int
 @Query("SELECT * FROM PricingRuleEntity ORDER BY name") fun pricingRules():Flow<List<PricingRuleEntity>>
+ @Query("SELECT * FROM BuyGetPromotionEntity ORDER BY name") fun buyGetPromotions():Flow<List<BuyGetPromotionEntity>>
+ @Query("SELECT * FROM BuyGetPromotionEntity WHERE active=1") suspend fun activeBuyGetPromotionsSnapshot():List<BuyGetPromotionEntity>
+ @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun saveBuyGetPromotion(v:BuyGetPromotionEntity)
+ @Query("UPDATE BuyGetPromotionEntity SET active=:active,updatedAt=:updatedAt WHERE id=:id") suspend fun setBuyGetPromotionActive(id:String,active:Boolean,updatedAt:Long)
 @Query("SELECT * FROM PricingRuleEntity WHERE active=1") suspend fun activePricingRulesSnapshot():List<PricingRuleEntity>
 @Query("SELECT * FROM PricingRuleEntity ORDER BY name") suspend fun allPricingRulesSnapshot():List<PricingRuleEntity>
 @Query("SELECT * FROM BillAdjustmentEntity ORDER BY appliedAt DESC") fun billAdjustments():Flow<List<BillAdjustmentEntity>>

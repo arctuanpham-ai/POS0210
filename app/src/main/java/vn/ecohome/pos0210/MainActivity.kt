@@ -1113,13 +1113,10 @@ fun LoyaltyCampaignManager(vm: PosViewModel) {
     var name by remember { mutableStateOf("") }
     var trigger by remember { mutableStateOf("BILL_COUNT") }
     var threshold by remember { mutableStateOf("") }
-    var rewardId by remember { mutableStateOf("") }
-    var voucherValue by remember { mutableStateOf("") }
-    var cycle by remember { mutableStateOf("REPEAT") }
+    var cycle by remember { mutableStateOf("ONCE") }
     var expires by remember { mutableStateOf("") }
     fun edit(c: LoyaltyCampaignEntity?) {
-        editing=c;name=c?.name.orEmpty();trigger=c?.triggerType?:"BILL_COUNT";threshold=c?.threshold?.toString().orEmpty()
-        rewardId=c?.rewardMenuItemId.orEmpty();voucherValue=c?.rewardValue?.takeIf{it>0}?.toString().orEmpty();cycle=c?.cycleMode?:"REPEAT";expires=c?.expiresDays?.toString().orEmpty()
+        editing=c;name=c?.name.orEmpty();trigger="POINTS";threshold="100";cycle="ONCE";expires=""
     }
     if(employee?.role!="ADMIN"){Column{Header("Tích lũy & quà"){vm.screen.value="MANAGE"};Text("Chỉ Admin được cấu hình chương trình.",Modifier.padding(20.dp))};return}
     Column {
@@ -1129,40 +1126,25 @@ fun LoyaltyCampaignManager(vm: PosViewModel) {
                 Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
                     Text(if(editing==null)"TẠO CHƯƠNG TRÌNH" else "SỬA CHƯƠNG TRÌNH",fontWeight=FontWeight.Black)
                     OutlinedTextField(name,{name=it.take(60)},Modifier.fillMaxWidth(),label={Text("Tên chương trình")},singleLine=true)
-                    Text("Điều kiện tích lũy",fontSize=12.sp,fontWeight=FontWeight.Bold)
-                    Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
-                        listOf("BILL_COUNT" to "Lượt mua","SPEND" to "Tổng chi","POINTS" to "Điểm").forEach{(id,label)->
-                            FilterChip(trigger==id,{trigger=id},{Text(label)})
-                        }
-                    }
-                    OutlinedTextField(threshold,{threshold=it.filter(Char::isDigit).take(10)},Modifier.fillMaxWidth(),label={Text(if(trigger=="SPEND")"Ngưỡng tổng chi (đ)" else if(trigger=="POINTS")"Ngưỡng điểm" else "Số lượt mua")},singleLine=true)
-                    Text("Voucher đổi 01 món",fontSize=12.sp,fontWeight=FontWeight.Bold)
-                    OutlinedTextField(voucherValue,{voucherValue=it.filter(Char::isDigit).take(8)},Modifier.fillMaxWidth(),label={Text("Giá trị tối đa của voucher (đ)")},singleLine=true)
-                    Text("Khách chọn đúng 01 món đang bán có giá không vượt quá voucher. Không đổi tiền mặt, không tiền thừa.",fontSize=11.sp)
-                    Text("Món quà cố định (tương thích chương trình cũ)",fontSize=12.sp,fontWeight=FontWeight.Bold)
-                    menu.filter{it.active}.forEach{item->
-                        Row(Modifier.fillMaxWidth().clickable{rewardId=item.id},verticalAlignment=Alignment.CenterVertically){
-                            RadioButton(rewardId==item.id,{rewardId=item.id});Text("${item.name} · ${money(item.price)}")
-                        }
-                    }
-                    Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){FilterChip(cycle=="REPEAT",{cycle="REPEAT"},{Text("Lặp lại")});FilterChip(cycle=="ONCE",{cycle="ONCE"},{Text("Một lần")})}
-                    OutlinedTextField(expires,{expires=it.filter(Char::isDigit).take(4)},Modifier.fillMaxWidth(),label={Text("Hạn quà (ngày) · bỏ trống = không hạn")},singleLine=true)
+                    Text("ĐIỀU KIỆN: 100 ĐIỂM TÍCH LŨY",fontWeight=FontWeight.Bold)
+                    Text("QUYỀN LỢI: GIẢM 30.000đ CHO 01 HÓA ĐƠN",fontWeight=FontWeight.Bold)
+                    Text("Chỉ áp dụng một lần cho mỗi khách. Không phát hành hoặc đổi voucher.",fontSize=12.sp)
                     Button(onClick={
                         val now=System.currentTimeMillis()
-                        vm.saveLoyaltyCampaign(LoyaltyCampaignEntity(editing?.id?:UUID.randomUUID().toString(),name.trim(),trigger,threshold.toLongOrNull()?:0L,if((voucherValue.toLongOrNull()?:0L)>0L)"VOUCHER" else "MENU_ITEM",rewardValue=voucherValue.toLongOrNull()?:0L,rewardMenuItemId=if(voucherValue.toLongOrNull()!=null)null else rewardId.ifBlank{null},cycleMode=cycle,expiresDays=expires.toIntOrNull(),active=editing?.active?:true,createdAt=editing?.createdAt?:now,updatedAt=now))
-                    },modifier=Modifier.fillMaxWidth(),enabled=name.isNotBlank()&&((voucherValue.toLongOrNull()?:0L)>0L||rewardId.isNotBlank())){Text(if(editing==null)"LƯU CHƯƠNG TRÌNH" else "CẬP NHẬT CHƯƠNG TRÌNH")}
+                        vm.saveLoyaltyCampaign(LoyaltyCampaignEntity(editing?.id?:UUID.randomUUID().toString(),name.trim(),"POINTS",100L,"BILL_DISCOUNT",rewardValue=30000L,cycleMode="ONCE",active=editing?.active?:true,createdAt=editing?.createdAt?:now,updatedAt=now))
+                    },modifier=Modifier.fillMaxWidth(),enabled=name.isNotBlank()){Text(if(editing==null)"LƯU CHƯƠNG TRÌNH" else "CẬP NHẬT CHƯƠNG TRÌNH")}
                     if(editing!=null)TextButton({edit(null)}){Text("TẠO CHƯƠNG TRÌNH MỚI")}
                     if(message.contains("CHƯƠNG TRÌNH")||message.contains("MÓN QUÀ")||message.contains("ĐIỀU KIỆN"))Text(message,fontSize=11.sp,fontWeight=FontWeight.Bold)
                 }}
             }
             items(campaigns){campaign->
                 val reward=menu.firstOrNull{it.id==campaign.rewardMenuItemId}
-                val rewardText=if(campaign.rewardType=="VOUCHER") "Voucher 01 món tối đa "+money(campaign.rewardValue) else reward?.name?:"Món đã bị xóa"
+                val rewardText=if(campaign.rewardType=="BILL_DISCOUNT") "Giảm "+money(campaign.rewardValue)+" trên bill" else "ĐÃ TẠM KHÓA · chương trình cũ"
                 Card(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(4.dp)){
                     Text(campaign.name,fontWeight=FontWeight.Black)
                     Text("${when(campaign.triggerType){"BILL_COUNT"->"${campaign.threshold} lượt mua";"SPEND"->"${money(campaign.threshold)} tổng chi";else->"${campaign.threshold} điểm"}} → $rewardText · ${if(campaign.cycleMode=="REPEAT")"Lặp lại" else "Một lần"}",fontSize=12.sp)
                     Text(if(campaign.expiresDays==null)"Không hạn quà" else "Hạn ${campaign.expiresDays} ngày",fontSize=11.sp)
-                    Row{TextButton({edit(campaign)}){Text("SỬA")};TextButton({vm.toggleLoyaltyCampaign(campaign)}){Text(if(campaign.active)"TẠM NGƯNG" else "BẬT LẠI")}}
+                    if(campaign.rewardType=="BILL_DISCOUNT") Row{TextButton({edit(campaign)}){Text("SỬA")};TextButton({vm.toggleLoyaltyCampaign(campaign)}){Text(if(campaign.active)"TẠM NGƯNG" else "BẬT LẠI")}}
                 }}
             }
         }
@@ -1278,7 +1260,7 @@ fun Manage(vm: PosViewModel) {
             Rowx("Khách hàng", "Tra cứu · cập nhật tên/SĐT/địa chỉ · Member/VIP/VVIP") { vm.screen.value = "CUSTOMERS" }
             if (employee?.role == "ADMIN") {
                 Rowx("Cấu hình hạng thành viên", "Ngưỡng điểm · tự nâng hạng · % ưu đãi Member/VIP/VVIP") { vm.screen.value = "LOYALTY_CONFIG" }
-                Rowx("Chương trình tích lũy & quà", "Lượt mua · tổng chi · điểm · món quà · bật/tắt") { vm.screen.value = "LOYALTY_CAMPAIGNS" }
+                Rowx("Chương trình tích điểm giảm bill", "100 điểm → giảm 30.000đ một lần · bật/tắt") { vm.screen.value = "LOYALTY_CAMPAIGNS" }
                 Rowx("Nhân viên", "Thêm · khóa · phân quyền") { vm.screen.value = "EMP" }
                 Rowx("Chấm công & Bảng lương", "Giờ vào/ra · tổng giờ · lương theo tháng") { vm.screen.value = "PAYROLL" }
             }

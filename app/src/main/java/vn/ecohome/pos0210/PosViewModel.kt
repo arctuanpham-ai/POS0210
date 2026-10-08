@@ -17,6 +17,8 @@ import vn.ecohome.pos0210.printing.BluetoothPrinter
 import vn.ecohome.pos0210.printing.PrinterRouting
 import vn.ecohome.pos0210.printing.ReceiptRenderer
 import vn.ecohome.pos0210.payment.VietQrOffline
+import vn.ecohome.pos0210.promotion.BuyGetPolicy
+import vn.ecohome.pos0210.promotion.BuyGetRule
 import java.util.UUID
 import java.security.SecureRandom
 import java.text.SimpleDateFormat
@@ -738,6 +740,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
   viewModelScope.launch{
    val s=currentSession.value ?: repo.openSession(t.id,e.id,if(businessTestMode.value)"TEST" else "LIVE").also{currentSession.value=it}
    val bs=dao.batches(s.id).first()
+   val historical=bs.filter{it.status!="CANCELLED"}.flatMap{dao.batchItems(it.id).first()}
    val its=mutableListOf<OrderItemEntity>()
    lines.forEach{(id,q)->
     if(id.startsWith("combo:")){
@@ -752,6 +755,24 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
     }else{
      menu.value.firstOrNull{it.id==id}?.let{its.add(OrderItemEntity("","",it.id,it.name,it.price,q,(cartNotes.value[id] ?: "").trim()))}
     }
+   }
+   val now=System.currentTimeMillis()
+   val existingPromotionIds=historical.mapNotNull{it.buyGetPromotionId}.toSet()
+   val candidates=dao.activeBuyGetPromotionsSnapshot()
+    .filter{(it.startAt==null||now>=it.startAt)&&(it.endAt==null||now<=it.endAt)}
+    .filter{existingPromotionIds.isEmpty()||it.id in existingPromotionIds}
+    .mapNotNull { rule ->
+     val paidBefore=historical.filter{it.buyGetPromotionId==null&&it.menuItemId==rule.buyMenuItemId}.sumOf{it.qty.coerceAtLeast(0)}
+     val paidNow=lines[rule.buyMenuItemId]?:0
+     val existingGift=historical.filter{it.buyGetPromotionId==rule.id}.sumOf{it.qty.coerceAtLeast(0)}
+     val request=BuyGetPolicy.giftToAdd(BuyGetRule(rule.id,rule.buyMenuItemId,rule.buyQuantity,rule.giftMenuItemId,rule.giftQuantity,rule.repeat,rule.active),paidBefore+paidNow,existingGift)?:return@mapNotNull null
+     val gift=menu.value.firstOrNull{it.id==request.menuItemId&&it.active}?:return@mapNotNull null
+     Triple(rule,request,gift)
+    }
+   val chosen=candidates.maxByOrNull{it.second.quantity.toLong()*it.third.price}
+   if(chosen!=null){
+    val(rule,request,gift)=chosen
+    its.add(OrderItemEntity(id="",batchId="",menuItemId=gift.id,itemNameSnapshot="🎁 ${gift.name}",unitPriceSnapshot=gift.price,qty=request.quantity,note="QUÀ TẶNG · ${rule.name}",buyGetPromotionId=rule.id,buyGetLabel=rule.name))
    }
    repo.createBatch(s.id,bs.size+1,e.id,its)
    cart.value=emptyMap();cartNotes.value=emptyMap()

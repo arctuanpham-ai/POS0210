@@ -26,23 +26,36 @@ object AttendanceQaFixtures {
 }
 
 object AttendancePayroll {
+    // Completed shifts are paid in whole-hour increments. A 15-minute
+    // tolerance on either side of the hour is always included in that hour.
+    // For the remaining 15..45-minute interval, round to the nearest hour.
+    fun payableMinutes(actualMinutes:Long):Long =
+        ((actualMinutes.coerceAtLeast(0L)+30L)/60L)*60L
+
     fun splitByDay(session:AttendanceSessionEntity, now:Long=System.currentTimeMillis(), zone:ZoneId=ZoneId.systemDefault()):List<PayrollDay>{
         val end=(session.checkOutAt?:now).coerceAtLeast(session.checkInAt)
         if(end<=session.checkInAt)return emptyList()
-        val out=mutableListOf<PayrollDay>()
+        val segments=mutableListOf<Pair<String,Long>>()
         var cursor=session.checkInAt
         while(cursor<end){
             val z=Instant.ofEpochMilli(cursor).atZone(zone)
             val nextDay=z.toLocalDate().plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
             val segmentEnd=minOf(end,nextDay)
             val minutes=(segmentEnd-cursor)/60_000L
-            if(minutes>0){
-                val amount=minutes*session.hourlyRate*session.multiplierBasisPoints/60L/10_000L
-                out+=PayrollDay(session.employeeId,z.toLocalDate().toString(),minutes,session.hourlyRate,session.multiplierBasisPoints,amount)
-            }
+            if(minutes>0)segments+=z.toLocalDate().toString() to minutes
             cursor=segmentEnd
         }
-        return out
+        if(segments.isEmpty())return emptyList()
+        // Open shifts remain accurate to the minute until checkout.
+        val totalActual=segments.sumOf{it.second}
+        val totalPayable=if(session.status=="CLOSED"&&session.checkOutAt!=null)payableMinutes(totalActual) else totalActual
+        var allocated=0L
+        return segments.mapIndexed{index,(date,actual)->
+            val minutes=if(index==segments.lastIndex)totalPayable-allocated
+                else (totalPayable*actual/totalActual).also{allocated+=it}
+            val amount=minutes*session.hourlyRate*session.multiplierBasisPoints/60L/10_000L
+            PayrollDay(session.employeeId,date,minutes,session.hourlyRate,session.multiplierBasisPoints,amount)
+        }
     }
     fun period(sessions:List<AttendanceSessionEntity>,now:Long=System.currentTimeMillis(),zone:ZoneId=ZoneId.systemDefault())=
         sessions.flatMap{splitByDay(it,now,zone)}

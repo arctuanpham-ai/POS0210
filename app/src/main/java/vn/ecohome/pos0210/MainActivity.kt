@@ -261,6 +261,9 @@ fun Order(vm: PosViewModel, t: DiningTableEntity) {
     val cats by vm.categories.collectAsState()
     val cart by vm.cart.collectAsState()
     val cartNotes by vm.cartNotes.collectAsState()
+    val selectedVoucher by vm.selectedVoucher.collectAsState()
+    val voucherMessage by vm.voucherMessage.collectAsState()
+    var voucherDialog by remember { mutableStateOf(false) }
     var showCart by remember { mutableStateOf(false) }
     var noteTarget by remember { mutableStateOf<Pair<String,String>?>(null) }
     var selectedCat by remember(cats) { mutableStateOf(cats.firstOrNull()?.id ?: "") }
@@ -370,11 +373,21 @@ fun Order(vm: PosViewModel, t: DiningTableEntity) {
             Text(money(total), fontWeight = FontWeight.Black)
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { showCart = true }, modifier = Modifier.weight(1f)) { Text("XEM GIỎ HÀNG") }
-            Button(onClick = { vm.sendBatch() }, modifier = Modifier.weight(1f), enabled = cart.isNotEmpty()) { Text("GỬI LÀM HÀNG") }
+            OutlinedButton(onClick = { voucherDialog = true }, modifier = Modifier.weight(1f)) { Text(if(selectedVoucher==null)"ĐỔI VOUCHER" else "ĐÃ CHỌN VOUCHER") }
+            OutlinedButton(onClick = { showCart = true }, modifier = Modifier.weight(1f)) { Text("GIỎ HÀNG") }
+            Button(onClick = { vm.sendBatch() }, modifier = Modifier.weight(1f), enabled = cart.isNotEmpty()||selectedVoucher!=null) { Text("GỬI BẾP") }
         }
     }
     if (showCart) OrderCartNotesDialog(vm) { showCart = false }
+    if(voucherDialog){
+        var voucherCode by remember { mutableStateOf("") }
+        AlertDialog(onDismissRequest={voucherDialog=false},title={Text("Đổi voucher 0210")},text={Column(Modifier.verticalScroll(rememberScrollState())){
+            Text("Nhập mã trên phiếu, sau đó chọn đúng một món trong hạn mức.",fontSize=12.sp)
+            OutlinedTextField(voucherCode,{voucherCode=it.uppercase().take(20)},Modifier.fillMaxWidth(),label={Text("Ví dụ: 0210-A1B2C3")},singleLine=true)
+            ms.filter{it.active}.forEach{item->TextButton({vm.selectVoucher(voucherCode,item.id);voucherDialog=false},Modifier.fillMaxWidth(),enabled=voucherCode.length>=6){Text(item.name+" · "+money(item.price),Modifier.fillMaxWidth())}}
+        }},confirmButton={TextButton({voucherDialog=false}){Text("ĐÓNG")}})
+    }
+    if(voucherMessage.isNotBlank())Text(voucherMessage,Modifier.padding(horizontal=14.dp,vertical=2.dp),fontSize=11.sp,fontWeight=FontWeight.Bold,color=Coffee)
     noteTarget?.let { (key,name) ->
         var noteText by remember(key) { mutableStateOf(cartNotes[key].orEmpty()) }
         AlertDialog(

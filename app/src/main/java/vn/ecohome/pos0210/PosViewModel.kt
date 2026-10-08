@@ -1152,6 +1152,24 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    }
   }
  }
+ private suspend fun printLoyaltyVoucher(reward:CustomerRewardEntity,customer:CustomerEntity?){
+  val cap=VoucherPolicy.cap(reward.rewardSnapshot)?:return
+  if(printerMode()!="BLUETOOTH"||receiptPrinterMac().isBlank()){printerMessage.value="VOUCHER ĐÃ LƯU · CẦN CẤU HÌNH MÁY IN ĐỂ IN PHIẾU";return}
+  if(dao.voucherPrintJob(reward.id)!=null)return
+  val code=VoucherPolicy.code(reward.id)
+  val expiry=reward.expiresAt?.let{SimpleDateFormat("dd/MM/yyyy",Locale("vi","VN")).format(Date(it))}?:"KHÔNG HẠN"
+  val lines=listOf(Triple("VOUCHER "+code,1,cap))
+  val notes=listOf("ĐỔI 01 MÓN TỐI ĐA "+java.text.NumberFormat.getNumberInstance(Locale("vi","VN")).format(cap)+"đ","KHÔNG QUY ĐỔI TIỀN MẶT · KHÔNG TIỀN THỪA","HẠN DÙNG: "+expiry,"ĐƯA PHIẾU HOẶC ĐỌC MÃ KHI ĐỔI QUÀ")
+  val profile=printerProfile()
+  val bitmap=ReceiptRenderer.bill("PHIẾU VOUCHER",SimpleDateFormat("HH:mm dd/MM",Locale("vi","VN")).format(Date(reward.earnedAt)),lines,cap,0L,cap,0L,notes,customer?.name?.ifBlank{"KHÁCH THÂN THIẾT"}?:"KHÁCH THÂN THIẾT",null,0,0,0,"VOUCHER 0210",null,profile)
+  val job=PrintJobEntity(UUID.randomUUID().toString(),reward.id,reward.sourceBillId,"VOUCHER",createdAt=System.currentTimeMillis())
+  dao.insertPrintJob(job)
+  if(repo.claimPrint(job.id,"ANDROID")){
+   val result=BluetoothPrinter.printBitmap(getApplication(),receiptPrinterMac(),bitmap,profile,vn.ecohome.pos0210.printing.PrintJobType.PAYMENT)
+   if(result.isSuccess){dao.markPrintSuccess(job.id,System.currentTimeMillis());audit("LOYALTY",reward.id,"VOUCHER_PRINTED","code="+code)}
+   else{dao.markPrintFailed(job.id,result.exceptionOrNull()?.message?:"UNKNOWN");printerMessage.value="VOUCHER ĐÃ LƯU NHƯNG IN LỖI · CÓ THỂ IN LẠI"}
+  }
+ }
  fun close(method:String,preview:PricingPreview,customerPhone:String="",customerName:String=""){
   val session=currentSession.value?:return
   val employee=currentEmployee.value?:return
@@ -1191,7 +1209,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    val pointsAfter=commit.pointsAfter
    val receiptTier=commit.tier
    val issuedRewards=if(session.dataScope=="LIVE"&&bill.customerId!=null)repo.evaluateLoyalty(bill.customerId,bill.id) else emptyList()
-   if(issuedRewards.isNotEmpty())audit("LOYALTY",bill.id,"REWARD_ISSUED","count=${issuedRewards.size},customer=${bill.customerId}")
+   if(issuedRewards.isNotEmpty()){audit("LOYALTY",bill.id,"REWARD_ISSUED","count=${issuedRewards.size},customer=${bill.customerId}");issuedRewards.forEach{printLoyaltyVoucher(it,customer)}}
    autoBackup()
    if(false&&printerMode()=="BLUETOOTH"&&printerMac().isNotBlank()){
     val bs=dao.batches(session.id).first().filter{it.status!="CANCELLED"}

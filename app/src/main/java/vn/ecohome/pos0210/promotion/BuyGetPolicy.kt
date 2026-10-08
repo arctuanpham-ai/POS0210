@@ -19,8 +19,16 @@ data class BuyGetAward(val ruleId: String, val menuItemId: String, val quantity:
 
 /** A single best discount per order; no stacking with coupons or tier discounts. */
 object BuyGetPolicy {
+    /** Reject incomplete or self-contradictory campaigns before saving locally or syncing. */
+    fun isValid(rule: BuyGetRule): Boolean =
+        rule.id.isNotBlank() &&
+        rule.buyMenuItemId.isNotBlank() &&
+        rule.giftMenuItemId.isNotBlank() &&
+        rule.buyQuantity in 1..1000 &&
+        rule.giftQuantity in 1..1000
+
     fun awards(rule: BuyGetRule, lines: List<BuyGetLine>): BuyGetAward? {
-        if (!rule.active || rule.buyQuantity <= 0 || rule.giftQuantity <= 0) return null
+        if (!rule.active || !isValid(rule)) return null
         val purchased = lines.filter { it.menuItemId == rule.buyMenuItemId }
             .sumOf { it.quantity.coerceAtLeast(0) }
         val repeats = if (rule.buyMenuItemId == rule.giftMenuItemId) {

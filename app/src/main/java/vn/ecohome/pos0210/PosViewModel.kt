@@ -782,7 +782,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
   val t=currentTable.value?:return
   if(!e.canSendKitchen&&e.role!="ADMIN")return
   val lines=cart.value
-  if(lines.isEmpty())return
+  if(lines.isEmpty()&&selectedVoucher.value==null)return
   viewModelScope.launch{
    val s=currentSession.value ?: repo.openSession(t.id,e.id,if(businessTestMode.value)"TEST" else "LIVE").also{currentSession.value=it}
    val bs=dao.batches(s.id).first()

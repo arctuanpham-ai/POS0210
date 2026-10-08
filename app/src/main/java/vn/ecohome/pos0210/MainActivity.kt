@@ -3357,7 +3357,7 @@ fun Report(vm: PosViewModel) {
         }
         excelFilterError="Đang tạo file Excel..."
         val endExclusive=end?.let{java.util.Calendar.getInstance().apply{timeInMillis=it;add(java.util.Calendar.DAY_OF_MONTH,1)}.timeInMillis}
-        vm.exportTransactionExcel(start,endExclusive,excelPayer.takeUnless{it=="ALL"},excelCashier.takeUnless{it=="ALL"}){uri,name->
+        vm.exportTransactionExcel(start,endExclusive,excelPayer.takeUnless{it=="ALL"},excelCashier.takeUnless{it=="ALL"},onReady={uri,name->
             excelFilterError="Đã tạo file Excel · đang mở ứng dụng..."
             if(download){
                 val intent=Intent(Intent.ACTION_CREATE_DOCUMENT).apply{
@@ -3382,7 +3382,7 @@ fun Report(vm: PosViewModel) {
                     reportContext.startActivity(Intent.createChooser(intent,"Chia sẻ Excel qua Zalo / ứng dụng khác"))
                 }
             }
-        }{error->excelFilterError=error}
+        },onError={error->excelFilterError=error})
     }
     fun shareAiExport(){
         vm.exportAiBusinessData { uri, name ->

@@ -780,6 +780,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
  }
  fun resetVoucherLookup(){verifiedVoucher.value=null;voucherMessage.value=""}
  fun selectVoucher(code:String,menuItemId:String){
+  voucherMessage.value="ĐỔI VOUCHER ĐÃ TẠM KHÓA";return
   val e=currentEmployee.value?:return
   viewModelScope.launch(Dispatchers.IO){
    val suffix=code.uppercase().removePrefix("0210-").filter(Char::isLetterOrDigit).takeLast(6)
@@ -791,12 +792,14 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    selectedVoucher.value=reward;selectedVoucherItemId.value=item.id;voucherMessage.value="ĐÃ CHỌN "+VoucherPolicy.code(reward.id)+" · "+item.name+" miễn phí"
   }
  }
+ fun customerRewards(customerId:String)=dao.availableRewards(customerId)
  fun clearSelectedVoucher(){selectedVoucher.value=null;selectedVoucherItemId.value=null;verifiedVoucher.value=null;voucherMessage.value=""}
  fun sendBatch(){
   val e=currentEmployee.value?:return
   val t=currentTable.value?:return
   if(!e.canSendKitchen&&e.role!="ADMIN")return
   val lines=cart.value
+  if(selectedVoucher.value!=null){printerMessage.value="ĐỔI VOUCHER ĐÃ TẠM KHÓA";clearSelectedVoucher();return}
   if(lines.isEmpty()&&selectedVoucher.value==null)return
   viewModelScope.launch{
    val s=currentSession.value ?: repo.openSession(t.id,e.id,if(businessTestMode.value)"TEST" else "LIVE").also{currentSession.value=it}
@@ -1209,7 +1212,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    else{dao.markPrintFailed(job.id,result.exceptionOrNull()?.message?:"UNKNOWN");printerMessage.value="VOUCHER ĐÃ LƯU NHƯNG IN LỖI · CÓ THỂ IN LẠI"}
   }
  }
- fun close(method:String,preview:PricingPreview,customerPhone:String="",customerName:String=""){
+ fun close(method:String,preview:PricingPreview,customerPhone:String="",customerName:String="",loyaltyRewardId:String?=null){
   val session=currentSession.value?:return
   val employee=currentEmployee.value?:return
   val table=currentTable.value

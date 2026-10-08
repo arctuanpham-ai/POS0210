@@ -1090,7 +1090,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
   runCatching{
    val file=vn.ecohome.pos0210.data.TransactionExcelExport.create(getApplication(),dao,vn.ecohome.pos0210.data.TransactionExcelExport.Filter(from,toExclusive,payer,cashier))
    vn.ecohome.pos0210.data.TransactionExcelExport.uri(getApplication(),file) to file.name
-  }.onSuccess{(uri,name)->withContext(Dispatchers.Main){onReady(uri,name)}}
+  }.onSuccess{(uri,name)->kotlinx.coroutines.withContext(Dispatchers.Main){onReady(uri,name)}}
    .onFailure{printerMessage.value="XUẤT EXCEL LỖI: "+it.message}
  }
 }

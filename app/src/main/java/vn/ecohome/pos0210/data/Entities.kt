@@ -35,7 +35,7 @@ import androidx.room.PrimaryKey
 @Entity(indices=[Index("entityId")]) data class AuditEventEntity(@PrimaryKey val id:String,val entityType:String,val entityId:String,val action:String,val actorId:String?,val deviceId:String?,val occurredAt:Long,val payload:String="")
 @Entity data class AppSettingEntity(@PrimaryKey val key:String,val value:String)
 @Entity data class CloudSyncStateEntity(@PrimaryKey val id:String="firebase",val enabled:Boolean=false,val dirty:Boolean=true,val lastAttemptAt:Long?=null,val lastSuccessAt:Long?=null,val lastError:String?=null,val syncedUid:String?=null,val bootstrapState:String="NEEDS_PULL",val bootstrapCompletedAt:Long?=null,val lastPullAt:Long?=null)
-@Entity(indices=[Index("employeeId"),Index("checkInAt"),Index("status")])
+@Entity(indices=[Index("employeeId"),Index("checkInAt"),Index("status"),Index("dataScope")])
 data class AttendanceSessionEntity(
  @PrimaryKey val id:String,
  val employeeId:String,

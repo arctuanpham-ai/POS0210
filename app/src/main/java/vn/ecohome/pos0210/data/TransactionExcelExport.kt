@@ -7,6 +7,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import kotlinx.coroutines.flow.first
 
 object TransactionExcelExport {
  data class Filter(val from:Long?=null,val toExclusive:Long?=null,val payer:String?=null,val cashier:String?=null)
@@ -24,12 +25,44 @@ object TransactionExcelExport {
   val bills=dao.allPaidBillsSnapshot().associateBy{it.id}
   val payments=dao.allPaymentsSnapshot().filter{it.billId in bills&&ok(it.paidAt)&&(f.cashier.isNullOrBlank()||it.cashierId==f.cashier)}
   val movements=dao.allFinancialMovementsSnapshot().filter{ok(it.occurredAt)&&(f.payer.isNullOrBlank()||it.counterpartyName.equals(f.payer,true))}
+  val suppliers=dao.allSuppliersSnapshot().associateBy{it.id}
+  val sessions=dao.allSessionsSnapshot().associateBy{it.id}
+  val tables=dao.allTablesSnapshot().associateBy{it.id}
+  val batches=dao.allOrderBatchesSnapshot().filter{it.status!="CANCELLED"}.groupBy{it.sessionId}
+  val orderItems=dao.allOrderItemsSnapshot().groupBy{it.batchId}
+  val customers=bills.values.mapNotNull{it.customerId}.distinct().associateWith{dao.customerById(it)}
   val sheets=linkedMapOf<String,List<List<Any?>>>()
-  sheets["Nhap hang"]=listOf(listOf("Ma phieu","Ngay","Nguoi nhap","Nguoi chi","Nhom","Tong VND","Ghi chu"))+purchases.map{listOf(it.id,day(it.purchasedAt),people[it.enteredBy]?.name?:it.enteredBy,it.paidByName,it.expenseCategory,it.total,it.note)}
-  sheets["Chi tiet nhap"]=listOf(listOf("Ma phieu","Ten hang","So luong","Don vi","Don gia VND","Thanh tien VND"))+purchases.flatMap{p->dao.purchaseItemsSnapshot(p.id).map{listOf(p.id,it.name,it.qty,it.unit,it.unitPrice,it.amount)}}
+  val purchaseRows=mutableListOf<List<Any?>>()
+  for(p in purchases){
+   val items=dao.purchaseItemsSnapshot(p.id)
+   val base=listOf<Any?>(p.id,day(p.purchasedAt),suppliers[p.supplierId]?.name.orEmpty(),people[p.enteredBy]?.name?:p.enteredBy,p.paidByName,p.expenseCategory,p.total,p.note)
+   if(items.isEmpty())purchaseRows.add(base+listOf<Any?>("","","","","",0L))
+   else items.forEachIndexed{index,item->purchaseRows.add(base+listOf<Any?>(item.name,item.qty,item.unit,item.unitPrice,item.amount,if(index==0)p.total else 0L))}
+  }
+  sheets["Nhap hang"]=listOf(listOf("Ma phieu","Ngay nhap","Nha cung cap","Nguoi nhap","Nguoi chi","Nhom chi phi","Tong phieu VND (doi chieu)","Ghi chu phieu","Mat hang","So luong","Don vi","Don gia VND","Thanh tien dong VND","Tong phieu VND (chi tinh mot lan)"))+purchaseRows
   sheets["Phieu chi"]=listOf(listOf("Ma phieu","Ngay","Loai","Nguoi chi nhan","Phuong thuc","So tien VND","Noi dung"))+movements.map{listOf(it.id,day(it.occurredAt),it.type,it.counterpartyName,it.method,it.amount,it.note)}
-  sheets["Bill"]=listOf(listOf("So bill","Ngay thanh toan","Thu ngan","Hinh thuc","Tien hang VND","Thuc thu VND","Tham chieu"))+payments.mapNotNull{p->bills[p.billId]?.let{b->listOf(b.billNo,day(p.paidAt),people[p.cashierId]?.name?:p.cashierId,p.method,b.subtotal,p.amount,p.reference.orEmpty())}}
-  sheets["Bo loc"]=listOf(listOf("Thong tin","Gia tri"),listOf("Tu",day(f.from)),listOf("Den truoc",day(f.toExclusive)),listOf("Nguoi chi",f.payer?:"Tat ca"),listOf("Thu ngan",f.cashier?.let{people[it]?.name?:it}?:"Tat ca"),listOf("So phieu nhap",purchases.size),listOf("So phieu chi",movements.size),listOf("So bill",payments.size))
+  val billRows=mutableListOf<List<Any?>>()
+  val billDetails=mutableListOf<List<Any?>>()
+  for(payment in payments){
+   val bill=bills[payment.billId]?:continue
+   val customer=bill.customerId?.let{customers[it]}
+   val session=sessions[bill.sessionId]
+   val tableName=session?.tableId?.let{tables[it]?.name}.orEmpty()
+   val adjustments=dao.adjustmentsByBillId(bill.id)
+   val surcharge=adjustments.filter{it.kind=="SURCHARGE"}.sumOf{it.amount}
+   val discount=adjustments.filter{it.kind=="DISCOUNT"}.sumOf{kotlin.math.abs(it.amount)}
+   val base=listOf<Any?>(bill.billNo,bill.id,day(bill.openedAt),day(payment.paidAt),tableName,people[payment.cashierId]?.name?:payment.cashierId,payment.method,payment.reference.orEmpty(),customer?.name.orEmpty(),customer?.phone.orEmpty(),customer?.tier.orEmpty())
+   billRows.add(base+listOf<Any?>(bill.subtotal,surcharge,discount,bill.total,payment.amount,adjustments.joinToString("; "){it.kind+": "+it.name+" ("+it.amount+")"}))
+   val billBatches=batches[bill.sessionId].orEmpty()
+   val lines=billBatches.flatMap{batch->orderItems[batch.id].orEmpty().map{batch to it}}
+   if(lines.isEmpty())billDetails.add(base+listOf<Any?>("","","",0,0L,0L,"",""))
+   else lines.forEach{(batch,item)->
+    billDetails.add(base+listOf<Any?>(batch.sequence,item.itemNameSnapshot,item.menuItemId.orEmpty(),item.qty,item.unitPriceSnapshot,item.qty.toLong()*item.unitPriceSnapshot,item.note,item.loyaltyLabel?:item.buyGetLabel.orEmpty()))
+   }
+  }
+  sheets["Bill"]=listOf(listOf("So bill","ID bill","Gio mo","Gio thanh toan","Ban","Thu ngan","Thanh toan","Tham chieu","Ten khach","SDT khach","Hang khach","Tien mon VND","Phu thu VND","Giam gia VND","Tong bill VND","Thuc thu VND","Chi tiet dieu chinh"))+billRows
+  sheets["Mon theo bill"]=listOf(listOf("So bill","ID bill","Gio mo","Gio thanh toan","Ban","Thu ngan","Thanh toan","Tham chieu","Ten khach","SDT khach","Hang khach","Dot goi","Ten mon tai thoi diem ban","Ma mon","So luong","Don gia tai thoi diem ban VND","Thanh tien VND","Ghi chu mon","Uu dai / voucher"))+billDetails
+  sheets["Bo loc"]=listOf(listOf("Thong tin","Gia tri"),listOf("Tu",day(f.from)),listOf("Den truoc",day(f.toExclusive)),listOf("Nguoi chi",f.payer?:"Tat ca"),listOf("Thu ngan",f.cashier?.let{people[it]?.name?:it}?:"Tat ca"),listOf("So phieu nhap",purchases.size),listOf("So dong hang nhap",purchaseRows.size),listOf("So dong mon theo bill",billDetails.size),listOf("So phieu chi",movements.size),listOf("So bill",payments.size))
   val file=File(File(context.cacheDir,"exports").apply{mkdirs()},"POS0210_${System.currentTimeMillis()}.xlsx")
   ZipOutputStream(file.outputStream().buffered()).use{z->
    val ns="http://schemas.openxmlformats.org/"

@@ -441,13 +441,13 @@ fun saveLoyaltyCampaign(campaign:LoyaltyCampaignEntity){
  val e=currentEmployee.value?:return
  if(e.role!="ADMIN"){viewModelScope.launch{audit("SECURITY","LOYALTY_CAMPAIGN","DENIED","role=${e.role}")};return}
  if(!LoyaltyCampaignPolicy.isValid(campaign.triggerType,campaign.threshold,campaign.expiresDays)){printerMessage.value="ĐIỀU KIỆN TÍCH LŨY HOẶC HẠN QUÀ KHÔNG HỢP LỆ";return}
- if(campaign.triggerType!="POINTS"||campaign.threshold!=100L||campaign.rewardType!="BILL_DISCOUNT"||campaign.rewardValue!=30000L||campaign.cycleMode!="ONCE"){printerMessage.value="CHỈ HỖ TRỢ 100 ĐIỂM → GIẢM 30.000Đ MỘT LẦN";return}
+ if(campaign.triggerType!="POINTS"||campaign.threshold !in 1L..1000000L||campaign.cycleMode!="ONCE"||!((campaign.rewardType=="BILL_DISCOUNT"&&campaign.rewardValue in 1L..10000000L)||(campaign.rewardType=="BILL_DISCOUNT_PERCENT"&&campaign.rewardValue in 1L..100L))){printerMessage.value="ĐIỀU KIỆN GIẢM GIÁ KHÔNG HỢP LỆ";return}
  viewModelScope.launch(Dispatchers.IO){
   val now=System.currentTimeMillis()
   val fixed=campaign.copy(name=campaign.name.trim(),rewardMenuItemId=null,updatedAt=now,createdAt=if(campaign.createdAt<=0)now else campaign.createdAt)
   dao.upsertLoyaltyCampaign(fixed)
   dao.enqueueSync(SyncQueueEntity(UUID.randomUUID().toString(),"LOYALTY_CAMPAIGN",fixed.id,"UPSERT","",now,now))
-  audit("LOYALTY",fixed.id,"CAMPAIGN_SAVE","trigger=${fixed.triggerType},threshold=${fixed.threshold},reward=BILL_DISCOUNT:${fixed.rewardValue},active=${fixed.active}")
+  audit("LOYALTY",fixed.id,"CAMPAIGN_SAVE","trigger=${fixed.triggerType},threshold=${fixed.threshold},reward=${fixed.rewardType}:${fixed.rewardValue},active=${fixed.active}")
   autoBackup();autoMasterConfig()
   printerMessage.value="ĐÃ LƯU CHƯƠNG TRÌNH TÍCH LŨY"
  }
@@ -456,11 +456,23 @@ fun toggleLoyaltyCampaign(campaign:LoyaltyCampaignEntity){
  val e=currentEmployee.value?:return
  if(e.role!="ADMIN")return
  viewModelScope.launch(Dispatchers.IO){
-  if(campaign.rewardType!="BILL_DISCOUNT"){printerMessage.value="CHƯƠNG TRÌNH VOUCHER/QUÀ ĐÃ TẠM KHÓA";return@launch}
+  if(campaign.rewardType !in listOf("BILL_DISCOUNT","BILL_DISCOUNT_PERCENT")){printerMessage.value="CHƯƠNG TRÌNH VOUCHER/QUÀ ĐÃ TẠM KHÓA";return@launch}
   val now=System.currentTimeMillis();val active=!campaign.active
   dao.setLoyaltyCampaignActive(campaign.id,active,now)
   dao.enqueueSync(SyncQueueEntity(UUID.randomUUID().toString(),"LOYALTY_CAMPAIGN",campaign.id,"UPSERT","",now,now))
   audit("LOYALTY",campaign.id,"CAMPAIGN_ACTIVE",active.toString());autoBackup();autoMasterConfig()
+ }
+}
+fun savePointEarningRate(text:String){
+ val e=currentEmployee.value?:return
+ if(e.role!="ADMIN")return
+ val amount=text.toLongOrNull()
+ if(amount==null||amount !in 1000L..10000000L){printerMessage.value="SỐ TIỀN/ĐIỂM PHẢI TỪ 1.000 ĐẾN 10.000.000Đ";return}
+ viewModelScope.launch(Dispatchers.IO){
+  dao.saveSetting(AppSettingEntity("loyalty_vnd_per_point",amount.toString()))
+  audit("LOYALTY","POINT_RATE","SAVE","vnd_per_point=$amount")
+  autoBackup();autoMasterConfig()
+  printerMessage.value="ĐÃ LƯU QUY TẮC TÍCH ĐIỂM"
  }
 }
 fun saveLoyaltyConfig(auto:Boolean,memberDiscount:Int,vipPoints:Int,vipDiscount:Int,vvipPoints:Int,vvipDiscount:Int){

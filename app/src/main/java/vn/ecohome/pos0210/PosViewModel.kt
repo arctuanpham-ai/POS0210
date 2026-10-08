@@ -1083,7 +1083,18 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    if(changed>0) autoBackup()
   }
  }
- fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
+ fun exportTransactionExcel(from:Long?,toExclusive:Long?,payer:String?,cashier:String?,onReady:(android.net.Uri,String)->Unit){
+ val e=currentEmployee.value?:return
+ if(e.role!="ADMIN"&&!e.canViewReport){printerMessage.value="KHÔNG CÓ QUYỀN XUẤT BÁO CÁO";return}
+ viewModelScope.launch(Dispatchers.IO){
+  runCatching{
+   val file=vn.ecohome.pos0210.data.TransactionExcelExport.create(getApplication(),dao,vn.ecohome.pos0210.data.TransactionExcelExport.Filter(from,toExclusive,payer,cashier))
+   vn.ecohome.pos0210.data.TransactionExcelExport.uri(getApplication(),file) to file.name
+  }.onSuccess{(uri,name)->withContext(Dispatchers.Main){onReady(uri,name)}}
+   .onFailure{printerMessage.value="XUẤT EXCEL LỖI: "+it.message}
+ }
+}
+fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
   val e=currentEmployee.value?:return
   if(e.role!="ADMIN"&&!e.canViewReport){printerMessage.value="KHÔNG CÓ QUYỀN XUẤT DỮ LIỆU";return}
   viewModelScope.launch(Dispatchers.IO){

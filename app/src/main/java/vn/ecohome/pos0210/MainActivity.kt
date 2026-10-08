@@ -790,7 +790,7 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                     Text("Dùng quyền lợi 100 điểm: giảm 30.000đ một lần",fontWeight=FontWeight.Bold,fontSize=12.sp)
                 }
             }
-            Text("Tích điểm: 10.000đ thực trả = 1 điểm", fontSize = 11.sp)
+            Text("Tích điểm: "+money(setting("loyalty_vnd_per_point").toLongOrNull()?:10000L)+" thực trả = 1 điểm", fontSize = 11.sp)
 
             Text("🔒 Thu tiền: ${e?.name}", Modifier.padding(vertical = 14.dp))
             if (billPrinted) {
@@ -1131,10 +1131,12 @@ fun LoyaltyCampaignManager(vm: PosViewModel) {
     var name by remember { mutableStateOf("") }
     var trigger by remember { mutableStateOf("BILL_COUNT") }
     var threshold by remember { mutableStateOf("") }
+    var discountKind by remember { mutableStateOf("BILL_DISCOUNT") }
+    var discountValue by remember { mutableStateOf("30000") }
     var cycle by remember { mutableStateOf("ONCE") }
     var expires by remember { mutableStateOf("") }
     fun edit(c: LoyaltyCampaignEntity?) {
-        editing=c;name=c?.name.orEmpty();trigger="POINTS";threshold="100";cycle="ONCE";expires=""
+        editing=c;name=c?.name.orEmpty();trigger="POINTS";threshold=c?.threshold?.toString()?:"100";discountKind=c?.rewardType?.takeIf{it=="BILL_DISCOUNT"||it=="BILL_DISCOUNT_PERCENT"}?:"BILL_DISCOUNT";discountValue=c?.rewardValue?.toString()?:"30000";cycle="ONCE";expires=""
     }
     if(employee?.role!="ADMIN"){Column{Header("Tích lũy & quà"){vm.screen.value="MANAGE"};Text("Chỉ Admin được cấu hình chương trình.",Modifier.padding(20.dp))};return}
     Column {
@@ -1144,12 +1146,13 @@ fun LoyaltyCampaignManager(vm: PosViewModel) {
                 Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
                     Text(if(editing==null)"TẠO CHƯƠNG TRÌNH" else "SỬA CHƯƠNG TRÌNH",fontWeight=FontWeight.Black)
                     OutlinedTextField(name,{name=it.take(60)},Modifier.fillMaxWidth(),label={Text("Tên chương trình")},singleLine=true)
-                    Text("ĐIỀU KIỆN: 100 ĐIỂM TÍCH LŨY",fontWeight=FontWeight.Bold)
-                    Text("QUYỀN LỢI: GIẢM 30.000đ CHO 01 HÓA ĐƠN",fontWeight=FontWeight.Bold)
+                    OutlinedTextField(threshold,{threshold=it.filter(Char::isDigit)},Modifier.fillMaxWidth(),label={Text("Số điểm đạt mốc")})
+                    Row{FilterChip(discountKind=="BILL_DISCOUNT",{discountKind="BILL_DISCOUNT"},{Text("Giảm tiền")});FilterChip(discountKind=="BILL_DISCOUNT_PERCENT",{discountKind="BILL_DISCOUNT_PERCENT"},{Text("Giảm %")})}
+                    OutlinedTextField(discountValue,{discountValue=it.filter(Char::isDigit)},Modifier.fillMaxWidth(),label={Text(if(discountKind=="BILL_DISCOUNT")"Số tiền giảm (đ)" else "Phần trăm giảm (%)")})
                     Text("Chỉ áp dụng một lần cho mỗi khách. Không phát hành hoặc đổi voucher.",fontSize=12.sp)
                     Button(onClick={
                         val now=System.currentTimeMillis()
-                        vm.saveLoyaltyCampaign(LoyaltyCampaignEntity(editing?.id?:UUID.randomUUID().toString(),name.trim(),"POINTS",100L,"BILL_DISCOUNT",rewardValue=30000L,cycleMode="ONCE",active=editing?.active?:true,createdAt=editing?.createdAt?:now,updatedAt=now))
+                        vm.saveLoyaltyCampaign(LoyaltyCampaignEntity(editing?.id?:UUID.randomUUID().toString(),name.trim(),"POINTS",threshold.toLongOrNull()?:0L,discountKind,rewardValue=discountValue.toLongOrNull()?:0L,cycleMode="ONCE",active=editing?.active?:true,createdAt=editing?.createdAt?:now,updatedAt=now))
                     },modifier=Modifier.fillMaxWidth(),enabled=name.isNotBlank()){Text(if(editing==null)"LƯU CHƯƠNG TRÌNH" else "CẬP NHẬT CHƯƠNG TRÌNH")}
                     if(editing!=null)TextButton({edit(null)}){Text("TẠO CHƯƠNG TRÌNH MỚI")}
                     if(message.contains("CHƯƠNG TRÌNH")||message.contains("MÓN QUÀ")||message.contains("ĐIỀU KIỆN"))Text(message,fontSize=11.sp,fontWeight=FontWeight.Bold)
@@ -1157,12 +1160,12 @@ fun LoyaltyCampaignManager(vm: PosViewModel) {
             }
             items(campaigns){campaign->
                 val reward=menu.firstOrNull{it.id==campaign.rewardMenuItemId}
-                val rewardText=if(campaign.rewardType=="BILL_DISCOUNT") "Giảm "+money(campaign.rewardValue)+" trên bill" else "ĐÃ TẠM KHÓA · chương trình cũ"
+                val rewardText=when(campaign.rewardType){"BILL_DISCOUNT"->"Giảm "+money(campaign.rewardValue)+" trên bill";"BILL_DISCOUNT_PERCENT"->"Giảm "+campaign.rewardValue+"% trên bill";else->"ĐÃ TẠM KHÓA · chương trình cũ"}
                 Card(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(4.dp)){
                     Text(campaign.name,fontWeight=FontWeight.Black)
                     Text("${when(campaign.triggerType){"BILL_COUNT"->"${campaign.threshold} lượt mua";"SPEND"->"${money(campaign.threshold)} tổng chi";else->"${campaign.threshold} điểm"}} → $rewardText · ${if(campaign.cycleMode=="REPEAT")"Lặp lại" else "Một lần"}",fontSize=12.sp)
                     Text(if(campaign.expiresDays==null)"Không hạn quà" else "Hạn ${campaign.expiresDays} ngày",fontSize=11.sp)
-                    if(campaign.rewardType=="BILL_DISCOUNT") Row{TextButton({edit(campaign)}){Text("SỬA")};TextButton({vm.toggleLoyaltyCampaign(campaign)}){Text(if(campaign.active)"TẠM NGƯNG" else "BẬT LẠI")}}
+                    if(campaign.rewardType in listOf("BILL_DISCOUNT","BILL_DISCOUNT_PERCENT")) Row{TextButton({edit(campaign)}){Text("SỬA")};TextButton({vm.toggleLoyaltyCampaign(campaign)}){Text(if(campaign.active)"TẠM NGƯNG" else "BẬT LẠI")}}
                 }}
             }
         }
@@ -1180,6 +1183,7 @@ fun LoyaltyConfig(vm: PosViewModel) {
     var vvipPoints by remember(settings) { mutableStateOf(current("vvip_min_points","500")) }
     var vvipDiscount by remember(settings) { mutableStateOf(current("vvip_discount_percent","10")) }
     var saved by remember { mutableStateOf(false) }
+    var vndPerPoint by remember(settings) { mutableStateOf(current("loyalty_vnd_per_point","10000")) }
 
     Column {
         Header("Cấu hình hạng thành viên") { vm.screen.value = "MANAGE" }
@@ -1195,6 +1199,8 @@ fun LoyaltyConfig(vm: PosViewModel) {
                 }
             }
             Spacer(Modifier.height(10.dp))
+            OutlinedTextField(vndPerPoint,{vndPerPoint=it.filter(Char::isDigit)},Modifier.fillMaxWidth(),label={Text("Số tiền thanh toán = 1 điểm (VNĐ)")})
+            Button(onClick={vm.savePointEarningRate(vndPerPoint)}){Text("LƯU QUY TẮC TÍCH ĐIỂM")}
             TierConfigCard("MEMBER", "0", memberDiscount, { memberDiscount = it }, null, null)
             Spacer(Modifier.height(8.dp))
             TierConfigCard("VIP", vipPoints, vipDiscount, { vipDiscount = it }, vipPoints) { vipPoints = it }
@@ -1278,7 +1284,7 @@ fun Manage(vm: PosViewModel) {
             Rowx("Khách hàng", "Tra cứu · cập nhật tên/SĐT/địa chỉ · Member/VIP/VVIP") { vm.screen.value = "CUSTOMERS" }
             if (employee?.role == "ADMIN") {
                 Rowx("Cấu hình hạng thành viên", "Ngưỡng điểm · tự nâng hạng · % ưu đãi Member/VIP/VVIP") { vm.screen.value = "LOYALTY_CONFIG" }
-                Rowx("Chương trình tích điểm giảm bill", "100 điểm → giảm 30.000đ một lần · bật/tắt") { vm.screen.value = "LOYALTY_CAMPAIGNS" }
+                Rowx("Chương trình tích điểm giảm bill", "Tùy chỉnh điểm → giảm tiền hoặc % một lần") { vm.screen.value = "LOYALTY_CAMPAIGNS" }
                 Rowx("Nhân viên", "Thêm · khóa · phân quyền") { vm.screen.value = "EMP" }
                 Rowx("Chấm công & Bảng lương", "Giờ vào/ra · tổng giờ · lương theo tháng") { vm.screen.value = "PAYROLL" }
             }

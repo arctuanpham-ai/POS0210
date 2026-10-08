@@ -105,7 +105,7 @@ class PosViewModel(app:Application):AndroidViewModel(app){
    val rate=PayrollSettings.hourlyRate(setting("hourly_rate_"+e.id),defaultRate)
    val defaultMultiplier=PayrollSettings.multiplierBasisPoints(setting("attendance_multiplier_percent"))
    val employeeMultiplier=setting("attendance_multiplier_percent_"+e.id).toIntOrNull()
-   val multiplier=if(employeeMultiplier in 50..300) employeeMultiplier*100 else defaultMultiplier
+   val multiplier=employeeMultiplier?.takeIf{it in 50..300}?.times(100)?:defaultMultiplier
    val s=AttendanceSessionEntity(UUID.randomUUID().toString(),e.id,now,hourlyRate=rate,multiplierBasisPoints=multiplier)
    dao.insertAttendanceSession(s);myAttendance.value=s;refreshPayroll()
    dao.enqueueSync(SyncQueueEntity(UUID.randomUUID().toString(),"ATTENDANCE",s.id,"UPSERT","",now,now))

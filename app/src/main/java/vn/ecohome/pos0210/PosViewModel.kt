@@ -446,6 +446,22 @@ fun saveHolidayMultiplier(localDate:String,multiplierText:String){
   printerMessage.value="ĐÃ LƯU HỆ SỐ K NGÀY $localDate"
  }
 }
+fun saveHolidayMultipliers(localDates:Set<String>,multiplierText:String){
+ val e=currentEmployee.value?:return
+ if(e.role!="ADMIN"&&e.role!="MANAGER"){viewModelScope.launch{audit("SECURITY","PAYROLL_DATE_MULTIPLIER","DENIED","role=${e.role}")};return}
+ val normalized=multiplierText.trim().replace(',','.')
+ val multiplier=HolidayMultiplier.basisPoints(normalized)
+ val format=SimpleDateFormat("yyyy-MM-dd",Locale.US).apply{isLenient=false}
+ val dates=localDates.map{it.trim()}.filter{it.isNotBlank()}.toSortedSet()
+ val validMultiplier=normalized.matches(Regex("""\d+(\.\d{1,4})?"""))&&multiplier in 5_000..30_000
+ if(dates.isEmpty()||dates.any{runCatching{format.parse(it)}.isFailure}||!validMultiplier){printerMessage.value="K PHẢI TỪ 0.5 ĐẾN 3.0 VÀ PHẢI CHỌN NGÀY";return}
+ viewModelScope.launch(Dispatchers.IO){
+  db.withTransaction{dates.forEach{date->dao.saveSetting(AppSettingEntity(HolidayMultiplier.settingKey(date),multiplier.toString()))}}
+  audit("PAYROLL",dates.joinToString(","),"DATE_MULTIPLIER_BATCH_SAVE","multiplierBp=$multiplier,count=${dates.size},operator=${e.id}")
+  autoBackup();autoMasterConfig()
+  printerMessage.value="ĐÃ LƯU K = $normalized CHO ${dates.size} NGÀY: ${dates.joinToString(", ")}"
+ }
+}
 fun clearHolidayMultiplier(localDate:String){
  val e=currentEmployee.value?:return
  if(e.role!="ADMIN"&&e.role!="MANAGER"){viewModelScope.launch{audit("SECURITY","PAYROLL_DATE_MULTIPLIER","DENIED","role=${e.role}")};return}

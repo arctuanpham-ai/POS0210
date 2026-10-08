@@ -1286,6 +1286,7 @@ fun PayrollManager(vm:PosViewModel){
     val settings by vm.settings.collectAsState()
     val days by vm.payrollDays.collectAsState()
     val label by vm.payrollPeriodLabel.collectAsState()
+    val attendanceQaMode by vm.attendanceQaMode.collectAsState()
     val message by vm.printerMessage.collectAsState()
     val cal=remember{Calendar.getInstance()}
     var year by remember{mutableIntStateOf(cal.get(Calendar.YEAR))}
@@ -1321,7 +1322,7 @@ fun PayrollManager(vm:PosViewModel){
     val visibleEmployees=if(isManager)employees else employees.filter{it.id==employee?.id}
     val grouped=visibleDays.groupBy{it.employeeId}
     Column{
-        Header("Chấm công & Bảng lương"){vm.screen.value="MANAGE"}
+        Header(if(attendanceQaMode)"CHẤM CÔNG QA · BẢNG LƯƠNG" else "Chấm công & Bảng lương"){vm.screen.value="MANAGE"}
         Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween){
             OutlinedButton({if(month==1){month=12;year--}else month--}){Text("‹")}
             Text("THÁNG $label",fontWeight=FontWeight.Black,fontSize=18.sp)
@@ -1430,6 +1431,13 @@ fun TestModeManager(vm:PosViewModel){
                 Switch(enabled,{vm.setBusinessTestMode(it)})
             }
             Text("Bill TEST đã thanh toán: ${testBills.size}")
+            if(employee?.role=="ADMIN"){
+                HorizontalDivider()
+                Text("QA CHẤM CÔNG",fontWeight=FontWeight.Black)
+                Text("Tạo ca mẫu có ngày thường, K=1.5, K=2 và ca qua ngày. Dữ liệu này không tính vào bảng lương thật.",fontSize=11.sp)
+                Button({vm.seedAttendanceQa();vm.screen.value="PAYROLL"},Modifier.fillMaxWidth()){Text("TẠO CA CÔNG QA & XEM BẢNG LƯƠNG")}
+                OutlinedButton({vm.clearAttendanceQa()},Modifier.fillMaxWidth()){Text("XÓA TOÀN BỘ CA CÔNG QA")}
+            }
             HorizontalDivider()
             Text("XÓA DỮ LIỆU TEST",fontWeight=FontWeight.Black)
             Text("Chỉ xóa Session/Order/Bill/Payment thuộc TEST. Không đụng dữ liệu LIVE, nhập hàng, chi phí hay tài sản.",fontSize=12.sp)

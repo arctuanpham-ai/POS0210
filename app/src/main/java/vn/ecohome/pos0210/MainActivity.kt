@@ -3327,7 +3327,24 @@ fun Report(vm: PosViewModel) {
     var excelPayer by remember { mutableStateOf("ALL") }
     var excelCashier by remember { mutableStateOf("ALL") }
     var excelFilterError by remember { mutableStateOf("") }
-    fun shareExcel(){
+    var excelSaveSource by remember { mutableStateOf<android.net.Uri?>(null) }
+    val excelSaveLauncher=androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ){result->
+        val destination=result.data?.data
+        val source=excelSaveSource
+        if(result.resultCode==android.app.Activity.RESULT_OK&&destination!=null&&source!=null){
+            runCatching{
+                reportContext.contentResolver.openInputStream(source)?.use{input->
+                    reportContext.contentResolver.openOutputStream(destination)?.use{output->input.copyTo(output)}
+                        ?:error("Không mở được file đích")
+                }?:error("Không mở được file nguồn")
+            }.onSuccess{excelFilterError="ĐÃ LƯU FILE EXCEL"}
+             .onFailure{excelFilterError="LỖI LƯU EXCEL: "+it.message}
+        }
+        excelSaveSource=null
+    }
+    fun shareExcel(download:Boolean){
         fun parseDate(s:String):Long? {
             if(s.isBlank())return null
             val fmt=java.text.SimpleDateFormat("dd/MM/yyyy",java.util.Locale("vi","VN")).apply{isLenient=false}
@@ -3341,13 +3358,29 @@ fun Report(vm: PosViewModel) {
         excelFilterError=""
         val endExclusive=end?.let{java.util.Calendar.getInstance().apply{timeInMillis=it;add(java.util.Calendar.DAY_OF_MONTH,1)}.timeInMillis}
         vm.exportTransactionExcel(start,endExclusive,excelPayer.takeUnless{it=="ALL"},excelCashier.takeUnless{it=="ALL"}){uri,name->
-            val intent=Intent(Intent.ACTION_SEND).apply{
-                type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                putExtra(Intent.EXTRA_STREAM,uri)
-                putExtra(Intent.EXTRA_SUBJECT,"POS0210 · Excel giao dịch")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            if(download){
+                val intent=Intent(Intent.ACTION_CREATE_DOCUMENT).apply{
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    putExtra(Intent.EXTRA_TITLE,name)
+                }
+                excelSaveSource=uri
+                excelSaveLauncher.launch(intent)
+            }else{
+                val intent=Intent(Intent.ACTION_SEND).apply{
+                    type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    putExtra(Intent.EXTRA_STREAM,uri)
+                    putExtra(Intent.EXTRA_SUBJECT,"POS0210 · Báo cáo Excel")
+                    clipData=android.content.ClipData.newUri(reportContext.contentResolver,name,uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                val zaloIntent=Intent(intent).apply{setPackage("com.zing.zalo")}
+                if(zaloIntent.resolveActivity(reportContext.packageManager)!=null){
+                    reportContext.startActivity(zaloIntent)
+                }else{
+                    reportContext.startActivity(Intent.createChooser(intent,"Chia sẻ Excel qua Zalo / ứng dụng khác"))
+                }
             }
-            reportContext.startActivity(Intent.createChooser(intent,"Xuất Excel / gửi AI: $name"))
         }
     }
     fun shareAiExport(){
@@ -3494,7 +3527,10 @@ fun Report(vm: PosViewModel) {
             payments.map{it.cashierId}.distinct().forEach{id->FilterChip(excelCashier==id,{excelCashier=id},{Text(id.take(8))})}
         }
         if(excelFilterError.isNotBlank())Text(excelFilterError,color=Color.Red,modifier=Modifier.padding(horizontal=12.dp))
-        Button(onClick={shareExcel()},modifier=Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=4.dp)){Text("XUẤT EXCEL (.XLSX) / GỬI AI")}
+        Row(Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=4.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+            Button(onClick={shareExcel(true)},modifier=Modifier.weight(1f)){Text("TẢI EXCEL")}
+            Button(onClick={shareExcel(false)},modifier=Modifier.weight(1f)){Text("SHARE ZALO")}
+        }
         if(section == "PURCHASES") {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp).horizontalScroll(rememberScrollState()),

@@ -46,7 +46,8 @@ data class AttendanceSessionEntity(
  val multiplierBasisPoints:Int=10000,
  val note:String="",
  val createdAt:Long=System.currentTimeMillis(),
- val updatedAt:Long=System.currentTimeMillis()
+ val updatedAt:Long=System.currentTimeMillis(),
+ val dataScope:String="LIVE"
 )
 
 @Entity(indices=[Index("active"),Index("triggerType")])

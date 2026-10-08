@@ -133,7 +133,8 @@ class PosRepository(private val db:PosDatabase){
         customerName:String="",
         autoTier:Boolean=true,
         vipMinPoints:Int=200,
-        vvipMinPoints:Int=500
+        vvipMinPoints:Int=500,
+        loyaltyRewardId:String?=null
     ):PaymentCommitResult {
         require(method=="CASH" || method=="TRANSFER") { "INVALID_PAYMENT_METHOD" }
         require(preview.subtotal>=0L && preview.total>=0L && preview.surcharge>=0L && preview.discount>=0L) { "INVALID_PAYMENT_AMOUNT" }
@@ -183,8 +184,16 @@ class PosRepository(private val db:PosDatabase){
                 preview.subtotal,preview.total,"PAID",customer?.id,dataScope=session.dataScope
             )
 
+            if(loyaltyRewardId!=null){
+                check(!isTest && customer!=null){"LOYALTY_REQUIRES_LIVE_CUSTOMER"}
+                val reward=dao.availableRewardsSnapshot(customer!!.id,now).firstOrNull{it.id==loyaltyRewardId}
+                    ?:error("LOYALTY_REWARD_UNAVAILABLE")
+                check(reward.rewardSnapshot.split("|").getOrNull(1)=="BILL_DISCOUNT" && reward.rewardSnapshot.split("|").getOrNull(2)?.toLongOrNull()==30000L){"LOYALTY_REWARD_INVALID"}
+                check(preview.discount==minOf(30000L,preview.subtotal+preview.surcharge)){"LOYALTY_DISCOUNT_MISMATCH"}
+            }
             if(dao.closeSession(session.id,session.version)!=1) error("SESSION_ALREADY_CLOSED_OR_CHANGED")
             dao.insertBill(bill)
+            if(loyaltyRewardId!=null) check(dao.redeemReward(loyaltyRewardId,bill.id,now)==1){"LOYALTY_ALREADY_USED"}
             dao.insertPayment(PaymentEntity(UUID.randomUUID().toString(),bill.id,method,preview.total,cashierId,now,dataScope=session.dataScope))
 
             customer?.let { cu ->

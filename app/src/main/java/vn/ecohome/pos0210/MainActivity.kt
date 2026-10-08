@@ -589,7 +589,7 @@ private fun tierDiscountRule(tier: String?, settings: List<AppSettingEntity>): P
     )
 }
 
-private fun calculatePricing(subtotal: Long, rules: List<PricingRuleEntity>, enteredCode: String, now: Long = System.currentTimeMillis()): PricingPreview {
+private fun calculatePricing(subtotal: Long, rules: List<PricingRuleEntity>, enteredCode: String, now: Long = System.currentTimeMillis(), buyGetDiscount: Long = 0L, buyGetLabel: String? = null): PricingPreview {
     val code = enteredCode.trim().uppercase()
     val eligible = rules.filter { pricingRuleInTime(it, now) }
     val codeMatches = if (code.isBlank()) emptyList() else eligible.filter { it.code.isNotBlank() && it.code.equals(code, true) }
@@ -598,20 +598,25 @@ private fun calculatePricing(subtotal: Long, rules: List<PricingRuleEntity>, ent
     val afterSurcharge = subtotal + surcharge
     val discountCandidates = eligible.filter { it.kind == "DISCOUNT" && (it.autoApply || it in codeMatches) }
     val bestDiscount = discountCandidates.maxByOrNull { afterSurcharge * it.percent / 100L }
-    val discount = bestDiscount?.let { afterSurcharge * it.percent / 100L } ?: 0L
-    val total = (afterSurcharge - discount).coerceAtLeast(0L)
+    val ruleDiscount = bestDiscount?.let { afterSurcharge * it.percent / 100L } ?: 0L
+    val safeBuyGetDiscount = buyGetDiscount.coerceIn(0L, afterSurcharge)
+    val useBuyGet = safeBuyGetDiscount >= ruleDiscount && safeBuyGetDiscount > 0L
+    val discount = if (useBuyGet) safeBuyGetDiscount else ruleDiscount
+    val appliedRule = if (useBuyGet) null else bestDiscount
     val message = when {
+        useBuyGet -> "Đã áp dụng ưu đãi ${buyGetLabel ?: "Mua X tặng Y"}."
         code.isNotBlank() && codeMatches.isEmpty() -> "Mã không hợp lệ hoặc đã hết thời gian áp dụng."
-        code.isNotBlank() && bestDiscount != null && bestDiscount !in codeMatches -> "Mã hợp lệ nhưng hệ thống đang áp dụng ưu đãi lớn hơn: ${bestDiscount.name}."
-        code.isNotBlank() && bestDiscount != null -> "Đã áp dụng ưu đãi tốt nhất: ${bestDiscount.name}."
+        code.isNotBlank() && appliedRule != null && appliedRule !in codeMatches -> "Mã hợp lệ nhưng hệ thống đang áp dụng ưu đãi lớn hơn: ${appliedRule.name}."
+        code.isNotBlank() && appliedRule != null -> "Đã áp dụng ưu đãi tốt nhất: ${appliedRule.name}."
         else -> ""
     }
-    return PricingPreview(subtotal, surcharge, discount, total, surchargeRules, bestDiscount, message)
+    return PricingPreview(subtotal, surcharge, discount, total, surchargeRules, appliedRule, message, if (useBuyGet) safeBuyGetDiscount else 0L, if (useBuyGet) buyGetLabel else null)
 }
 
 @Composable
 fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
     val subtotal by vm.total(s.id).collectAsState(initial = 0)
+    val buyGetDiscount by vm.buyGetDiscount(s.id).collectAsState(initial = 0L)
     val rules by vm.pricingRules.collectAsState()
     val e by vm.currentEmployee.collectAsState()
     val settings by vm.settings.collectAsState()
@@ -631,7 +636,7 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
         newMember = matchedCustomer == null && normalizedPhone.length >= 9
     )
     val loyaltyRule = tierDiscountRule(effectiveTier, settings)
-    val preview = calculatePricing(subtotal, rules + listOfNotNull(loyaltyRule), appliedCode)
+    val preview = calculatePricing(subtotal, rules + listOfNotNull(loyaltyRule), appliedCode, buyGetDiscount = buyGetDiscount, buyGetLabel = "Mua X tặng Y")
     val paymentSession by vm.paymentSession(s.id).collectAsState(initial = null)
     val printedCheckoutKey by vm.printedCheckoutKey.collectAsState()
     val bankEvents by vm.recentBankNotifications.collectAsState()
@@ -688,6 +693,7 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
             preview.surchargeRules.forEach { Text("• ${it.name} +${it.percent}%", fontSize = 12.sp) }
             if (preview.discount > 0) {
                 Text("Ưu đãi: -${money(preview.discount)}", fontWeight = FontWeight.Bold)
+                preview.buyGetLabel?.let { Text("• $it · quà tặng giảm 100%", fontSize = 12.sp) }
                 preview.discountRule?.let { Text("• ${it.name} -${it.percent}%", fontSize = 12.sp) }
             }
             HorizontalDivider(Modifier.padding(vertical = 10.dp))

@@ -1126,9 +1126,10 @@ fun LoyaltyCampaignManager(vm: PosViewModel) {
             }
             items(campaigns){campaign->
                 val reward=menu.firstOrNull{it.id==campaign.rewardMenuItemId}
+                val rewardText=if(campaign.rewardType=="VOUCHER") "Voucher 01 món tối đa "+money(campaign.rewardValue) else reward?.name?:"Món đã bị xóa"
                 Card(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(4.dp)){
                     Text(campaign.name,fontWeight=FontWeight.Black)
-                    Text("${when(campaign.triggerType){"BILL_COUNT"->"${campaign.threshold} lượt mua";"SPEND"->"${money(campaign.threshold)} tổng chi";else->"${campaign.threshold} điểm"}} → ${reward?.name?:"Món đã bị xóa"} · ${if(campaign.cycleMode=="REPEAT")"Lặp lại" else "Một lần"}",fontSize=12.sp)
+                    Text("${when(campaign.triggerType){"BILL_COUNT"->"${campaign.threshold} lượt mua";"SPEND"->"${money(campaign.threshold)} tổng chi";else->"${campaign.threshold} điểm"}} → $rewardText · ${if(campaign.cycleMode=="REPEAT")"Lặp lại" else "Một lần"}",fontSize=12.sp)
                     Text(if(campaign.expiresDays==null)"Không hạn quà" else "Hạn ${campaign.expiresDays} ngày",fontSize=11.sp)
                     Row{TextButton({edit(campaign)}){Text("SỬA")};TextButton({vm.toggleLoyaltyCampaign(campaign)}){Text(if(campaign.active)"TẠM NGƯNG" else "BẬT LẠI")}}
                 }}

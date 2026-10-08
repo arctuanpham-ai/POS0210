@@ -23,7 +23,13 @@ object BuyGetPolicy {
         if (!rule.active || rule.buyQuantity <= 0 || rule.giftQuantity <= 0) return null
         val purchased = lines.filter { it.menuItemId == rule.buyMenuItemId }
             .sumOf { it.quantity.coerceAtLeast(0) }
-        val repeats = if (rule.repeat) purchased / rule.buyQuantity
+        val repeats = if (rule.buyMenuItemId == rule.giftMenuItemId) {
+            // For A == B, X purchased units and Y gifted units form one complete group.
+            val groupSize = rule.buyQuantity.toLong() + rule.giftQuantity
+            if (groupSize > Int.MAX_VALUE) return null
+            if (rule.repeat) purchased / groupSize.toInt()
+            else if (purchased >= groupSize) 1 else 0
+        } else if (rule.repeat) purchased / rule.buyQuantity
             else if (purchased >= rule.buyQuantity) 1 else 0
         if (repeats <= 0) return null
         val giftLines = lines.filter { it.menuItemId == rule.giftMenuItemId && it.quantity > 0 }
@@ -32,7 +38,7 @@ object BuyGetPolicy {
         if (qty > Int.MAX_VALUE) return null
         // A == B: never discount more items than the order actually contains.
         val giftQty = if (rule.buyMenuItemId == rule.giftMenuItemId)
-            minOf(qty.toInt(), (purchased - repeats * rule.buyQuantity).coerceAtLeast(0))
+            minOf(qty.toInt(), (purchased.toLong() - repeats.toLong() * rule.buyQuantity).coerceAtLeast(0L).toInt())
             else minOf(qty.toInt(), giftLines.sumOf { it.quantity.coerceAtLeast(0) })
         if (giftQty <= 0) return null
         if (giftPrice > Long.MAX_VALUE / giftQty) return null

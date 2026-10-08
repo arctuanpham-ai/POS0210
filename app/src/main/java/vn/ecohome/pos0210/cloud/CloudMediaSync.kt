@@ -77,7 +77,7 @@ object CloudMediaSync {
                 val sourceHash=sha256(source)
                 val doc=manifest.document("${type}_${id}")
                 val old=withTimeout(TIMEOUT_MS){doc.get().await()}
-                if(old.getString("sourceSha256")==sourceHash&&old.getString("encoding")=="jpeg-base64-v1"){skipped++;continue}
+                if(old.getString("sourceSha256")==sourceHash&&old.getString("encoding")=="jpeg-base64-v1"&&old.getString("payload")?.isNotBlank()==true&&old.getString("sha256")?.isNotBlank()==true){skipped++;continue}
                 val compressed=compress(source)
                 val payload=Base64.encodeToString(compressed,Base64.NO_WRAP)
                 val data=mapOf("mediaId" to "${type}_${id}","entityType" to type,"entityId" to id,

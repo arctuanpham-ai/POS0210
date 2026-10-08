@@ -1077,6 +1077,8 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    val pointsEarned=commit.pointsEarned
    val pointsAfter=commit.pointsAfter
    val receiptTier=commit.tier
+   val issuedRewards=if(session.dataScope=="LIVE"&&bill.customerId!=null)repo.evaluateLoyalty(bill.customerId,bill.id) else emptyList()
+   if(issuedRewards.isNotEmpty())audit("LOYALTY",bill.id,"REWARD_ISSUED","count=${issuedRewards.size},customer=${bill.customerId}")
    autoBackup()
    if(false&&printerMode()=="BLUETOOTH"&&printerMac().isNotBlank()){
     val bs=dao.batches(session.id).first().filter{it.status!="CANCELLED"}

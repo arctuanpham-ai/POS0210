@@ -2050,6 +2050,7 @@ fun PricingManager(vm: PosViewModel) {
     val rules by vm.pricingRules.collectAsState()
     var showAdd by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<PricingRuleEntity?>(null) }
+    var editTarget by remember { mutableStateOf<PricingRuleEntity?>(null) }
     Column {
         Header("Ưu đãi & điều chỉnh giá") { vm.screen.value = "MANAGE" }
         Button(onClick = { showAdd = true }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
@@ -2068,6 +2069,7 @@ fun PricingManager(vm: PosViewModel) {
                         }
                         Column(horizontalAlignment = Alignment.End) {
                             Switch(checked = rule.active, onCheckedChange = { vm.togglePricingRule(rule) })
+                            TextButton(onClick = { editTarget = rule }) { Text("SỬA") }
                             TextButton(onClick = { deleteTarget = rule }) { Text("XÓA") }
                         }
                     }
@@ -2084,6 +2086,7 @@ fun PricingManager(vm: PosViewModel) {
             dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("HỦY") } }
         )
     }
+    editTarget?.let { rule -> PricingRuleDialog(initial=rule,onDismiss={editTarget=null}) { name,code,kind,percent,startAt,endAt,startMin,endMin,autoApply -> vm.updatePricingRule(rule,name,code,kind,percent,startAt,endAt,startMin,endMin,autoApply);editTarget=null } }
     if (showAdd) {
         PricingRuleDialog(onDismiss = { showAdd = false }) { name, code, kind, percent, startAt, endAt, startMin, endMin, autoApply ->
             vm.savePricingRule(name, code, kind, percent, startAt, endAt, startMin, endMin, autoApply)
@@ -2094,20 +2097,21 @@ fun PricingManager(vm: PosViewModel) {
 
 @Composable
 fun PricingRuleDialog(
+    initial: PricingRuleEntity? = null,
     onDismiss: () -> Unit,
     onSave: (String, String, String, Int, Long?, Long?, Int?, Int?, Boolean) -> Unit
 ) {
-    var name by remember { mutableStateOf("") }
-    var code by remember { mutableStateOf("") }
-    var kind by remember { mutableStateOf("DISCOUNT") }
-    var percentText by remember { mutableStateOf("") }
-    var startText by remember { mutableStateOf("") }
-    var endText by remember { mutableStateOf("") }
-    var startHour by remember { mutableStateOf("") }
-    var endHour by remember { mutableStateOf("") }
-    var autoApply by remember { mutableStateOf(true) }
+    var name by remember { mutableStateOf(initial?.name.orEmpty()) }
+    var code by remember { mutableStateOf(initial?.code.orEmpty()) }
+    var kind by remember { mutableStateOf(initial?.kind ?: "DISCOUNT") }
+    var percentText by remember { mutableStateOf(initial?.percent?.toString().orEmpty()) }
+    var startText by remember { mutableStateOf(initial?.startAt?.let { SimpleDateFormat("dd/MM/yyyy HH:mm",Locale.getDefault()).format(java.util.Date(it)) }.orEmpty()) }
+    var endText by remember { mutableStateOf(initial?.endAt?.let { SimpleDateFormat("dd/MM/yyyy HH:mm",Locale.getDefault()).format(java.util.Date(it)) }.orEmpty()) }
+    var startHour by remember { mutableStateOf(initial?.startMinute?.let { "%02d:%02d".format(it/60,it%60) }.orEmpty()) }
+    var endHour by remember { mutableStateOf(initial?.endMinute?.let { "%02d:%02d".format(it/60,it%60) }.orEmpty()) }
+    var autoApply by remember { mutableStateOf(initial?.autoApply ?: true) }
     fun parseDate(text: String): Long? = if (text.isBlank()) null else runCatching {
-        SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).apply { isLenient = false }.parse(text)?.time
+        SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).apply { isLenient = false }.also { require(it.parse(text)?.let { d -> it.format(d) == text.trim() } == true) }.parse(text)?.time
     }.getOrNull()
     fun parseMinute(text: String): Int? {
         if (text.isBlank()) return null
@@ -2124,7 +2128,7 @@ fun PricingRuleDialog(
         confirmButton = {
             Button(
                 onClick = { onSave(name, code, kind, percentText.toIntOrNull() ?: 0, parseDate(startText), parseDate(endText), parseMinute(startHour), parseMinute(endHour), autoApply) },
-                enabled = name.isNotBlank() && (percentText.toIntOrNull() ?: 0) in 1..100 && (autoApply || code.isNotBlank())
+                enabled = name.isNotBlank() && (percentText.toIntOrNull() ?: 0) in 1..100 && (autoApply || code.isNotBlank()) && (startText.isBlank() || parseDate(startText)!=null) && (endText.isBlank() || parseDate(endText)!=null) && (startHour.isBlank() || parseMinute(startHour)!=null) && (endHour.isBlank() || parseMinute(endHour)!=null) && (startText.isBlank() || endText.isBlank() || parseDate(endText)!! >= parseDate(startText)!!) && (startHour.isBlank() == endHour.isBlank())
             ) { Text("LƯU") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("HỦY") } },

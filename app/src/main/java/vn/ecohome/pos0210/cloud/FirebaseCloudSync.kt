@@ -83,6 +83,24 @@ object FirebaseCloudSync {
         FirestorePrivateBackup.upload(context,FirebaseFirestore.getInstance(app),uid,System.currentTimeMillis())
     }}
 
+    // Explicit catalog publication: called only after an authorized local menu edit.
+    // A secondary device running ordinary sync can only pull, never publish.
+    suspend fun publishMenu(context:Context):Result<Unit> = CloudOperationGuard.mutex.withLock { runCatching {
+        val dao=PosDatabase.get(context).dao()
+        val cfg=config(context)
+        val app=firebaseApp(context,cfg)
+        val uid=FirebaseAuth.getInstance(app).currentUser?.uid?:error("Chưa đăng nhập Firebase")
+        val fs=FirebaseFirestore.getInstance(app)
+        val root=fs.collection("users").document(uid).collection("stores").document("0210")
+        val categories=dao.allCategoriesSnapshot()
+        val items=dao.allMenuSnapshot()
+        require(categories.isNotEmpty() && items.isNotEmpty()){"Không đẩy menu rỗng lên Cloud"}
+        val now=System.currentTimeMillis()
+        writeMaps(fs,root.collection("menuCategories"),categories.map{v->v.id to mapOf("id" to v.id,"name" to v.name,"sortOrder" to v.sortOrder,"active" to v.active,"updatedAt" to now)})
+        writeMaps(fs,root.collection("menu"),items.map{v->v.id to mapOf("id" to v.id,"categoryId" to v.categoryId,"name" to v.name,"price" to v.price,"sortOrder" to v.sortOrder,"active" to v.active,"productCode" to v.productCode,"description" to v.description,"updatedAt" to now)})
+        root.collection("config").document("menuVersion").set(mapOf("updatedAt" to now,"publisherUid" to uid,"itemCount" to items.size,"categoryCount" to categories.size)).await()
+    }}
+
     suspend fun syncNow(context:Context):Result<Unit> = CloudOperationGuard.mutex.withLock { runCatching{
         val db=PosDatabase.get(context);val dao=db.dao();val old=dao.cloudSyncStateSnapshot()?:CloudSyncStateEntity()
         dao.saveCloudSyncState(old.copy(lastAttemptAt=System.currentTimeMillis(),lastError=null))

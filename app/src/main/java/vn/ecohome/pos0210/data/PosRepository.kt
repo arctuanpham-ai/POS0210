@@ -31,9 +31,8 @@ class PosRepository(private val db:PosDatabase){
             dao.activeLoyaltyCampaignsSnapshot().forEach { campaign ->
                 if(campaign.threshold<=0)return@forEach
                 val progress=when(campaign.triggerType){"BILL_COUNT"->visits;"SPEND"->spend;"POINTS"->points;else->0L}
-                val eligible=if(campaign.cycleMode=="REPEAT") progress/campaign.threshold else if(progress>=campaign.threshold) 1L else 0L
-                val issued=dao.issuedRewardCount(customerId,campaign.id).toLong()
-                if(eligible>issued && dao.rewardExists(customerId,campaign.id,sourceBillId)==0){
+                val issued=dao.issuedRewardCount(customerId,campaign.id)
+                repeat(LoyaltyAwardPolicy.additionalAwards(progress,campaign.threshold,campaign.cycleMode,issued)) {
                     val expires=campaign.expiresDays?.let{now+it*86_400_000L}
                     val snapshot=campaign.name+"|"+campaign.rewardType+"|"+campaign.rewardValue+"|"+(campaign.rewardMenuItemId?:"")+"|"+(campaign.rewardCategoryId?:"")
                     val reward=CustomerRewardEntity(UUID.randomUUID().toString(),customerId,campaign.id,sourceBillId,"AVAILABLE",now,expires,rewardSnapshot=snapshot)

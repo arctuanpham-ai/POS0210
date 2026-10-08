@@ -136,6 +136,9 @@ object FirebaseCloudSync {
             "READY" -> Unit
             else -> error("BOOTSTRAP_STATE_INVALID: undefined")
         }
+        // Menu is cloud-authoritative for secondary devices. Never overwrite an existing
+        // cloud menu with a stale local snapshot during ordinary realtime sync.
+        stage("PULL_MENU"){pullCloudMenu(root,dao)}
         stage("PULL_FINANCE"){pullCloudFinance(root,dao)}
         stage("WRITE_FINANCE"){writeFinanceMirror(fs,root,dao)}
         val tables=dao.cloudTablesSnapshot();val sessions=dao.cloudSessionsSnapshot();val bills=dao.cloudBillsSnapshot();val payments=dao.cloudPaymentsSnapshot()
@@ -145,9 +148,14 @@ object FirebaseCloudSync {
         val openByTable=open.associateBy{it.tableId}
         stage("DASHBOARD"){root.collection("dashboard").document("current").set(financialDashboard(dao,bills,payments,now)+mapOf("openTables" to open.size,"openTableNames" to tables.filter{openByTable.containsKey(it.id)}.map{it.name},"revenueToday" to paidToday.sumOf{it.total},"paidBillsToday" to paidToday.size,"lastUpdatedAt" to now)).await()}
         writeMaps(fs,root.collection("tableStatus"),tables.map{t->t.id to mapOf("id" to t.id,"name" to t.name,"areaId" to t.areaId,"active" to t.active,"occupied" to openByTable.containsKey(t.id),"openedAt" to openByTable[t.id]?.openedAt,"updatedAt" to now)})
-        writeMaps(fs,root.collection("menu"),dao.allMenuSnapshot().map{m->m.id to mapOf("id" to m.id,"categoryId" to m.categoryId,"name" to m.name,"price" to m.price,"sortOrder" to m.sortOrder,"active" to m.active,"productCode" to m.productCode,"description" to m.description)})
+        // A full menu mirror is only seeded when no cloud menu exists. Edits must
+        // publish through an explicit versioned menu mutation, not generic sync.
+        val cloudMenuExists=stage("MENU_SEED_CHECK"){root.collection("menu").limit(1).get().await().isEmpty.not()}
+        if(!cloudMenuExists){
+            writeMaps(fs,root.collection("menu"),dao.allMenuSnapshot().map{m->m.id to mapOf("id" to m.id,"categoryId" to m.categoryId,"name" to m.name,"price" to m.price,"sortOrder" to m.sortOrder,"active" to m.active,"productCode" to m.productCode,"description" to m.description)})
+            writeMaps(fs,root.collection("menuCategories"),dao.allCategoriesSnapshot().map{cat->cat.id to mapOf("id" to cat.id,"name" to cat.name,"sortOrder" to cat.sortOrder,"active" to cat.active)})
+        }
         writeMaps(fs,root.collection("areas"),dao.allAreasSnapshot().map{a->a.id to mapOf("id" to a.id,"name" to a.name,"sortOrder" to a.sortOrder,"active" to a.active)})
-        writeMaps(fs,root.collection("menuCategories"),dao.allCategoriesSnapshot().map{c0->c0.id to mapOf("id" to c0.id,"name" to c0.name,"sortOrder" to c0.sortOrder,"active" to c0.active)})
         writeMaps(fs,root.collection("sessions"),sessions.map{s->s.id to mapOf("id" to s.id,"tableId" to s.tableId,"openedAt" to s.openedAt,"openedBy" to s.openedBy,"status" to s.status,"version" to s.version)})
         writeMaps(fs,root.collection("orderBatches"),dao.cloudOrderBatchesSnapshot().map{b->b.id to mapOf("id" to b.id,"sessionId" to b.sessionId,"sequence" to b.sequence,"ordererId" to b.ordererId,"createdAt" to b.createdAt,"sentAt" to b.sentAt,"status" to b.status,"serviceNo" to b.serviceNo,"deliveredAt" to b.deliveredAt,"deliveredBy" to b.deliveredBy)})
         writeMaps(fs,root.collection("orderItems"),dao.cloudOrderItemsSnapshot().map{i->i.id to mapOf("id" to i.id,"batchId" to i.batchId,"menuItemId" to i.menuItemId,"itemName" to i.itemNameSnapshot,"unitPrice" to i.unitPriceSnapshot,"qty" to i.qty,"note" to i.note,"adjustmentOfItemId" to i.adjustmentOfItemId)})
@@ -206,6 +214,34 @@ object FirebaseCloudSync {
         writeMaps(fs,root.collection("orderBatches"),batches.map{b->b.id to mapOf("id" to b.id,"sessionId" to b.sessionId,"sequence" to b.sequence,"ordererId" to b.ordererId,"createdAt" to b.createdAt,"sentAt" to b.sentAt,"status" to b.status,"serviceNo" to b.serviceNo,"deliveredAt" to b.deliveredAt,"deliveredBy" to b.deliveredBy)})
         writeMaps(fs,root.collection("orderItems"),items.map{i->i.id to mapOf("id" to i.id,"batchId" to i.batchId,"menuItemId" to i.menuItemId,"itemName" to i.itemNameSnapshot,"unitPrice" to i.unitPriceSnapshot,"qty" to i.qty,"note" to i.note,"adjustmentOfItemId" to i.adjustmentOfItemId)})
     }}
+
+    private suspend fun pullCloudMenu(root:com.google.firebase.firestore.DocumentReference,dao:PosDao){
+        val categoryDocs=root.collection("menuCategories").get().await().documents
+        val itemDocs=root.collection("menu").get().await().documents
+        if(categoryDocs.isEmpty() || itemDocs.isEmpty())return
+        for(doc in categoryDocs){
+            dao.saveCategory(vn.ecohome.pos0210.data.MenuCategoryEntity(
+                id=doc.getString("id")?:doc.id,
+                name=doc.getString("name")?:continue,
+                sortOrder=doc.getLong("sortOrder")?.toInt()?:0,
+                active=doc.getBoolean("active")?:true))
+        }
+        val local=dao.allMenuSnapshot().associateBy{it.id}
+        for(doc in itemDocs){
+            val id=doc.getString("id")?:doc.id
+            val name=doc.getString("name")?:continue
+            val categoryId=doc.getString("categoryId")?:continue
+            val old=local[id]
+            dao.saveMenuItem(vn.ecohome.pos0210.data.MenuItemEntity(
+                id=id,categoryId=categoryId,name=name,
+                price=doc.getLong("price")?:0L,
+                imageUri=old?.imageUri,
+                sortOrder=doc.getLong("sortOrder")?.toInt()?:0,
+                active=doc.getBoolean("active")?:true,
+                productCode=doc.getString("productCode")?:old?.productCode.orEmpty(),
+                description=doc.getString("description")?:""))
+        }
+    }
 
     private suspend fun pullCloudFinance(root:com.google.firebase.firestore.DocumentReference,dao:PosDao){
         val remotePurchases=root.collection("purchases").get().await().documents

@@ -40,9 +40,11 @@ object BuyGetPolicy {
         purchasedQuantity: Int,
         existingGiftQuantity: Int
     ): BuyGetGiftRequest? {
-        if (!rule.active || !isValid(rule) || rule.buyMenuItemId == rule.giftMenuItemId) return null
+        if (!rule.active || !isValid(rule)) return null
         val purchased = purchasedQuantity.coerceAtLeast(0)
         val existing = existingGiftQuantity.coerceAtLeast(0)
+        // purchasedQuantity is the paid/manual quantity; generated gifts are supplied separately.
+        // This keeps a same-item 2+1 promotion idempotent without requiring the operator to add 3.
         val groups = if (rule.repeat) purchased / rule.buyQuantity
         else if (purchased >= rule.buyQuantity) 1 else 0
         if (groups <= 0) return null

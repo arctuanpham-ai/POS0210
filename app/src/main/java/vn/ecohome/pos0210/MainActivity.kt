@@ -1,6 +1,7 @@
 package vn.ecohome.pos0210
 
 import android.net.Uri
+import android.app.DatePickerDialog
 import android.Manifest
 import android.os.Build
 import android.provider.Settings
@@ -1217,19 +1218,36 @@ fun PayrollManager(vm:PosViewModel){
     val label by vm.payrollPeriodLabel.collectAsState()
     val message by vm.printerMessage.collectAsState()
     val cal=remember{Calendar.getInstance()}
+    val context=LocalContext.current
     var year by remember{mutableIntStateOf(cal.get(Calendar.YEAR))}
     var month by remember{mutableIntStateOf(cal.get(Calendar.MONTH)+1)}
     LaunchedEffect(year,month){vm.loadPayrollMonth(year,month)}
     if(employee==null){Column{Header("Bảng lương"){vm.screen.value="MANAGE"};Text("Vui lòng đăng nhập để xem bảng công.",Modifier.padding(20.dp))};return}
     val isManager=employee?.role=="ADMIN"||employee?.role=="MANAGER"
     fun setting(key:String)=settings.firstOrNull{it.key==key}?.value.orEmpty()
+    fun kText(basisPoints:String):String{
+        val value=basisPoints.toIntOrNull()?.div(10_000.0)?:1.0
+        return "%.4f".format(Locale.US,value).trimEnd('0').trimEnd('.')
+    }
+    val holidayKByDate=remember(settings){
+        settings.mapNotNull{item->
+            item.key.removePrefix("attendance_date_multiplier_").takeIf{item.key.startsWith("attendance_date_multiplier_")&&item.value.isNotBlank()}?.let{it to kText(item.value)}
+        }.toMap()
+    }
     var defaultRate by remember(settings){mutableStateOf(setting("hourly_rate_default").ifBlank{"35000"})}
-    var defaultMultiplier by remember(settings){mutableStateOf(setting("attendance_multiplier_percent").ifBlank{"100"})}
     var employeeRates by remember(settings,employees){mutableStateOf(employees.associate{it.id to setting("hourly_rate_"+it.id)})}
-    var employeeMultipliers by remember(settings,employees){mutableStateOf(employees.associate{it.id to setting("attendance_multiplier_percent_"+it.id)})}
+    var selectedHolidayDate by remember{mutableStateOf("")}
+    var holidayK by remember{mutableStateOf("2")}
     val visibleDays=if(isManager)days else days.filter{it.employeeId==employee?.id}
     val visibleEmployees=if(isManager)employees else employees.filter{it.id==employee?.id}
     val grouped=visibleDays.groupBy{it.employeeId}
+    fun pickHolidayDate(){
+        val initial=Calendar.getInstance()
+        DatePickerDialog(context,{_,pickedYear,pickedMonth,pickedDay->
+            selectedHolidayDate="%04d-%02d-%02d".format(Locale.US,pickedYear,pickedMonth+1,pickedDay)
+            holidayK=holidayKByDate[selectedHolidayDate].orEmpty().ifBlank{"2"}
+        },initial.get(Calendar.YEAR),initial.get(Calendar.MONTH),initial.get(Calendar.DAY_OF_MONTH)).show()
+    }
     Column{
         Header("Chấm công & Bảng lương"){vm.screen.value="MANAGE"}
         Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween){
@@ -1244,19 +1262,38 @@ fun PayrollManager(vm:PosViewModel){
                         Text("CÀI ĐẶT CÔNG & LƯƠNG",fontWeight=FontWeight.Black,fontSize=17.sp)
                         Text("Đơn giá và hệ số được chốt vào ca lúc CHECK-IN. Sửa sau đó chỉ áp dụng ca mới, không làm sai lịch sử.",fontSize=11.sp)
                         OutlinedTextField(defaultRate,{defaultRate=it.filter(Char::isDigit).take(7)},Modifier.fillMaxWidth(),label={Text("Đơn giá mặc định (đ/giờ)")},singleLine=true)
-                        OutlinedTextField(defaultMultiplier,{defaultMultiplier=it.filter(Char::isDigit).take(3)},Modifier.fillMaxWidth(),label={Text("Hệ số mặc định (%) · 100 = lương chuẩn")},singleLine=true)
                         Text("Thiết lập riêng từng nhân viên: để trống sẽ dùng mức mặc định.",fontSize=11.sp,fontWeight=FontWeight.Bold)
                         employees.forEach{emp->
                             Card(Modifier.fillMaxWidth()){
                                 Column(Modifier.padding(10.dp),verticalArrangement=Arrangement.spacedBy(6.dp)){
                                     Text(emp.name+(if(!emp.active)" · ĐÃ KHÓA" else ""),fontWeight=FontWeight.Bold)
                                     OutlinedTextField(employeeRates[emp.id].orEmpty(),{value->employeeRates=employeeRates.toMutableMap().apply{put(emp.id,value.filter(Char::isDigit).take(7))}},Modifier.fillMaxWidth(),label={Text("Đơn giá riêng (đ/giờ)")},singleLine=true)
-                                    OutlinedTextField(employeeMultipliers[emp.id].orEmpty(),{value->employeeMultipliers=employeeMultipliers.toMutableMap().apply{put(emp.id,value.filter(Char::isDigit).take(3))}},Modifier.fillMaxWidth(),label={Text("Hệ số riêng (%)")},singleLine=true)
                                 }
                             }
                         }
-                        Button(onClick={vm.savePayrollConfig(defaultRate,defaultMultiplier,employeeRates,employeeMultipliers)},modifier=Modifier.fillMaxWidth()){Text("LƯU CÀI ĐẶT CÔNG / LƯƠNG")}
-                        if(message.contains("CÔNG")||message.contains("LƯƠNG"))Text(message,fontSize=11.sp,fontWeight=FontWeight.Bold)
+                        Button(onClick={vm.savePayrollConfig(defaultRate,employeeRates)},modifier=Modifier.fillMaxWidth()){Text("LƯU ĐƠN GIÁ CÔNG / GIỜ")}
+                        HorizontalDivider()
+                        Text("HỆ SỐ NGÀY LỄ",fontWeight=FontWeight.Black,fontSize=16.sp)
+                        Text("Chọn ngày trên lịch, sau đó đặt K=1.5, K=2 hoặc số lẻ. K áp dụng cho mọi nhân viên check-in trong ngày đó.",fontSize=11.sp)
+                        OutlinedButton(onClick={pickHolidayDate()},modifier=Modifier.fillMaxWidth()){
+                            Text(if(selectedHolidayDate.isBlank())"CHỌN NGÀY TRÊN LỊCH" else "NGÀY ĐÃ CHỌN: $selectedHolidayDate")
+                        }
+                        Row(horizontalArrangement=Arrangement.spacedBy(8.dp),modifier=Modifier.fillMaxWidth()){
+                            OutlinedButton({holidayK="1.5"},Modifier.weight(1f)){Text("K = 1.5")}
+                            OutlinedButton({holidayK="2"},Modifier.weight(1f)){Text("K = 2")}
+                        }
+                        OutlinedTextField(holidayK,{holidayK=it.filter{c->c.isDigit()||c=='.'||c==','}.take(6)},Modifier.fillMaxWidth(),label={Text("K tùy chỉnh · từ 0.5 đến 3.0")},singleLine=true)
+                        Button(onClick={if(selectedHolidayDate.isBlank())pickHolidayDate() else vm.saveHolidayMultiplier(selectedHolidayDate,holidayK)},modifier=Modifier.fillMaxWidth()){Text("LƯU HỆ SỐ NGÀY ĐÃ CHỌN")}
+                        if(holidayKByDate.isNotEmpty()){
+                            Text("NGÀY ĐÃ CÀI HỆ SỐ",fontSize=12.sp,fontWeight=FontWeight.Bold)
+                            holidayKByDate.toSortedMap().forEach{(date,k)->
+                                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+                                    Text("$date · K = $k",Modifier.weight(1f),fontSize=12.sp)
+                                    TextButton({vm.clearHolidayMultiplier(date)}){Text("XÓA")}
+                                }
+                            }
+                        }
+                        if(message.contains("CÔNG")||message.contains("LƯƠNG")||message.contains("HỆ SỐ")||message.contains("K NGÀY"))Text(message,fontSize=11.sp,fontWeight=FontWeight.Bold)
                     }
                 }
             }

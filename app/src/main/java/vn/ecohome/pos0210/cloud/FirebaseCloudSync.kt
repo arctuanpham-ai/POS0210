@@ -62,7 +62,7 @@ object FirebaseCloudSync {
     }
     internal fun firebaseApp(context:Context,c:FirebaseConfig):FirebaseApp{
         FirebaseApp.getApps(context).firstOrNull{it.name==APP_NAME}?.let{return it}
-        return FirebaseApp.initializeApp(context,FirebaseOptions.Builder().setProjectId(c.projectId).setApplicationId(c.applicationId).setApiKey(c.apiKey).build(),APP_NAME)
+        return FirebaseApp.initializeApp(context,FirebaseOptions.Builder().setProjectId(c.projectId).setApplicationId(c.applicationId).setApiKey(c.apiKey).setStorageBucket("${c.projectId}.firebasestorage.app").build(),APP_NAME)
             ?: error("Không thể khởi tạo Firebase")
     }
     suspend fun signIn(context:Context,email:String,password:String):String{

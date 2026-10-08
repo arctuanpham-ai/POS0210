@@ -27,4 +27,19 @@ class AttendancePayrollTest {
   assertEquals(setOf("TEST"),rows.map{it.dataScope}.toSet())
   assertEquals(listOf(120L,120L),AttendancePayroll.splitByDay(rows.last(),zone=zone).map{it.minutes})
  }
+ @Test fun completedShiftsRoundToWholeHoursWithFifteenMinuteTolerance(){
+  assertEquals(540L,AttendancePayroll.payableMinutes(525L))
+  assertEquals(540L,AttendancePayroll.payableMinutes(555L))
+  assertEquals(480L,AttendancePayroll.payableMinutes(509L))
+  assertEquals(600L,AttendancePayroll.payableMinutes(570L))
+  val s=AttendanceSessionEntity("round","e1",ms("2026-10-08T06:00:00"),ms("2026-10-08T14:45:00"),"CLOSED",35000,10000)
+  val day=AttendancePayroll.splitByDay(s,zone=zone).single()
+  assertEquals(540L,day.minutes)
+  assertEquals(315000L,day.amount)
+ }
+ @Test fun openShiftIsNotPrematurelyRounded(){
+  val start=ms("2026-10-08T06:00:00")
+  val s=AttendanceSessionEntity("open","e1",start,null,"OPEN",35000,10000)
+  assertEquals(525L,AttendancePayroll.splitByDay(s,ms("2026-10-08T14:45:00"),zone).single().minutes)
+ }
 }

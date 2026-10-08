@@ -924,6 +924,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
  fun batches(id:String)=dao.batches(id)
  fun items(id:String)=dao.batchItems(id)
  fun total(id:String)=dao.sessionTotal(id)
+ fun buyGetDiscount(id:String)=dao.sessionBuyGetDiscount(id)
  fun session(id:String)=dao.sessionById(id)
  fun setCustomerTier(customer:CustomerEntity,tier:String){
   val e=currentEmployee.value?:return

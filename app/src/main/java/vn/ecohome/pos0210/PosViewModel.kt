@@ -447,7 +447,7 @@ fun saveLoyaltyCampaign(campaign:LoyaltyCampaignEntity){
   val fixed=campaign.copy(name=campaign.name.trim(),rewardMenuItemId=null,updatedAt=now,createdAt=if(campaign.createdAt<=0)now else campaign.createdAt)
   dao.upsertLoyaltyCampaign(fixed)
   dao.enqueueSync(SyncQueueEntity(UUID.randomUUID().toString(),"LOYALTY_CAMPAIGN",fixed.id,"UPSERT","",now,now))
-  audit("LOYALTY",fixed.id,"CAMPAIGN_SAVE","trigger=${fixed.triggerType},threshold=${fixed.threshold},reward="BILL_DISCOUNT:"+fixed.rewardValue+",active=${fixed.active}")
+  audit("LOYALTY",fixed.id,"CAMPAIGN_SAVE","trigger=${fixed.triggerType},threshold=${fixed.threshold},reward=BILL_DISCOUNT:${fixed.rewardValue},active=${fixed.active}")
   autoBackup();autoMasterConfig()
   printerMessage.value="ĐÃ LƯU CHƯƠNG TRÌNH TÍCH LŨY"
  }

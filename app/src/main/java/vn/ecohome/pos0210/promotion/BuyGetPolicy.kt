@@ -26,15 +26,17 @@ object BuyGetPolicy {
         val repeats = if (rule.repeat) purchased / rule.buyQuantity
             else if (purchased >= rule.buyQuantity) 1 else 0
         if (repeats <= 0) return null
-        val giftPrice = lines.firstOrNull { it.menuItemId == rule.giftMenuItemId }
-            ?.unitPrice?.coerceAtLeast(0) ?: return null
+        val giftLines = lines.filter { it.menuItemId == rule.giftMenuItemId && it.quantity > 0 }
+        val giftPrice = giftLines.firstOrNull()?.unitPrice?.coerceAtLeast(0) ?: return null
         val qty = repeats.toLong() * rule.giftQuantity
         if (qty > Int.MAX_VALUE) return null
         // A == B: never discount more items than the order actually contains.
         val giftQty = if (rule.buyMenuItemId == rule.giftMenuItemId)
-            minOf(qty.toInt(), purchased) else qty.toInt()
+            minOf(qty.toInt(), (purchased - repeats * rule.buyQuantity).coerceAtLeast(0))
+            else minOf(qty.toInt(), giftLines.sumOf { it.quantity.coerceAtLeast(0) })
         if (giftQty <= 0) return null
-        return BuyGetAward(rule.id, rule.giftMenuItemId, giftQty, giftPrice * giftQty)
+        if (giftPrice > Long.MAX_VALUE / giftQty) return null
+        return BuyGetAward(rule.id, rule.giftMenuItemId, giftQty, giftPrice * giftQty))
     }
 
     fun best(

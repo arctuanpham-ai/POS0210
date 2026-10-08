@@ -1300,7 +1300,7 @@ fun Manage(vm: PosViewModel) {
             }
             if (employee?.role == "ADMIN" || employee?.role == "MANAGER") {
                 Rowx("VietQR", "Lưu tài khoản · tạo QR") { vm.screen.value = "VIETQR" }
-                Rowx("Thanh toán chuyển khoản", "Đọc thông báo VCB/VietinBank · rung · đọc số tiền") { vm.screen.value = "BANK_PAYMENT_SETTINGS" }
+                Rowx("Thanh toán chuyển khoản", "Techcombank · VCB · VietinBank · rung · đọc tiền") { vm.screen.value = "BANK_PAYMENT_SETTINGS" }
             }
             Rowx("Máy in", "58/80mm · Bluetooth · ESC/POS") { vm.screen.value = "PRINTER" }
             if (employee?.role == "ADMIN" || employee?.canManageSystem == true) {
@@ -4140,7 +4140,7 @@ fun BankPaymentSettings(vm:PosViewModel){
                     Button(onClick={context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))},modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text(if(permissionGranted)"MỞ CÀI ĐẶT QUYỀN" else "CẤP QUYỀN ĐỌC THÔNG BÁO")}
                 }
             }
-            Text("Ngân hàng hỗ trợ: Vietcombank · VietinBank",fontSize=12.sp)
+            Text("Ngân hàng hỗ trợ: Techcombank · Vietcombank · VietinBank",fontSize=12.sp)
             Text("Chỉ đọc notification từ package ngân hàng trong whitelist; không đọc SMS, Zalo hoặc ứng dụng khác.",fontSize=11.sp)
             SettingSwitch("Rung khi nhận tiền",enabled("bank_notification_vibrate",true)){vm.saveSetting("bank_notification_vibrate",it.toString())}
             SettingSwitch("Đọc số tiền bằng loa",enabled("bank_notification_tts",true)){vm.saveSetting("bank_notification_tts",it.toString())}
@@ -4161,6 +4161,8 @@ fun BankNotificationTest(vm:PosViewModel){
     val context=LocalContext.current
     val events by vm.recentBankNotifications.collectAsState()
     val event=events.firstOrNull()
+    var demoAmount by remember { mutableStateOf("127000") }
+    var demoStatus by remember { mutableStateOf("") }
     Column{
         Header("Test thông báo ngân hàng"){vm.screen.value="BANK_PAYMENT_SETTINGS"}
         Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())){
@@ -4176,7 +4178,17 @@ fun BankNotificationTest(vm:PosViewModel){
                     Text("Content: ${event.content?:"—"}",fontSize=11.sp)
                 }
             }
-            Button(onClick={BankPaymentAnnouncer.announce(context,127000,"Bàn 05",false,true)},modifier=Modifier.fillMaxWidth().padding(top=12.dp)){Text("TEST TTS")}
+            Text("DEMO RUNG VÀ ĐỌC TIỀN · KHÔNG GHI DOANH THU",fontWeight=FontWeight.Black)
+            OutlinedTextField(value=demoAmount,onValueChange={demoAmount=it.filter(Char::isDigit)},label={Text("Số tiền mô phỏng (VNĐ)")},modifier=Modifier.fillMaxWidth())
+            Button(onClick={
+                BankPaymentAnnouncer.announce(context,demoAmount.toLongOrNull()?:127000L,"Bàn 05",true,true)
+                demoStatus="Đã gửi lệnh rung và đọc loa. Nếu không nghe, kiểm tra âm lượng media và giọng đọc tiếng Việt."
+            },modifier=Modifier.fillMaxWidth().padding(top=12.dp)){Text("DEMO NHẬN TIỀN · RUNG + ĐỌC LOA")}
+            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                OutlinedButton(onClick={BankPaymentAnnouncer.announce(context,0L,null,true,false);demoStatus="Đã gửi lệnh rung"},modifier=Modifier.weight(1f)){Text("TEST RUNG")}
+                OutlinedButton(onClick={BankPaymentAnnouncer.announce(context,demoAmount.toLongOrNull()?:127000L,null,false,true);demoStatus="Đã gửi lệnh đọc loa"},modifier=Modifier.weight(1f)){Text("TEST LOA")}
+            }
+            if(demoStatus.isNotBlank())Text(demoStatus,fontSize=12.sp)
             OutlinedButton(onClick={vm.clearBankNotificationLog()},modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text("XÓA LOG TEST")}
             Text("Log chỉ lưu cục bộ tối đa 20 notification ngân hàng gần nhất và có thể xóa tại đây.",Modifier.padding(top=10.dp),fontSize=11.sp)
         }

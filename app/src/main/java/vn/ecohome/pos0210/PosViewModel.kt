@@ -321,6 +321,7 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
    autoBackup();autoMasterConfig()
   }
  }
+ fun updatePricingRule(rule:PricingRuleEntity,name:String,code:String,kind:String,percent:Int,startAt:Long?,endAt:Long?,startMinute:Int?,endMinute:Int?,autoApply:Boolean){val e=currentEmployee.value?:return;if(e.role!="ADMIN"||name.isBlank()||percent !in 1..100||(startAt!=null&&endAt!=null&&endAt<startAt))return;viewModelScope.launch{dao.savePricingRule(rule.copy(name=name.trim(),code=code.trim().uppercase(),kind=kind,percent=percent,startAt=startAt,endAt=endAt,startMinute=startMinute,endMinute=endMinute,autoApply=autoApply));audit("PRICING",rule.id,"UPDATE","name=$name,percent=$percent");autoBackup();autoMasterConfig()}}
  fun togglePricingRule(rule:PricingRuleEntity){
   val e=currentEmployee.value?:return
   if(e.role!="ADMIN")return

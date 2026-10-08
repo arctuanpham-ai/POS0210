@@ -29,6 +29,7 @@ class PosViewModel(app:Application):AndroidViewModel(app){
  val monthlyAccounting=dao.monthlyAccounting().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val profitPartners=dao.profitPartners().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val tableServiceTimings=dao.tableServiceTimings().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val areas=repo.areas().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val tables=repo.tables().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val waitingBatches=dao.waitingBatches().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val categories=repo.categories().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val menu=repo.menuItems().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val combos=dao.combos().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val employees=repo.employees().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val sessions=repo.openSessions().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val bills=repo.paidBills().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val testBills=dao.testPaidBills().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val openAttendances=dao.openAttendances().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val myAttendance=MutableStateFlow<AttendanceSessionEntity?>(null);val suppliers=dao.suppliers().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val purchases=dao.purchases().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val purchaseCosts=dao.purchaseCosts().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val purchaseCategories=dao.purchaseCategories().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val costCodes=dao.costCodes().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val purchaseItemsAll=dao.allPurchaseItems().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val payments=dao.payments().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val customers=dao.customers().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val customerItemStats=dao.customerItemStats().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val pricingRules=dao.pricingRules().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val buyGetPromotions=dao.buyGetPromotions().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val billAdjustments=dao.billAdjustments().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val settings=dao.settings().stateIn(viewModelScope,SharingStarted.Eagerly,emptyList());val printJobs=dao.printJobs().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val audits=dao.audits().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val itemSales=dao.paidItemSales().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val loyaltyCampaigns=dao.allLoyaltyCampaigns().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
  val payrollDays=MutableStateFlow<List<PayrollDay>>(emptyList())
  val payrollPeriodLabel=MutableStateFlow("")
+ val attendanceQaMode=MutableStateFlow(false)
  private val payrollSelection=MutableStateFlow<PayrollPeriod?>(null)
  private var payrollRefreshJob:Job?=null
  fun loadPayrollMonth(year:Int,month:Int){
@@ -40,7 +41,8 @@ class PosViewModel(app:Application):AndroidViewModel(app){
   viewModelScope.launch(Dispatchers.IO){
    val now=System.currentTimeMillis()
    val zone=java.time.ZoneId.systemDefault()
-   val rows=AttendancePayroll.period(dao.attendanceBetween(selected.startAt,selected.endAt,now),now,zone).filter{
+   val scope=if(attendanceQaMode.value) "TEST" else "LIVE"
+   val rows=AttendancePayroll.period(dao.attendanceBetween(selected.startAt,selected.endAt,now,scope),now,zone).filter{
     val date=java.time.LocalDate.parse(it.date)
     date.year==selected.year&&date.monthValue==selected.month
    }
@@ -101,6 +103,37 @@ class PosViewModel(app:Application):AndroidViewModel(app){
  repo.savePurchaseCategory(PurchaseCategoryEntity("pc_salary","Lương","ngày công",0,true))
  repo.savePurchaseCategory(PurchaseCategoryEntity("pc_fixed","Vật tư cố định","cái",1,true))
  repo.savePurchaseCategory(PurchaseCategoryEntity("pc_production","Vật tư sản xuất","kg",2,true));repo.saveArea(AreaEntity("inside","Trong nhà",0));repo.saveArea(AreaEntity("outside","Ngoài trời",1));(1..6).forEach{repo.saveTable(DiningTableEntity("t$it","inside","Bàn %02d".format(it),it))};(7..8).forEach{repo.saveTable(DiningTableEntity("t$it","outside","Bàn %02d".format(it),it))};listOf("Cà phê","Ăn sáng","Trà","Sinh tố","Khác").forEachIndexed{i,n->repo.saveCategory(MenuCategoryEntity("c$i",n,i))};listOf(MenuItemEntity("m1","c0","Đen đá",25000,productCode="CF-001"),MenuItemEntity("m2","c0","Nâu đá",30000,productCode="CF-002"),MenuItemEntity("m3","c0","Bạc xỉu",30000,productCode="CF-003"),MenuItemEntity("m4","c1","Bún gà",40000,productCode="AS-001"),MenuItemEntity("m5","c1","Đùi gà",55000,productCode="AS-002"),MenuItemEntity("m6","c1","Cánh gà",45000,productCode="AS-003"),MenuItemEntity("m7","c2","Trà mạn",25000,productCode="TR-001"),MenuItemEntity("m8","c2","Trà đào",35000,productCode="TR-002")).forEach{repo.saveMenuItem(it)};repo.saveEmployee(EmployeeEntity("e0","Tuấn",true,"0210","ADMIN",true,true,true,true,true,true,true));repo.saveEmployee(EmployeeEntity("e1","Hương",true,"1992","STAFF",true,true,true,true,false,false,false));repo.saveEmployee(EmployeeEntity("e2","Nam",true,"2000","STAFF",false,false,true,true,false,false,false))}
+ fun setAttendanceQaMode(enabled:Boolean){
+  val e=currentEmployee.value?:return
+  if(e.role!="ADMIN")return
+  attendanceQaMode.value=enabled;refreshPayroll()
+ }
+ fun seedAttendanceQa(){
+  val e=currentEmployee.value?:return
+  if(e.role!="ADMIN"){printerMessage.value="CHỈ ADMIN ĐƯỢC TẠO DỮ LIỆU QA";return}
+  viewModelScope.launch(Dispatchers.IO){
+   val now=System.currentTimeMillis();val fallback=PayrollSettings.hourlyRate(setting("hourly_rate_default"),35000L)
+   val targets=dao.allEmployeesSnapshot().filter{it.active}.take(2)
+   dao.deleteTestAttendances()
+   val rows=targets.flatMap{employee->
+    val rate=PayrollSettings.hourlyRate(setting("hourly_rate_"+employee.id),fallback)
+    AttendanceQaFixtures.sample(employee.id,now,rate)
+   }
+   if(rows.isNotEmpty())dao.insertAttendanceSessions(rows)
+   attendanceQaMode.value=true;refreshPayroll()
+   audit("ATTENDANCE_QA","FIXTURE","SEED","sessions="+rows.size)
+   printerMessage.value="QA · ĐÃ TẠO "+rows.size+" CA MẪU · KHÔNG TÍNH LƯƠNG THẬT"
+  }
+ }
+ fun clearAttendanceQa(){
+  val e=currentEmployee.value?:return
+  if(e.role!="ADMIN")return
+  viewModelScope.launch(Dispatchers.IO){
+   val count=dao.deleteTestAttendances();attendanceQaMode.value=false;refreshPayroll()
+   audit("ATTENDANCE_QA","FIXTURE","CLEAR","sessions="+count)
+   printerMessage.value="QA · ĐÃ XÓA "+count+" CA MẪU"
+  }
+ }
  fun checkIn(){
   val e=currentEmployee.value?:return
   viewModelScope.launch(Dispatchers.IO){

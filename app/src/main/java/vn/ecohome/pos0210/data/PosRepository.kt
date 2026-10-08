@@ -29,7 +29,7 @@ class PosRepository(private val db:PosDatabase){
         val points=dao.pointBalanceForCustomer(customerId).toLong()
         val earned=mutableListOf<CustomerRewardEntity>()
         db.withTransaction {
-            dao.activeLoyaltyCampaignsSnapshot().filter { it.rewardType=="BILL_DISCOUNT" }.forEach { campaign ->
+            dao.activeLoyaltyCampaignsSnapshot().filter { it.rewardType=="BILL_DISCOUNT" || it.rewardType=="BILL_DISCOUNT_PERCENT" }.forEach { campaign ->
                 if(campaign.threshold<=0)return@forEach
                 val progress=when(campaign.triggerType){"BILL_COUNT"->visits;"SPEND"->spend;"POINTS"->points;else->0L}
                 val issued=dao.issuedRewardCount(customerId,campaign.id)
@@ -189,8 +189,14 @@ class PosRepository(private val db:PosDatabase){
                 check(!isTest && customer!=null){"LOYALTY_REQUIRES_LIVE_CUSTOMER"}
                 val reward=dao.availableRewardsSnapshot(customer!!.id,now).firstOrNull{it.id==loyaltyRewardId}
                     ?:error("LOYALTY_REWARD_UNAVAILABLE")
-                check(reward.rewardSnapshot.split("|").getOrNull(1)=="BILL_DISCOUNT" && reward.rewardSnapshot.split("|").getOrNull(2)?.toLongOrNull()==30000L){"LOYALTY_REWARD_INVALID"}
-                check(preview.discount==minOf(30000L,preview.subtotal+preview.surcharge)){"LOYALTY_DISCOUNT_MISMATCH"}
+                val fields=reward.rewardSnapshot.split("|")
+                val value=fields.getOrNull(2)?.toLongOrNull() ?: error("LOYALTY_REWARD_INVALID")
+                val expected=when(fields.getOrNull(1)){
+                    "BILL_DISCOUNT" -> value.takeIf{it in 1L..10000000L}
+                    "BILL_DISCOUNT_PERCENT" -> value.takeIf{it in 1L..100L}?.let{preview.subtotal*it/100L}
+                    else -> null
+                } ?: error("LOYALTY_REWARD_INVALID")
+                check(preview.discount==minOf(expected,preview.subtotal+preview.surcharge)){"LOYALTY_DISCOUNT_MISMATCH"}
             }
             if(dao.closeSession(session.id,session.version)!=1) error("SESSION_ALREADY_CLOSED_OR_CHANGED")
             dao.insertBill(bill)

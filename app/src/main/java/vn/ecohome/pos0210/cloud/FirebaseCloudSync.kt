@@ -96,8 +96,16 @@ object FirebaseCloudSync {
         val items=dao.allMenuSnapshot()
         require(categories.isNotEmpty() && items.isNotEmpty()){"Không đẩy menu rỗng lên Cloud"}
         val now=System.currentTimeMillis()
-        writeMaps(fs,root.collection("menuCategories"),categories.map{v->v.id to mapOf("id" to v.id,"name" to v.name,"sortOrder" to v.sortOrder,"active" to v.active,"updatedAt" to now)})
-        writeMaps(fs,root.collection("menu"),items.map{v->v.id to mapOf("id" to v.id,"categoryId" to v.categoryId,"name" to v.name,"price" to v.price,"sortOrder" to v.sortOrder,"active" to v.active,"productCode" to v.productCode,"description" to v.description,"updatedAt" to now)})
+        // Merge individual entities instead of uploading the entire stale device catalog.
+        // Existing remote entries not edited on this device must remain untouched.
+        val categoryRemote=root.collection("menuCategories").get().await().documents.associateBy{it.id}
+        val itemRemote=root.collection("menu").get().await().documents.associateBy{it.id}
+        val pending=dao.pendingSync(now,500).filter{it.entityType=="MENU_ITEM"}
+        val changedIds=pending.map{it.entityId}.toSet()
+        val categoryUpdates=categories.filter{categoryRemote[it.id]==null}
+        val itemUpdates=items.filter{itemRemote[it.id]==null || it.id in changedIds}
+        writeMaps(fs,root.collection("menuCategories"),categoryUpdates.map{v->v.id to mapOf("id" to v.id,"name" to v.name,"sortOrder" to v.sortOrder,"active" to v.active,"updatedAt" to now)})
+        writeMaps(fs,root.collection("menu"),itemUpdates.map{v->v.id to mapOf("id" to v.id,"categoryId" to v.categoryId,"name" to v.name,"price" to v.price,"sortOrder" to v.sortOrder,"active" to v.active,"productCode" to v.productCode,"description" to v.description,"updatedAt" to now)})
         root.collection("config").document("menuVersion").set(mapOf("updatedAt" to now,"publisherUid" to uid,"itemCount" to items.size,"categoryCount" to categories.size)).await()
     }}
 

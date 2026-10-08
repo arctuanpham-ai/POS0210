@@ -1175,6 +1175,9 @@ fun Manage(vm: PosViewModel) {
                 Rowx("Nhân viên", "Thêm · khóa · phân quyền") { vm.screen.value = "EMP" }
                 Rowx("Chấm công & Bảng lương", "Giờ vào/ra · tổng giờ · lương theo tháng") { vm.screen.value = "PAYROLL" }
             }
+            if (employee != null && employee.role != "ADMIN") {
+                Rowx("Bảng công & lương của tôi", "Xem giờ làm và tiền lương cá nhân · chỉ đọc") { vm.screen.value = "PAYROLL" }
+            }
             if (employee?.role == "ADMIN" || employee?.canManageSystem == true) {
                 Rowx("Bàn & khu vực", "Thêm · sửa · Trong nhà / Ngoài trời") { vm.screen.value = "TABLE_ADMIN" }
             }
@@ -1213,8 +1216,11 @@ fun PayrollManager(vm:PosViewModel){
     val label by vm.payrollPeriodLabel.collectAsState()
     val cal=remember{Calendar.getInstance()};var year by remember{mutableIntStateOf(cal.get(Calendar.YEAR))};var month by remember{mutableIntStateOf(cal.get(Calendar.MONTH)+1)}
     LaunchedEffect(year,month){vm.loadPayrollMonth(year,month)}
-    if(employee?.role!="ADMIN"&&employee?.role!="MANAGER"){Column{Header("Bảng lương"){vm.screen.value="MANAGE"};Text("Chỉ ADMIN/MANAGER được xem bảng lương.",Modifier.padding(20.dp))};return}
-    val grouped=days.groupBy{it.employeeId}
+    if(employee==null){Column{Header("Bảng lương"){vm.screen.value="MANAGE"};Text("Vui lòng đăng nhập để xem bảng công.",Modifier.padding(20.dp))};return}
+    val isManager=employee?.role=="ADMIN"||employee?.role=="MANAGER"
+    val visibleDays=if(isManager)days else days.filter{it.employeeId==employee?.id}
+    val visibleEmployees=if(isManager)employees else employees.filter{it.id==employee?.id}
+    val grouped=visibleDays.groupBy{it.employeeId}
     Column{
         Header("Chấm công & Bảng lương"){vm.screen.value="MANAGE"}
         Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween){
@@ -1223,7 +1229,7 @@ fun PayrollManager(vm:PosViewModel){
             OutlinedButton({if(month==12){month=1;year++}else month++}){Text("›")}
         }
         LazyColumn(Modifier.fillMaxSize().padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
-            items(employees.filter{grouped[it.id]?.isNotEmpty()==true}){emp->
+            items(visibleEmployees.filter{grouped[it.id]?.isNotEmpty()==true}){emp->
                 val rows=grouped[emp.id].orEmpty();val mins=rows.sumOf{it.minutes};val total=rows.sumOf{it.amount}
                 Card(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(4.dp)){
                     Text(emp.name,fontWeight=FontWeight.Black,fontSize=17.sp)
@@ -1233,7 +1239,7 @@ fun PayrollManager(vm:PosViewModel){
                     }
                 }}
             }
-            if(days.isEmpty())item{Text("Chưa có dữ liệu chấm công trong tháng này.",Modifier.padding(12.dp))}
+            if(visibleDays.isEmpty())item{Text("Chưa có dữ liệu chấm công trong tháng này.",Modifier.padding(12.dp))}
         }
     }
 }

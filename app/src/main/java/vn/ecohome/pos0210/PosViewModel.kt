@@ -782,6 +782,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
  fun selectVoucher(code:String,menuItemId:String){
   voucherMessage.value="ĐỔI VOUCHER ĐÃ TẠM KHÓA"
  }
+ fun customerRewards(customerId:String)=dao.availableRewards(customerId)
  fun clearSelectedVoucher(){selectedVoucher.value=null;selectedVoucherItemId.value=null;verifiedVoucher.value=null;voucherMessage.value=""}
  fun sendBatch(){
   val e=currentEmployee.value?:return

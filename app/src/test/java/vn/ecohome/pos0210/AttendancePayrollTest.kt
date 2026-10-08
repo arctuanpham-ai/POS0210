@@ -20,4 +20,11 @@ class AttendancePayrollTest {
   val s=AttendanceSessionEntity("a","e1",ms("2026-10-08T06:00:00"),ms("2026-10-08T10:00:00"),"CLOSED",35000,15000)
   assertEquals(210000L,AttendancePayroll.splitByDay(s,zone=zone).single().amount)
  }
+ @Test fun qaFixtureIncludesRegularHolidayAndCrossMidnightShifts(){
+  val rows=AttendanceQaFixtures.sample("e1",ms("2026-10-08T12:00:00"),35000,zone)
+  assertEquals(3,rows.size)
+  assertEquals(listOf(10000,15000,20000),rows.map{it.multiplierBasisPoints})
+  assertEquals(setOf("TEST"),rows.map{it.dataScope}.toSet())
+  assertEquals(listOf(120L,120L),AttendancePayroll.splitByDay(rows.last(),zone=zone).map{it.minutes})
+ }
 }

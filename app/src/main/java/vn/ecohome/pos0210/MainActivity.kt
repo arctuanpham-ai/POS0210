@@ -603,6 +603,7 @@ private fun calculatePricing(subtotal: Long, rules: List<PricingRuleEntity>, ent
     val useBuyGet = safeBuyGetDiscount >= ruleDiscount && safeBuyGetDiscount > 0L
     val discount = if (useBuyGet) safeBuyGetDiscount else ruleDiscount
     val appliedRule = if (useBuyGet) null else bestDiscount
+    val total = (afterSurcharge - discount).coerceAtLeast(0L)
     val message = when {
         useBuyGet -> "Đã áp dụng ưu đãi ${buyGetLabel ?: "Mua X tặng Y"}."
         code.isNotBlank() && codeMatches.isEmpty() -> "Mã không hợp lệ hoặc đã hết thời gian áp dụng."

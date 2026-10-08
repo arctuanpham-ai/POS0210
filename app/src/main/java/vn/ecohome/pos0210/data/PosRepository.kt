@@ -1,6 +1,7 @@
 package vn.ecohome.pos0210.data
 
 import androidx.room.withTransaction
+import vn.ecohome.pos0210.LoyaltyAwardPolicy
 import java.util.UUID
 
 class PosRepository(private val db:PosDatabase){

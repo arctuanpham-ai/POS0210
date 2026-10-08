@@ -16,4 +16,21 @@ ND:CT DEN:164T2690PJ300DB4 MBVCB.16065678956.848811.PHAM ANH TUAN chuyen tien.CT
  @Test fun debitIsNotCredit(){val tx=VcbNotificationParser().parse("Thông báo VCB",vcbBody.replace("+2,000","-2,000"),1)!!;assertEquals(TransactionDirection.DEBIT,tx.direction)}
  @Test fun malformedFailsSafely(){assertNull(VietinbankNotificationParser().parse("Tin biến động số dư","format mới chưa hỗ trợ",1))}
  @Test fun repostHasSameFingerprint(){val p=VcbNotificationParser();assertEquals(p.parse("a",vcbBody,1)!!.rawHash,p.parse("a",vcbBody,2)!!.rawHash)}
+ @Test fun parsesTechcombankCreditAndIgnoresBalance(){
+  val tx=TechcombankNotificationParser().parse("TCB","TCB TK 1903xxxxxx1015 lúc 09/10/26 14:32: +2,500,000 VND. SD: 15,230,000 VND. ND: Nguyen Van B chuyen khoan",1)!!
+  assertEquals("TECHCOMBANK",tx.bank)
+  assertEquals("1903xxxxxx1015",tx.account)
+  assertEquals(2_500_000L,tx.amount)
+  assertEquals(TransactionDirection.CREDIT,tx.direction)
+  assertNotNull(tx.transactionTime)
+  assertTrue(tx.content.contains("Nguyen Van B"))
+ }
+ @Test fun techcombankDebitNeverBecomesCredit(){
+  val tx=TechcombankNotificationParser().parse("TCB","TCB TK 1903xxxxxx1015 lúc 09/10/26 14:32: -500,000 VND. SD: 15,230,000 VND. ND: mua hang",1)!!
+  assertEquals(TransactionDirection.DEBIT,tx.direction)
+  assertEquals(500_000L,tx.amount)
+ }
+ @Test fun techcombankBalanceOnlyIsNotTransaction(){
+  assertNull(TechcombankNotificationParser().parse("TCB","TCB SD: 15,230,000 VND",1))
+ }
 }

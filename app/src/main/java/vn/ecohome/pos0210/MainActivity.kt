@@ -1212,12 +1212,21 @@ fun Manage(vm: PosViewModel) {
 fun PayrollManager(vm:PosViewModel){
     val employee by vm.currentEmployee.collectAsState()
     val employees by vm.employees.collectAsState()
+    val settings by vm.settings.collectAsState()
     val days by vm.payrollDays.collectAsState()
     val label by vm.payrollPeriodLabel.collectAsState()
-    val cal=remember{Calendar.getInstance()};var year by remember{mutableIntStateOf(cal.get(Calendar.YEAR))};var month by remember{mutableIntStateOf(cal.get(Calendar.MONTH)+1)}
+    val message by vm.printerMessage.collectAsState()
+    val cal=remember{Calendar.getInstance()}
+    var year by remember{mutableIntStateOf(cal.get(Calendar.YEAR))}
+    var month by remember{mutableIntStateOf(cal.get(Calendar.MONTH)+1)}
     LaunchedEffect(year,month){vm.loadPayrollMonth(year,month)}
     if(employee==null){Column{Header("Bảng lương"){vm.screen.value="MANAGE"};Text("Vui lòng đăng nhập để xem bảng công.",Modifier.padding(20.dp))};return}
     val isManager=employee?.role=="ADMIN"||employee?.role=="MANAGER"
+    fun setting(key:String)=settings.firstOrNull{it.key==key}?.value.orEmpty()
+    var defaultRate by remember(settings){mutableStateOf(setting("hourly_rate_default").ifBlank{"35000"})}
+    var defaultMultiplier by remember(settings){mutableStateOf(setting("attendance_multiplier_percent").ifBlank{"100"})}
+    var employeeRates by remember(settings,employees){mutableStateOf(employees.associate{it.id to setting("hourly_rate_"+it.id)})}
+    var employeeMultipliers by remember(settings,employees){mutableStateOf(employees.associate{it.id to setting("attendance_multiplier_percent_"+it.id)})}
     val visibleDays=if(isManager)days else days.filter{it.employeeId==employee?.id}
     val visibleEmployees=if(isManager)employees else employees.filter{it.id==employee?.id}
     val grouped=visibleDays.groupBy{it.employeeId}
@@ -1229,6 +1238,28 @@ fun PayrollManager(vm:PosViewModel){
             OutlinedButton({if(month==12){month=1;year++}else month++}){Text("›")}
         }
         LazyColumn(Modifier.fillMaxSize().padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
+            if(isManager) item{
+                Card(Modifier.fillMaxWidth()){
+                    Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
+                        Text("CÀI ĐẶT CÔNG & LƯƠNG",fontWeight=FontWeight.Black,fontSize=17.sp)
+                        Text("Đơn giá và hệ số được chốt vào ca lúc CHECK-IN. Sửa sau đó chỉ áp dụng ca mới, không làm sai lịch sử.",fontSize=11.sp)
+                        OutlinedTextField(defaultRate,{defaultRate=it.filter(Char::isDigit).take(7)},Modifier.fillMaxWidth(),label={Text("Đơn giá mặc định (đ/giờ)")},singleLine=true)
+                        OutlinedTextField(defaultMultiplier,{defaultMultiplier=it.filter(Char::isDigit).take(3)},Modifier.fillMaxWidth(),label={Text("Hệ số mặc định (%) · 100 = lương chuẩn")},singleLine=true)
+                        Text("Thiết lập riêng từng nhân viên: để trống sẽ dùng mức mặc định.",fontSize=11.sp,fontWeight=FontWeight.Bold)
+                        employees.forEach{emp->
+                            Card(Modifier.fillMaxWidth()){
+                                Column(Modifier.padding(10.dp),verticalArrangement=Arrangement.spacedBy(6.dp)){
+                                    Text(emp.name+(if(!emp.active)" · ĐÃ KHÓA" else ""),fontWeight=FontWeight.Bold)
+                                    OutlinedTextField(employeeRates[emp.id].orEmpty(),{value->employeeRates=employeeRates.toMutableMap().apply{put(emp.id,value.filter(Char::isDigit).take(7))}},Modifier.fillMaxWidth(),label={Text("Đơn giá riêng (đ/giờ)")},singleLine=true)
+                                    OutlinedTextField(employeeMultipliers[emp.id].orEmpty(),{value->employeeMultipliers=employeeMultipliers.toMutableMap().apply{put(emp.id,value.filter(Char::isDigit).take(3))}},Modifier.fillMaxWidth(),label={Text("Hệ số riêng (%)")},singleLine=true)
+                                }
+                            }
+                        }
+                        Button(onClick={vm.savePayrollConfig(defaultRate,defaultMultiplier,employeeRates,employeeMultipliers)},modifier=Modifier.fillMaxWidth()){Text("LƯU CÀI ĐẶT CÔNG / LƯƠNG")}
+                        if(message.contains("CÔNG")||message.contains("LƯƠNG"))Text(message,fontSize=11.sp,fontWeight=FontWeight.Bold)
+                    }
+                }
+            }
             items(visibleEmployees.filter{grouped[it.id]?.isNotEmpty()==true}){emp->
                 val rows=grouped[emp.id].orEmpty();val mins=rows.sumOf{it.minutes};val total=rows.sumOf{it.amount}
                 Card(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(4.dp)){

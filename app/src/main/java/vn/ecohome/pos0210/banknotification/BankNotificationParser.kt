@@ -52,18 +52,18 @@ class VietinbankNotificationParser:BankNotificationParser {
 }
 
 class TechcombankNotificationParser:BankNotificationParser {
+ private val structured=Regex("""(?:TCB|Techcombank)\s+TK\s+([0-9xX*]{4,24})\s+lúc\s+(\d{2}/\d{2}/\d{2,4}\s+\d{2}:\d{2})(?:\s*:\s*|\s+)([+-])\s*([\d.,]+)\s*(?:VND|VNĐ|đồng|đ)\b""",RegexOption.IGNORE_CASE)
  override fun parse(title:String,body:String,receivedAt:Long):BankTransaction? {
   val full="$title\n$body"
-  val credit=Regex("(?:\\b(?:tang|tăng|nhận|nhan|credited|credit|ghi có|bien dong so du|biến động số dư)\\b|\\+\\s*[\\d.,]+\\s*(?:vnd|đ))",RegexOption.IGNORE_CASE).containsMatchIn(full)
-  val debit=Regex("(?:\\b(?:trừ|tru|thanh toán|chuyển đi|ghi nợ|debited|debit)\\b|\\-\\s*[\\d.,]+\\s*(?:vnd|đ))",RegexOption.IGNORE_CASE).containsMatchIn(full)
-  if(!credit||debit)return null
-  val amountRaw=Regex("(?:\\+\\s*|(?:số tiền|so tien|giao dịch|giao dich|nhận|nhan|amount)\\s*[:+]\\s*)([\\d.,]+)\\s*(?:vnd|vnđ|đ|dong|đồng)",RegexOption.IGNORE_CASE).find(full)?.groupValues?.get(1)
-   ?:Regex("([\\d.,]+)\\s*(?:vnd|vnđ|đ|đồng)",RegexOption.IGNORE_CASE).find(full)?.groupValues?.get(1)
-   ?:return null
-  val amount=digitsAmount(amountRaw)?.takeIf{it>0L}?:return null
-  val account=Regex("(?:TK|tài khoản|tai khoan|account)\\s*[:#]?\\s*([*xX\\d]{4,20})",RegexOption.IGNORE_CASE).find(full)?.groupValues?.get(1).orEmpty()
-  val reference=Regex("(?:mã giao dịch|ma giao dich|ref|trace)\\s*[:#]?\\s*([A-Z0-9]+)",RegexOption.IGNORE_CASE).find(full)?.groupValues?.get(1)
-  return BankTransaction("TECHCOMBANK",account,amount,TransactionDirection.CREDIT,null,receivedAt,body.take(1000),reference,fingerprint("TECHCOMBANK",account,amount,null,reference,body))
+  val match=structured.find(full)?:return null
+  val account=match.groupValues[1]
+  val rawTime=match.groupValues[2]
+  val direction=if(match.groupValues[3]=="+")TransactionDirection.CREDIT else TransactionDirection.DEBIT
+  val amount=digitsAmount(match.groupValues[4])?.takeIf{it>0L}?:return null
+  val time=parseTime(rawTime,if(rawTime.substringBefore(" ").substringAfterLast("/").length==2)"dd/MM/yy HH:mm" else "dd/MM/yyyy HH:mm")
+  val content=Regex("""\bND\s*:\s*(.*)""",setOf(RegexOption.IGNORE_CASE,RegexOption.DOT_MATCHES_ALL)).find(full)?.groupValues?.get(1)?.trim().orEmpty()
+  val reference=Regex("""(?:mã giao dịch|ma giao dich|ref|trace)\s*[:#]?\s*([A-Z0-9]+)""",RegexOption.IGNORE_CASE).find(full)?.groupValues?.get(1)
+  return BankTransaction("TECHCOMBANK",account,amount,direction,time,receivedAt,content,reference,fingerprint("TECHCOMBANK",account,amount,time,reference,full))
  }
 }
 

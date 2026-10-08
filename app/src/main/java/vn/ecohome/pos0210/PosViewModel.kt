@@ -1083,15 +1083,19 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    if(changed>0) autoBackup()
   }
  }
- fun exportTransactionExcel(from:Long?,toExclusive:Long?,payer:String?,cashier:String?,onReady:(android.net.Uri,String)->Unit){
- val e=currentEmployee.value?:return
- if(e.role!="ADMIN"&&!e.canViewReport){printerMessage.value="KHÔNG CÓ QUYỀN XUẤT BÁO CÁO";return}
+ fun exportTransactionExcel(from:Long?,toExclusive:Long?,payer:String?,cashier:String?,onReady:(android.net.Uri,String)->Unit,onError:(String)->Unit){
+ val e=currentEmployee.value
+ if(e==null){onError("Chưa đăng nhập tài khoản");return}
+ if(e.role!="ADMIN"&&!e.canViewReport){onError("Tài khoản không có quyền xem/xuất báo cáo");return}
  viewModelScope.launch(Dispatchers.IO){
-  runCatching{
+  val result=runCatching{
    val file=vn.ecohome.pos0210.data.TransactionExcelExport.create(getApplication(),dao,vn.ecohome.pos0210.data.TransactionExcelExport.Filter(from,toExclusive,payer,cashier))
    vn.ecohome.pos0210.data.TransactionExcelExport.uri(getApplication(),file) to file.name
-  }.onSuccess{(uri,name)->kotlinx.coroutines.withContext(Dispatchers.Main){onReady(uri,name)}}
-   .onFailure{printerMessage.value="XUẤT EXCEL LỖI: "+it.message}
+  }
+  kotlinx.coroutines.withContext(Dispatchers.Main){
+   result.onSuccess{(uri,name)->onReady(uri,name)}
+    .onFailure{onError("Xuất Excel lỗi: "+(it.message?:"không xác định"))}
+  }
  }
 }
 fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){

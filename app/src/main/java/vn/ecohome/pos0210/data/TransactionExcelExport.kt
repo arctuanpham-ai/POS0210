@@ -13,9 +13,45 @@ object TransactionExcelExport {
  data class Filter(val from:Long?=null,val toExclusive:Long?=null,val payer:String?=null,val cashier:String?=null)
  private fun day(t:Long?)=t?.let{SimpleDateFormat("dd/MM/yyyy HH:mm",Locale.US).format(Date(it))}.orEmpty()
  private fun esc(v:Any?)=v?.toString().orEmpty().replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace("\"","&quot;").filter{it.code>=32||it=='\n'||it=='\t'}
+ private fun columnName(index:Int):String {
+  var n=index+1
+  val out=StringBuilder()
+  while(n>0){n--;out.insert(0,('A'.code+n%26).toChar());n/=26}
+  return out.toString()
+ }
  private fun sheet(rows:List<List<Any?>>):String{
-  val body=rows.mapIndexed{idx,row->"<row r=\""+(idx+1)+"\">"+row.joinToString(""){v->if(v is Number)"<c><v>"+v+"</v></c>" else "<c t=\"inlineStr\"><is><t>"+esc(v)+"</t></is></c>"}+"</row>"}.joinToString("")
-  return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData>"+body+"</sheetData></worksheet>"
+  val maxColumns=rows.maxOfOrNull{it.size}?:1
+  val widths=(0 until maxColumns).map{col->
+   val header=rows.firstOrNull()?.getOrNull(col)?.toString().orEmpty()
+   val longest=rows.asSequence().take(150).map{it.getOrNull(col)?.toString().orEmpty().length}.maxOrNull()?:0
+   kotlin.math.min(52,kotlin.math.max(14,kotlin.math.max(header.length+3,longest+2))).toDouble()
+  }
+  val columns="<cols>"+widths.mapIndexed{i,w->"<col min=\\""+(i+1)+"\\" max=\\""+(i+1)+"\\" width=\\""+w+"\\" customWidth=\\"1\\"/>"}.joinToString("")+"</cols>"
+  val body=rows.mapIndexed{idx,row->
+   "<row r=\\""+(idx+1)+"\\" ht=\\""+(if(idx==0)34 else 25)+"\\" customHeight=\\"1\\">"+
+    row.mapIndexed{col,v->
+     val ref=columnName(col)+(idx+1)
+     val style=if(idx==0)1 else if(v is Number)2 else 3
+     if(v is Number)"<c r=\\""+ref+"\\" s=\\""+style+"\\"><v>"+v+"</v></c>"
+     else "<c r=\\""+ref+"\\" s=\\""+style+"\\" t=\\"inlineStr\\"><is><t>"+esc(v)+"</t></is></c>"
+    }.joinToString("")+"</row>"
+  }.joinToString("")
+  val range="A1:"+columnName(maxColumns-1)+rows.size.coerceAtLeast(1)
+  return "<?xml version=\\"1.0\\" encoding=\\"UTF-8\\"?><worksheet xmlns=\\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\\"><dimension ref=\\""+range+"\\"/><sheetViews><sheetView workbookViewId=\\"0\\"><pane ySplit=\\"1\\" topLeftCell=\\"A2\\" activePane=\\"bottomLeft\\" state=\\"frozen\\"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight=\\"25\\"/>"+columns+"<sheetData>"+body+"</sheetData><autoFilter ref=\\""+range+"\\"/><pageMargins left=\\"0.3\\" right=\\"0.3\\" top=\\"0.5\\" bottom=\\"0.5\\" header=\\"0.2\\" footer=\\"0.2\\"/></worksheet>"
+ }
+ private fun styles():String{
+  val border="<border><left style=\\"thin\\"><color rgb=\\"FFB0B0B0\\"/></left><right style=\\"thin\\"><color rgb=\\"FFB0B0B0\\"/></right><top style=\\"thin\\"><color rgb=\\"FFB0B0B0\\"/></top><bottom style=\\"thin\\"><color rgb=\\"FFB0B0B0\\"/></bottom><diagonal/></border>"
+  return "<?xml version=\\"1.0\\" encoding=\\"UTF-8\\"?><styleSheet xmlns=\\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\\">"+
+   "<numFmts count=\\"1\\"><numFmt numFmtId=\\"164\\" formatCode=\\"#,##0.##\\"/></numFmts>"+
+   "<fonts count=\\"2\\"><font><sz val=\\"13\\"/><name val=\\"Times New Roman\\"/><family val=\\"1\\"/></font><font><b/><sz val=\\"13\\"/><name val=\\"Times New Roman\\"/><family val=\\"1\\"/></font></fonts>"+
+   "<fills count=\\"2\\"><fill><patternFill patternType=\\"none\\"/></fill><fill><patternFill patternType=\\"solid\\"><fgColor rgb=\\"FFEAE3D6\\"/><bgColor indexed=\\"64\\"/></patternFill></fill></fills>"+
+   "<borders count=\\"2\\"><border><left/><right/><top/><bottom/><diagonal/></border>"+border+"</borders>"+
+   "<cellStyleXfs count=\\"1\\"><xf numFmtId=\\"0\\" fontId=\\"0\\" fillId=\\"0\\" borderId=\\"0\\"/></cellStyleXfs>"+
+   "<cellXfs count=\\"4\\"><xf numFmtId=\\"0\\" fontId=\\"0\\" fillId=\\"0\\" borderId=\\"0\\" xfId=\\"0\\"/>"+
+   "<xf numFmtId=\\"0\\" fontId=\\"1\\" fillId=\\"1\\" borderId=\\"1\\" xfId=\\"0\\" applyAlignment=\\"1\\"><alignment horizontal=\\"center\\" vertical=\\"center\\" wrapText=\\"1\\"/></xf>"+
+   "<xf numFmtId=\\"164\\" fontId=\\"0\\" fillId=\\"0\\" borderId=\\"1\\" xfId=\\"0\\" applyNumberFormat=\\"1\\" applyAlignment=\\"1\\"><alignment horizontal=\\"right\\" vertical=\\"center\\"/></xf>"+
+   "<xf numFmtId=\\"0\\" fontId=\\"0\\" fillId=\\"0\\" borderId=\\"1\\" xfId=\\"0\\" applyAlignment=\\"1\\"><alignment horizontal=\\"left\\" vertical=\\"center\\" wrapText=\\"1\\"/></xf></cellXfs>"+
+   "<cellStyles count=\\"1\\"><cellStyle name=\\"Normal\\" xfId=\\"0\\" builtinId=\\"0\\"/></cellStyles></styleSheet>"
  }
  private fun ZipOutputStream.add(path:String,body:String){putNextEntry(ZipEntry(path));write(body.toByteArray(Charsets.UTF_8));closeEntry()}
  suspend fun create(context:Context,dao:PosDao,f:Filter):File {
@@ -66,10 +102,11 @@ object TransactionExcelExport {
   val file=File(File(context.cacheDir,"exports").apply{mkdirs()},"POS0210_${System.currentTimeMillis()}.xlsx")
   ZipOutputStream(file.outputStream().buffered()).use{z->
    val ns="http://schemas.openxmlformats.org/"
-   z.add("[Content_Types].xml","<?xml version=\"1.0\"?><Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/><Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>"+sheets.keys.indices.joinToString(""){"<Override PartName=\"/xl/worksheets/sheet"+(it+1)+".xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>"}+"</Types>")
+   z.add("[Content_Types].xml","<?xml version=\"1.0\"?><Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/><Override PartName=\"/xl/styles.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml\"/><Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>"+sheets.keys.indices.joinToString(""){"<Override PartName=\"/xl/worksheets/sheet"+(it+1)+".xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>"}+"</Types>")
    z.add("_rels/.rels","<?xml version=\"1.0\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"xl/workbook.xml\"/></Relationships>")
    z.add("xl/workbook.xml","<?xml version=\"1.0\"?><workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"><sheets>"+sheets.keys.mapIndexed{i,n->"<sheet name=\""+esc(n)+"\" sheetId=\""+(i+1)+"\" r:id=\"rId"+(i+1)+"\"/>"}.joinToString("")+"</sheets></workbook>")
-   z.add("xl/_rels/workbook.xml.rels","<?xml version=\"1.0\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"+sheets.keys.indices.joinToString(""){"<Relationship Id=\"rId"+(it+1)+"\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet"+(it+1)+".xml\"/>"}+"</Relationships>")
+   z.add("xl/_rels/workbook.xml.rels","<?xml version=\"1.0\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"+sheets.keys.indices.joinToString(""){"<Relationship Id=\"rId"+(it+1)+"\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet"+(it+1)+".xml\"/>"}+"<Relationship Id=\\"rIdStyles\\" Type=\\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles\\" Target=\\"styles.xml\\"/></Relationships>")
+   z.add("xl/styles.xml",styles())
    sheets.values.forEachIndexed{i,rows->z.add("xl/worksheets/sheet"+(i+1)+".xml",sheet(rows))}
   }
   return file

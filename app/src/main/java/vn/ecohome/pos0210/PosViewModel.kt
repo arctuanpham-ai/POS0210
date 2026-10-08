@@ -780,19 +780,8 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
  }
  fun resetVoucherLookup(){verifiedVoucher.value=null;voucherMessage.value=""}
  fun selectVoucher(code:String,menuItemId:String){
-  voucherMessage.value="ĐỔI VOUCHER ĐÃ TẠM KHÓA";return
-  val e=currentEmployee.value?:return
-  viewModelScope.launch(Dispatchers.IO){
-   val suffix=code.uppercase().removePrefix("0210-").filter(Char::isLetterOrDigit).takeLast(6)
-   val reward=dao.availableVoucherBySuffix(suffix,System.currentTimeMillis())
-   if(verifiedVoucher.value?.id!=reward?.id){voucherMessage.value="HÃY KIỂM TRA MÃ VOUCHER TRƯỚC";return@launch}
-   val item=menu.value.firstOrNull{it.id==menuItemId&&it.active}
-   val cap=reward?.let{VoucherPolicy.cap(it.rewardSnapshot)}
-   if(reward==null||cap==null||item==null||!VoucherPolicy.canRedeem(item.price,cap,false)){voucherMessage.value="VOUCHER KHÔNG HỢP LỆ HOẶC MÓN VƯỢT HẠN MỨC";return@launch}
-   selectedVoucher.value=reward;selectedVoucherItemId.value=item.id;voucherMessage.value="ĐÃ CHỌN "+VoucherPolicy.code(reward.id)+" · "+item.name+" miễn phí"
-  }
+  voucherMessage.value="ĐỔI VOUCHER ĐÃ TẠM KHÓA"
  }
- fun customerRewards(customerId:String)=dao.availableRewards(customerId)
  fun clearSelectedVoucher(){selectedVoucher.value=null;selectedVoucherItemId.value=null;verifiedVoucher.value=null;voucherMessage.value=""}
  fun sendBatch(){
   val e=currentEmployee.value?:return

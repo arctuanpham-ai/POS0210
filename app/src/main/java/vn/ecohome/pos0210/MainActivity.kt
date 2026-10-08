@@ -108,6 +108,7 @@ fun App(vm: PosViewModel = viewModel()) {
         "MENU" -> MenuManager(vm)
         "COMBO" -> ComboManager(vm)
         "PRICING" -> PricingManager(vm)
+        "BUY_GET" -> BuyGetManager(vm)
         "DELIVERY" -> DeliveryQueue(vm)
         "CUSTOMERS" -> Customers(vm)
         "LOYALTY_CONFIG" -> LoyaltyConfig(vm)
@@ -2224,6 +2225,9 @@ fun PricingManager(vm: PosViewModel) {
         Button(onClick = { showAdd = true }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
             Text("＋ TẠO CHƯƠNG TRÌNH")
         }
+        OutlinedButton(onClick = { vm.screen.value = "BUY_GET" }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp)) {
+            Text("MUA X TẶNG Y")
+        }
         Text("Giảm giá không cộng dồn: hệ thống chỉ áp dụng 1 mức giảm có giá trị lớn nhất.", Modifier.padding(horizontal = 16.dp), fontSize = 12.sp)
         LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
             items(rules) { rule ->
@@ -4119,4 +4123,84 @@ fun BankNotificationTest(vm:PosViewModel){
             Text("Log chỉ lưu cục bộ tối đa 20 notification ngân hàng gần nhất và có thể xóa tại đây.",Modifier.padding(top=10.dp),fontSize=11.sp)
         }
     }
+}
+
+
+@Composable
+fun BuyGetManager(vm: PosViewModel) {
+    val rules by vm.buyGetPromotions.collectAsState()
+    val menu by vm.menu.collectAsState()
+    var adding by remember { mutableStateOf(false) }
+    Column {
+        Header("Mua X tặng Y") { vm.screen.value = "PRICING" }
+        Text("Mỗi order chỉ lấy ưu đãi có lợi nhất; quà hiển thị riêng cho bếp và hóa đơn.", Modifier.padding(horizontal = 16.dp, vertical = 6.dp), fontSize = 12.sp)
+        Button(onClick = { adding = true }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) { Text("＋ TẠO MUA–TẶNG") }
+        LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
+            items(rules) { rule ->
+                val buy = menu.firstOrNull { it.id == rule.buyMenuItemId }?.name ?: "Món đã xoá"
+                val gift = menu.firstOrNull { it.id == rule.giftMenuItemId }?.name ?: "Món đã xoá"
+                Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(rule.name, fontWeight = FontWeight.Bold)
+                            Text("Mua ${rule.buyQuantity} $buy · tặng ${rule.giftQuantity} $gift")
+                            Text(if (rule.repeat) "Lặp lại khi đủ điều kiện" else "Chỉ áp dụng một lần", fontSize = 11.sp)
+                        }
+                        Switch(checked = rule.active, onCheckedChange = { vm.toggleBuyGetPromotion(rule) })
+                    }
+                }
+            }
+        }
+    }
+    if (adding) BuyGetRuleDialog(menu = menu.filter { it.active }, onDismiss = { adding = false }) { name,buy,buyQty,gift,giftQty,repeat ->
+        vm.saveBuyGetPromotion(name,buy,buyQty,gift,giftQty,repeat,null,null)
+        adding = false
+    }
+}
+
+@Composable
+private fun BuyGetRuleDialog(
+    menu: List<MenuItemEntity>,
+    onDismiss: () -> Unit,
+    onSave: (String,String,Int,String,Int,Boolean) -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    var buyId by remember { mutableStateOf(menu.firstOrNull()?.id.orEmpty()) }
+    var giftId by remember { mutableStateOf(menu.firstOrNull()?.id.orEmpty()) }
+    var buyQty by remember { mutableStateOf("1") }
+    var giftQty by remember { mutableStateOf("1") }
+    var repeat by remember { mutableStateOf(true) }
+    var selectingBuy by remember { mutableStateOf(true) }
+    val buyName = menu.firstOrNull { it.id == buyId }?.name ?: "Chọn món cần mua"
+    val giftName = menu.firstOrNull { it.id == giftId }?.name ?: "Chọn món tặng"
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Tạo chương trình mua–tặng") },
+        confirmButton = {
+            Button(
+                onClick = { onSave(name,buyId,buyQty.toIntOrNull() ?: 0,giftId,giftQty.toIntOrNull() ?: 0,repeat) },
+                enabled = name.isNotBlank() && buyId.isNotBlank() && giftId.isNotBlank() && (buyQty.toIntOrNull() ?: 0) > 0 && (giftQty.toIntOrNull() ?: 0) > 0
+            ) { Text("LƯU") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("HỦY") } },
+        text = {
+            LazyColumn {
+                item {
+                    OutlinedTextField(name,{name=it},Modifier.fillMaxWidth(),label={Text("Tên chương trình")})
+                    Text("Món cần mua", Modifier.padding(top=8.dp), fontWeight=FontWeight.Bold)
+                    OutlinedButton(onClick={selectingBuy=true},Modifier.fillMaxWidth()){Text(buyName)}
+                    OutlinedTextField(buyQty,{buyQty=it.filter(Char::isDigit).take(4)},Modifier.fillMaxWidth(),label={Text("Số lượng X")})
+                    Text("Món tặng", Modifier.padding(top=8.dp), fontWeight=FontWeight.Bold)
+                    OutlinedButton(onClick={selectingBuy=false},Modifier.fillMaxWidth()){Text(giftName)}
+                    OutlinedTextField(giftQty,{giftQty=it.filter(Char::isDigit).take(4)},Modifier.fillMaxWidth(),label={Text("Số lượng Y")})
+                    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){Text("Lặp lại khi đủ điều kiện",Modifier.weight(1f));Switch(repeat,{repeat=it})}
+                    Text(if (buyId==giftId) "Cùng món: hệ thống thêm đủ món nhận được và giảm 100% phần quà." else "Khác món: món quà được tự thêm vào order.",fontSize=11.sp)
+                    Text("Chọn ${if(selectingBuy) "món cần mua" else "món tặng"}",Modifier.padding(top=8.dp),fontWeight=FontWeight.Bold)
+                }
+                items(menu){ item ->
+                    TextButton(onClick={if(selectingBuy)buyId=item.id else giftId=item.id},modifier=Modifier.fillMaxWidth()){Text("${item.name} · ${money(item.price)}",Modifier.fillMaxWidth())}
+                }
+            }
+        }
+    )
 }

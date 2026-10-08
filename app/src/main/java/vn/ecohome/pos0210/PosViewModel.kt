@@ -19,6 +19,9 @@ import vn.ecohome.pos0210.printing.ReceiptRenderer
 import vn.ecohome.pos0210.payment.VietQrOffline
 import java.util.UUID
 import java.security.SecureRandom
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 class PosViewModel(app:Application):AndroidViewModel(app){
  private val db=PosDatabase.get(app);private val repo=PosRepository(db);private val dao=db.dao();private val masterMutex=Mutex()
  val monthlyAccounting=dao.monthlyAccounting().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val profitPartners=dao.profitPartners().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val tableServiceTimings=dao.tableServiceTimings().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val areas=repo.areas().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val tables=repo.tables().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val waitingBatches=dao.waitingBatches().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val categories=repo.categories().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val menu=repo.menuItems().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val combos=dao.combos().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val employees=repo.employees().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val sessions=repo.openSessions().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val bills=repo.paidBills().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val testBills=dao.testPaidBills().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val openAttendances=dao.openAttendances().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val myAttendance=MutableStateFlow<AttendanceSessionEntity?>(null);val suppliers=dao.suppliers().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val purchases=dao.purchases().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val purchaseCosts=dao.purchaseCosts().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val purchaseCategories=dao.purchaseCategories().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val costCodes=dao.costCodes().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val purchaseItemsAll=dao.allPurchaseItems().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val payments=dao.payments().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val customers=dao.customers().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val customerItemStats=dao.customerItemStats().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val pricingRules=dao.pricingRules().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val billAdjustments=dao.billAdjustments().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val settings=dao.settings().stateIn(viewModelScope,SharingStarted.Eagerly,emptyList());val printJobs=dao.printJobs().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val audits=dao.audits().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val itemSales=dao.paidItemSales().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
@@ -103,9 +106,8 @@ class PosViewModel(app:Application):AndroidViewModel(app){
    val now=System.currentTimeMillis()
    val defaultRate=PayrollSettings.hourlyRate(setting("hourly_rate_default"),0L)
    val rate=PayrollSettings.hourlyRate(setting("hourly_rate_"+e.id),defaultRate)
-   val defaultMultiplier=PayrollSettings.multiplierBasisPoints(setting("attendance_multiplier_percent"))
-   val employeeMultiplier=setting("attendance_multiplier_percent_"+e.id).toIntOrNull()
-   val multiplier=employeeMultiplier?.takeIf{it in 50..300}?.times(100)?:defaultMultiplier
+   val localDate=SimpleDateFormat("yyyy-MM-dd",Locale.US).format(Date(now))
+   val multiplier=HolidayMultiplier.basisPoints(setting(HolidayMultiplier.settingKey(localDate)))
    val s=AttendanceSessionEntity(UUID.randomUUID().toString(),e.id,now,hourlyRate=rate,multiplierBasisPoints=multiplier)
    dao.insertAttendanceSession(s);myAttendance.value=s;refreshPayroll()
    dao.enqueueSync(SyncQueueEntity(UUID.randomUUID().toString(),"ATTENDANCE",s.id,"UPSERT","",now,now))
@@ -409,32 +411,49 @@ fun saveLoyaltyConfig(auto:Boolean,memberDiscount:Int,vipPoints:Int,vipDiscount:
    autoBackup();autoMasterConfig()
   }
  }
-fun savePayrollConfig(defaultRateText:String,defaultMultiplierText:String,employeeRates:Map<String,String>,employeeMultipliers:Map<String,String>){
+fun savePayrollConfig(defaultRateText:String,employeeRates:Map<String,String>){
  val e=currentEmployee.value?:return
  if(e.role!="ADMIN"&&e.role!="MANAGER"){viewModelScope.launch{audit("SECURITY","PAYROLL_CONFIG","DENIED","role=${e.role}")};return}
  val defaultRate=defaultRateText.trim().toLongOrNull()
  if(defaultRate !in 1_000L..1_000_000L){printerMessage.value="ĐƠN GIÁ GIỜ MẶC ĐỊNH PHẢI TỪ 1.000Đ ĐẾN 1.000.000Đ";return}
- val defaultMultiplier=defaultMultiplierText.trim().toIntOrNull()
- if(defaultMultiplier !in 50..300){printerMessage.value="HỆ SỐ MẶC ĐỊNH PHẢI TỪ 50% ĐẾN 300%";return}
  val allowedEmployees=employees.value.map{it.id}.toSet()
  if(employeeRates.any{(id,value)->id !in allowedEmployees||(value.isNotBlank()&&value.trim().toLongOrNull() !in 1_000L..1_000_000L)}){
   printerMessage.value="ĐƠN GIÁ RIÊNG KHÔNG HỢP LỆ";return
  }
- if(employeeMultipliers.any{(id,value)->id !in allowedEmployees||(value.isNotBlank()&&value.trim().toIntOrNull() !in 50..300)}){
-  printerMessage.value="HỆ SỐ RIÊNG KHÔNG HỢP LỆ";return
- }
  viewModelScope.launch(Dispatchers.IO){
   db.withTransaction{
    dao.saveSetting(AppSettingEntity("hourly_rate_default",defaultRate.toString()))
-   dao.saveSetting(AppSettingEntity("attendance_multiplier_percent",defaultMultiplier.toString()))
-   allowedEmployees.forEach{id->
-    dao.saveSetting(AppSettingEntity("hourly_rate_"+id,employeeRates[id].orEmpty().trim()))
-    dao.saveSetting(AppSettingEntity("attendance_multiplier_percent_"+id,employeeMultipliers[id].orEmpty().trim()))
-   }
+   allowedEmployees.forEach{id->dao.saveSetting(AppSettingEntity("hourly_rate_"+id,employeeRates[id].orEmpty().trim()))}
   }
-  audit("PAYROLL","CONFIG","SAVE","defaultRate=$defaultRate,defaultMultiplier=$defaultMultiplier,operator=${e.id}")
+  audit("PAYROLL","CONFIG","SAVE","defaultRate=$defaultRate,operator=${e.id}")
   autoBackup();autoMasterConfig()
-  printerMessage.value="ĐÃ LƯU THÔNG SỐ CHẤM CÔNG / LƯƠNG"
+  printerMessage.value="ĐÃ LƯU ĐƠN GIÁ CÔNG / GIỜ"
+ }
+}
+fun saveHolidayMultiplier(localDate:String,multiplierText:String){
+ val e=currentEmployee.value?:return
+ if(e.role!="ADMIN"&&e.role!="MANAGER"){viewModelScope.launch{audit("SECURITY","PAYROLL_DATE_MULTIPLIER","DENIED","role=${e.role}")};return}
+ val normalized=multiplierText.trim().replace(',','.')
+ val multiplier=HolidayMultiplier.basisPoints(normalized)
+ val format=SimpleDateFormat("yyyy-MM-dd",Locale.US).apply{isLenient=false}
+ val validDate=runCatching{format.parse(localDate)}.isSuccess
+ val validMultiplier=normalized.matches(Regex("""\\d+(\\.\\d{1,4})?"""))&&multiplier in 5_000..30_000
+ if(!validDate||!validMultiplier){printerMessage.value="K PHẢI TỪ 0.5 ĐẾN 3.0";return}
+ viewModelScope.launch(Dispatchers.IO){
+  dao.saveSetting(AppSettingEntity(HolidayMultiplier.settingKey(localDate),multiplier.toString()))
+  audit("PAYROLL",localDate,"DATE_MULTIPLIER_SAVE","multiplierBp=$multiplier,operator=${e.id}")
+  autoBackup();autoMasterConfig()
+  printerMessage.value="ĐÃ LƯU HỆ SỐ K NGÀY $localDate"
+ }
+}
+fun clearHolidayMultiplier(localDate:String){
+ val e=currentEmployee.value?:return
+ if(e.role!="ADMIN"&&e.role!="MANAGER"){viewModelScope.launch{audit("SECURITY","PAYROLL_DATE_MULTIPLIER","DENIED","role=${e.role}")};return}
+ viewModelScope.launch(Dispatchers.IO){
+  dao.saveSetting(AppSettingEntity(HolidayMultiplier.settingKey(localDate),""))
+  audit("PAYROLL",localDate,"DATE_MULTIPLIER_CLEAR","operator=${e.id}")
+  autoBackup();autoMasterConfig()
+  printerMessage.value="ĐÃ XÓA HỆ SỐ K NGÀY $localDate"
  }
 }
 fun saveSetting(key:String,value:String){

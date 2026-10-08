@@ -3355,9 +3355,10 @@ fun Report(vm: PosViewModel) {
         if((excelFrom.isNotBlank()&&start==null)||(excelTo.isNotBlank()&&end==null)||(start!=null&&end!=null&&start>end)){
             excelFilterError="Ngày không hợp lệ. Nhập dd/MM/yyyy, từ ngày không sau đến ngày.";return
         }
-        excelFilterError=""
+        excelFilterError="Đang tạo file Excel..."
         val endExclusive=end?.let{java.util.Calendar.getInstance().apply{timeInMillis=it;add(java.util.Calendar.DAY_OF_MONTH,1)}.timeInMillis}
         vm.exportTransactionExcel(start,endExclusive,excelPayer.takeUnless{it=="ALL"},excelCashier.takeUnless{it=="ALL"}){uri,name->
+            excelFilterError="Đã tạo file Excel · đang mở ứng dụng..."
             if(download){
                 val intent=Intent(Intent.ACTION_CREATE_DOCUMENT).apply{
                     addCategory(Intent.CATEGORY_OPENABLE)
@@ -3381,7 +3382,7 @@ fun Report(vm: PosViewModel) {
                     reportContext.startActivity(Intent.createChooser(intent,"Chia sẻ Excel qua Zalo / ứng dụng khác"))
                 }
             }
-        }
+        }{error->excelFilterError=error}
     }
     fun shareAiExport(){
         vm.exportAiBusinessData { uri, name ->

@@ -441,15 +441,13 @@ fun saveLoyaltyCampaign(campaign:LoyaltyCampaignEntity){
  val e=currentEmployee.value?:return
  if(e.role!="ADMIN"){viewModelScope.launch{audit("SECURITY","LOYALTY_CAMPAIGN","DENIED","role=${e.role}")};return}
  if(!LoyaltyCampaignPolicy.isValid(campaign.triggerType,campaign.threshold,campaign.expiresDays)){printerMessage.value="ĐIỀU KIỆN TÍCH LŨY HOẶC HẠN QUÀ KHÔNG HỢP LỆ";return}
- val reward=campaign.rewardMenuItemId?.let{id->menu.value.firstOrNull{it.id==id&&it.active}}
- val voucher=campaign.rewardType=="VOUCHER"&&campaign.rewardValue>0
- if(!voucher&&(campaign.rewardType!="MENU_ITEM"||reward==null)){printerMessage.value="HÃY NHẬP GIÁ TRỊ VOUCHER HOẶC CHỌN MÓN QUÀ ĐANG BẬT";return}
+ if(campaign.triggerType!="POINTS"||campaign.threshold!=100L||campaign.rewardType!="BILL_DISCOUNT"||campaign.rewardValue!=30000L||campaign.cycleMode!="ONCE"){printerMessage.value="CHỈ HỖ TRỢ 100 ĐIỂM → GIẢM 30.000Đ MỘT LẦN";return}
  viewModelScope.launch(Dispatchers.IO){
   val now=System.currentTimeMillis()
-  val fixed=campaign.copy(name=campaign.name.trim(),rewardMenuItemId=if(voucher)null else reward!!.id,updatedAt=now,createdAt=if(campaign.createdAt<=0)now else campaign.createdAt)
+  val fixed=campaign.copy(name=campaign.name.trim(),rewardMenuItemId=null,updatedAt=now,createdAt=if(campaign.createdAt<=0)now else campaign.createdAt)
   dao.upsertLoyaltyCampaign(fixed)
   dao.enqueueSync(SyncQueueEntity(UUID.randomUUID().toString(),"LOYALTY_CAMPAIGN",fixed.id,"UPSERT","",now,now))
-  audit("LOYALTY",fixed.id,"CAMPAIGN_SAVE","trigger=${fixed.triggerType},threshold=${fixed.threshold},reward="+(if(voucher) "VOUCHER:"+fixed.rewardValue else reward!!.id)+",active=${fixed.active}")
+  audit("LOYALTY",fixed.id,"CAMPAIGN_SAVE","trigger=${fixed.triggerType},threshold=${fixed.threshold},reward="BILL_DISCOUNT:"+fixed.rewardValue+",active=${fixed.active}")
   autoBackup();autoMasterConfig()
   printerMessage.value="ĐÃ LƯU CHƯƠNG TRÌNH TÍCH LŨY"
  }
@@ -458,6 +456,7 @@ fun toggleLoyaltyCampaign(campaign:LoyaltyCampaignEntity){
  val e=currentEmployee.value?:return
  if(e.role!="ADMIN")return
  viewModelScope.launch(Dispatchers.IO){
+  if(campaign.rewardType!="BILL_DISCOUNT"){printerMessage.value="CHƯƠNG TRÌNH VOUCHER/QUÀ ĐÃ TẠM KHÓA";return@launch}
   val now=System.currentTimeMillis();val active=!campaign.active
   dao.setLoyaltyCampaignActive(campaign.id,active,now)
   dao.enqueueSync(SyncQueueEntity(UUID.randomUUID().toString(),"LOYALTY_CAMPAIGN",campaign.id,"UPSERT","",now,now))

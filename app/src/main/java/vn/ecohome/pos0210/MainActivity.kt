@@ -655,9 +655,10 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
     val loyaltyRule = tierDiscountRule(effectiveTier, settings)
     val manualVoucher=if(voucherDiscount>0L) voucherDiscount else buyGetDiscount
     val manualLabel=if(voucherDiscount>0L) "Voucher 0210" else "Mua X tặng Y"
-    // A redeemed voucher is an explicit, already-committed reward: it cannot be
-    // silently replaced by a percentage offer at checkout.
-    val eligibleRules = if (voucherDiscount > 0L) rules.filter { it.kind == "SURCHARGE" } else rules + listOfNotNull(loyaltyRule)
+    // Both voucher and buy-get gift lines have already been persisted in the order.
+    // Never replace their 100% gift discount with a percentage rule at checkout:
+    // that would charge for a promised gift and leave the redeemed reward locked.
+    val eligibleRules = if (manualVoucher > 0L) rules.filter { it.kind == "SURCHARGE" } else rules + listOfNotNull(loyaltyRule)
     val preview = calculatePricing(subtotal, eligibleRules, appliedCode, buyGetDiscount = manualVoucher, buyGetLabel = manualLabel)
     val paymentSession by vm.paymentSession(s.id).collectAsState(initial = null)
     val printedCheckoutKey by vm.printedCheckoutKey.collectAsState()

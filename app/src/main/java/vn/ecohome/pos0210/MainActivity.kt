@@ -3508,29 +3508,7 @@ fun Report(vm: PosViewModel) {
             FilterChip(section == "BILLS", { section = "BILLS" }, { Text("LỊCH SỬ BILL") })
             FilterChip(section == "PURCHASES", { section = "PURCHASES" }, { Text("CHI / NGƯỜI CHI") })
             FilterChip(section == "MONTHLY", { section = "MONTHLY" }, { Text("BÁO CÁO THÁNG") })
-        }
-        OutlinedButton(
-            onClick={shareAiExport()},
-            modifier=Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=4.dp)
-        ){ Text("XUẤT DỮ LIỆU CHO AI") }
-
-        Text("XUẤT EXCEL · PHIẾU NHẬP / PHIẾU CHI / BILL",modifier=Modifier.padding(horizontal=12.dp,vertical=4.dp),fontWeight=FontWeight.Bold)
-        Row(Modifier.fillMaxWidth().padding(horizontal=12.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)){
-            OutlinedTextField(excelFrom,{excelFrom=it},Modifier.weight(1f),label={Text("Từ dd/MM/yyyy")},singleLine=true)
-            OutlinedTextField(excelTo,{excelTo=it},Modifier.weight(1f),label={Text("Đến dd/MM/yyyy")},singleLine=true)
-        }
-        Row(Modifier.fillMaxWidth().padding(horizontal=12.dp).horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(5.dp)){
-            FilterChip(excelPayer=="ALL",{excelPayer="ALL"},{Text("Mọi người chi")})
-            purchases.map{it.paidByName}.filter{it.isNotBlank()}.distinct().sorted().forEach{name->FilterChip(excelPayer==name,{excelPayer=name},{Text(name)})}
-        }
-        Row(Modifier.fillMaxWidth().padding(horizontal=12.dp).horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(5.dp)){
-            FilterChip(excelCashier=="ALL",{excelCashier="ALL"},{Text("Mọi thu ngân")})
-            payments.map{it.cashierId}.distinct().forEach{id->FilterChip(excelCashier==id,{excelCashier=id},{Text(id.take(8))})}
-        }
-        if(excelFilterError.isNotBlank())Text(excelFilterError,color=Color.Red,modifier=Modifier.padding(horizontal=12.dp))
-        Row(Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=4.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)){
-            Button(onClick={shareExcel(true)},modifier=Modifier.weight(1f)){Text("TẢI EXCEL")}
-            Button(onClick={shareExcel(false)},modifier=Modifier.weight(1f)){Text("SHARE ZALO")}
+            FilterChip(section == "EXPORT", { section = "EXPORT" }, { Text("XUẤT DỮ LIỆU") })
         }
         if(section == "PURCHASES") {
             Row(
@@ -3552,6 +3530,31 @@ fun Report(vm: PosViewModel) {
             }
         }
         when (section) {
+            "EXPORT" -> {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal=12.dp,vertical=10.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
+                    Text("XUẤT BÁO CÁO",fontWeight=FontWeight.Bold)
+                    Text("Tải Excel hoặc gửi qua Zalo theo khoảng thời gian và người thực hiện.")
+                    OutlinedTextField(excelFrom,{excelFrom=it},Modifier.fillMaxWidth(),label={Text("Từ ngày · dd/MM/yyyy")},singleLine=true)
+                    OutlinedTextField(excelTo,{excelTo=it},Modifier.fillMaxWidth(),label={Text("Đến ngày · dd/MM/yyyy")},singleLine=true)
+                    Text("NGƯỜI CHI",fontWeight=FontWeight.Bold)
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                        FilterChip(excelPayer=="ALL",{excelPayer="ALL"},{Text("Tất cả")})
+                        purchases.map{it.paidByName}.filter{it.isNotBlank()}.distinct().sorted().forEach{name->FilterChip(excelPayer==name,{excelPayer=name},{Text(name)})}
+                    }
+                    Text("THU NGÂN",fontWeight=FontWeight.Bold)
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                        FilterChip(excelCashier=="ALL",{excelCashier="ALL"},{Text("Tất cả")})
+                        payments.map{it.cashierId}.distinct().forEach{id->FilterChip(excelCashier==id,{excelCashier=id},{Text(id.take(8))})}
+                    }
+                    if(excelFilterError.isNotBlank())Text(excelFilterError,color=if(excelFilterError.startsWith("LỖI")||excelFilterError.contains("lỗi",true))Color.Red else Color.DarkGray)
+                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                        Button(onClick={shareExcel(true)},modifier=Modifier.weight(1f)){Text("TẢI EXCEL")}
+                        Button(onClick={shareExcel(false)},modifier=Modifier.weight(1f)){Text("SHARE ZALO")}
+                    }
+                    Text("DỮ LIỆU PHÂN TÍCH AI",fontWeight=FontWeight.Bold)
+                    OutlinedButton(onClick={shareAiExport()},modifier=Modifier.fillMaxWidth()){Text("XUẤT DỮ LIỆU JSON CHO AI")}
+                }
+            }
             "MONTHLY" -> MonthlyProfitReport(vm)
             "OVERVIEW" -> {
                 Row(

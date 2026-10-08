@@ -164,6 +164,10 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
   val root=setting("storage_root_uri")
   if(root.isNotBlank()&&setting("storage_write_enabled")!="false") DataBackup.backupMediaLatest(getApplication(),root)
  }
+ private suspend fun publishCatalogChange(){
+  val result=FirebaseCloudSync.publishMenu(getApplication())
+  result.onFailure{e->cloudMessage.value="Menu đã lưu trên máy · chưa đẩy Cloud: ${e.message}"}
+ }
  private suspend fun autoMasterConfig(){
   val root=dao.allSettingsSnapshot().firstOrNull{it.key=="storage_root_uri"}?.value.orEmpty()
   val writes=dao.allSettingsSnapshot().firstOrNull{it.key=="storage_write_enabled"}?.value!="false"
@@ -273,7 +277,7 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
    val tableName=name.trim().ifBlank{"Bàn %02d".format(n)}
    repo.saveTable(DiningTableEntity(id,areaId,tableName,n,true))
    audit("TABLE",id,"CREATE","name=$tableName,area=$areaId")
-   autoBackup();autoMasterConfig()
+   autoBackup();autoMasterConfig();publishCatalogChange()
   }
  }
  fun updateTable(t:DiningTableEntity,name:String,areaId:String){
@@ -282,7 +286,7 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
   viewModelScope.launch{
    repo.saveTable(t.copy(name=name.trim().ifBlank{t.name},areaId=areaId))
    audit("TABLE",t.id,"UPDATE","name=$name,area=$areaId")
-   autoBackup();autoMasterConfig()
+   autoBackup();autoMasterConfig();publishCatalogChange()
   }
  }
  fun hideTable(t:DiningTableEntity){
@@ -292,7 +296,7 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
    if(dao.openSessionForTable(t.id)!=null)return@launch
    repo.saveTable(t.copy(active=false))
    audit("TABLE",t.id,"HIDE",t.name)
-   autoBackup();autoMasterConfig()
+   autoBackup();autoMasterConfig();publishCatalogChange()
   }
  }
  fun canConfigureQr():Boolean{val r=currentEmployee.value?.role?:return false;return r=="ADMIN"||r=="MANAGER"}
@@ -311,7 +315,7 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
    do{code="$prefix-${seq.toString().padStart(3,'0')}";seq++}while(code in used)
    val managed=runCatching{ManagedMedia.importImage(getApplication(),imageUri,"menu_"+id)}.getOrNull()
    repo.saveMenuItem(MenuItemEntity(id,cat,name.trim(),price,managed,menu.value.size+1,active,code,description.trim()))
-   audit("MENU",id,"CREATE","$code | ${name.trim()} | price=$price | category=$categoryName");autoBackup();autoBackupMedia();autoMasterConfig()
+   audit("MENU",id,"CREATE","$code | ${name.trim()} | price=$price | category=$categoryName");autoBackup();autoBackupMedia();autoMasterConfig();publishCatalogChange()
   }
  }
  fun updateMenu(original:MenuItemEntity,name:String,price:Long,cat:String,description:String,imageUri:String?,active:Boolean){
@@ -322,7 +326,7 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
    repo.saveMenuItem(updated)
    val oldCat=categories.value.firstOrNull{it.id==original.categoryId}?.name.orEmpty();val newCat=categories.value.firstOrNull{it.id==cat}?.name.orEmpty()
    audit("MENU",original.id,"UPDATE","${original.productCode} | name:${original.name}->${updated.name} | price:${original.price}->${updated.price} | category:$oldCat->$newCat | active:${original.active}->${updated.active} | actor:${currentEmployee.value?.id}")
-   autoBackup();autoBackupMedia();autoMasterConfig()
+   autoBackup();autoBackupMedia();autoMasterConfig();publishCatalogChange()
   }
  }
  fun setMenuImage(i:MenuItemEntity,uri:String?){
@@ -330,23 +334,23 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
   viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO){
    val managed=runCatching{ManagedMedia.importImage(getApplication(),uri,"menu_"+i.id)}.getOrNull()
    repo.saveMenuItem(i.copy(imageUri=managed))
-   audit("MENU",i.id,"IMAGE");autoBackup();autoBackupMedia();autoMasterConfig()
+   audit("MENU",i.id,"IMAGE");autoBackup();autoBackupMedia();autoMasterConfig();publishCatalogChange()
   }
  }
- fun toggleMenu(i:MenuItemEntity){if(!canManageMenu())return;viewModelScope.launch{dao.setMenuActive(i.id,!i.active);audit("MENU",i.id,"ACTIVE",(!i.active).toString());autoBackup();autoMasterConfig()}}
- fun deleteMenu(i:MenuItemEntity){if(!canManageMenu())return;viewModelScope.launch{dao.setMenuActive(i.id,false);audit("MENU",i.id,"DELETE_SOFT",i.name);autoBackup();autoMasterConfig()}}
- fun addCategory(name:String){if(!canManageMenu()||name.isBlank())return;viewModelScope.launch{val id=UUID.randomUUID().toString();repo.saveCategory(MenuCategoryEntity(id,name.trim(),categories.value.size+1,true));audit("CATEGORY",id,"CREATE",name.trim());autoBackup();autoMasterConfig()}}
+ fun toggleMenu(i:MenuItemEntity){if(!canManageMenu())return;viewModelScope.launch{dao.setMenuActive(i.id,!i.active);audit("MENU",i.id,"ACTIVE",(!i.active).toString());autoBackup();autoMasterConfig();publishCatalogChange()}}
+ fun deleteMenu(i:MenuItemEntity){if(!canManageMenu())return;viewModelScope.launch{dao.setMenuActive(i.id,false);audit("MENU",i.id,"DELETE_SOFT",i.name);autoBackup();autoMasterConfig();publishCatalogChange()}}
+ fun addCategory(name:String){if(!canManageMenu()||name.isBlank())return;viewModelScope.launch{val id=UUID.randomUUID().toString();repo.saveCategory(MenuCategoryEntity(id,name.trim(),categories.value.size+1,true));audit("CATEGORY",id,"CREATE",name.trim());autoBackup();autoMasterConfig();publishCatalogChange()}}
  fun deleteCategory(c:MenuCategoryEntity){
   if(!canManageMenu())return
   viewModelScope.launch{
    if(menu.value.any{it.active&&it.categoryId==c.id})return@launch
    dao.setCategoryActive(c.id,false)
    audit("CATEGORY",c.id,"DELETE_SOFT",c.name)
-   autoBackup();autoMasterConfig()
+   autoBackup();autoMasterConfig();publishCatalogChange()
   }
  }
- fun saveEmployee(name:String,pin:String,role:String,checkout:Boolean,purchase:Boolean,order:Boolean=true,kitchen:Boolean=true,report:Boolean=false,menu:Boolean=false,system:Boolean=false){if(currentEmployee.value?.role!="ADMIN")return;viewModelScope.launch{val id=UUID.randomUUID().toString();repo.saveEmployee(EmployeeEntity(id,name,true,pin,role,checkout,purchase,order,kitchen,report,menu,system));audit("EMPLOYEE",id,"CREATE",name);autoBackup();autoMasterConfig()}}
- fun updateEmployee(e:EmployeeEntity){if(currentEmployee.value?.role!="ADMIN")return;viewModelScope.launch{repo.saveEmployee(e);audit("EMPLOYEE",e.id,"UPDATE");autoBackup();autoMasterConfig()}};fun toggleEmployee(e:EmployeeEntity){if(currentEmployee.value?.role!="ADMIN"||e.id==currentEmployee.value?.id)return;viewModelScope.launch{dao.setEmployeeActive(e.id,!e.active);audit("EMPLOYEE",e.id,if(e.active)"DISABLE" else "ENABLE");autoBackup();autoMasterConfig()}}
+ fun saveEmployee(name:String,pin:String,role:String,checkout:Boolean,purchase:Boolean,order:Boolean=true,kitchen:Boolean=true,report:Boolean=false,menu:Boolean=false,system:Boolean=false){if(currentEmployee.value?.role!="ADMIN")return;viewModelScope.launch{val id=UUID.randomUUID().toString();repo.saveEmployee(EmployeeEntity(id,name,true,pin,role,checkout,purchase,order,kitchen,report,menu,system));audit("EMPLOYEE",id,"CREATE",name);autoBackup();autoMasterConfig();publishCatalogChange()}}
+ fun updateEmployee(e:EmployeeEntity){if(currentEmployee.value?.role!="ADMIN")return;viewModelScope.launch{repo.saveEmployee(e);audit("EMPLOYEE",e.id,"UPDATE");autoBackup();autoMasterConfig();publishCatalogChange()}};fun toggleEmployee(e:EmployeeEntity){if(currentEmployee.value?.role!="ADMIN"||e.id==currentEmployee.value?.id)return;viewModelScope.launch{dao.setEmployeeActive(e.id,!e.active);audit("EMPLOYEE",e.id,if(e.active)"DISABLE" else "ENABLE");autoBackup();autoMasterConfig();publishCatalogChange()}}
  fun saveSupplier(name:String){val e=currentEmployee.value?:return;if(!e.canPurchase&&e.role!="ADMIN")return;if(name.isBlank())return;viewModelScope.launch{val id=UUID.randomUUID().toString();repo.saveSupplier(SupplierEntity(id,name.trim()));audit("SUPPLIER",id,"CREATE",name.trim());autoBackup()}}
  fun addPurchaseCategory(name:String,defaultUnit:String){
   val e=currentEmployee.value?:return
@@ -356,7 +360,7 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
    val id=UUID.randomUUID().toString()
    repo.savePurchaseCategory(PurchaseCategoryEntity(id,name.trim(),defaultUnit.trim().ifBlank{"lần"},purchaseCategories.value.size+1,true))
    audit("PURCHASE_CATEGORY",id,"CREATE",name.trim())
-   autoBackup();autoMasterConfig()
+   autoBackup();autoMasterConfig();publishCatalogChange()
   }
  }
  fun deletePurchaseCategory(c:PurchaseCategoryEntity){
@@ -367,7 +371,7 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
    if(used)return@launch
    dao.setPurchaseCategoryActive(c.id,false)
    audit("PURCHASE_CATEGORY",c.id,"DELETE_SOFT",c.name)
-   autoBackup();autoMasterConfig()
+   autoBackup();autoMasterConfig();publishCatalogChange()
   }
  };
  fun saveCombo(name:String,price:Long,description:String,imageUri:String?,items:Map<String,Int>,initial:ComboEntity?=null){
@@ -390,13 +394,13 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
    val action=if(initial==null)"CREATE" else "UPDATE"
    val before=initial?.let{"name=${it.name},price=${it.price},description=${it.description}"}.orEmpty()
    audit("COMBO",id,action,"$before -> name=${name.trim()},price=$price,description=${description.trim()},items=${cleanItems.size}")
-   autoBackup();autoBackupMedia();autoMasterConfig()
+   autoBackup();autoBackupMedia();autoMasterConfig();publishCatalogChange()
   }
  }
  fun toggleCombo(combo:ComboEntity){
   val e=currentEmployee.value?:return
   if(e.role!="ADMIN"&&!e.canManageMenu)return
-  viewModelScope.launch{dao.setComboActive(combo.id,!combo.active);audit("COMBO",combo.id,"ACTIVE",(!combo.active).toString());autoBackup();autoMasterConfig()}
+  viewModelScope.launch{dao.setComboActive(combo.id,!combo.active);audit("COMBO",combo.id,"ACTIVE",(!combo.active).toString());autoBackup();autoMasterConfig();publishCatalogChange()}
  }
  fun savePricingRule(name:String,code:String,kind:String,percent:Int,startAt:Long?,endAt:Long?,startMinute:Int?,endMinute:Int?,autoApply:Boolean){
   val e=currentEmployee.value?:return
@@ -405,14 +409,14 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
    val id=UUID.randomUUID().toString()
    dao.savePricingRule(PricingRuleEntity(id,name.trim(),code.trim().uppercase(),kind,percent.coerceIn(1,100),startAt,endAt,startMinute,endMinute,autoApply,true))
    audit("PRICING",id,"CREATE","name=${name.trim()},kind=$kind,percent=$percent,code=${code.trim().uppercase()}")
-   autoBackup();autoMasterConfig()
+   autoBackup();autoMasterConfig();publishCatalogChange()
   }
  }
- fun updatePricingRule(rule:PricingRuleEntity,name:String,code:String,kind:String,percent:Int,startAt:Long?,endAt:Long?,startMinute:Int?,endMinute:Int?,autoApply:Boolean){val e=currentEmployee.value?:return;if(e.role!="ADMIN"||name.isBlank()||percent !in 1..100||(startAt!=null&&endAt!=null&&endAt<startAt))return;viewModelScope.launch{dao.savePricingRule(rule.copy(name=name.trim(),code=code.trim().uppercase(),kind=kind,percent=percent,startAt=startAt,endAt=endAt,startMinute=startMinute,endMinute=endMinute,autoApply=autoApply));audit("PRICING",rule.id,"UPDATE","name=$name,percent=$percent");autoBackup();autoMasterConfig()}}
+ fun updatePricingRule(rule:PricingRuleEntity,name:String,code:String,kind:String,percent:Int,startAt:Long?,endAt:Long?,startMinute:Int?,endMinute:Int?,autoApply:Boolean){val e=currentEmployee.value?:return;if(e.role!="ADMIN"||name.isBlank()||percent !in 1..100||(startAt!=null&&endAt!=null&&endAt<startAt))return;viewModelScope.launch{dao.savePricingRule(rule.copy(name=name.trim(),code=code.trim().uppercase(),kind=kind,percent=percent,startAt=startAt,endAt=endAt,startMinute=startMinute,endMinute=endMinute,autoApply=autoApply));audit("PRICING",rule.id,"UPDATE","name=$name,percent=$percent");autoBackup();autoMasterConfig();publishCatalogChange()}}
  fun togglePricingRule(rule:PricingRuleEntity){
   val e=currentEmployee.value?:return
   if(e.role!="ADMIN")return
-  viewModelScope.launch{dao.setPricingRuleActive(rule.id,!rule.active);audit("PRICING",rule.id,"ACTIVE",(!rule.active).toString());autoBackup();autoMasterConfig()}
+  viewModelScope.launch{dao.setPricingRuleActive(rule.id,!rule.active);audit("PRICING",rule.id,"ACTIVE",(!rule.active).toString());autoBackup();autoMasterConfig();publishCatalogChange()}
  }
  fun deletePricingRule(rule:PricingRuleEntity){
   val e=currentEmployee.value?:return
@@ -420,7 +424,7 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
   viewModelScope.launch{
    dao.setPricingRuleActive(rule.id,false)
    audit("PRICING",rule.id,"DELETE_SOFT","pricing_rule_archived")
-   autoBackup();autoMasterConfig()
+   autoBackup();autoMasterConfig();publishCatalogChange()
   }
  }
  fun saveBuyGetPromotion(name:String,buyMenuItemId:String,buyQuantity:Int,giftMenuItemId:String,giftQuantity:Int,repeat:Boolean,startAt:Long?,endAt:Long?){
@@ -430,12 +434,12 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
    val now=System.currentTimeMillis();val id=UUID.randomUUID().toString()
    dao.saveBuyGetPromotion(BuyGetPromotionEntity(id,name.trim(),buyMenuItemId,buyQuantity,giftMenuItemId,giftQuantity,repeat,true,startAt,endAt,now,now))
    audit("BUY_GET",id,"CREATE","buy=$buyMenuItemId x$buyQuantity,gift=$giftMenuItemId x$giftQuantity,repeat=$repeat")
-   autoBackup();autoMasterConfig()
+   autoBackup();autoMasterConfig();publishCatalogChange()
   }
  }
  fun toggleBuyGetPromotion(rule:BuyGetPromotionEntity){
   val e=currentEmployee.value?:return;if(e.role!="ADMIN")return
-  viewModelScope.launch(Dispatchers.IO){dao.setBuyGetPromotionActive(rule.id,!rule.active,System.currentTimeMillis());audit("BUY_GET",rule.id,"ACTIVE",(!rule.active).toString());autoBackup();autoMasterConfig()}
+  viewModelScope.launch(Dispatchers.IO){dao.setBuyGetPromotionActive(rule.id,!rule.active,System.currentTimeMillis());audit("BUY_GET",rule.id,"ACTIVE",(!rule.active).toString());autoBackup();autoMasterConfig();publishCatalogChange()}
  }
 fun saveLoyaltyCampaign(campaign:LoyaltyCampaignEntity){
  val e=currentEmployee.value?:return
@@ -448,7 +452,7 @@ fun saveLoyaltyCampaign(campaign:LoyaltyCampaignEntity){
   dao.upsertLoyaltyCampaign(fixed)
   dao.enqueueSync(SyncQueueEntity(UUID.randomUUID().toString(),"LOYALTY_CAMPAIGN",fixed.id,"UPSERT","",now,now))
   audit("LOYALTY",fixed.id,"CAMPAIGN_SAVE","trigger=${fixed.triggerType},threshold=${fixed.threshold},reward=${fixed.rewardType}:${fixed.rewardValue},active=${fixed.active}")
-  autoBackup();autoMasterConfig()
+  autoBackup();autoMasterConfig();publishCatalogChange()
   printerMessage.value="ĐÃ LƯU CHƯƠNG TRÌNH TÍCH LŨY"
  }
 }
@@ -460,7 +464,7 @@ fun toggleLoyaltyCampaign(campaign:LoyaltyCampaignEntity){
   val now=System.currentTimeMillis();val active=!campaign.active
   dao.setLoyaltyCampaignActive(campaign.id,active,now)
   dao.enqueueSync(SyncQueueEntity(UUID.randomUUID().toString(),"LOYALTY_CAMPAIGN",campaign.id,"UPSERT","",now,now))
-  audit("LOYALTY",campaign.id,"CAMPAIGN_ACTIVE",active.toString());autoBackup();autoMasterConfig()
+  audit("LOYALTY",campaign.id,"CAMPAIGN_ACTIVE",active.toString());autoBackup();autoMasterConfig();publishCatalogChange()
  }
 }
 fun savePointEarningRate(text:String){
@@ -471,7 +475,7 @@ fun savePointEarningRate(text:String){
  viewModelScope.launch(Dispatchers.IO){
   dao.saveSetting(AppSettingEntity("loyalty_vnd_per_point",amount.toString()))
   audit("LOYALTY","POINT_RATE","SAVE","vnd_per_point=$amount")
-  autoBackup();autoMasterConfig()
+  autoBackup();autoMasterConfig();publishCatalogChange()
   printerMessage.value="ĐÃ LƯU QUY TẮC TÍCH ĐIỂM"
  }
 }
@@ -498,7 +502,7 @@ fun saveLoyaltyConfig(auto:Boolean,memberDiscount:Int,vipPoints:Int,vipDiscount:
     }
    }
    audit("LOYALTY","CONFIG","SAVE","auto=$auto,vip=$safeVip,vvip=$safeVvip")
-   autoBackup();autoMasterConfig()
+   autoBackup();autoMasterConfig();publishCatalogChange()
   }
  }
 fun savePayrollConfig(defaultRateText:String,employeeRates:Map<String,String>){
@@ -516,7 +520,7 @@ fun savePayrollConfig(defaultRateText:String,employeeRates:Map<String,String>){
    allowedEmployees.forEach{id->dao.saveSetting(AppSettingEntity("hourly_rate_"+id,employeeRates[id].orEmpty().trim()))}
   }
   audit("PAYROLL","CONFIG","SAVE","defaultRate=$defaultRate,operator=${e.id}")
-  autoBackup();autoMasterConfig()
+  autoBackup();autoMasterConfig();publishCatalogChange()
   printerMessage.value="ĐÃ LƯU ĐƠN GIÁ CÔNG / GIỜ"
  }
 }
@@ -532,7 +536,7 @@ fun saveHolidayMultiplier(localDate:String,multiplierText:String){
  viewModelScope.launch(Dispatchers.IO){
   dao.saveSetting(AppSettingEntity(HolidayMultiplier.settingKey(localDate),multiplier.toString()))
   audit("PAYROLL",localDate,"DATE_MULTIPLIER_SAVE","multiplierBp=$multiplier,operator=${e.id}")
-  autoBackup();autoMasterConfig()
+  autoBackup();autoMasterConfig();publishCatalogChange()
   printerMessage.value="ĐÃ LƯU HỆ SỐ K NGÀY $localDate"
  }
 }
@@ -548,7 +552,7 @@ fun saveHolidayMultipliers(localDates:Set<String>,multiplierText:String){
  viewModelScope.launch(Dispatchers.IO){
   db.withTransaction{dates.forEach{date->dao.saveSetting(AppSettingEntity(HolidayMultiplier.settingKey(date),multiplier.toString()))}}
   audit("PAYROLL",dates.joinToString(","),"DATE_MULTIPLIER_BATCH_SAVE","multiplierBp=$multiplier,count=${dates.size},operator=${e.id}")
-  autoBackup();autoMasterConfig()
+  autoBackup();autoMasterConfig();publishCatalogChange()
   printerMessage.value="ĐÃ LƯU K = $normalized CHO ${dates.size} NGÀY: ${dates.joinToString(", ")}"
  }
 }
@@ -558,7 +562,7 @@ fun clearHolidayMultiplier(localDate:String){
  viewModelScope.launch(Dispatchers.IO){
   dao.saveSetting(AppSettingEntity(HolidayMultiplier.settingKey(localDate),""))
   audit("PAYROLL",localDate,"DATE_MULTIPLIER_CLEAR","operator=${e.id}")
-  autoBackup();autoMasterConfig()
+  autoBackup();autoMasterConfig();publishCatalogChange()
   printerMessage.value="ĐÃ XÓA HỆ SỐ K NGÀY $localDate"
  }
 }

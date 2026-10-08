@@ -3322,6 +3322,34 @@ fun Report(vm: PosViewModel) {
     var showBulkDelete by remember { mutableStateOf(false) }
     var bulkDeleteReason by remember { mutableStateOf("") }
     val reportContext = LocalContext.current
+    var excelFrom by remember { mutableStateOf("") }
+    var excelTo by remember { mutableStateOf("") }
+    var excelPayer by remember { mutableStateOf("ALL") }
+    var excelCashier by remember { mutableStateOf("ALL") }
+    var excelFilterError by remember { mutableStateOf("") }
+    fun shareExcel(){
+        fun parseDate(s:String):Long? {
+            if(s.isBlank())return null
+            val fmt=java.text.SimpleDateFormat("dd/MM/yyyy",java.util.Locale("vi","VN")).apply{isLenient=false}
+            return fmt.parse(s)?.time
+        }
+        val start=runCatching{parseDate(excelFrom)}.getOrNull()
+        val end=runCatching{parseDate(excelTo)}.getOrNull()
+        if((excelFrom.isNotBlank()&&start==null)||(excelTo.isNotBlank()&&end==null)||(start!=null&&end!=null&&start>end)){
+            excelFilterError="Ngày không hợp lệ. Nhập dd/MM/yyyy, từ ngày không sau đến ngày.";return
+        }
+        excelFilterError=""
+        val endExclusive=end?.let{java.util.Calendar.getInstance().apply{timeInMillis=it;add(java.util.Calendar.DAY_OF_MONTH,1)}.timeInMillis}
+        vm.exportTransactionExcel(start,endExclusive,excelPayer.takeUnless{it=="ALL"},excelCashier.takeUnless{it=="ALL"}){uri,name->
+            val intent=Intent(Intent.ACTION_SEND).apply{
+                type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                putExtra(Intent.EXTRA_STREAM,uri)
+                putExtra(Intent.EXTRA_SUBJECT,"POS0210 · Excel giao dịch")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            reportContext.startActivity(Intent.createChooser(intent,"Xuất Excel / gửi AI: $name"))
+        }
+    }
     fun shareAiExport(){
         vm.exportAiBusinessData { uri, name ->
             val intent=Intent(Intent.ACTION_SEND).apply{
@@ -3452,6 +3480,21 @@ fun Report(vm: PosViewModel) {
             modifier=Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=4.dp)
         ){ Text("XUẤT DỮ LIỆU CHO AI") }
 
+        Text("XUẤT EXCEL · PHIẾU NHẬP / PHIẾU CHI / BILL",modifier=Modifier.padding(horizontal=12.dp,vertical=4.dp),fontWeight=FontWeight.Bold)
+        Row(Modifier.fillMaxWidth().padding(horizontal=12.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+            OutlinedTextField(excelFrom,{excelFrom=it},Modifier.weight(1f),label={Text("Từ dd/MM/yyyy")},singleLine=true)
+            OutlinedTextField(excelTo,{excelTo=it},Modifier.weight(1f),label={Text("Đến dd/MM/yyyy")},singleLine=true)
+        }
+        Row(Modifier.fillMaxWidth().padding(horizontal=12.dp).horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(5.dp)){
+            FilterChip(excelPayer=="ALL",{excelPayer="ALL"},{Text("Mọi người chi")})
+            purchases.map{it.paidByName}.filter{it.isNotBlank()}.distinct().sorted().forEach{name->FilterChip(excelPayer==name,{excelPayer=name},{Text(name)})}
+        }
+        Row(Modifier.fillMaxWidth().padding(horizontal=12.dp).horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(5.dp)){
+            FilterChip(excelCashier=="ALL",{excelCashier="ALL"},{Text("Mọi thu ngân")})
+            payments.map{it.cashierId}.distinct().forEach{id->FilterChip(excelCashier==id,{excelCashier=id},{Text(id.take(8))})}
+        }
+        if(excelFilterError.isNotBlank())Text(excelFilterError,color=Color.Red,modifier=Modifier.padding(horizontal=12.dp))
+        Button(onClick={shareExcel()},modifier=Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=4.dp)){Text("XUẤT EXCEL (.XLSX) / GỬI AI")}
         if(section == "PURCHASES") {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp).horizontalScroll(rememberScrollState()),

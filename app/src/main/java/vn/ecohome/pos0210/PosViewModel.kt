@@ -820,7 +820,11 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
      val gift=menu.value.firstOrNull{it.id==request.menuItemId&&it.active}?:return@mapNotNull null
      Triple(rule,request,gift)
     }
-   val chosen=if(voucher==null)candidates.maxByOrNull{it.second.quantity.toLong()*it.third.price} else null
+   // A kitchen-issued gift locks the session to its first promotion.
+   // Never stack a second campaign in later batches.
+   val chosen=if(voucher==null)candidates
+    .filter{existingPromotionIds.isEmpty()||it.first.id==existingPromotionIds.first()}
+    .maxByOrNull{it.second.quantity.toLong()*it.third.price} else null
    if(chosen!=null){
     val(rule,request,gift)=chosen
     its.add(OrderItemEntity(id="",batchId="",menuItemId=gift.id,itemNameSnapshot="🎁 ${gift.name}",unitPriceSnapshot=gift.price,qty=request.quantity,note="QUÀ TẶNG · ${rule.name}",buyGetPromotionId=rule.id,buyGetLabel=rule.name))

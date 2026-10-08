@@ -36,7 +36,7 @@ object BuyGetPolicy {
             else minOf(qty.toInt(), giftLines.sumOf { it.quantity.coerceAtLeast(0) })
         if (giftQty <= 0) return null
         if (giftPrice > Long.MAX_VALUE / giftQty) return null
-        return BuyGetAward(rule.id, rule.giftMenuItemId, giftQty, giftPrice * giftQty))
+        return BuyGetAward(rule.id, rule.giftMenuItemId, giftQty, giftPrice * giftQty)
     }
 
     fun best(

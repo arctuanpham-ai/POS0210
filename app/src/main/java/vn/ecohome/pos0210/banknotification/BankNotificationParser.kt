@@ -51,10 +51,27 @@ class VietinbankNotificationParser:BankNotificationParser {
  }
 }
 
+class TechcombankNotificationParser:BankNotificationParser {
+ override fun parse(title:String,body:String,receivedAt:Long):BankTransaction? {
+  val full="$title\n$body"
+  val credit=Regex("(?:\\b(?:tang|tăng|nhận|nhan|credited|credit|ghi có|bien dong so du|biến động số dư)\\b|\\+\\s*[\\d.,]+\\s*(?:vnd|đ))",RegexOption.IGNORE_CASE).containsMatchIn(full)
+  val debit=Regex("(?:\\b(?:trừ|tru|thanh toán|chuyển đi|ghi nợ|debited|debit)\\b|\\-\\s*[\\d.,]+\\s*(?:vnd|đ))",RegexOption.IGNORE_CASE).containsMatchIn(full)
+  if(!credit||debit)return null
+  val amountRaw=Regex("(?:\\+\\s*|(?:số tiền|so tien|giao dịch|giao dich|nhận|nhan|amount)\\s*[:+]\\s*)([\\d.,]+)\\s*(?:vnd|vnđ|đ|dong|đồng)",RegexOption.IGNORE_CASE).find(full)?.groupValues?.get(1)
+   ?:Regex("([\\d.,]+)\\s*(?:vnd|vnđ|đ|đồng)",RegexOption.IGNORE_CASE).find(full)?.groupValues?.get(1)
+   ?:return null
+  val amount=digitsAmount(amountRaw)?.takeIf{it>0L}?:return null
+  val account=Regex("(?:TK|tài khoản|tai khoan|account)\\s*[:#]?\\s*([*xX\\d]{4,20})",RegexOption.IGNORE_CASE).find(full)?.groupValues?.get(1).orEmpty()
+  val reference=Regex("(?:mã giao dịch|ma giao dich|ref|trace)\\s*[:#]?\\s*([A-Z0-9]+)",RegexOption.IGNORE_CASE).find(full)?.groupValues?.get(1)
+  return BankTransaction("TECHCOMBANK",account,amount,TransactionDirection.CREDIT,null,receivedAt,body.take(1000),reference,fingerprint("TECHCOMBANK",account,amount,null,reference,body))
+ }
+}
+
 object BankParserRegistry {
  private val parsers=mapOf(
   "com.VCB" to VcbNotificationParser(),
-  "com.vietinbank.ipay" to VietinbankNotificationParser()
+  "com.vietinbank.ipay" to VietinbankNotificationParser(),
+  "vn.com.techcombank.bb.app" to TechcombankNotificationParser()
  )
  val supportedPackages:Set<String> get()=parsers.keys
  fun parser(packageName:String)=parsers[packageName]

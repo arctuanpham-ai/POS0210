@@ -1069,7 +1069,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    val adjustments=buildList{
     preview.surchargeRules.forEach{rule->add("PHỤ THU ${rule.name}  +${rule.percent}%")}
     preview.discountRule?.let{rule->add("ƯU ĐÃI ${rule.name}${if(rule.code.isNotBlank()) " · ${rule.code}" else ""}  -${rule.percent}%")}
-    preview.buyGetLabel?.let{label->add("ƯU ĐÃI $label  · quà tặng -${money(preview.buyGetDiscount)}")}
+    preview.buyGetLabel?.let{label->add("ƯU ĐÃI $label  · quà tặng -${java.text.NumberFormat.getNumberInstance(java.util.Locale("vi","VN")).format(preview.buyGetDiscount)+"đ"}")}
    }
    val profile=printerProfile()
    val bitmap=ReceiptRenderer.bill(table.name,period,lines,preview.subtotal,preview.surcharge,preview.discount,preview.total,adjustments,customerName.ifBlank{"KHÁCH LẠ"},null,0,0,0,"CHƯA XÁC NHẬN",qr,profile)
@@ -1171,7 +1171,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
      preview.discountRule?.let{rule->
       add("ƯU ĐÃI ${rule.name}${if(rule.code.isNotBlank()) " · ${rule.code}" else ""}  -${rule.percent}%")
      }
-     preview.buyGetLabel?.let{label->add("ƯU ĐÃI $label  · quà tặng -${money(preview.buyGetDiscount)}")}
+     preview.buyGetLabel?.let{label->add("ƯU ĐÃI $label  · quà tặng -${java.text.NumberFormat.getNumberInstance(java.util.Locale("vi","VN")).format(preview.buyGetDiscount)+"đ"}")}
     }
     val profile=printerProfile()
     val bmp=ReceiptRenderer.bill(

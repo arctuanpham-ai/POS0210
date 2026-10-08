@@ -96,7 +96,23 @@ class PosViewModel(app:Application):AndroidViewModel(app){
  repo.savePurchaseCategory(PurchaseCategoryEntity("pc_salary","Lương","ngày công",0,true))
  repo.savePurchaseCategory(PurchaseCategoryEntity("pc_fixed","Vật tư cố định","cái",1,true))
  repo.savePurchaseCategory(PurchaseCategoryEntity("pc_production","Vật tư sản xuất","kg",2,true));repo.saveArea(AreaEntity("inside","Trong nhà",0));repo.saveArea(AreaEntity("outside","Ngoài trời",1));(1..6).forEach{repo.saveTable(DiningTableEntity("t$it","inside","Bàn %02d".format(it),it))};(7..8).forEach{repo.saveTable(DiningTableEntity("t$it","outside","Bàn %02d".format(it),it))};listOf("Cà phê","Ăn sáng","Trà","Sinh tố","Khác").forEachIndexed{i,n->repo.saveCategory(MenuCategoryEntity("c$i",n,i))};listOf(MenuItemEntity("m1","c0","Đen đá",25000,productCode="CF-001"),MenuItemEntity("m2","c0","Nâu đá",30000,productCode="CF-002"),MenuItemEntity("m3","c0","Bạc xỉu",30000,productCode="CF-003"),MenuItemEntity("m4","c1","Bún gà",40000,productCode="AS-001"),MenuItemEntity("m5","c1","Đùi gà",55000,productCode="AS-002"),MenuItemEntity("m6","c1","Cánh gà",45000,productCode="AS-003"),MenuItemEntity("m7","c2","Trà mạn",25000,productCode="TR-001"),MenuItemEntity("m8","c2","Trà đào",35000,productCode="TR-002")).forEach{repo.saveMenuItem(it)};repo.saveEmployee(EmployeeEntity("e0","Tuấn",true,"0210","ADMIN",true,true,true,true,true,true,true));repo.saveEmployee(EmployeeEntity("e1","Hương",true,"1992","STAFF",true,true,true,true,false,false,false));repo.saveEmployee(EmployeeEntity("e2","Nam",true,"2000","STAFF",false,false,true,true,false,false,false))}
- fun checkIn(){ val e=currentEmployee.value?:return; viewModelScope.launch(Dispatchers.IO){ if(dao.openAttendance(e.id)!=null){printerMessage.value="BẠN ĐANG TRONG CA";return@launch}; val now=System.currentTimeMillis(); val rate=setting("hourly_rate_"+e.id).toLongOrNull()?:setting("hourly_rate_default").toLongOrNull()?:0L; val s=AttendanceSessionEntity(UUID.randomUUID().toString(),e.id,now,hourlyRate=rate); dao.insertAttendanceSession(s);myAttendance.value=s;refreshPayroll();dao.enqueueSync(SyncQueueEntity(UUID.randomUUID().toString(),"ATTENDANCE",s.id,"UPSERT","",now,now));audit("ATTENDANCE",s.id,"CHECK_IN","hourlyRate=$rate");printerMessage.value="ĐÃ CHECK-IN" } }
+ fun checkIn(){
+  val e=currentEmployee.value?:return
+  viewModelScope.launch(Dispatchers.IO){
+   if(dao.openAttendance(e.id)!=null){printerMessage.value="BẠN ĐANG TRONG CA";return@launch}
+   val now=System.currentTimeMillis()
+   val defaultRate=PayrollSettings.hourlyRate(setting("hourly_rate_default"),0L)
+   val rate=PayrollSettings.hourlyRate(setting("hourly_rate_"+e.id),defaultRate)
+   val defaultMultiplier=PayrollSettings.multiplierBasisPoints(setting("attendance_multiplier_percent"))
+   val employeeMultiplier=setting("attendance_multiplier_percent_"+e.id).toIntOrNull()
+   val multiplier=if(employeeMultiplier in 50..300) employeeMultiplier*100 else defaultMultiplier
+   val s=AttendanceSessionEntity(UUID.randomUUID().toString(),e.id,now,hourlyRate=rate,multiplierBasisPoints=multiplier)
+   dao.insertAttendanceSession(s);myAttendance.value=s;refreshPayroll()
+   dao.enqueueSync(SyncQueueEntity(UUID.randomUUID().toString(),"ATTENDANCE",s.id,"UPSERT","",now,now))
+   audit("ATTENDANCE",s.id,"CHECK_IN","hourlyRate=$rate,multiplierBp=$multiplier")
+   printerMessage.value="ĐÃ CHECK-IN"
+  }
+ }
 fun checkOut(){ val e=currentEmployee.value?:return; viewModelScope.launch(Dispatchers.IO){ val s=dao.openAttendance(e.id)?:run{printerMessage.value="CHƯA CHECK-IN";return@launch}; val now=System.currentTimeMillis(); if(dao.closeAttendance(s.id,now)==1){myAttendance.value=null;refreshPayroll();dao.enqueueSync(SyncQueueEntity(UUID.randomUUID().toString(),"ATTENDANCE",s.id,"UPSERT","",now,now));audit("ATTENDANCE",s.id,"CHECK_OUT","minutes="+((now-s.checkInAt)/60000));printerMessage.value="ĐÃ CHECK-OUT · "+((now-s.checkInAt)/60000)+" PHÚT"} } }
 fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==null)authError.value="PIN không đúng" else{currentEmployee.value=e;myAttendance.value=dao.openAttendance(e.id);authError.value="";screen.value="TABLES";audit("AUTH",e.id,"LOGIN")}}};fun logout(){val e=currentEmployee.value;viewModelScope.launch{if(e!=null)audit("AUTH",e.id,"LOGOUT")};businessTestMode.value=false;checkoutPrintTestMode.value=false;printedCheckoutKey.value=null;currentEmployee.value=null;screen.value="LOGIN"}
  private suspend fun audit(type:String,id:String,action:String,payload:String=""){dao.audit(AuditEventEntity(UUID.randomUUID().toString(),type,id,action,currentEmployee.value?.id,"ANDROID",System.currentTimeMillis(),payload))}
@@ -393,6 +409,34 @@ fun saveLoyaltyConfig(auto:Boolean,memberDiscount:Int,vipPoints:Int,vipDiscount:
    autoBackup();autoMasterConfig()
   }
  }
+fun savePayrollConfig(defaultRateText:String,defaultMultiplierText:String,employeeRates:Map<String,String>,employeeMultipliers:Map<String,String>){
+ val e=currentEmployee.value?:return
+ if(e.role!="ADMIN"&&e.role!="MANAGER"){viewModelScope.launch{audit("SECURITY","PAYROLL_CONFIG","DENIED","role=${e.role}")};return}
+ val defaultRate=defaultRateText.trim().toLongOrNull()
+ if(defaultRate !in 1_000L..1_000_000L){printerMessage.value="ĐƠN GIÁ GIỜ MẶC ĐỊNH PHẢI TỪ 1.000Đ ĐẾN 1.000.000Đ";return}
+ val defaultMultiplier=defaultMultiplierText.trim().toIntOrNull()
+ if(defaultMultiplier !in 50..300){printerMessage.value="HỆ SỐ MẶC ĐỊNH PHẢI TỪ 50% ĐẾN 300%";return}
+ val allowedEmployees=employees.value.map{it.id}.toSet()
+ if(employeeRates.any{(id,value)->id !in allowedEmployees||(value.isNotBlank()&&value.trim().toLongOrNull() !in 1_000L..1_000_000L)}){
+  printerMessage.value="ĐƠN GIÁ RIÊNG KHÔNG HỢP LỆ";return
+ }
+ if(employeeMultipliers.any{(id,value)->id !in allowedEmployees||(value.isNotBlank()&&value.trim().toIntOrNull() !in 50..300)}){
+  printerMessage.value="HỆ SỐ RIÊNG KHÔNG HỢP LỆ";return
+ }
+ viewModelScope.launch(Dispatchers.IO){
+  db.withTransaction{
+   dao.saveSetting(AppSettingEntity("hourly_rate_default",defaultRate.toString()))
+   dao.saveSetting(AppSettingEntity("attendance_multiplier_percent",defaultMultiplier.toString()))
+   allowedEmployees.forEach{id->
+    dao.saveSetting(AppSettingEntity("hourly_rate_"+id,employeeRates[id].orEmpty().trim()))
+    dao.saveSetting(AppSettingEntity("attendance_multiplier_percent_"+id,employeeMultipliers[id].orEmpty().trim()))
+   }
+  }
+  audit("PAYROLL","CONFIG","SAVE","defaultRate=$defaultRate,defaultMultiplier=$defaultMultiplier,operator=${e.id}")
+  autoBackup();autoMasterConfig()
+  printerMessage.value="ĐÃ LƯU THÔNG SỐ CHẤM CÔNG / LƯƠNG"
+ }
+}
 fun saveSetting(key:String,value:String){
  val e=currentEmployee.value?:return
  val allowed=when(key){

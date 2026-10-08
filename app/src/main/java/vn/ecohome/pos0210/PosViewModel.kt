@@ -773,10 +773,10 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    val item=menu.value.firstOrNull{it.id==menuItemId&&it.active}
    val cap=reward?.let{VoucherPolicy.cap(it.rewardSnapshot)}
    if(reward==null||cap==null||item==null||!VoucherPolicy.canRedeem(item.price,cap,false)){voucherMessage.value="VOUCHER KHÔNG HỢP LỆ HOẶC MÓN VƯỢT HẠN MỨC";return@launch}
-   selectedVoucher.value=reward;voucherMessage.value="ĐÃ CHỌN "+VoucherPolicy.code(reward.id)+" · "+item.name+" miễn phí"
+   selectedVoucher.value=reward;selectedVoucherItemId.value=item.id;voucherMessage.value="ĐÃ CHỌN "+VoucherPolicy.code(reward.id)+" · "+item.name+" miễn phí"
   }
  }
- fun clearSelectedVoucher(){selectedVoucher.value=null;voucherMessage.value=""}
+ fun clearSelectedVoucher(){selectedVoucher.value=null;selectedVoucherItemId.value=null;voucherMessage.value=""}
  fun sendBatch(){
   val e=currentEmployee.value?:return
   val t=currentTable.value?:return

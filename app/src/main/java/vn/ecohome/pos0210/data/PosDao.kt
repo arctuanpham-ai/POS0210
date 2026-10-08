@@ -4,13 +4,15 @@ import kotlinx.coroutines.flow.Flow
 data class TableServiceTimingRow(val sessionId:String,val firstOrderAt:Long?,val lastOrderSentAt:Long?,val sentBatchCount:Int,val waitingBatchCount:Int)
 @Dao interface PosDao{
 @Insert(onConflict=OnConflictStrategy.ABORT) suspend fun insertAttendanceSession(v:AttendanceSessionEntity)
-@Query("SELECT * FROM AttendanceSessionEntity WHERE employeeId=:employeeId AND status='OPEN' ORDER BY checkInAt DESC LIMIT 1") suspend fun openAttendance(employeeId:String):AttendanceSessionEntity?
-@Query("SELECT * FROM AttendanceSessionEntity WHERE status='OPEN' ORDER BY checkInAt") fun openAttendances():Flow<List<AttendanceSessionEntity>>
-@Query("SELECT * FROM AttendanceSessionEntity WHERE employeeId=:employeeId ORDER BY checkInAt DESC") fun attendanceHistory(employeeId:String):Flow<List<AttendanceSessionEntity>>
-@Query("SELECT * FROM AttendanceSessionEntity WHERE checkInAt<:endAt AND COALESCE(checkOutAt,:now)>:startAt ORDER BY employeeId,checkInAt") suspend fun attendanceBetween(startAt:Long,endAt:Long,now:Long):List<AttendanceSessionEntity>
+@Insert(onConflict=OnConflictStrategy.ABORT) suspend fun insertAttendanceSessions(v:List<AttendanceSessionEntity>)
+@Query("SELECT * FROM AttendanceSessionEntity WHERE employeeId=:employeeId AND status='OPEN' AND dataScope='LIVE' ORDER BY checkInAt DESC LIMIT 1") suspend fun openAttendance(employeeId:String):AttendanceSessionEntity?
+@Query("SELECT * FROM AttendanceSessionEntity WHERE status='OPEN' AND dataScope='LIVE' ORDER BY checkInAt") fun openAttendances():Flow<List<AttendanceSessionEntity>>
+@Query("SELECT * FROM AttendanceSessionEntity WHERE employeeId=:employeeId AND dataScope='LIVE' ORDER BY checkInAt DESC") fun attendanceHistory(employeeId:String):Flow<List<AttendanceSessionEntity>>
+@Query("SELECT * FROM AttendanceSessionEntity WHERE checkInAt<:endAt AND COALESCE(checkOutAt,:now)>:startAt AND dataScope=:dataScope ORDER BY employeeId,checkInAt") suspend fun attendanceBetween(startAt:Long,endAt:Long,now:Long,dataScope:String="LIVE"):List<AttendanceSessionEntity>
 @Query("SELECT * FROM AttendanceSessionEntity WHERE id=:id LIMIT 1") suspend fun attendanceById(id:String):AttendanceSessionEntity?
-@Query("UPDATE AttendanceSessionEntity SET checkInAt=:checkInAt,checkOutAt=:checkOutAt,status=:status,note=:note,updatedAt=:updatedAt WHERE id=:id") suspend fun correctAttendance(id:String,checkInAt:Long,checkOutAt:Long?,status:String,note:String,updatedAt:Long):Int
-@Query("UPDATE AttendanceSessionEntity SET checkOutAt=:at,status='CLOSED',updatedAt=:at WHERE id=:id AND status='OPEN'") suspend fun closeAttendance(id:String,at:Long):Int
+@Query("UPDATE AttendanceSessionEntity SET checkInAt=:checkInAt,checkOutAt=:checkOutAt,status=:status,note=:note,updatedAt=:updatedAt WHERE id=:id AND dataScope='LIVE'") suspend fun correctAttendance(id:String,checkInAt:Long,checkOutAt:Long?,status:String,note:String,updatedAt:Long):Int
+@Query("UPDATE AttendanceSessionEntity SET checkOutAt=:at,status='CLOSED',updatedAt=:at WHERE id=:id AND status='OPEN' AND dataScope='LIVE'") suspend fun closeAttendance(id:String,at:Long):Int
+@Query("DELETE FROM AttendanceSessionEntity WHERE dataScope=\'TEST\'") suspend fun deleteTestAttendances():Int
 
 @Query("SELECT * FROM AreaEntity WHERE active=1 ORDER BY sortOrder,name") fun areas():Flow<List<AreaEntity>>
 @Query("SELECT * FROM DiningTableEntity WHERE active=1 ORDER BY sortOrder,name") fun tables():Flow<List<DiningTableEntity>>

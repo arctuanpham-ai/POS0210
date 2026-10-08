@@ -107,6 +107,7 @@ object FirebaseCloudSync {
         writeMaps(fs,root.collection("menuCategories"),categoryUpdates.map{v->v.id to mapOf("id" to v.id,"name" to v.name,"sortOrder" to v.sortOrder,"active" to v.active,"updatedAt" to now)})
         writeMaps(fs,root.collection("menu"),itemUpdates.map{v->v.id to mapOf("id" to v.id,"categoryId" to v.categoryId,"name" to v.name,"price" to v.price,"sortOrder" to v.sortOrder,"active" to v.active,"productCode" to v.productCode,"description" to v.description,"updatedAt" to now)})
         root.collection("config").document("menuVersion").set(mapOf("updatedAt" to now,"publisherUid" to uid,"itemCount" to items.size,"categoryCount" to categories.size)).await()
+        Unit
     }}
 
     suspend fun syncNow(context:Context):Result<Unit> = CloudOperationGuard.mutex.withLock { runCatching{

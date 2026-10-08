@@ -114,6 +114,7 @@ WHERE s.status='OPEN' GROUP BY s.id""") fun tableServiceTimings():Flow<List<Tabl
 @Query("SELECT * FROM OpeningCashAdjustmentEntity ORDER BY changedAt DESC") fun openingCashAdjustments():Flow<List<OpeningCashAdjustmentEntity>>
 @Query("SELECT * FROM PrintJobEntity ORDER BY createdAt DESC") fun printJobs():Flow<List<PrintJobEntity>>
 @Query("SELECT * FROM PrintJobEntity WHERE batchId=:batchId AND type=\'KITCHEN\' LIMIT 1") suspend fun kitchenPrintJob(batchId:String):PrintJobEntity?
+@Query("SELECT * FROM PrintJobEntity WHERE batchId=:rewardId AND type=\'VOUCHER\' LIMIT 1") suspend fun voucherPrintJob(rewardId:String):PrintJobEntity?
 @Query("SELECT * FROM AuditEventEntity ORDER BY occurredAt DESC LIMIT 500") fun audits():Flow<List<AuditEventEntity>>
 @Query("SELECT * FROM AppSettingEntity") fun settings():Flow<List<AppSettingEntity>>
 @Query("SELECT * FROM CloudSyncStateEntity WHERE id='firebase' LIMIT 1") fun cloudSyncState():Flow<CloudSyncStateEntity?>

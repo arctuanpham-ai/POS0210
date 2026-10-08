@@ -17,6 +17,9 @@ data class BuyGetRule(
 data class BuyGetLine(val menuItemId: String, val quantity: Int, val unitPrice: Long)
 data class BuyGetAward(val ruleId: String, val menuItemId: String, val quantity: Int, val discount: Long)
 
+/** A new gift line required for a different-item promotion. */
+data class BuyGetGiftRequest(val ruleId: String, val menuItemId: String, val quantity: Int)
+
 /** A single best discount per order; no stacking with coupons or tier discounts. */
 object BuyGetPolicy {
     /** Reject incomplete or self-contradictory campaigns before saving locally or syncing. */
@@ -26,6 +29,28 @@ object BuyGetPolicy {
         rule.giftMenuItemId.isNotBlank() &&
         rule.buyQuantity in 1..1000 &&
         rule.giftQuantity in 1..1000
+
+    /**
+     * Returns only the gift quantity still missing from an order.
+     * existingGiftQuantity must contain previously generated gift lines for this rule,
+     * not manually ordered items, so recalculation is idempotent.
+     */
+    fun giftToAdd(
+        rule: BuyGetRule,
+        purchasedQuantity: Int,
+        existingGiftQuantity: Int
+    ): BuyGetGiftRequest? {
+        if (!rule.active || !isValid(rule) || rule.buyMenuItemId == rule.giftMenuItemId) return null
+        val purchased = purchasedQuantity.coerceAtLeast(0)
+        val existing = existingGiftQuantity.coerceAtLeast(0)
+        val groups = if (rule.repeat) purchased / rule.buyQuantity
+        else if (purchased >= rule.buyQuantity) 1 else 0
+        if (groups <= 0) return null
+        val desired = groups.toLong() * rule.giftQuantity
+        if (desired > Int.MAX_VALUE) return null
+        val missing = desired.toInt() - existing
+        return if (missing > 0) BuyGetGiftRequest(rule.id, rule.giftMenuItemId, missing) else null
+    }
 
     fun awards(rule: BuyGetRule, lines: List<BuyGetLine>): BuyGetAward? {
         if (!rule.active || !isValid(rule)) return null

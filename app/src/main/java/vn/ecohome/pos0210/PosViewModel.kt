@@ -439,13 +439,14 @@ fun saveLoyaltyCampaign(campaign:LoyaltyCampaignEntity){
  if(e.role!="ADMIN"){viewModelScope.launch{audit("SECURITY","LOYALTY_CAMPAIGN","DENIED","role=${e.role}")};return}
  if(!LoyaltyCampaignPolicy.isValid(campaign.triggerType,campaign.threshold,campaign.expiresDays)){printerMessage.value="ĐIỀU KIỆN TÍCH LŨY HOẶC HẠN QUÀ KHÔNG HỢP LỆ";return}
  val reward=campaign.rewardMenuItemId?.let{id->menu.value.firstOrNull{it.id==id&&it.active}}
- if(campaign.rewardType!="MENU_ITEM"||reward==null){printerMessage.value="HÃY CHỌN MÓN QUÀ ĐANG BẬT TRONG MENU";return}
+ val voucher=campaign.rewardType=="VOUCHER"&&campaign.rewardValue>0
+ if(!voucher&&(campaign.rewardType!="MENU_ITEM"||reward==null)){printerMessage.value="HÃY NHẬP GIÁ TRỊ VOUCHER HOẶC CHỌN MÓN QUÀ ĐANG BẬT";return}
  viewModelScope.launch(Dispatchers.IO){
   val now=System.currentTimeMillis()
-  val fixed=campaign.copy(name=campaign.name.trim(),rewardMenuItemId=reward.id,updatedAt=now,createdAt=if(campaign.createdAt<=0)now else campaign.createdAt)
+  val fixed=campaign.copy(name=campaign.name.trim(),rewardMenuItemId=if(voucher)null else reward!!.id,updatedAt=now,createdAt=if(campaign.createdAt<=0)now else campaign.createdAt)
   dao.upsertLoyaltyCampaign(fixed)
   dao.enqueueSync(SyncQueueEntity(UUID.randomUUID().toString(),"LOYALTY_CAMPAIGN",fixed.id,"UPSERT","",now,now))
-  audit("LOYALTY",fixed.id,"CAMPAIGN_SAVE","trigger=${fixed.triggerType},threshold=${fixed.threshold},reward=${reward.id},active=${fixed.active}")
+  audit("LOYALTY",fixed.id,"CAMPAIGN_SAVE","trigger=${fixed.triggerType},threshold=${fixed.threshold},reward="+(if(voucher) "VOUCHER:"+fixed.rewardValue else reward!!.id)+",active=${fixed.active}")
   autoBackup();autoMasterConfig()
   printerMessage.value="ĐÃ LƯU CHƯƠNG TRÌNH TÍCH LŨY"
  }

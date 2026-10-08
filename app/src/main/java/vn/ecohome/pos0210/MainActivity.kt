@@ -382,9 +382,13 @@ fun Order(vm: PosViewModel, t: DiningTableEntity) {
     if(voucherDialog){
         var voucherCode by remember { mutableStateOf("") }
         AlertDialog(onDismissRequest={voucherDialog=false},title={Text("Đổi voucher 0210")},text={Column(Modifier.verticalScroll(rememberScrollState())){
-            Text("Nhập mã trên phiếu, sau đó chọn đúng một món trong hạn mức.",fontSize=12.sp)
-            OutlinedTextField(voucherCode,{voucherCode=it.uppercase().take(20)},Modifier.fillMaxWidth(),label={Text("Ví dụ: 0210-A1B2C3")},singleLine=true)
-            ms.filter{it.active}.forEach{item->TextButton({vm.selectVoucher(voucherCode,item.id);voucherDialog=false},Modifier.fillMaxWidth(),enabled=voucherCode.length>=6){Text(item.name+" · "+money(item.price),Modifier.fillMaxWidth())}}
+            Text("Voucher được phát hành sau khi thanh toán bill LIVE đủ điều kiện tích lũy và có số điện thoại khách. Mã nằm trên phiếu in từ máy in bill.",fontSize=12.sp)
+            Text("Bước 1 · Nhập mã và kiểm tra hạn mức. Bước 2 · Chọn 01 món không vượt hạn mức.",fontSize=12.sp)
+            OutlinedTextField(voucherCode,{voucherCode=it.uppercase().take(20)},Modifier.fillMaxWidth(),label={Text("Mã trên phiếu · 0210-A1B2C3")},singleLine=true)
+            TextButton(onClick={vm.lookupVoucher(voucherCode)},enabled=voucherCode.trim().length>=6){Text("KIỂM TRA MÃ VOUCHER")}
+            if(voucherMessage.isNotBlank())Text(voucherMessage,fontSize=12.sp,color=Coffee)
+            Text("CHỌN MÓN ĐỔI QUÀ",fontWeight=FontWeight.Bold,fontSize=12.sp)
+            ms.filter{it.active}.forEach{item->TextButton({vm.selectVoucher(voucherCode,item.id);voucherDialog=false},Modifier.fillMaxWidth(),enabled=voucherCode.trim().length>=6){Text(item.name+" · "+money(item.price),Modifier.fillMaxWidth())}}
         }},confirmButton={TextButton({voucherDialog=false}){Text("ĐÓNG")}})
     }
     if(voucherMessage.isNotBlank())Text(voucherMessage,Modifier.padding(horizontal=14.dp,vertical=2.dp),fontSize=11.sp,fontWeight=FontWeight.Bold,color=Coffee)

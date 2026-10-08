@@ -16,6 +16,13 @@ class HolidayMultiplierTest {
         assertEquals(10_000, HolidayMultiplier.basisPoints("abc"))
     }
 
+    @Test fun toggles_multiple_calendar_dates_without_losing_previous_selection() {
+        val selected = HolidayCalendarSelection.toggle(emptySet(), "2026-10-10")
+        val withSecond = HolidayCalendarSelection.toggle(selected, "2026-10-11")
+        assertEquals(setOf("2026-10-10", "2026-10-11"), withSecond)
+        assertEquals(setOf("2026-10-11"), HolidayCalendarSelection.toggle(withSecond, "2026-10-10"))
+    }
+
     @Test fun uses_a_date_scoped_setting_key() {
         assertEquals(
             "attendance_date_multiplier_2026-10-10",

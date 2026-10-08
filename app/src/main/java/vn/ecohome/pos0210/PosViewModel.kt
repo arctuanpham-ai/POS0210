@@ -768,6 +768,15 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    audit("ACCOUNTING","PAYER_ALIAS","MERGE","${oldName.trim()}->${newName.trim()},purchases=$purchasesChanged,reimbursements=$reimbursementsChanged");autoBackup()
   }
  }
+ fun lookupVoucher(code:String){
+  viewModelScope.launch(Dispatchers.IO){
+   val normalized=code.trim().uppercase()
+   if(!normalized.matches(Regex("(0210-)?[A-Z0-9]{6}"))){voucherMessage.value="NHẬP ĐÚNG MÃ VOUCHER 0210-XXXXXX";return@launch}
+   val reward=dao.availableVoucherBySuffix(normalized.removePrefix("0210-"),System.currentTimeMillis())
+   val cap=reward?.let{VoucherPolicy.cap(it.rewardSnapshot)}
+   voucherMessage.value=if(cap!=null)"VOUCHER HỢP LỆ · HẠN MỨC "+java.text.NumberFormat.getNumberInstance(Locale("vi","VN")).format(cap)+"đ · CHỌN 01 MÓN" else "MÃ KHÔNG TỒN TẠI, ĐÃ DÙNG HOẶC HẾT HẠN"
+  }
+ }
  fun selectVoucher(code:String,menuItemId:String){
   val e=currentEmployee.value?:return
   viewModelScope.launch(Dispatchers.IO){

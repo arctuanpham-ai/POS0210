@@ -72,6 +72,8 @@ WHERE s.status='OPEN' GROUP BY s.id""") fun tableServiceTimings():Flow<List<Tabl
 @Query("SELECT * FROM PricingRuleEntity ORDER BY name") fun pricingRules():Flow<List<PricingRuleEntity>>
  @Query("SELECT * FROM BuyGetPromotionEntity ORDER BY name") fun buyGetPromotions():Flow<List<BuyGetPromotionEntity>>
  @Query("SELECT * FROM BuyGetPromotionEntity WHERE active=1") suspend fun activeBuyGetPromotionsSnapshot():List<BuyGetPromotionEntity>
+ @Query("SELECT * FROM BuyGetPromotionEntity ORDER BY name") suspend fun allBuyGetPromotionsSnapshot():List<BuyGetPromotionEntity>
+ @Query("UPDATE BuyGetPromotionEntity SET active=0") suspend fun deactivateAllBuyGetPromotions()
  @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun saveBuyGetPromotion(v:BuyGetPromotionEntity)
  @Query("UPDATE BuyGetPromotionEntity SET active=:active,updatedAt=:updatedAt WHERE id=:id") suspend fun setBuyGetPromotionActive(id:String,active:Boolean,updatedAt:Long)
 @Query("SELECT * FROM PricingRuleEntity WHERE active=1") suspend fun activePricingRulesSnapshot():List<PricingRuleEntity>

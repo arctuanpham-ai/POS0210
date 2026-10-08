@@ -2,6 +2,9 @@ package vn.ecohome.pos0210.data
 
 import android.content.Context
 import android.net.Uri
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import java.io.ByteArrayOutputStream
 import android.webkit.MimeTypeMap
 import java.io.File
 import java.util.UUID
@@ -22,18 +25,31 @@ object ManagedMedia {
         }
 
         val dir = File(context.filesDir, "managed_media").apply { mkdirs() }
-        val ext = runCatching {
-            context.contentResolver.getType(uri)
-                ?.let { MimeTypeMap.getSingleton().getExtensionFromMimeType(it) }
-        }.getOrNull()
-            ?: uri.lastPathSegment?.substringAfterLast('.', "")?.takeIf { it.length in 2..5 }
-            ?: "jpg"
-
-        val out = File(dir, prefix + "_" + UUID.randomUUID().toString() + "." + ext)
-        context.contentResolver.openInputStream(uri).use { input ->
-            requireNotNull(input) { "Không đọc được ảnh nguồn" }
-            out.outputStream().use { output -> input.copyTo(output) }
-        }
+        val out = File(dir, prefix + "_" + UUID.randomUUID().toString() + ".jpg")
+        val source=context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            ?:error("Không đọc được ảnh nguồn")
+        val bounds=BitmapFactory.Options().apply{inJustDecodeBounds=true}
+        BitmapFactory.decodeByteArray(source,0,source.size,bounds)
+        require(bounds.outWidth>0 && bounds.outHeight>0){"Ảnh không hợp lệ"}
+        var sample=1
+        while(maxOf(bounds.outWidth,bounds.outHeight)/sample>1280)sample*=2
+        val options=BitmapFactory.Options().apply{inSampleSize=sample;inPreferredConfig=Bitmap.Config.RGB_565}
+        val decoded=BitmapFactory.decodeByteArray(source,0,source.size,options)?:error("Không giải mã được ảnh")
+        try{
+            val scale=minOf(1f,1280f/maxOf(decoded.width,decoded.height))
+            val scaled=if(scale<1f)Bitmap.createScaledBitmap(decoded,(decoded.width*scale).toInt().coerceAtLeast(1),(decoded.height*scale).toInt().coerceAtLeast(1),true) else decoded
+            try{
+                var output=ByteArray(0)
+                for(q in listOf(85,78,70,60,48,35)){
+                    val stream=ByteArrayOutputStream()
+                    scaled.compress(Bitmap.CompressFormat.JPEG,q,stream)
+                    output=stream.toByteArray()
+                    if(output.size<=300_000)break
+                }
+                require(output.size<=450_000){"Ảnh quá phức tạp để nén"}
+                out.writeBytes(output)
+            }finally{if(scaled!==decoded)scaled.recycle()}
+        }finally{decoded.recycle()}
         return Uri.fromFile(out).toString()
     }
 

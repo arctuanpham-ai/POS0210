@@ -1175,7 +1175,7 @@ fun Manage(vm: PosViewModel) {
                 Rowx("Nhân viên", "Thêm · khóa · phân quyền") { vm.screen.value = "EMP" }
                 Rowx("Chấm công & Bảng lương", "Giờ vào/ra · tổng giờ · lương theo tháng") { vm.screen.value = "PAYROLL" }
             }
-            if (employee != null && employee.role != "ADMIN") {
+            if (employee?.role != null && employee?.role != "ADMIN") {
                 Rowx("Bảng công & lương của tôi", "Xem giờ làm và tiền lương cá nhân · chỉ đọc") { vm.screen.value = "PAYROLL" }
             }
             if (employee?.role == "ADMIN" || employee?.canManageSystem == true) {

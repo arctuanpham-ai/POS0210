@@ -613,7 +613,9 @@ private fun calculatePricing(subtotal: Long, rules: List<PricingRuleEntity>, ent
     val bestDiscount = discountCandidates.maxByOrNull { afterSurcharge * it.percent / 100L }
     val ruleDiscount = bestDiscount?.let { afterSurcharge * it.percent / 100L } ?: 0L
     val safeBuyGetDiscount = buyGetDiscount.coerceIn(0L, afterSurcharge)
-    val useBuyGet = safeBuyGetDiscount > 0L
+    // Compare competing discounts; never silently replace a better percentage offer.
+    // Voucher selection is explicit and is handled separately by its caller.
+    val useBuyGet = safeBuyGetDiscount > 0L && safeBuyGetDiscount >= ruleDiscount
     val discount = if (useBuyGet) safeBuyGetDiscount else ruleDiscount
     val appliedRule = if (useBuyGet) null else bestDiscount
     val total = (afterSurcharge - discount).coerceAtLeast(0L)

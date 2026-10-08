@@ -803,6 +803,10 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
     }
    }
    val now=System.currentTimeMillis()
+   val voucher=selectedVoucher.value
+   val voucherItem=selectedVoucherItemId.value?.let{id->menu.value.firstOrNull{it.id==id&&it.active}}
+   val voucherCap=voucher?.let{VoucherPolicy.cap(it.rewardSnapshot)}
+   if(voucher!=null&&(voucherItem==null||voucherCap==null||!VoucherPolicy.canRedeem(voucherItem.price,voucherCap,false))){printerMessage.value="VOUCHER KHÔNG CÒN HỢP LỆ · CHỌN LẠI";clearSelectedVoucher();return@launch}
    val existingPromotionIds=historical.mapNotNull{it.buyGetPromotionId}.toSet()
    val candidates=dao.activeBuyGetPromotionsSnapshot()
     .filter{(it.startAt==null||now>=it.startAt)&&(it.endAt==null||now<=it.endAt)}
@@ -815,13 +819,16 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
      val gift=menu.value.firstOrNull{it.id==request.menuItemId&&it.active}?:return@mapNotNull null
      Triple(rule,request,gift)
     }
-   val chosen=candidates.maxByOrNull{it.second.quantity.toLong()*it.third.price}
+   val chosen=if(voucher==null)candidates.maxByOrNull{it.second.quantity.toLong()*it.third.price} else null
    if(chosen!=null){
     val(rule,request,gift)=chosen
     its.add(OrderItemEntity(id="",batchId="",menuItemId=gift.id,itemNameSnapshot="🎁 ${gift.name}",unitPriceSnapshot=gift.price,qty=request.quantity,note="QUÀ TẶNG · ${rule.name}",buyGetPromotionId=rule.id,buyGetLabel=rule.name))
    }
-   repo.createBatch(s.id,bs.size+1,e.id,its)
-   cart.value=emptyMap();cartNotes.value=emptyMap()
+   if(voucher!=null&&voucherItem!=null){its.add(OrderItemEntity(id="",batchId="",menuItemId=voucherItem.id,itemNameSnapshot="🎁 "+voucherItem.name,unitPriceSnapshot=voucherItem.price,qty=1,note="VOUCHER "+VoucherPolicy.code(voucher.id),loyaltyRewardId=voucher.id,loyaltyLabel="Voucher 0210"))}
+   val created=repo.createBatch(s.id,bs.size+1,e.id,its)
+   if(voucher!=null&&dao.redeemReward(voucher.id,created.id,now)!=1){dao.cancelBatch(created.id);printerMessage.value="VOUCHER ĐÃ ĐƯỢC DÙNG Ở THIẾT BỊ KHÁC";clearSelectedVoucher();return@launch}
+   if(voucher!=null)audit("LOYALTY",voucher.id,"VOUCHER_REDEEMED","batch="+created.id+",item="+voucherItem!!.id)
+   cart.value=emptyMap();cartNotes.value=emptyMap();clearSelectedVoucher()
    autoBackup()
    screen.value="SENT"
   }

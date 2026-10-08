@@ -29,7 +29,7 @@ class PosRepository(private val db:PosDatabase){
         val points=dao.pointBalanceForCustomer(customerId).toLong()
         val earned=mutableListOf<CustomerRewardEntity>()
         db.withTransaction {
-            dao.activeLoyaltyCampaignsSnapshot().forEach { campaign ->
+            dao.activeLoyaltyCampaignsSnapshot().filter { it.rewardType=="BILL_DISCOUNT" }.forEach { campaign ->
                 if(campaign.threshold<=0)return@forEach
                 val progress=when(campaign.triggerType){"BILL_COUNT"->visits;"SPEND"->spend;"POINTS"->points;else->0L}
                 val issued=dao.issuedRewardCount(customerId,campaign.id)

@@ -1221,7 +1221,9 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
      customerName=customerName,
      autoTier=setting("loyalty_auto_tier").ifBlank{"true"}.toBoolean(),
      vipMinPoints=setting("vip_min_points").toIntOrNull() ?: 200,
-     vvipMinPoints=setting("vvip_min_points").toIntOrNull() ?: 500
+     vvipMinPoints=setting("vvip_min_points").toIntOrNull() ?: 500,
+     loyaltyRewardId=loyaltyRewardId,
+     pointUnitVnd=setting("loyalty_vnd_per_point").toLongOrNull() ?: 10000L
     )
    }.getOrElse { err ->
     printerMessage.value=when(err.message){

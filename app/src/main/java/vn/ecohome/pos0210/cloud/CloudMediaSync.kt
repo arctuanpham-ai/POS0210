@@ -10,7 +10,7 @@ import vn.ecohome.pos0210.data.PosDatabase
 import java.io.File
 import java.security.MessageDigest
 
-data class CloudMediaResult(val uploaded:Int=0,val downloaded:Int=0,val skipped:Int=0,val errors:Int=0)
+data class CloudMediaResult(val uploaded:Int=0,val downloaded:Int=0,val skipped:Int=0,val errors:Int=0,val firstError:String?=null)
 
 object CloudMediaSync {
     private const val STORE_ID="0210"
@@ -45,7 +45,7 @@ object CloudMediaSync {
         val combos=dao.allCombosSnapshot().mapNotNull{m->m.imageUri?.takeIf(String::isNotBlank)?.let{Triple("combo",m.id,it)}}
         val manifest=fs.collection("users").document(uid).collection("stores").document(STORE_ID).collection("media")
         val storage=FirebaseStorage.getInstance(FirebaseCloudSync.firebaseApp(context,FirebaseCloudSync.config(context))).reference
-        var uploaded=0;var skipped=0;var errors=0
+        var uploaded=0;var skipped=0;var errors=0;var firstError:String?=null
         for((type,id,uri) in items+combos){
             runCatching {
                 val bytes=readLocal(context,uri)?:error("LOCAL_MEDIA_UNREADABLE")
@@ -58,9 +58,9 @@ object CloudMediaSync {
                 withTimeout(ITEM_TIMEOUT_MS){storage.child(cloudPath).putBytes(bytes).await()}
                 withTimeout(MANIFEST_TIMEOUT_MS){doc.set(mapOf("mediaId" to mediaId,"entityType" to type,"entityId" to id,"cloudPath" to cloudPath,"sha256" to hash,"bytes" to bytes.size,"version" to ((old.getLong("version")?:0L)+1L),"updatedAt" to System.currentTimeMillis())).await()}
                 uploaded++
-            }.onFailure{errors++}
+            }.onFailure{errors++;if(firstError==null)firstError=it.message?:it.javaClass.simpleName}
         }
-        return CloudMediaResult(uploaded=uploaded,skipped=skipped,errors=errors)
+        return CloudMediaResult(uploaded=uploaded,skipped=skipped,errors=errors,firstError=firstError)
     }
 
     suspend fun restoreMissing(context:Context,fs:FirebaseFirestore,uid:String):CloudMediaResult {
@@ -69,7 +69,7 @@ object CloudMediaSync {
         val app=FirebaseCloudSync.firebaseApp(context,FirebaseCloudSync.config(context))
         val storage=FirebaseStorage.getInstance(app).reference
         val dir=File(context.filesDir,"managed_media").apply{mkdirs()}
-        var downloaded=0;var skipped=0;var errors=0
+        var downloaded=0;var skipped=0;var errors=0;var firstError:String?=null
         for(doc in docs){
             runCatching {
                 val type=doc.getString("entityType")?:return@runCatching
@@ -93,6 +93,6 @@ object CloudMediaSync {
                 when(type){"menu"->dao.updateMenuImage(id,localUri);"combo"->dao.updateComboImage(id,localUri)}
             }.onFailure{errors++}
         }
-        return CloudMediaResult(downloaded=downloaded,skipped=skipped,errors=errors)
+        return CloudMediaResult(downloaded=downloaded,skipped=skipped,errors=errors,firstError=firstError)
     }
 }

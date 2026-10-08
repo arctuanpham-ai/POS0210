@@ -164,6 +164,10 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
   val root=setting("storage_root_uri")
   if(root.isNotBlank()&&setting("storage_write_enabled")!="false") DataBackup.backupMediaLatest(getApplication(),root)
  }
+ private suspend fun queueCatalogChange(type:String,id:String){
+  val now=System.currentTimeMillis()
+  dao.enqueueSync(SyncQueueEntity(UUID.randomUUID().toString(),type,id,"UPSERT","",now,now))
+ }
  private suspend fun publishCatalogChange(){
   val result=FirebaseCloudSync.publishMenu(getApplication())
   result.onFailure{e->cloudMessage.value="Menu đã lưu trên máy · chưa đẩy Cloud: ${e.message}"}
@@ -337,14 +341,15 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
    audit("MENU",i.id,"IMAGE");autoBackup();autoBackupMedia();autoMasterConfig();publishCatalogChange()
   }
  }
- fun toggleMenu(i:MenuItemEntity){if(!canManageMenu())return;viewModelScope.launch{dao.setMenuActive(i.id,!i.active);audit("MENU",i.id,"ACTIVE",(!i.active).toString());autoBackup();autoMasterConfig();publishCatalogChange()}}
- fun deleteMenu(i:MenuItemEntity){if(!canManageMenu())return;viewModelScope.launch{dao.setMenuActive(i.id,false);audit("MENU",i.id,"DELETE_SOFT",i.name);autoBackup();autoMasterConfig();publishCatalogChange()}}
- fun addCategory(name:String){if(!canManageMenu()||name.isBlank())return;viewModelScope.launch{val id=UUID.randomUUID().toString();repo.saveCategory(MenuCategoryEntity(id,name.trim(),categories.value.size+1,true));audit("CATEGORY",id,"CREATE",name.trim());autoBackup();autoMasterConfig();publishCatalogChange()}}
+ fun toggleMenu(i:MenuItemEntity){if(!canManageMenu())return;viewModelScope.launch{dao.setMenuActive(i.id,!i.active);queueCatalogChange("MENU_ITEM",i.id);audit("MENU",i.id,"ACTIVE",(!i.active).toString());autoBackup();autoMasterConfig();publishCatalogChange()}}
+ fun deleteMenu(i:MenuItemEntity){if(!canManageMenu())return;viewModelScope.launch{dao.setMenuActive(i.id,false);queueCatalogChange("MENU_ITEM",i.id);audit("MENU",i.id,"DELETE_SOFT",i.name);autoBackup();autoMasterConfig();publishCatalogChange()}}
+ fun addCategory(name:String){if(!canManageMenu()||name.isBlank())return;viewModelScope.launch{val id=UUID.randomUUID().toString();repo.saveCategory(MenuCategoryEntity(id,name.trim(),categories.value.size+1,true));queueCatalogChange("MENU_CATEGORY",id);audit("CATEGORY",id,"CREATE",name.trim());autoBackup();autoMasterConfig();publishCatalogChange()}}
  fun deleteCategory(c:MenuCategoryEntity){
   if(!canManageMenu())return
   viewModelScope.launch{
    if(menu.value.any{it.active&&it.categoryId==c.id})return@launch
    dao.setCategoryActive(c.id,false)
+   queueCatalogChange("MENU_CATEGORY",c.id)
    audit("CATEGORY",c.id,"DELETE_SOFT",c.name)
    autoBackup();autoMasterConfig();publishCatalogChange()
   }

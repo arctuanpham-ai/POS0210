@@ -52,7 +52,7 @@ class PosViewModel(app:Application):AndroidViewModel(app){
    }
   }
  }val healthIssues=MutableStateFlow<List<String>>(emptyList());val healthMessage=MutableStateFlow("Chưa kiểm tra");val customerUpdateMessage=MutableStateFlow("");val cartNotes=MutableStateFlow<Map<String,String>>(emptyMap());val cart=MutableStateFlow<Map<String,Int>>(emptyMap());val currentTable=MutableStateFlow<DiningTableEntity?>(null);val currentSession=MutableStateFlow<TableSessionEntity?>(null);val currentEmployee=MutableStateFlow<EmployeeEntity?>(null);val authError=MutableStateFlow("");val screen=MutableStateFlow("LOGIN");val printerPreview=MutableStateFlow("");val printerMessage=MutableStateFlow("");val printedCheckoutKey=MutableStateFlow<String?>(null);val checkoutPrintTestMode=MutableStateFlow(false);val businessTestMode=MutableStateFlow(false)
- val selectedVoucher=MutableStateFlow<CustomerRewardEntity?>(null);val selectedVoucherItemId=MutableStateFlow<String?>(null);val voucherMessage=MutableStateFlow("")
+ val selectedVoucher=MutableStateFlow<CustomerRewardEntity?>(null);val selectedVoucherItemId=MutableStateFlow<String?>(null);val voucherMessage=MutableStateFlow("");val verifiedVoucher=MutableStateFlow<CustomerRewardEntity?>(null)
  val recentBankNotifications=dao.recentBankNotifications().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
  val assetCategories=dao.assetCategories().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
  val assets=dao.assets().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
@@ -771,24 +771,28 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
  fun lookupVoucher(code:String){
   viewModelScope.launch(Dispatchers.IO){
    val normalized=code.trim().uppercase()
+   verifiedVoucher.value=null
    if(!normalized.matches(Regex("(0210-)?[A-Z0-9]{6}"))){voucherMessage.value="NHẬP ĐÚNG MÃ VOUCHER 0210-XXXXXX";return@launch}
    val reward=dao.availableVoucherBySuffix(normalized.removePrefix("0210-"),System.currentTimeMillis())
    val cap=reward?.let{VoucherPolicy.cap(it.rewardSnapshot)}
+   verifiedVoucher.value=if(cap!=null)reward else null
    voucherMessage.value=if(cap!=null)"VOUCHER HỢP LỆ · HẠN MỨC "+java.text.NumberFormat.getNumberInstance(Locale("vi","VN")).format(cap)+"đ · CHỌN 01 MÓN" else "MÃ KHÔNG TỒN TẠI, ĐÃ DÙNG HOẶC HẾT HẠN"
   }
  }
+ fun resetVoucherLookup(){verifiedVoucher.value=null;voucherMessage.value=""}
  fun selectVoucher(code:String,menuItemId:String){
   val e=currentEmployee.value?:return
   viewModelScope.launch(Dispatchers.IO){
    val suffix=code.uppercase().removePrefix("0210-").filter(Char::isLetterOrDigit).takeLast(6)
    val reward=dao.availableVoucherBySuffix(suffix,System.currentTimeMillis())
+   if(verifiedVoucher.value?.id!=reward?.id){voucherMessage.value="HÃY KIỂM TRA MÃ VOUCHER TRƯỚC";return@launch}
    val item=menu.value.firstOrNull{it.id==menuItemId&&it.active}
    val cap=reward?.let{VoucherPolicy.cap(it.rewardSnapshot)}
    if(reward==null||cap==null||item==null||!VoucherPolicy.canRedeem(item.price,cap,false)){voucherMessage.value="VOUCHER KHÔNG HỢP LỆ HOẶC MÓN VƯỢT HẠN MỨC";return@launch}
    selectedVoucher.value=reward;selectedVoucherItemId.value=item.id;voucherMessage.value="ĐÃ CHỌN "+VoucherPolicy.code(reward.id)+" · "+item.name+" miễn phí"
   }
  }
- fun clearSelectedVoucher(){selectedVoucher.value=null;selectedVoucherItemId.value=null;voucherMessage.value=""}
+ fun clearSelectedVoucher(){selectedVoucher.value=null;selectedVoucherItemId.value=null;verifiedVoucher.value=null;voucherMessage.value=""}
  fun sendBatch(){
   val e=currentEmployee.value?:return
   val t=currentTable.value?:return

@@ -1309,7 +1309,7 @@ fun PayrollManager(vm:PosViewModel){
                         OutlinedTextField(holidayK,{holidayK=it.filter{c->c.isDigit()||c=='.'||c==','}.take(6)},Modifier.fillMaxWidth(),label={Text("K tùy chỉnh · từ 0.5 đến 3.0")},singleLine=true)
                         Button(
                             onClick={
-                                selectedHolidayDates.forEach{vm.saveHolidayMultiplier(it,holidayK)}
+                                vm.saveHolidayMultipliers(selectedHolidayDates,holidayK)
                                 selectedHolidayDates=emptySet()
                             },
                             modifier=Modifier.fillMaxWidth(),
@@ -1324,7 +1324,7 @@ fun PayrollManager(vm:PosViewModel){
                                 }
                             }
                         }
-                        if(message.contains("CÔNG")||message.contains("LƯƠNG")||message.contains("HỆ SỐ")||message.contains("K NGÀY"))Text(message,fontSize=11.sp,fontWeight=FontWeight.Bold)
+                        if(message.contains("CÔNG")||message.contains("LƯƠNG")||message.contains("HỆ SỐ")||message.contains("K NGÀY")||message.contains("K ="))Text("XÁC NHẬN · $message",fontSize=11.sp,fontWeight=FontWeight.Bold)
                     }
                 }
             }

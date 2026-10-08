@@ -165,6 +165,9 @@ object FirebaseCloudSync {
         }
         // Menu is cloud-authoritative for secondary devices. Never overwrite an existing
         // cloud menu with a stale local snapshot during ordinary realtime sync.
+        // Flush locally edited menu entities BEFORE pulling remote state.
+        // Otherwise a remote snapshot can overwrite an offline edit before upload.
+        stage("PUSH_PENDING_MENU"){pushPendingCatalog(root,dao)}
         stage("PULL_MENU"){pullCloudMenu(root,dao)}
         stage("PULL_FINANCE"){pullCloudFinance(root,dao)}
         stage("WRITE_FINANCE"){writeFinanceMirror(fs,root,dao)}
@@ -241,6 +244,33 @@ object FirebaseCloudSync {
         writeMaps(fs,root.collection("orderBatches"),batches.map{b->b.id to mapOf("id" to b.id,"sessionId" to b.sessionId,"sequence" to b.sequence,"ordererId" to b.ordererId,"createdAt" to b.createdAt,"sentAt" to b.sentAt,"status" to b.status,"serviceNo" to b.serviceNo,"deliveredAt" to b.deliveredAt,"deliveredBy" to b.deliveredBy)})
         writeMaps(fs,root.collection("orderItems"),items.map{i->i.id to mapOf("id" to i.id,"batchId" to i.batchId,"menuItemId" to i.menuItemId,"itemName" to i.itemNameSnapshot,"unitPrice" to i.unitPriceSnapshot,"qty" to i.qty,"note" to i.note,"adjustmentOfItemId" to i.adjustmentOfItemId)})
     }}
+
+    private suspend fun pushPendingCatalog(root:com.google.firebase.firestore.DocumentReference,dao:PosDao){
+        dao.recoverInflightSync()
+        val pending=dao.pendingSync(System.currentTimeMillis(),500).filter{it.entityType=="MENU_ITEM"||it.entityType=="MENU_CATEGORY"}
+        for(q in pending){
+            if(dao.claimSync(q.id,System.currentTimeMillis())!=1)continue
+            try{
+                if(q.entityType=="MENU_ITEM"){
+                    val item=dao.menuItemById(q.entityId)
+                    if(item!=null)root.collection("menu").document(item.id).set(mapOf(
+                        "id" to item.id,"categoryId" to item.categoryId,"name" to item.name,
+                        "price" to item.price,"sortOrder" to item.sortOrder,"active" to item.active,
+                        "productCode" to item.productCode,"description" to item.description,
+                        "updatedAt" to System.currentTimeMillis())).await()
+                }else{
+                    val cat=dao.allCategoriesSnapshot().firstOrNull{it.id==q.entityId}
+                    if(cat!=null)root.collection("menuCategories").document(cat.id).set(mapOf(
+                        "id" to cat.id,"name" to cat.name,"sortOrder" to cat.sortOrder,
+                        "active" to cat.active,"updatedAt" to System.currentTimeMillis())).await()
+                }
+                dao.completeSync(q.id)
+            }catch(e:Exception){
+                dao.retrySync(q.id,System.currentTimeMillis()+30000L,System.currentTimeMillis(),e.message)
+                throw e
+            }
+        }
+    }
 
     private suspend fun pullCloudMenu(root:com.google.firebase.firestore.DocumentReference,dao:PosDao){
         val categoryDocs=root.collection("menuCategories").get().await().documents

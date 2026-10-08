@@ -45,6 +45,7 @@ WHERE s.status='OPEN' GROUP BY s.id""") fun tableServiceTimings():Flow<List<Tabl
 @Query("SELECT COALESCE(SUM(qty*unitPriceSnapshot),0) FROM OrderItemEntity WHERE batchId IN (SELECT id FROM OrderBatchEntity WHERE sessionId=:sessionId AND status!='CANCELLED')") fun sessionTotal(sessionId:String):Flow<Long>
 @Query("SELECT COALESCE(SUM(qty*unitPriceSnapshot),0) FROM OrderItemEntity WHERE batchId IN (SELECT id FROM OrderBatchEntity WHERE sessionId=:sessionId AND status!='CANCELLED')") suspend fun sessionTotalSnapshot(sessionId:String):Long
 @Query("SELECT COALESCE(SUM(qty*unitPriceSnapshot),0) FROM OrderItemEntity WHERE batchId IN (SELECT id FROM OrderBatchEntity WHERE sessionId=:sessionId AND status!='CANCELLED') AND buyGetPromotionId IS NOT NULL") fun sessionBuyGetDiscount(sessionId:String):Flow<Long>
+@Query("SELECT COALESCE(SUM(qty*unitPriceSnapshot),0) FROM OrderItemEntity WHERE batchId IN (SELECT id FROM OrderBatchEntity WHERE sessionId=:sessionId AND status!=\'CANCELLED\') AND loyaltyRewardId IS NOT NULL") fun sessionVoucherDiscount(sessionId:String):Flow<Long>
 @Query("SELECT * FROM BillEntity WHERE status='PAID' AND dataScope='LIVE' ORDER BY closedAt DESC") fun paidBills():Flow<List<BillEntity>>
 @Query("SELECT * FROM BillEntity WHERE status='PAID' AND dataScope='LIVE' ORDER BY closedAt DESC") suspend fun allPaidBillsSnapshot():List<BillEntity>
 @Query("SELECT * FROM BillEntity WHERE status='PAID' AND dataScope='TEST' ORDER BY closedAt DESC") fun testPaidBills():Flow<List<BillEntity>>

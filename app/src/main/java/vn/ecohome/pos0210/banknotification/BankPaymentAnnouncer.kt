@@ -16,10 +16,10 @@ object BankPaymentAnnouncer {
    if(Build.VERSION.SDK_INT>=26)vibrator.vibrate(VibrationEffect.createOneShot(180,VibrationEffect.DEFAULT_AMPLITUDE)) else @Suppress("DEPRECATION") vibrator.vibrate(180)
   }
   if(!speak)return
-  var tts:TextToSpeech?=null
-  tts=TextToSpeech(context.applicationContext){status->
+  val ttsHolder=arrayOfNulls<TextToSpeech>(1)
+  val engineInstance=TextToSpeech(context.applicationContext){status->
    if(status==TextToSpeech.SUCCESS){
-    val engine=tts?:return@TextToSpeech
+    val engine=ttsHolder[0]?:return@TextToSpeech
     val localeResult=engine.setLanguage(Locale("vi","VN"))
     if(localeResult==TextToSpeech.LANG_MISSING_DATA||localeResult==TextToSpeech.LANG_NOT_SUPPORTED){engine.shutdown();return@TextToSpeech}
     engine.setOnUtteranceProgressListener(object:UtteranceProgressListener(){
@@ -29,7 +29,8 @@ object BankPaymentAnnouncer {
     })
     val subject=tableName?.takeIf{it.isNotBlank()}?.let{"$it đã thanh toán"}?:"Đã nhận"
     engine.speak("$subject ${"%,d".format(amount).replace(',','.')} đồng",TextToSpeech.QUEUE_FLUSH,null,"bank-payment")
-   } else tts?.shutdown()
+   } else ttsHolder[0]?.shutdown()
   }
+  ttsHolder[0]=engineInstance
  }
 }

@@ -32,6 +32,14 @@ class BuyGetPolicyTest {
         assertNull(BuyGetPolicy.giftToAdd(rule, purchasedQuantity = 2, existingGiftQuantity = 1))
     }
 
+    @Test fun sameItemAddsGiftAfterOnlyPaidQuantityIsOrdered() {
+        val rule = BuyGetRule("r", "coffee", 2, "coffee", 1)
+        assertEquals(
+            BuyGetGiftRequest("r", "coffee", 1),
+            BuyGetPolicy.giftToAdd(rule, purchasedQuantity = 2, existingGiftQuantity = 0)
+        )
+    }
+
     @Test fun bestNeverStacksWithHigherExistingDiscount() {
         val rule = BuyGetRule("r", "coffee", 2, "tea", 1)
         val lines = listOf(BuyGetLine("coffee", 2, 30000), BuyGetLine("tea", 1, 20000))

@@ -152,9 +152,9 @@ object FirebaseCloudSync {
         val tables=dao.cloudTablesSnapshot();val sessions=dao.cloudSessionsSnapshot();val bills=dao.cloudBillsSnapshot();val payments=dao.cloudPaymentsSnapshot();val paymentMirror=dao.cloudPaymentMirrorSnapshot()
         val today=Calendar.getInstance().apply{set(Calendar.HOUR_OF_DAY,0);set(Calendar.MINUTE,0);set(Calendar.SECOND,0);set(Calendar.MILLISECOND,0)}.timeInMillis
         val paidToday=bills.filter{it.status=="PAID"&&(it.closedAt?:0)>=today};val open=sessions.filter{it.status=="OPEN"};val now=System.currentTimeMillis()
-        stage("STORE_ROOT"){root.set(mapOf("name" to "0210","updatedAt" to now,"schemaVersion" to 1)).await()}
+        stage("STORE_ROOT"){FirestoreServerWriter.set(root,mapOf("name" to "0210","updatedAt" to now,"schemaVersion" to 1))}
         val openByTable=open.associateBy{it.tableId}
-        stage("DASHBOARD"){root.collection("dashboard").document("current").set(financialDashboard(dao,bills,payments,now)+mapOf("openTables" to open.size,"openTableNames" to tables.filter{openByTable.containsKey(it.id)}.map{it.name},"revenueToday" to paidToday.sumOf{it.total},"paidBillsToday" to paidToday.size,"lastUpdatedAt" to now)).await()}
+        stage("DASHBOARD"){FirestoreServerWriter.set(root.collection("dashboard").document("current"),financialDashboard(dao,bills,payments,now)+mapOf("openTables" to open.size,"openTableNames" to tables.filter{openByTable.containsKey(it.id)}.map{it.name},"revenueToday" to paidToday.sumOf{it.total},"paidBillsToday" to paidToday.size,"lastUpdatedAt" to now))}
         writeMaps(fs,root.collection("tableStatus"),tables.map{t->t.id to mapOf("id" to t.id,"name" to t.name,"areaId" to t.areaId,"active" to t.active,"occupied" to openByTable.containsKey(t.id),"openedAt" to openByTable[t.id]?.openedAt,"updatedAt" to now)})
         // A full menu mirror is only seeded when no cloud menu exists. Edits must
         // publish through an explicit versioned menu mutation, not generic sync.
@@ -169,7 +169,7 @@ object FirebaseCloudSync {
         writeMaps(fs,root.collection("orderItems"),dao.cloudOrderItemsSnapshot().map{i->i.id to mapOf("id" to i.id,"batchId" to i.batchId,"menuItemId" to i.menuItemId,"itemName" to i.itemNameSnapshot,"unitPrice" to i.unitPriceSnapshot,"qty" to i.qty,"note" to i.note,"adjustmentOfItemId" to i.adjustmentOfItemId)})
         writeMaps(fs,root.collection("bills"),bills.map{b->b.id to mapOf("id" to b.id,"sessionId" to b.sessionId,"billNo" to b.billNo,"openedAt" to b.openedAt,"closedAt" to b.closedAt,"subtotal" to b.subtotal,"total" to b.total,"status" to b.status)})
         writeMaps(fs,root.collection("payments"),paymentMirror.map{p->p.id to mapOf("id" to p.id,"billId" to p.billId,"method" to p.method,"amount" to p.amount,"cashierId" to p.cashierId,"paidAt" to p.paidAt,"reference" to p.reference,"dataScope" to p.dataScope)})
-        val settings=dao.allSettingsSnapshot().filter{CloudSyncPolicy.shouldUploadSetting(it.key)}.associate{it.key to it.value};stage("WRITE_CONFIG"){root.collection("config").document("safe").set(settings+mapOf("updatedAt" to now)).await()}
+        val settings=dao.allSettingsSnapshot().filter{CloudSyncPolicy.shouldUploadSetting(it.key)}.associate{it.key to it.value};stage("WRITE_CONFIG"){FirestoreServerWriter.set(root.collection("config").document("safe"),settings+mapOf("updatedAt" to now))}
         // Heavy private backup and media transfer are handled by a separate worker.
         // They must never block the foreground "Sync now" action.
         enqueueBackup(context)
@@ -205,7 +205,7 @@ object FirebaseCloudSync {
         // Immediate worker is lightweight: finance reconciliation belongs to full sync.
         val tables=dao.cloudTablesSnapshot();val sessions=dao.cloudSessionsSnapshot();val batches=dao.cloudOrderBatchesSnapshot();val items=dao.cloudOrderItemsSnapshot();val bills=dao.cloudBillsSnapshot();val open=sessions.filter{it.status=="OPEN"};val openByTable=open.associateBy{it.tableId}
         val today=Calendar.getInstance().apply{set(Calendar.HOUR_OF_DAY,0);set(Calendar.MINUTE,0);set(Calendar.SECOND,0);set(Calendar.MILLISECOND,0)}.timeInMillis;val paidToday=bills.filter{it.status=="PAID"&&(it.closedAt?:0)>=today};val now=System.currentTimeMillis()
-        stage("DASHBOARD_WRITE"){root.collection("dashboard").document("current").set(financialDashboard(dao,bills,dao.cloudPaymentsSnapshot(),now)+mapOf("openTables" to open.size,"openTableNames" to tables.filter{openByTable.containsKey(it.id)}.map{it.name},"revenueToday" to paidToday.sumOf{it.total},"paidBillsToday" to paidToday.size,"lastUpdatedAt" to now)).await()}
+        stage("DASHBOARD_WRITE"){FirestoreServerWriter.set(root.collection("dashboard").document("current"),financialDashboard(dao,bills,dao.cloudPaymentsSnapshot(),now)+mapOf("openTables" to open.size,"openTableNames" to tables.filter{openByTable.containsKey(it.id)}.map{it.name},"revenueToday" to paidToday.sumOf{it.total},"paidBillsToday" to paidToday.size,"lastUpdatedAt" to now))}
         writeMaps(fs,root.collection("tableStatus"),tables.map{t->t.id to mapOf("id" to t.id,"name" to t.name,"areaId" to t.areaId,"active" to t.active,"occupied" to openByTable.containsKey(t.id),"openedAt" to openByTable[t.id]?.openedAt,"updatedAt" to now)})
         // The browser manager is read-only, but it needs these live records to show
         // the current order and elapsed serving time without waiting for the backup job.
@@ -221,23 +221,23 @@ object FirebaseCloudSync {
             val claimed=group.filter{dao.claimSync(it.id,System.currentTimeMillis())==1}
             if(claimed.isEmpty())continue
             try {
-                val batch=root.firestore.batch()
+                val writes=mutableListOf<Pair<String,Map<String,Any?>>>()
                 for(q in claimed.distinctBy{it.entityType to it.entityId}) {
                 if(q.entityType=="MENU_ITEM"){
                     val item=dao.menuItemById(q.entityId)
-                    if(item!=null)batch.set(root.collection("menu").document(item.id),mapOf(
+                    if(item!=null)writes.add(root.collection("menu").document(item.id).path to mapOf(
                         "id" to item.id,"categoryId" to item.categoryId,"name" to item.name,
                         "price" to item.price,"sortOrder" to item.sortOrder,"active" to item.active,
                         "productCode" to item.productCode,"description" to item.description,
                         "updatedAt" to System.currentTimeMillis()))
                 }else{
                     val cat=dao.allCategoriesSnapshot().firstOrNull{it.id==q.entityId}
-                    if(cat!=null)batch.set(root.collection("menuCategories").document(cat.id),mapOf(
+                    if(cat!=null)writes.add(root.collection("menuCategories").document(cat.id).path to mapOf(
                         "id" to cat.id,"name" to cat.name,"sortOrder" to cat.sortOrder,
                         "active" to cat.active,"updatedAt" to System.currentTimeMillis()))
                 }
                 }
-                stage("PUSH_PENDING_CATALOG count=${claimed.size}"){batch.commit().await()}
+                stage("PUSH_PENDING_CATALOG count=${claimed.size}"){FirestoreServerWriter.commit(root.firestore,writes)}
                 claimed.forEach{dao.completeSync(it.id)}
             }catch(e:CancellationException){ throw e
             }catch(e:Exception){
@@ -396,7 +396,7 @@ object FirebaseCloudSync {
         CloudExecution.trace("WRITE_${collection.id} changed=${changed.size} total=${rows.size}")
         changed.chunked(400).forEachIndexed{index,chunk->
             stage("WRITE_${collection.id}_BATCH_${index+1}",15_000L){
-                val batch=fs.batch();chunk.forEach{(id,data)->batch.set(collection.document(id),data)};batch.commit().await()
+                FirestoreServerWriter.commit(fs,chunk.map{(id,data)->collection.document(id).path to data})
             }
             val editor=ack.edit()
             chunk.forEach{(id,data)->editor.putString(collection.path+"/"+id,fingerprint(data))}

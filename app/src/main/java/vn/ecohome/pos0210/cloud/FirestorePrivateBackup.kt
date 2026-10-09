@@ -64,32 +64,28 @@ object FirestorePrivateBackup {
 
             // Mark only the target slot as WRITING. The other VALID slot stays untouched.
             stage("BACKUP_MARK_WRITING"){
-                targetDoc.set(mapOf(
+                FirestoreServerWriter.set(targetDoc,mapOf(
                     "slot" to target,
                     "status" to "WRITING",
                     "startedAt" to now,
                     "format" to FORMAT
-                )).await()
+                ))
             }
 
             // Clear stale chunks only from the target slot.
             stage("BACKUP_CLEAR_TARGET"){deleteSlotChunks(targetDoc)}
 
-            chunks.chunked(350).forEachIndexed { groupIndex,group ->
-                val batch=fs.batch()
-                group.forEachIndexed { offset,data ->
-                    val index=groupIndex*350+offset
-                    batch.set(
-                        targetDoc.collection("chunks").document(index.toString().padStart(4,'0')),
-                        mapOf("index" to index,"data" to data)
-                    )
+            chunks.chunked(8).forEachIndexed { groupIndex,group ->
+                val writes=group.mapIndexed { offset,data ->
+                    val index=groupIndex*8+offset
+                    targetDoc.collection("chunks").document(index.toString().padStart(4,'0')).path to mapOf<String,Any?>("index" to index,"data" to data)
                 }
-                stage("BACKUP_WRITE_CHUNKS"){batch.commit().await()}
+                stage("BACKUP_WRITE_CHUNKS_${groupIndex+1}"){FirestoreServerWriter.commit(fs,writes)}
             }
 
             val checksum=sha256(zipped)
             stage("BACKUP_WRITE_META"){
-                targetDoc.set(mapOf(
+                FirestoreServerWriter.set(targetDoc,mapOf(
                     "slot" to target,
                     "status" to "VALID",
                     "createdAt" to now,
@@ -97,15 +93,15 @@ object FirestorePrivateBackup {
                     "chunks" to chunks.size,
                     "sha256" to checksum,
                     "format" to FORMAT
-                )).await()
+                ))
             }
             stage("BACKUP_WRITE_ROOT"){
-                privateRoot.set(mapOf(
+                FirestoreServerWriter.set(privateRoot,mapOf(
                     "activeSlot" to target,
                     "updatedAt" to now,
                     "format" to FORMAT,
                     "retentionSlots" to 2
-                )).await()
+                ))
             }
             val confirmed=stage("BACKUP_CONFIRM_SERVER"){targetDoc.get(Source.SERVER).await()}
             require(!confirmed.metadata.hasPendingWrites()&&confirmed.getString("sha256")==checksum&&isValidSlot(confirmed)) {"BACKUP_SERVER_CONFIRMATION_FAILED"}
@@ -221,11 +217,9 @@ object FirestorePrivateBackup {
     }
 
     private suspend fun deleteSlotChunks(slot:com.google.firebase.firestore.DocumentReference){
-        val docs=slot.collection("chunks").get().await().documents
+        val docs=slot.collection("chunks").get(Source.SERVER).await().documents
         docs.chunked(400).forEach { group ->
-            val batch=slot.firestore.batch()
-            group.forEach{batch.delete(it.reference)}
-            batch.commit().await()
+            FirestoreServerWriter.delete(slot.firestore,group.map{it.reference.path})
         }
     }
 

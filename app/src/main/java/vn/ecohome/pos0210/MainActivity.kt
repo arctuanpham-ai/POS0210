@@ -95,7 +95,7 @@ private fun PaymentQrImage(
 ) {
     if (PaymentQrMode.usesStaticSoundboxQr(mode)) {
         Image(
-            painter = painterResource(R.drawable.techcombank_soundbox_static_qr),
+            painter = painterResource(R.drawable.soundbox_qr_clean),
             contentDescription = "Mã QR tĩnh Techcombank Soundbox",
             modifier = modifier
         )

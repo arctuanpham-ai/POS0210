@@ -102,6 +102,14 @@ class PosRepository(private val db:PosDatabase){
             true
         }
 
+    suspend fun softDeleteCustomerAudited(customerId:String,actorId:String):Boolean = db.withTransaction {
+        if(dao.softDeleteCustomer(customerId)!=1)return@withTransaction false
+        dao.audit(AuditEventEntity(
+            UUID.randomUUID().toString(),"CUSTOMER",customerId,"DELETE_SOFT",actorId,null,System.currentTimeMillis(),"HIDDEN_FROM_ACTIVE_LIST"
+        ))
+        true
+    }
+
     suspend fun updateCustomerProfileAudited(customerId:String,name:String,phone:String,address:String,actorId:String):Boolean =
         db.withTransaction {
             val changed=dao.updateCustomerProfileFields(customerId,name,phone,address)

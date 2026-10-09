@@ -298,10 +298,11 @@ class PosRepository(private val db:PosDatabase){
         bills
     }
 
-    suspend fun resetPreOpeningSales(actorId:String,autoTier:Boolean,vipMinPoints:Int,vvipMinPoints:Int):Int {
+    data class PreOpeningResetResult(val bills:Int,val attendance:Int)
+
+    suspend fun resetPreOpeningData(actorId:String,autoTier:Boolean,vipMinPoints:Int,vvipMinPoints:Int):PreOpeningResetResult = db.withTransaction {
         val targets=dao.allPaidBillsSnapshot()
-        if(targets.isEmpty()) return 0
-        return deleteBillsAtomic(
+        val bills=if(targets.isEmpty()) 0 else deleteBillsAtomic(
             targets=targets,
             reason="RESET_BAN_THU_TRUOC_KHAI_TRUONG",
             actorId=actorId,
@@ -309,6 +310,12 @@ class PosRepository(private val db:PosDatabase){
             vipMinPoints=vipMinPoints,
             vvipMinPoints=vvipMinPoints
         )
+        val billIds=targets.map{it.id}
+        if(billIds.isNotEmpty()){
+            dao.archivePaymentsForBills(billIds)
+            dao.cancelRewardsForBills(billIds)
+        }
+        PreOpeningResetResult(bills=bills,attendance=dao.deleteLiveAttendances())
     }
 
     suspend fun deletePurchaseAudited(purchase:PurchaseEntity,reason:String,actorId:String,linkedAssetId:String?=null):Boolean =

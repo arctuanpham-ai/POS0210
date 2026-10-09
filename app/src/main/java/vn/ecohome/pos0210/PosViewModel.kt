@@ -242,7 +242,7 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
   (setting("bank_name").isNotBlank()&&setting("bank_account").isNotBlank())
  private fun qrBitmap(amount:Long,info:String)=
   if(PaymentQrMode.usesStaticSoundboxQr(qrMode())) {
-   BitmapFactory.decodeResource(getApplication<Application>().resources,R.drawable.techcombank_soundbox_static_qr)
+   BitmapFactory.decodeResource(getApplication<Application>().resources,R.drawable.soundbox_qr_clean)
   } else VietQrOffline.bitmap(setting("bank_name"),setting("bank_account"),setting("bank_holder"),amount,info).getOrNull()
  fun testBluetoothPrint(){ testBluetoothPrint(vn.ecohome.pos0210.printing.PrintJobType.PAYMENT) }
  fun testKitchenBluetoothPrint(){ testBluetoothPrint(vn.ecohome.pos0210.printing.PrintJobType.KITCHEN) }

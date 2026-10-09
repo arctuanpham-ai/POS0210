@@ -328,15 +328,15 @@ object FirestorePrivateBackup {
     /** Hash logical business rows, not SQLite page churn or Cloud operation logs. */
     private fun businessFingerprint(file:File):String {
         val digest=MessageDigest.getInstance("SHA-256")
-        fun add(value:String){val bytes=value.toByteArray(Charsets.UTF_8);digest.update(java.nio.ByteBuffer.allocate(4).putInt(bytes.size).array());digest.update(bytes)}
+        fun feed(value:String){val bytes=value.toByteArray(Charsets.UTF_8);digest.update(java.nio.ByteBuffer.allocate(4).putInt(bytes.size).array());digest.update(bytes)}
         val excluded=setOf("CloudSyncStateEntity","SyncQueueEntity","AuditEventEntity","PrintJobEntity","BankNotificationEventEntity","room_master_table","android_metadata")
         SQLiteDatabase.openDatabase(file.absolutePath,null,SQLiteDatabase.OPEN_READONLY).use{db->
             val tables=db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name",null).use{c->buildList{while(c.moveToNext())add(c.getString(0))}}
             for(table in tables.filter{it !in excluded}){
-                add(table)
+                feed(table)
                 val quoted="\""+table.replace("\"","\"\"")+"\""
                 val rows=db.rawQuery("SELECT * FROM $quoted",null).use{cursor->
-                    cursor.columnNames.forEach{add(it)}
+                    cursor.columnNames.forEach{feed(it)}
                     buildList{
                         while(cursor.moveToNext()){
                             if(table=="AppSettingEntity"&&CloudQuotaPolicy.businessSettings(mapOf(cursor.getString(0) to cursor.getString(1))).isEmpty())continue
@@ -350,7 +350,7 @@ object FirestorePrivateBackup {
                         }
                     }
                 }
-                rows.sorted().forEach{add(it)}
+                rows.sorted().forEach{feed(it)}
             }
         }
         return digest.digest().joinToString(""){"%02x".format(it)}

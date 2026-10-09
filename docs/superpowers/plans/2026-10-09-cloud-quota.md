@@ -10,3 +10,7 @@ Approved specification: 12,000 writes/day target, 16,000 hard ceiling across upd
 Review focus: CAS contention, first document create race, cancellation/unknown receipts, daily reset/DST, metadata counts, UID/project isolation, multiple-device publisher handover, backup partial failure preserves the other valid slot, disabled Cloud remains disabled, no acknowledgement of deferred records.
 
 Ruling: per-task category budgets are soft allocations except optional dashboard/backup/media limits; unused capacity can support sales up to 16k. Counter writes are included in the total and system tally. Counter covers updated clients sharing a UID, not actual project-wide Firebase Usage.
+
+Verification ledger: policy/CAS/HTTP/lifecycle/cancellation suite passed 33/33 locally. Fresh reviewer found (1) older matching backup slot incorrectly suppressing newest snapshot, (2) stage wrappers causing deferred work to retry, (3) dashboard deferral without scheduled delivery. All addressed; reversion and nested deferral regressions passed. Existing combo queue acknowledgement moved behind server-confirmed backup; sync completion preserves the current enabled setting.
+
+Android CI build 284 found Kotlin local function name `add` shadowing ListBuilder.add in logical backup hashing. Renamed the digest feeder to `feed`; the isolated compiler reproduction confirms the cause. Rebuild required before APK delivery.

@@ -1,6 +1,7 @@
 package vn.ecohome.pos0210
 import android.app.Application
 import android.content.Intent
+import android.graphics.BitmapFactory
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.room.withTransaction
@@ -17,6 +18,7 @@ import vn.ecohome.pos0210.printing.BluetoothPrinter
 import vn.ecohome.pos0210.printing.PrinterRouting
 import vn.ecohome.pos0210.printing.ReceiptRenderer
 import vn.ecohome.pos0210.payment.VietQrOffline
+import vn.ecohome.pos0210.payment.PaymentQrMode
 import vn.ecohome.pos0210.promotion.BuyGetPolicy
 import vn.ecohome.pos0210.promotion.BuyGetRule
 import java.util.UUID
@@ -235,8 +237,13 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
  private fun kitchenPrinterName()=setting("kitchen_printer_name").ifBlank{printerName()}
  private fun receiptPrinterName()=setting("receipt_printer_name").ifBlank{printerName()}
  private fun printerProfile()=vn.ecohome.pos0210.printing.PrinterProfile.fromSetting(setting("printer_paper_mm"))
+ private fun qrMode()=setting("payment_qr_mode")
+ private fun isQrConfigured()=PaymentQrMode.usesStaticSoundboxQr(qrMode())||
+  (setting("bank_name").isNotBlank()&&setting("bank_account").isNotBlank())
  private fun qrBitmap(amount:Long,info:String)=
-  VietQrOffline.bitmap(setting("bank_name"),setting("bank_account"),setting("bank_holder"),amount,info).getOrNull()
+  if(PaymentQrMode.usesStaticSoundboxQr(qrMode())) {
+   BitmapFactory.decodeResource(getApplication<Application>().resources,R.drawable.techcombank_soundbox_static_qr)
+  } else VietQrOffline.bitmap(setting("bank_name"),setting("bank_account"),setting("bank_holder"),amount,info).getOrNull()
  fun testBluetoothPrint(){ testBluetoothPrint(vn.ecohome.pos0210.printing.PrintJobType.PAYMENT) }
  fun testKitchenBluetoothPrint(){ testBluetoothPrint(vn.ecohome.pos0210.printing.PrintJobType.KITCHEN) }
  private fun testBluetoothPrint(jobType:vn.ecohome.pos0210.printing.PrintJobType){
@@ -575,7 +582,7 @@ fun saveSetting(key:String,value:String){
  val e=currentEmployee.value?:return
  val allowed=when(key){
   "storage_root_uri","master_config_uri","autoback_tree_uri" -> e.role=="ADMIN"||e.canManageSystem
-  "bank_name","bank_account","bank_holder","qr_prefix","printer_mode","printer_mac","printer_name","kitchen_printer_mac","kitchen_printer_name","receipt_printer_mac","receipt_printer_name","printer_paper_mm","bank_notification_enabled","bank_notification_vibrate","bank_notification_tts" -> e.role=="ADMIN"||e.role=="MANAGER"
+  "bank_name","bank_account","bank_holder","qr_prefix","payment_qr_mode","printer_mode","printer_mac","printer_name","kitchen_printer_mac","kitchen_printer_name","receipt_printer_mac","receipt_printer_name","printer_paper_mm","bank_notification_enabled","bank_notification_vibrate","bank_notification_tts" -> e.role=="ADMIN"||e.role=="MANAGER"
   else -> e.role=="ADMIN"
  }
  if(!allowed){viewModelScope.launch{audit("SECURITY",key,"SETTING_DENIED","role=${e.role}")};return}
@@ -973,6 +980,21 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
  }
 
  fun canCancelOrder():Boolean{val r=currentEmployee.value?.role?:return false;return r=="ADMIN"||r=="MANAGER"}
+ fun canDeleteDraft(b:OrderBatchEntity):Boolean{
+  val e=currentEmployee.value?:return false
+  return DraftOrderPolicy.canDelete(b.status,b.ordererId,e.id,e.role)
+ }
+ fun deleteDraft(b:OrderBatchEntity){
+  val e=currentEmployee.value?:return
+  if(!DraftOrderPolicy.canDelete(b.status,b.ordererId,e.id,e.role))return
+  viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO){
+   if(dao.cancelBatch(b.id)>0){
+    audit("BATCH",b.id,"DRAFT_DELETED","operator=${e.name}")
+    printerMessage.value="ĐÃ XÓA ĐƠN NHÁP #${b.sequence}"
+    autoBackup()
+   }
+  }
+ }
  fun cancelBatch(b:OrderBatchEntity,reason:String){
   val e=currentEmployee.value?:return
   if(e.role!="ADMIN"&&e.role!="MANAGER")return
@@ -1163,7 +1185,7 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
    val batches=dao.batches(session.id).first().filter{it.status!="CANCELLED"}
    val lines=mutableListOf<Triple<String,Int,Long>>()
    batches.forEach{batch->dao.batchItems(batch.id).first().forEach{item->lines.add(Triple(item.itemNameSnapshot,item.qty,item.unitPriceSnapshot))}}
-   val qrConfigured=setting("bank_name").isNotBlank()&&setting("bank_account").isNotBlank()
+   val qrConfigured=isQrConfigured()
    val qr=if(qrConfigured)qrBitmap(preview.total,qrInfo) else null
    if(qrConfigured&&qr==null)printerMessage.value="VIETQR LỖI · Bill vẫn được in để thanh toán tiền mặt"
    val now=System.currentTimeMillis()

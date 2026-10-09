@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -46,6 +47,7 @@ import vn.ecohome.pos0210.data.*
 import vn.ecohome.pos0210.printing.PrinterText
 import vn.ecohome.pos0210.printing.BluetoothPrinter
 import vn.ecohome.pos0210.payment.VietQrOffline
+import vn.ecohome.pos0210.payment.PaymentQrMode
 import vn.ecohome.pos0210.banknotification.NotificationAccess
 import vn.ecohome.pos0210.banknotification.BankPaymentAnnouncer
 import java.text.SimpleDateFormat
@@ -78,6 +80,27 @@ private fun OfflineVietQrImage(
         onSuccess = { bitmap -> Image(bitmap.asImageBitmap(), "Mã VietQR thanh toán offline", modifier) },
         onFailure = { error -> Text("KHÔNG TẠO ĐƯỢC VIETQR\n${error.message}", modifier, color = Color.Red, textAlign = TextAlign.Center, fontWeight = FontWeight.Bold) }
     )
+}
+
+@Composable
+private fun PaymentQrImage(
+    mode: String,
+    bank: String,
+    account: String,
+    holder: String,
+    amount: Long,
+    info: String,
+    modifier: Modifier
+) {
+    if (PaymentQrMode.usesStaticSoundboxQr(mode)) {
+        Image(
+            painter = painterResource(R.drawable.techcombank_soundbox_static_qr),
+            contentDescription = "Mã QR tĩnh Techcombank Soundbox",
+            modifier = modifier
+        )
+    } else {
+        OfflineVietQrImage(bank, account, holder, amount, info, modifier)
+    }
 }
 
 class MainActivity : ComponentActivity() {
@@ -438,6 +461,7 @@ fun Sent(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
     val printerMessage by vm.printerMessage.collectAsState()
     val printerMode = vm.setting("printer_mode").ifBlank { "TEST" }
     var pv by remember { mutableStateOf<OrderBatchEntity?>(null) }
+    var deleteDraftTarget by remember { mutableStateOf<OrderBatchEntity?>(null) }
     var cancelTarget by remember { mutableStateOf<OrderBatchEntity?>(null) }
     var cancelReason by remember { mutableStateOf("") }
 
@@ -518,7 +542,14 @@ fun Sent(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                             modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
                         ) { Text("✓ ĐÃ GIAO ĐỦ") }
                     }
-                    if (b.status != "CANCELLED" && b.status != "DELIVERED" && (current?.role == "ADMIN" || current?.role == "MANAGER")) {
+                    if (b.status == "DRAFT" && vm.canDeleteDraft(b)) {
+                        Spacer(Modifier.height(14.dp))
+                        OutlinedButton(
+                            onClick = { deleteDraftTarget = b; pv = null },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("XÓA ĐƠN NHÁP") }
+                    }
+                    if (b.status == "WAITING" && (current?.role == "ADMIN" || current?.role == "MANAGER")) {
                         Spacer(Modifier.height(14.dp))
                         OutlinedButton(
                             onClick = { cancelTarget = b; cancelReason = ""; pv = null },
@@ -527,6 +558,18 @@ fun Sent(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                     }
                 }
             }
+        )
+    }
+
+    deleteDraftTarget?.let { b ->
+        AlertDialog(
+            onDismissRequest = { deleteDraftTarget = null },
+            title = { Text("Xóa Đơn Nháp #${b.sequence}") },
+            text = { Text("Đơn này chưa gửi bếp. Xóa sẽ không in phiếu và vẫn lưu lịch sử thao tác.") },
+            confirmButton = {
+                Button(onClick = { vm.deleteDraft(b); deleteDraftTarget = null }) { Text("XÓA ĐƠN NHÁP") }
+            },
+            dismissButton = { TextButton(onClick = { deleteDraftTarget = null }) { Text("GIỮ LẠI") } }
         )
     }
 
@@ -693,7 +736,9 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
     val billPrinted=printedCheckoutKey==checkoutKey
     val checkoutTestEnabled by vm.checkoutPrintTestMode.collectAsState()
     val checkoutPrintTestMode = checkoutTestEnabled && e?.role=="ADMIN"
-    val qrConfigured = setting("bank_name").isNotBlank() && setting("bank_account").isNotBlank()
+    val qrMode = setting("payment_qr_mode")
+    val soundboxStatic = PaymentQrMode.usesStaticSoundboxQr(qrMode)
+    val qrConfigured = soundboxStatic || (setting("bank_name").isNotBlank() && setting("bank_account").isNotBlank())
     val ambiguousEvent=bankEvents.firstOrNull{it.matchStatus=="AMBIGUOUS"&&it.amount==preview.total&&it.receivedAt>=s.openedAt}
 
     Column {
@@ -799,14 +844,17 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                 Card {
                     Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("VIETQR", fontWeight = FontWeight.Bold)
-                        if (!qrConfigured) Text("Chưa cấu hình tài khoản VietQR") else if(validPaymentSession==null) Text("Đang tạo mã thanh toán riêng cho bill…") else {
-                            OfflineVietQrImage(setting("bank_name"), setting("bank_account"), setting("bank_holder"), preview.total, qrInfo, Modifier.size(280.dp))
-                            Text("${setting("bank_name")} · ${setting("bank_account")}")
+                        if (!qrConfigured) Text("Chưa cấu hình tài khoản VietQR") else if(!soundboxStatic && validPaymentSession==null) Text("Đang tạo mã thanh toán riêng cho bill…") else {
+                            PaymentQrImage(qrMode, setting("bank_name"), setting("bank_account"), setting("bank_holder"), preview.total, qrInfo, Modifier.size(280.dp))
+                            if (soundboxStatic) Text("QR tĩnh Techcombank Soundbox · khách nhập đúng số tiền bill", fontSize = 11.sp, textAlign = TextAlign.Center)
+                            Text(if (soundboxStatic) "Techcombank · QR merchant Soundbox" else "${setting("bank_name")} · ${setting("bank_account")}")
                             Text("${money(preview.total)} · $qrInfo")
                         }
                     }
                 }
-                if(validPaymentSession?.status=="PAYMENT_DETECTED"){
+                if(soundboxStatic){
+                    Text("Nghe thông báo từ Soundbox và đối chiếu số tiền trước khi xác nhận thanh toán.",Modifier.padding(top=8.dp),fontSize=11.sp)
+                }else if(validPaymentSession?.status=="PAYMENT_DETECTED"){
                     Card(Modifier.fillMaxWidth().padding(top=10.dp),colors=CardDefaults.cardColors(containerColor=Color(0xFFDCE8D8))){
                         Column(Modifier.padding(14.dp)){
                             Text("✓ ĐÃ PHÁT HIỆN THANH TOÁN",fontWeight=FontWeight.Black)
@@ -1300,7 +1348,7 @@ fun Manage(vm: PosViewModel) {
             }
             if (employee?.role == "ADMIN" || employee?.role == "MANAGER") {
                 Rowx("VietQR", "Lưu tài khoản · tạo QR") { vm.screen.value = "VIETQR" }
-                Rowx("Thanh toán chuyển khoản", "Techcombank · VCB · VietinBank · rung · đọc tiền") { vm.screen.value = "BANK_PAYMENT_SETTINGS" }
+                Rowx("Thanh toán chuyển khoản", "QR tĩnh Techcombank Soundbox · đối chiếu thủ công") { vm.screen.value = "VIETQR" }
             }
             Rowx("Máy in", "58/80mm · Bluetooth · ESC/POS") { vm.screen.value = "PRINTER" }
             if (employee?.role == "ADMIN" || employee?.canManageSystem == true) {
@@ -3009,13 +3057,14 @@ fun VietQr(vm: PosViewModel) {
                 vm.saveSetting("bank_account", acc)
                 vm.saveSetting("bank_holder", holder)
                 vm.saveSetting("qr_prefix", "0210")
+                vm.saveSetting("payment_qr_mode", PaymentQrMode.TECHCOMBANK_SOUNDBOX_STATIC)
+                vm.saveSetting("bank_notification_enabled", "false")
                 saved = true
             }) { Text("LƯU") }
-            if (saved) Text("Đã lưu cấu hình VietQR", Modifier.padding(top = 8.dp))
-            if (bank.isNotBlank() && acc.isNotBlank()) {
-                Text("QR mẫu 1.000đ", Modifier.padding(top = 14.dp))
-                OfflineVietQrImage(bank, acc, holder, 1000, "0210 TEST", Modifier.size(240.dp))
-            }
+            if (saved) Text("Đã lưu cấu hình QR tĩnh Soundbox", Modifier.padding(top = 8.dp))
+            Text("TECHCOMBANK SOUNDBOX · QR TĨNH", Modifier.padding(top = 14.dp), fontWeight = FontWeight.Black)
+            Text("Dùng đúng QR merchant do Techcombank cấp để loa Soundbox nhận giao dịch. QR không nhúng số tiền; khách nhập đúng số tiền bill hiển thị khi thanh toán.", fontSize = 12.sp)
+            PaymentQrImage(PaymentQrMode.TECHCOMBANK_SOUNDBOX_STATIC, bank, acc, holder, 0, "", Modifier.size(240.dp).padding(top = 8.dp))
         }
     }
 }
@@ -3227,7 +3276,8 @@ fun BillPrintPreview(vm: PosViewModel) {
     val subtotal = 135000L
     val discount = 13500L
     val amount = subtotal - discount
-    val qrConfigured = setting("bank_name").isNotBlank() && setting("bank_account").isNotBlank()
+    val qrMode = setting("payment_qr_mode")
+    val qrConfigured = PaymentQrMode.usesStaticSoundboxQr(qrMode) || (setting("bank_name").isNotBlank() && setting("bank_account").isNotBlank())
 
     Column(
         Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 16.dp),
@@ -3258,7 +3308,7 @@ fun BillPrintPreview(vm: PosViewModel) {
         HorizontalDivider(Modifier.padding(vertical = 9.dp))
         Text("QUÉT MÃ THANH TOÁN", fontSize = 20.sp, fontWeight = FontWeight.Black)
         if (qrConfigured) {
-            OfflineVietQrImage(setting("bank_name"), setting("bank_account"), setting("bank_holder"), amount, "0210 BAN 02", Modifier.fillMaxWidth(0.78f).aspectRatio(1f).padding(top = 4.dp))
+            PaymentQrImage(qrMode, setting("bank_name"), setting("bank_account"), setting("bank_holder"), amount, "0210 BAN 02", Modifier.fillMaxWidth(0.78f).aspectRatio(1f).padding(top = 4.dp))
             Text("SỐ TIỀN: ${money(amount)}", fontSize = 17.sp, fontWeight = FontWeight.Black)
             Text("${setting("bank_name")} · ${setting("bank_account")}", fontSize = 15.sp, fontWeight = FontWeight.Bold)
             Text("Nội dung: 0210 BAN 02", fontSize = 14.sp)

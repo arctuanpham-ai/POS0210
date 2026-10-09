@@ -841,14 +841,27 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
             Text("🔒 Thu tiền: ${e?.name}", Modifier.padding(vertical = 14.dp))
             if (billPrinted) {
                 Text("✓ BILL ĐÃ IN · Chờ khách kiểm tra và thanh toán",fontWeight=FontWeight.Black,color=Color(0xFF41633A))
-                Card {
-                    Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("VIETQR", fontWeight = FontWeight.Bold)
-                        if (!qrConfigured) Text("Chưa cấu hình tài khoản VietQR") else if(!soundboxStatic && validPaymentSession==null) Text("Đang tạo mã thanh toán riêng cho bill…") else {
-                            PaymentQrImage(qrMode, setting("bank_name"), setting("bank_account"), setting("bank_holder"), preview.total, qrInfo, Modifier.size(280.dp))
-                            if (soundboxStatic) Text("QR tĩnh Techcombank Soundbox · khách nhập đúng số tiền bill", fontSize = 11.sp, textAlign = TextAlign.Center)
-                            Text(if (soundboxStatic) "Techcombank · QR merchant Soundbox" else "${setting("bank_name")} · ${setting("bank_account")}")
-                            Text("${money(preview.total)} · $qrInfo")
+                Card(
+                    modifier=Modifier.fillMaxWidth().padding(top=8.dp),
+                    shape=RoundedCornerShape(22.dp),
+                    colors=CardDefaults.cardColors(containerColor=Color.White),
+                    border=BorderStroke(1.dp,Color(0xFFE4DBD0))
+                ) {
+                    Column(Modifier.fillMaxWidth().padding(horizontal=18.dp,vertical=16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(if(soundboxStatic) "CHUYỂN KHOẢN TECHCOMBANK" else "THANH TOÁN VIETQR", fontWeight = FontWeight.Black, color=Coffee, fontSize=15.sp)
+                        if (!qrConfigured) Text("Chưa cấu hình tài khoản thanh toán") else if(!soundboxStatic && validPaymentSession==null) Text("Đang tạo mã thanh toán riêng cho bill…") else {
+                            Text(money(preview.total),fontWeight=FontWeight.Black,fontSize=30.sp,modifier=Modifier.padding(top=3.dp))
+                            Text(if(soundboxStatic) "Khách tự nhập đúng số tiền trên ứng dụng ngân hàng" else "Quét mã để thanh toán",fontSize=11.sp,textAlign=TextAlign.Center,color=Color(0xFF655C55))
+                            Surface(
+                                modifier=Modifier.padding(vertical=12.dp),
+                                shape=RoundedCornerShape(14.dp),
+                                border=BorderStroke(1.dp,Color(0xFFE6DDD2)),
+                                color=Color.White
+                            ) { PaymentQrImage(qrMode, setting("bank_name"), setting("bank_account"), setting("bank_holder"), preview.total, qrInfo, Modifier.size(250.dp).padding(7.dp)) }
+                            if(soundboxStatic){
+                                Text("Quét QR Techcombank · nghe Soundbox báo tiền vào",fontSize=12.sp,fontWeight=FontWeight.Bold,textAlign=TextAlign.Center)
+                                Text("Nội dung chuyển khoản: $qrInfo",fontSize=11.sp,textAlign=TextAlign.Center,color=Color(0xFF655C55),modifier=Modifier.padding(top=3.dp))
+                            }else Text("${setting("bank_name")} · ${setting("bank_account")}",fontSize=12.sp)
                         }
                     }
                 }
@@ -1357,7 +1370,7 @@ fun Manage(vm: PosViewModel) {
             if (employee?.role == "ADMIN") {
                 Rowx("Kiểm tra dữ liệu", "Đối soát Payment · Bill · Customer · điểm · trạng thái bàn") { vm.screen.value = "HEALTH" }
                 Rowx("TEST MODE", "Test order · bếp · thanh toán · in bill nhưng KHÔNG tính doanh thu") { vm.screen.value = "TEST_MODE" }
-                Rowx("Xóa dữ liệu bán thử trước khai trương", "Chỉ xóa Bill bán thử · GIỮ NGUYÊN nhập hàng, chi phí, tài sản") { vm.screen.value = "RESET_PREOPENING_SALES" }
+                Rowx("Dọn dữ liệu trước khai trương", "Bill thanh toán và chấm công · GIỮ NGUYÊN nhập hàng, chi phí, tài sản") { vm.screen.value = "RESET_PREOPENING_SALES" }
                 Rowx("Cloud & Manager realtime", "Firebase backup · trạng thái bàn · doanh thu trực tiếp") { vm.screen.value = "CLOUD" }
                 Rowx("Nhật ký hệ thống", "Audit thao tác · người thực hiện · thời điểm · dữ liệu thay đổi") { vm.screen.value = "SETTINGS" }
             }
@@ -1542,26 +1555,27 @@ fun TestModeManager(vm:PosViewModel){
 fun ResetPreOpeningSales(vm:PosViewModel){
     val employee by vm.currentEmployee.collectAsState()
     val bills by vm.bills.collectAsState()
+    val openAttendances by vm.openAttendances.collectAsState()
     var confirmText by remember { mutableStateOf("") }
     if(employee?.role!="ADMIN"){
-        Column{ Header("Reset bán thử"){vm.screen.value="MANAGE"}; Text("Chỉ ADMIN được thực hiện.",Modifier.padding(20.dp),fontWeight=FontWeight.Bold) }
+        Column{ Header("Dọn dữ liệu trước khai trương"){vm.screen.value="MANAGE"}; Text("Chỉ ADMIN được thực hiện.",Modifier.padding(20.dp),fontWeight=FontWeight.Bold) }
         return
     }
     Column{
-        Header("Reset bán thử"){vm.screen.value="MANAGE"}
+        Header("Dọn dữ liệu trước khai trương"){vm.screen.value="MANAGE"}
         Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)){
-            Text("XÓA DỮ LIỆU BÁN THỬ TRƯỚC KHAI TRƯƠNG",fontWeight=FontWeight.Black,fontSize=18.sp)
-            Text("Hiện có ${bills.size} bill PAID sẽ bị loại khỏi doanh thu.",fontWeight=FontWeight.Bold)
+            Text("DỌN DỮ LIỆU TRƯỚC KHAI TRƯƠNG",fontWeight=FontWeight.Black,fontSize=18.sp)
+            Text("Sẽ dọn ${bills.size} bill đã thanh toán và toàn bộ ca chấm công${if(openAttendances.isNotEmpty()) " · đang có ${openAttendances.size} ca mở" else ""}.",fontWeight=FontWeight.Bold)
+            Text("Bill/Payment bán thử sẽ bị loại khỏi dữ liệu vận hành và doanh thu, nhưng vẫn lưu audit để truy vết. Điểm, lượt ghé và voucher phát sinh từ bill sẽ được hoàn lại/hủy.")
             Text("GIỮ NGUYÊN: nhập hàng, chi phí đầu tư, nhà cung cấp, tài sản, menu, giá, bàn, nhân viên, cấu hình Cloud và media.")
-            Text("Bill được chuyển sang DELETED thay vì xóa vật lý để còn audit. Điểm/tổng chi tiêu khách liên quan sẽ được tính lại.")
-            Text("Trước khi thao tác, nên tạo Cloud Backup mới nhất. Sau reset hệ thống sẽ tự backup lại trạng thái mới.",fontSize=12.sp)
-            OutlinedTextField(confirmText,{confirmText=it.uppercase().take(16)},Modifier.fillMaxWidth(),label={Text("Nhập XOA BILL TEST để xác nhận")},singleLine=true)
+            Text("Ứng dụng tự lưu backup trước và sau thao tác, rồi yêu cầu đồng bộ Cloud.",fontSize=12.sp)
+            OutlinedTextField(confirmText,{confirmText=it.uppercase().take(24)},Modifier.fillMaxWidth(),label={Text("Nhập RESET KHAI TRUONG 0210 để xác nhận")},singleLine=true)
             Button(
-                onClick={vm.resetPreOpeningSales();confirmText=""},
+                onClick={vm.resetPreOpeningData();confirmText=""},
                 modifier=Modifier.fillMaxWidth(),
-                enabled=bills.isNotEmpty()&&confirmText=="XOA BILL TEST"
-            ){Text("XÁC NHẬN XÓA BILL BÁN THỬ")}
-            Text("Không thao tác vào Purchase/Expense/Asset.",fontSize=11.sp,fontWeight=FontWeight.Bold)
+                enabled=PreOpeningResetPolicy.canExecute(employee?.role,confirmText)
+            ){Text("XÁC NHẬN DỌN DỮ LIỆU TRƯỚC KHAI TRƯƠNG")}
+            Text("Không thao tác vào Purchase/Expense/Asset/Menu/Tài khoản.",fontSize=11.sp,fontWeight=FontWeight.Bold)
         }
     }
 }

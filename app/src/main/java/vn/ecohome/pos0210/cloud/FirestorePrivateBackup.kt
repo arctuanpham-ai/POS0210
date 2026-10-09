@@ -5,6 +5,7 @@ import android.database.sqlite.SQLiteDatabase
 import android.util.Base64
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Source
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.sync.withLock
 import vn.ecohome.pos0210.data.PosDatabase
@@ -43,10 +44,10 @@ object FirestorePrivateBackup {
         root.collection("slots").document(slot)
 
     private suspend fun <T> stage(name:String,block:suspend()->T):T =
-        try{block()}catch(e:Throwable){throw IllegalStateException("$name: ${e.message}",e)}
+        CloudExecution.stage(name,25_000L,block)
 
     suspend fun upload(context:Context,fs:FirebaseFirestore,uid:String,now:Long):CloudBackupInfo {
-        val staged=makeScrubbedCopy(context)
+        val staged=CloudExecution.operation("BACKUP_SNAPSHOT",CloudOperationGuard.mutex) { makeScrubbedCopy(context) }.getOrThrow()
         try {
             val zipped=gzip(staged.readBytes())
             val encoded=Base64.encodeToString(zipped,Base64.NO_WRAP)
@@ -56,8 +57,8 @@ object FirestorePrivateBackup {
             }
 
             val privateRoot=root(fs,uid)
-            val a=stage("BACKUP_READ_SLOT_A"){slotDoc(privateRoot,"A").get().await()}
-            val b=stage("BACKUP_READ_SLOT_B"){slotDoc(privateRoot,"B").get().await()}
+            val a=stage("BACKUP_READ_SLOT_A"){slotDoc(privateRoot,"A").get(Source.SERVER).await()}
+            val b=stage("BACKUP_READ_SLOT_B"){slotDoc(privateRoot,"B").get(Source.SERVER).await()}
             val target=chooseTargetSlot(a,b)
             val targetDoc=slotDoc(privateRoot,target)
 
@@ -106,7 +107,9 @@ object FirestorePrivateBackup {
                     "retentionSlots" to 2
                 )).await()
             }
-            return CloudBackupInfo(now,zipped.size,chunks.size,target)
+            val confirmed=stage("BACKUP_CONFIRM_SERVER"){targetDoc.get(Source.SERVER).await()}
+            require(!confirmed.metadata.hasPendingWrites()&&confirmed.getString("sha256")==checksum&&isValidSlot(confirmed)) {"BACKUP_SERVER_CONFIRMATION_FAILED"}
+            return CloudBackupInfo(System.currentTimeMillis(),zipped.size,chunks.size,target)
         } finally {
             staged.delete()
         }
@@ -135,17 +138,23 @@ object FirestorePrivateBackup {
         return legacyLatestInfo(privateRoot)
     }
 
-    suspend fun restoreLatest(context:Context):CloudBackupInfo = CloudOperationGuard.mutex.withLock { restoreLatestUnlocked(context) }
+    suspend fun restoreLatest(context:Context):CloudBackupInfo =
+        CloudExecution.operation("RESTORE",CloudOperationGuard.backupMutex) {
+            CloudExecution.operation("RESTORE_DB",CloudOperationGuard.mutex) { restoreLatestUnlocked(context) }.getOrThrow()
+        }.getOrThrow()
 
     // Caller already owns CloudOperationGuard (bootstrap sync). Avoid non-reentrant mutex deadlock.
     internal suspend fun restoreLatestInsideCloudOperation(context:Context):CloudBackupInfo = restoreLatestUnlocked(context)
 
     private suspend fun restoreLatestUnlocked(context:Context):CloudBackupInfo {
+        val local=PosDatabase.get(context).dao()
+        require(local.pendingSyncCount()==0 && local.cloudSessionsSnapshot().isEmpty() && local.cloudBillsSnapshot().isEmpty() && local.cloudPurchasesSnapshot().isEmpty()) {
+            "RESTORE_LOCAL_DATA_PRESENT: không ghi đè máy có giao dịch hoặc thay đổi chưa đồng bộ"
+        }
         val config=FirebaseCloudSync.config(context)
         require(config.valid){"Chưa cấu hình Firebase"}
         val app=FirebaseCloudSync.firebaseApp(context,config)
-        val uid=com.google.firebase.auth.FirebaseAuth.getInstance(app).currentUser?.uid
-            ?:error("Chưa đăng nhập Firebase")
+        val uid=FirebaseCloudSync.authenticatedUid(context,app)
         val fs=FirebaseFirestore.getInstance(app)
         val privateRoot=root(fs,uid)
 

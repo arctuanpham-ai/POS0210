@@ -1597,6 +1597,7 @@ fun ResetPreOpeningSales(vm:PosViewModel){
 
 @Composable
 fun CloudSyncSettings(vm:PosViewModel){
+    val cloudTrace by vn.ecohome.pos0210.cloud.CloudExecution.history.collectAsState()
     val settings by vm.settings.collectAsState();val state by vm.cloudSyncState.collectAsState();val message by vm.cloudMessage.collectAsState();val dashboard by vm.cloudDashboard.collectAsState()
     fun current(key:String)=settings.firstOrNull{it.key==key}?.value.orEmpty()
     val firebaseDefaults=vn.ecohome.pos0210.cloud.FirebaseCloudSync.defaultConfig();var projectId by remember(settings){mutableStateOf(current("firebase_project_id").ifBlank{firebaseDefaults.projectId})};var applicationId by remember(settings){mutableStateOf(current("firebase_application_id").ifBlank{firebaseDefaults.applicationId})};var apiKey by remember(settings){mutableStateOf(current("firebase_api_key").ifBlank{firebaseDefaults.apiKey})}
@@ -1629,7 +1630,10 @@ fun CloudSyncSettings(vm:PosViewModel){
             val backupOnlyError=state?.lastError?.takeIf{it.startsWith("PRIVATE_BACKUP_ONLY:")}
             Text("Realtime sync: "+when{state?.syncedUid==null->"Chưa đăng nhập";state?.lastSuccessAt!=null->"Thành công";else->"Chưa có lần thành công"},fontWeight=FontWeight.Bold)
             state?.lastSuccessAt?.let{Text("Lần realtime thành công: ${time(it)}",fontSize=12.sp)}
-            Text("Cloud backup: "+if(backupOnlyError==null)"Sẵn sàng" else "Có lỗi",fontWeight=FontWeight.Bold)
+            val backupConfirmed=current("cloud_backup_confirmed_at").toLongOrNull()
+            Text("Cloud backup: "+if(backupOnlyError!=null)"Có lỗi" else if(backupConfirmed!=null)"Đã được server xác nhận" else "Chưa có xác nhận trên máy này",fontWeight=FontWeight.Bold)
+            backupConfirmed?.let{Text("Backup server xác nhận: "+java.text.SimpleDateFormat("dd/MM/yyyy HH:mm:ss",java.util.Locale.getDefault()).format(java.util.Date(it)),fontSize=12.sp)}
+            cloudTrace.takeLast(6).forEach{Text(it,fontSize=11.sp)}
             backupOnlyError?.let{Text(it.removePrefix("PRIVATE_BACKUP_ONLY:").trim(),color=Color(0xFF9A4B3D),fontSize=12.sp)}
             HorizontalDivider()
             Text("MANAGER REALTIME",fontWeight=FontWeight.Black,fontSize=18.sp)

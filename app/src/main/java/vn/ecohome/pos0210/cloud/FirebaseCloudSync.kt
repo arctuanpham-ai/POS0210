@@ -14,6 +14,8 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Source
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -38,7 +40,7 @@ object CloudSyncPolicy{
     fun shouldUploadSetting(key:String)=key in safeSettingKeys
 }
 
-internal object CloudOperationGuard { val mutex=Mutex() }
+internal object CloudOperationGuard { val mutex=Mutex(); val backupMutex=Mutex() }
 
 object FirebaseCloudSync {
     private const val APP_NAME="pos0210-cloud"
@@ -65,59 +67,57 @@ object FirebaseCloudSync {
         return FirebaseApp.initializeApp(context,FirebaseOptions.Builder().setProjectId(c.projectId).setApplicationId(c.applicationId).setApiKey(c.apiKey).setStorageBucket("${c.projectId}.firebasestorage.app").build(),APP_NAME)
             ?: error("Không thể khởi tạo Firebase")
     }
+    internal suspend fun authenticatedUid(context:Context,app:FirebaseApp):String {
+        val auth=FirebaseAuth.getInstance(app)
+        val user=auth.currentUser?:error("AUTH_SESSION_MISSING: giữ nguyên UID đã lưu; cần xác thực lại tài khoản cũ")
+        val expected=PosDatabase.get(context).dao().cloudSyncStateSnapshot()?.syncedUid
+        require(expected==null||expected==user.uid){"AUTH_UID_MISMATCH: không đồng bộ sang UID khác"}
+        stage("AUTH_TOKEN"){user.getIdToken(false).await()}
+        return user.uid
+    }
     suspend fun signIn(context:Context,email:String,password:String):String{
         val c=config(context);require(c.valid){"Chưa cấu hình Firebase"}
-        return FirebaseAuth.getInstance(firebaseApp(context,c)).signInWithEmailAndPassword(email.trim(),password).await().user?.uid?:error("Firebase không trả UID")
+        val expected=PosDatabase.get(context).dao().cloudSyncStateSnapshot()?.syncedUid
+        val uid=stage("AUTH_SIGN_IN"){FirebaseAuth.getInstance(firebaseApp(context,c)).signInWithEmailAndPassword(email.trim(),password).await().user?.uid}?:error("Firebase không trả UID")
+        require(expected==null||expected==uid){"AUTH_UID_MISMATCH: giữ nguyên UID Cloud cũ, không đồng bộ tài khoản khác"}
+        return uid
     }
     fun signOut(context:Context){runCatching{FirebaseApp.getApps(context).firstOrNull{it.name==APP_NAME}?.let{FirebaseAuth.getInstance(it).signOut()}}}
     fun reset(context:Context){runCatching{FirebaseApp.getApps(context).firstOrNull{it.name==APP_NAME}?.delete()}}
     fun currentUid(context:Context):String?=runCatching{FirebaseApp.getApps(context).firstOrNull{it.name==APP_NAME}?.let{FirebaseAuth.getInstance(it).currentUser?.uid}}.getOrNull()
 
     private suspend fun <T> stage(name:String,timeoutMs:Long=25_000L,block:suspend()->T):T =
-        try{ withTimeout(timeoutMs){block()} }catch(e:Throwable){ throw IllegalStateException("$name: ${e.message}",e) }
+        CloudExecution.stage(name,timeoutMs,block)
 
-    suspend fun backupNow(context:Context):Result<CloudBackupInfo> = CloudOperationGuard.mutex.withLock { runCatching{
+    suspend fun backupNow(context:Context):Result<CloudBackupInfo> = CloudExecution.operation("BACKUP",CloudOperationGuard.backupMutex) {
         val c=config(context);require(c.valid){"Chưa cấu hình Firebase"}
         val app=firebaseApp(context,c)
-        val uid=FirebaseAuth.getInstance(app).currentUser?.uid?:error("Chưa đăng nhập Firebase")
+        val uid=authenticatedUid(context,app)
         val fs=FirebaseFirestore.getInstance(app)
         val backup=stage("PRIVATE_BACKUP",90_000L){FirestorePrivateBackup.upload(context,fs,uid,System.currentTimeMillis())}
         // Backup only: media upload/download is a separate explicit operation.
         // Avoid holding CloudOperationGuard for another 120 seconds after DB backup.
+        PosDatabase.get(context).dao().saveSetting(vn.ecohome.pos0210.data.AppSettingEntity("cloud_backup_confirmed_at",backup.createdAt.toString()))
         backup
-    }}
+    }
 
     // Explicit catalog publication: called only after an authorized local menu edit.
     // A secondary device running ordinary sync can only pull, never publish.
-    suspend fun publishMenu(context:Context):Result<Unit> = CloudOperationGuard.mutex.withLock { runCatching {
+    suspend fun publishMenu(context:Context):Result<Unit> = CloudExecution.operation("PUBLISH_MENU",CloudOperationGuard.mutex) {
         val dao=PosDatabase.get(context).dao()
         val cfg=config(context)
         val app=firebaseApp(context,cfg)
-        val uid=FirebaseAuth.getInstance(app).currentUser?.uid?:error("Chưa đăng nhập Firebase")
+        val uid=authenticatedUid(context,app)
         val fs=FirebaseFirestore.getInstance(app)
         val root=fs.collection("users").document(uid).collection("stores").document("0210")
-        val categories=dao.allCategoriesSnapshot()
-        val items=dao.allMenuSnapshot()
-        require(categories.isNotEmpty() && items.isNotEmpty()){"Không đẩy menu rỗng lên Cloud"}
-        val now=System.currentTimeMillis()
-        // Merge individual entities instead of uploading the entire stale device catalog.
-        // Existing remote entries not edited on this device must remain untouched.
-        val categoryRemote=root.collection("menuCategories").get().await().documents.associateBy{it.id}
-        val itemRemote=root.collection("menu").get().await().documents.associateBy{it.id}
-        val pending=dao.pendingSync(now,500).filter{it.entityType=="MENU_ITEM"}
-        val changedIds=pending.map{it.entityId}.toSet()
-        val categoryUpdates=categories.filter{categoryRemote[it.id]==null}
-        val itemUpdates=items.filter{itemRemote[it.id]==null || it.id in changedIds}
-        writeMaps(fs,root.collection("menuCategories"),categoryUpdates.map{v->v.id to mapOf("id" to v.id,"name" to v.name,"sortOrder" to v.sortOrder,"active" to v.active,"updatedAt" to now)})
-        writeMaps(fs,root.collection("menu"),itemUpdates.map{v->v.id to mapOf("id" to v.id,"categoryId" to v.categoryId,"name" to v.name,"price" to v.price,"sortOrder" to v.sortOrder,"active" to v.active,"productCode" to v.productCode,"description" to v.description,"updatedAt" to now)})
-        root.collection("config").document("menuVersion").set(mapOf("updatedAt" to now,"publisherUid" to uid,"itemCount" to items.size,"categoryCount" to categories.size)).await()
+        pushPendingCatalog(root,dao)
         Unit
-    }}
+    }
 
-    suspend fun syncNow(context:Context):Result<Unit> = CloudOperationGuard.mutex.withLock { runCatching{
+    suspend fun syncNow(context:Context):Result<Unit> = CloudExecution.operation("REALTIME",CloudOperationGuard.mutex) {
         val db=PosDatabase.get(context);val dao=db.dao();val old=dao.cloudSyncStateSnapshot()?:CloudSyncStateEntity()
         dao.saveCloudSyncState(old.copy(lastAttemptAt=System.currentTimeMillis(),lastError=null))
-        val c=config(context);require(c.valid){"Chưa cấu hình Firebase"};val firebaseApp=firebaseApp(context,c);val uid=FirebaseAuth.getInstance(firebaseApp).currentUser?.uid?:error("Chưa đăng nhập Firebase")
+        val c=config(context);require(c.valid){"Chưa cấu hình Firebase"};val firebaseApp=firebaseApp(context,c);val uid=authenticatedUid(context,firebaseApp)
         val fs=FirebaseFirestore.getInstance(firebaseApp);val root=fs.collection("users").document(uid).collection("stores").document("0210")
         // OFFLINE-FIRST bootstrap safety: a fresh/restored install must never publish
         // bundled defaults or an empty local database before remote state is inspected.
@@ -125,35 +125,9 @@ object FirebaseCloudSync {
         // path marks READY we fail closed and leave local operation untouched.
         when(old.bootstrapState){
             "NEEDS_PULL" -> {
-                val remoteExists=stage("BOOTSTRAP_CHECK"){root.get().await().exists()}
+                val remoteExists=stage("BOOTSTRAP_CHECK"){root.get(Source.SERVER).await().exists()}
                 if(remoteExists){
-                    // Restore the latest verified A/B Room snapshot before any local snapshot
-                    // is allowed to reach Firestore. restoreLatest closes/reopens Room itself.
-                    stage("BOOTSTRAP_RESTORE",60_000L){FirestorePrivateBackup.restoreLatestInsideCloudOperation(context)}
-                    val restoredDao=PosDatabase.get(context).dao()
-                    val bootstrapNow=System.currentTimeMillis()
-                    // DB is the operational prerequisite. Media is best-effort: a Storage/network
-                    // failure must never keep a freshly restored POS from becoming usable.
-                    val mediaRestoreError=runCatching{CloudMediaSync.restoreMissing(context,fs,uid)}
-                        .exceptionOrNull()?.message?.take(180)
-                    restoredDao.updateBootstrapState("READY",bootstrapNow,bootstrapNow)
-                    val restoredState=restoredDao.cloudSyncStateSnapshot()?:CloudSyncStateEntity()
-                    restoredDao.saveCloudSyncState(restoredState.copy(
-                        enabled=true,
-                        dirty=false,
-                        lastAttemptAt=bootstrapNow,
-                        lastSuccessAt=bootstrapNow,
-                        lastError=mediaRestoreError?.let{"MEDIA_RESTORE_ONLY: $it"},
-                        syncedUid=uid
-                    ))
-                    // Room was physically replaced. The caller ViewModel still owns DAO/Flow
-                    // instances from the pre-restore Room, so continuing in-process can show
-                    // stale Cloud/menu/media state. Restart and bind the whole UI to restored DB.
-                    val launch=context.packageManager.getLaunchIntentForPackage(context.packageName)
-                        ?.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                    if(launch!=null) context.startActivity(launch)
-                    android.os.Process.killProcess(android.os.Process.myPid())
-                    return@runCatching
+                    error("BOOTSTRAP_RESTORE_REQUIRED: không tự ghi đè local; dùng Khôi phục Cloud trên máy mới sau khi bảo toàn dữ liệu")
                 }
                 val bootstrapNow=System.currentTimeMillis()
                 dao.updateBootstrapState("READY",bootstrapNow,bootstrapNow)
@@ -172,9 +146,9 @@ object FirebaseCloudSync {
         // Flush locally edited menu entities BEFORE pulling remote state.
         // Otherwise a remote snapshot can overwrite an offline edit before upload.
         pushPendingCatalog(root,dao)
-        stage("PULL_MENU"){pullCloudMenu(root,dao)}
-        stage("PULL_FINANCE"){pullCloudFinance(root,dao)}
-        stage("WRITE_FINANCE"){writeFinanceMirror(fs,root,dao)}
+        pullCloudMenu(root,dao)
+        pullCloudFinance(root,dao)
+        writeFinanceMirror(fs,root,dao)
         val tables=dao.cloudTablesSnapshot();val sessions=dao.cloudSessionsSnapshot();val bills=dao.cloudBillsSnapshot();val payments=dao.cloudPaymentsSnapshot();val paymentMirror=dao.cloudPaymentMirrorSnapshot()
         val today=Calendar.getInstance().apply{set(Calendar.HOUR_OF_DAY,0);set(Calendar.MINUTE,0);set(Calendar.SECOND,0);set(Calendar.MILLISECOND,0)}.timeInMillis
         val paidToday=bills.filter{it.status=="PAID"&&(it.closedAt?:0)>=today};val open=sessions.filter{it.status=="OPEN"};val now=System.currentTimeMillis()
@@ -204,7 +178,7 @@ object FirebaseCloudSync {
         queued.filter { it.entityType != "MEDIA" }.forEach { q ->
             if(dao.claimSync(q.id,System.currentTimeMillis())==1){
                 val ok=when(q.entityType){
-                    "MENU_ITEM" -> true // menu mirror write above completed successfully
+                    "MENU_ITEM" -> false // Only pushPendingCatalog can acknowledge the exact queued edit.
                     "COMBO" -> true // combo metadata is covered by private snapshot; media has its own intent
                     "MEDIA" -> false
                     else -> false
@@ -221,58 +195,65 @@ object FirebaseCloudSync {
         dao.saveCloudSyncState(currentState.copy(enabled=true,dirty=false,lastAttemptAt=now,lastSuccessAt=now,lastError=null,syncedUid=uid))
     }.onFailure{e->
         val dao=PosDatabase.get(context).dao();val old=dao.cloudSyncStateSnapshot()?:CloudSyncStateEntity();dao.saveCloudSyncState(old.copy(lastAttemptAt=System.currentTimeMillis(),lastError=e.message?.take(300)))
-    }}
+        dao.saveSetting(vn.ecohome.pos0210.data.AppSettingEntity("cloud_sync_last_trace",CloudExecution.history.value.joinToString("\n")))
+    }
 
-    suspend fun syncDashboardNow(context:Context):Result<Unit> = CloudOperationGuard.mutex.withLock { runCatching{
-        val db=PosDatabase.get(context);val dao=db.dao();val c=config(context);require(c.valid){"Chưa cấu hình Firebase"};val firebaseApp=firebaseApp(context,c);val uid=FirebaseAuth.getInstance(firebaseApp).currentUser?.uid?:error("Chưa đăng nhập Firebase")
+    suspend fun syncDashboardNow(context:Context):Result<Unit> = CloudExecution.operation("DASHBOARD",CloudOperationGuard.mutex) {
+        val db=PosDatabase.get(context);val dao=db.dao();val c=config(context);require(c.valid){"Chưa cấu hình Firebase"};val firebaseApp=firebaseApp(context,c);val uid=authenticatedUid(context,firebaseApp)
         val fs=FirebaseFirestore.getInstance(firebaseApp);val root=fs.collection("users").document(uid).collection("stores").document("0210")
-        stage("PULL_FINANCE"){pullCloudFinance(root,dao)}
-        stage("WRITE_FINANCE"){writeFinanceMirror(fs,root,dao)}
+        // Immediate worker is lightweight: finance reconciliation belongs to full sync.
         val tables=dao.cloudTablesSnapshot();val sessions=dao.cloudSessionsSnapshot();val batches=dao.cloudOrderBatchesSnapshot();val items=dao.cloudOrderItemsSnapshot();val bills=dao.cloudBillsSnapshot();val open=sessions.filter{it.status=="OPEN"};val openByTable=open.associateBy{it.tableId}
         val today=Calendar.getInstance().apply{set(Calendar.HOUR_OF_DAY,0);set(Calendar.MINUTE,0);set(Calendar.SECOND,0);set(Calendar.MILLISECOND,0)}.timeInMillis;val paidToday=bills.filter{it.status=="PAID"&&(it.closedAt?:0)>=today};val now=System.currentTimeMillis()
-        root.collection("dashboard").document("current").set(financialDashboard(dao,bills,dao.cloudPaymentsSnapshot(),now)+mapOf("openTables" to open.size,"openTableNames" to tables.filter{openByTable.containsKey(it.id)}.map{it.name},"revenueToday" to paidToday.sumOf{it.total},"paidBillsToday" to paidToday.size,"lastUpdatedAt" to now)).await()
+        stage("DASHBOARD_WRITE"){root.collection("dashboard").document("current").set(financialDashboard(dao,bills,dao.cloudPaymentsSnapshot(),now)+mapOf("openTables" to open.size,"openTableNames" to tables.filter{openByTable.containsKey(it.id)}.map{it.name},"revenueToday" to paidToday.sumOf{it.total},"paidBillsToday" to paidToday.size,"lastUpdatedAt" to now)).await()}
         writeMaps(fs,root.collection("tableStatus"),tables.map{t->t.id to mapOf("id" to t.id,"name" to t.name,"areaId" to t.areaId,"active" to t.active,"occupied" to openByTable.containsKey(t.id),"openedAt" to openByTable[t.id]?.openedAt,"updatedAt" to now)})
         // The browser manager is read-only, but it needs these live records to show
         // the current order and elapsed serving time without waiting for the backup job.
         writeMaps(fs,root.collection("sessions"),sessions.map{s->s.id to mapOf("id" to s.id,"tableId" to s.tableId,"openedAt" to s.openedAt,"openedBy" to s.openedBy,"status" to s.status,"version" to s.version)})
         writeMaps(fs,root.collection("orderBatches"),batches.map{b->b.id to mapOf("id" to b.id,"sessionId" to b.sessionId,"sequence" to b.sequence,"ordererId" to b.ordererId,"createdAt" to b.createdAt,"sentAt" to b.sentAt,"status" to b.status,"serviceNo" to b.serviceNo,"deliveredAt" to b.deliveredAt,"deliveredBy" to b.deliveredBy)})
         writeMaps(fs,root.collection("orderItems"),items.map{i->i.id to mapOf("id" to i.id,"batchId" to i.batchId,"menuItemId" to i.menuItemId,"itemName" to i.itemNameSnapshot,"unitPrice" to i.unitPriceSnapshot,"qty" to i.qty,"note" to i.note,"adjustmentOfItemId" to i.adjustmentOfItemId)})
-    }}
+    }
 
     private suspend fun pushPendingCatalog(root:com.google.firebase.firestore.DocumentReference,dao:PosDao){
         dao.recoverInflightSync()
-        val pending=dao.pendingSync(System.currentTimeMillis(),500).filter{it.entityType=="MENU_ITEM"||it.entityType=="MENU_CATEGORY"}.take(30)
-        for(q in pending){
-            if(dao.claimSync(q.id,System.currentTimeMillis())!=1)continue
-            try{
-                stage("MENU_ITEM_${q.entityId}",8_000L){
+        val pending=dao.pendingSync(System.currentTimeMillis(),500).filter{it.entityType=="MENU_ITEM"||it.entityType=="MENU_CATEGORY"}
+        for(group in pending.chunked(400)){
+            val claimed=group.filter{dao.claimSync(it.id,System.currentTimeMillis())==1}
+            if(claimed.isEmpty())continue
+            try {
+                val batch=root.firestore.batch()
+                for(q in claimed.distinctBy{it.entityType to it.entityId}) {
                 if(q.entityType=="MENU_ITEM"){
                     val item=dao.menuItemById(q.entityId)
-                    if(item!=null)root.collection("menu").document(item.id).set(mapOf(
+                    if(item!=null)batch.set(root.collection("menu").document(item.id),mapOf(
                         "id" to item.id,"categoryId" to item.categoryId,"name" to item.name,
                         "price" to item.price,"sortOrder" to item.sortOrder,"active" to item.active,
                         "productCode" to item.productCode,"description" to item.description,
-                        "updatedAt" to System.currentTimeMillis())).await()
+                        "updatedAt" to System.currentTimeMillis()))
                 }else{
                     val cat=dao.allCategoriesSnapshot().firstOrNull{it.id==q.entityId}
-                    if(cat!=null)root.collection("menuCategories").document(cat.id).set(mapOf(
+                    if(cat!=null)batch.set(root.collection("menuCategories").document(cat.id),mapOf(
                         "id" to cat.id,"name" to cat.name,"sortOrder" to cat.sortOrder,
-                        "active" to cat.active,"updatedAt" to System.currentTimeMillis())).await()
+                        "active" to cat.active,"updatedAt" to System.currentTimeMillis()))
                 }
                 }
-                dao.completeSync(q.id)
+                stage("PUSH_PENDING_CATALOG count=${claimed.size}"){batch.commit().await()}
+                claimed.forEach{dao.completeSync(it.id)}
+            }catch(e:CancellationException){ throw e
             }catch(e:Exception){
-                dao.retrySync(q.id,System.currentTimeMillis()+30000L,System.currentTimeMillis(),e.message)
-                // Keep the unsent local mutation pending; do not block other cloud operations.
+                claimed.forEach{dao.retrySync(it.id,System.currentTimeMillis()+30000L,System.currentTimeMillis(),e.message)}
+                throw e // Fail once, preserve queue; do not accumulate 30 individual timeouts.
             }
         }
     }
 
     private suspend fun pullCloudMenu(root:com.google.firebase.firestore.DocumentReference,dao:PosDao){
-        val categoryDocs=root.collection("menuCategories").get().await().documents
-        val itemDocs=root.collection("menu").get().await().documents
+        val categoryDocs=stage("PULL_MENU_CATEGORIES"){root.collection("menuCategories").get(Source.SERVER).await().documents}
+        val itemDocs=stage("PULL_MENU_ITEMS"){root.collection("menu").get(Source.SERVER).await().documents}
         if(categoryDocs.isEmpty() || itemDocs.isEmpty())return
+        val unsent=dao.unsentCatalogSync()
+        val unsentCategories=unsent.filter{it.entityType=="MENU_CATEGORY"}.map{it.entityId}.toSet()
         for(doc in categoryDocs){
+            if(doc.id in unsentCategories)continue
             dao.saveCategory(vn.ecohome.pos0210.data.MenuCategoryEntity(
                 id=doc.getString("id")?:doc.id,
                 name=doc.getString("name")?:continue,
@@ -281,8 +262,6 @@ object FirebaseCloudSync {
         }
         val local=dao.allMenuSnapshot().associateBy{it.id}
         // Cloud must not overwrite unsent local catalog edits after a timeout.
-        val unsent=dao.pendingSync(System.currentTimeMillis()+86_400_000L,5000)
-            .filter{it.entityType=="MENU_ITEM"||it.entityType=="MENU_CATEGORY"}
         val unsentItems=unsent.filter{it.entityType=="MENU_ITEM"}.map{it.entityId}.toSet()
         for(doc in itemDocs){
             val id=doc.getString("id")?:doc.id
@@ -302,7 +281,7 @@ object FirebaseCloudSync {
     }
 
     private suspend fun pullCloudFinance(root:com.google.firebase.firestore.DocumentReference,dao:PosDao){
-        val remotePurchases=root.collection("purchases").get().await().documents
+        val remotePurchases=stage("PULL_FINANCE_PURCHASES"){root.collection("purchases").get(Source.SERVER).await().documents}
         remotePurchases.forEach{doc->
             val id=doc.getString("id")?.ifBlank{doc.id}?:doc.id
             val purchasedAt=doc.getLong("purchasedAt")?:return@forEach
@@ -324,13 +303,13 @@ object FirebaseCloudSync {
                 )
             )
         }
-        val remoteSuppliers=root.collection("suppliers").get().await().documents
+        val remoteSuppliers=stage("PULL_FINANCE_SUPPLIERS"){root.collection("suppliers").get(Source.SERVER).await().documents}
         remoteSuppliers.forEach{doc->
             val id=doc.getString("id")?.ifBlank{doc.id}?:doc.id
             val name=doc.getString("name")?:return@forEach
             if(name.isNotBlank()) dao.saveSupplier(vn.ecohome.pos0210.data.SupplierEntity(id,name,doc.getString("phone").orEmpty(),doc.getString("note").orEmpty(),doc.getBoolean("active")?:true))
         }
-        val remotePurchaseItems=root.collection("purchaseItems").get().await().documents.mapNotNull{doc->
+        val remotePurchaseItems=stage("PULL_FINANCE_ITEMS"){root.collection("purchaseItems").get(Source.SERVER).await().documents}.mapNotNull{doc->
             val purchaseId=doc.getString("purchaseId")?:return@mapNotNull null
             val name=doc.getString("name")?:return@mapNotNull null
             val qty=doc.getDouble("qty")?:doc.getLong("qty")?.toDouble()?:return@mapNotNull null
@@ -348,7 +327,7 @@ object FirebaseCloudSync {
             )
         }
         if(remotePurchaseItems.isNotEmpty()) dao.insertCloudPurchaseItems(remotePurchaseItems)
-        val remoteAssets=root.collection("assets").get().await().documents
+        val remoteAssets=stage("PULL_FINANCE_ASSETS"){root.collection("assets").get(Source.SERVER).await().documents}
         remoteAssets.forEach{doc->
             val id=doc.getString("id")?.ifBlank{doc.id}?:doc.id
             val name=doc.getString("name")?:return@forEach
@@ -368,7 +347,7 @@ object FirebaseCloudSync {
                 investmentClass=doc.getString("investmentClass").orEmpty().ifBlank{"INITIAL"}
             ))
         }
-        val remoteMovements=root.collection("financialMovements").get().await().documents
+        val remoteMovements=stage("PULL_FINANCE_MOVEMENTS"){root.collection("financialMovements").get(Source.SERVER).await().documents}
         remoteMovements.forEach{doc->
             val id=doc.getString("id")?.ifBlank{doc.id}?:doc.id
             val type=doc.getString("type")?:return@forEach
@@ -405,10 +384,22 @@ object FirebaseCloudSync {
     }
 
     private suspend fun writeMaps(fs:FirebaseFirestore,collection:com.google.firebase.firestore.CollectionReference,rows:List<Pair<String,Map<String,Any?>>>){
-        rows.chunked(400).forEachIndexed{index,chunk->
+        val ack=fs.app.applicationContext.getSharedPreferences("pos0210_cloud_ack_v1",Context.MODE_PRIVATE)
+        // Persist only hashes of server-acknowledged payloads. UID is part of the path.
+        // Ignore heartbeat timestamps, not business fields, to avoid rewriting historical rows.
+        fun fingerprint(data:Map<String,Any?>):String {
+            val stable=if(collection.id=="tableStatus")data-"updatedAt" else data
+            return java.security.MessageDigest.getInstance("SHA-256").digest(stable.toSortedMap().toString().toByteArray(Charsets.UTF_8)).joinToString(""){"%02x".format(it)}
+        }
+        val changed=rows.filter{(id,data)->ack.getString(collection.path+"/"+id,null)!=fingerprint(data)}
+        CloudExecution.trace("WRITE_${collection.id} changed=${changed.size} total=${rows.size}")
+        changed.chunked(400).forEachIndexed{index,chunk->
             stage("WRITE_${collection.id}_BATCH_${index+1}",15_000L){
                 val batch=fs.batch();chunk.forEach{(id,data)->batch.set(collection.document(id),data)};batch.commit().await()
             }
+            val editor=ack.edit()
+            chunk.forEach{(id,data)->editor.putString(collection.path+"/"+id,fingerprint(data))}
+            editor.commit()
         }
     }
     private suspend fun financialDashboard(dao:PosDao,bills:List<vn.ecohome.pos0210.data.BillEntity>,payments:List<vn.ecohome.pos0210.data.PaymentEntity>,now:Long):Map<String,Any?>{
@@ -433,7 +424,7 @@ object FirebaseCloudSync {
     }
     fun schedule(context:Context){
         val network=Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
-        val syncRequest=PeriodicWorkRequestBuilder<FirebaseSyncWorker>(24,TimeUnit.HOURS)
+        val syncRequest=PeriodicWorkRequestBuilder<FirebaseSyncWorker>(15,TimeUnit.MINUTES)
             .setConstraints(network).build()
         val backupRequest=PeriodicWorkRequestBuilder<FirebaseBackupWorker>(1,TimeUnit.HOURS)
             .setConstraints(network).build()
@@ -446,7 +437,7 @@ object FirebaseCloudSync {
     }
     fun enqueueImmediate(context:Context){
         val request=OneTimeWorkRequestBuilder<FirebaseRealtimeWorker>().setInitialDelay(3,TimeUnit.SECONDS).setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build()
-        WorkManager.getInstance(context).enqueueUniqueWork("pos0210-firebase-immediate",ExistingWorkPolicy.REPLACE,request)
+        WorkManager.getInstance(context).enqueueUniqueWork("pos0210-firebase-immediate",ExistingWorkPolicy.KEEP,request)
     }
     fun enqueueBackup(context:Context){
         val request=OneTimeWorkRequestBuilder<FirebaseBackupWorker>()
@@ -454,7 +445,7 @@ object FirebaseCloudSync {
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
-            "pos0210-firebase-backup",ExistingWorkPolicy.REPLACE,request
+            "pos0210-firebase-backup",ExistingWorkPolicy.KEEP,request
         )
     }
 }

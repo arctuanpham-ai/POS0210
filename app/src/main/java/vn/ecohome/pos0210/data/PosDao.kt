@@ -173,6 +173,7 @@ WHERE s.status='OPEN' GROUP BY s.id""") fun tableServiceTimings():Flow<List<Tabl
 @Query("UPDATE CloudSyncStateEntity SET dirty=1 WHERE id='firebase'") suspend fun markCloudDirty():Int
 @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun enqueueSync(v:SyncQueueEntity)
 @Query("SELECT * FROM SyncQueueEntity WHERE status='PENDING' AND nextAttemptAt<=:now ORDER BY createdAt LIMIT :limit") suspend fun pendingSync(now:Long,limit:Int=100):List<SyncQueueEntity>
+@Query("SELECT * FROM SyncQueueEntity WHERE status IN ('PENDING','IN_FLIGHT') AND entityType IN ('MENU_ITEM','MENU_CATEGORY')") suspend fun unsentCatalogSync():List<SyncQueueEntity>
 @Query("UPDATE SyncQueueEntity SET status='IN_FLIGHT',attempts=attempts+1,updatedAt=:now WHERE id=:id AND status='PENDING'") suspend fun claimSync(id:String,now:Long):Int
 @Query("DELETE FROM SyncQueueEntity WHERE id=:id") suspend fun completeSync(id:String):Int
 @Query("UPDATE SyncQueueEntity SET status='PENDING',nextAttemptAt=:nextAttemptAt,updatedAt=:now,lastError=:error WHERE id=:id") suspend fun retrySync(id:String,nextAttemptAt:Long,now:Long,error:String?):Int

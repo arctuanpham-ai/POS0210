@@ -246,6 +246,7 @@ WHERE s.status='OPEN' GROUP BY s.id""") fun tableServiceTimings():Flow<List<Tabl
 @Query("UPDATE PaymentEntity SET dataScope='PREOPENING_RESET' WHERE billId IN (:billIds) AND dataScope='LIVE'") suspend fun archivePaymentsForBills(billIds:List<String>):Int
 @Query("UPDATE CustomerRewardEntity SET status='CANCELLED' WHERE sourceBillId IN (:billIds) AND status='AVAILABLE'") suspend fun cancelRewardsForBills(billIds:List<String>):Int
 @Query("UPDATE CustomerEntity SET points=points+:pointsDelta,totalSpend=MAX(0,totalSpend+:spendDelta),visitCount=MAX(0,visitCount+:visitDelta),lastVisitAt=:lastVisitAt WHERE id=:customerId") suspend fun updateCustomerStats(customerId:String,pointsDelta:Int,spendDelta:Long,visitDelta:Int,lastVisitAt:Long?)
+@Query("UPDATE CustomerEntity SET active=0 WHERE id=:id AND active=1") suspend fun softDeleteCustomer(id:String):Int
 @Query("UPDATE CustomerEntity SET name=:name,phone=:phone,address=:address WHERE id=:id") suspend fun updateCustomerProfileFields(id:String,name:String,phone:String,address:String):Int
 @Query("UPDATE CustomerEntity SET tier=:tier,tierManual=:manual WHERE id=:id") suspend fun updateCustomerTierFields(id:String,tier:String,manual:Boolean):Int
 @Query("UPDATE PurchaseEntity SET status='DELETED' WHERE id=:id AND status='ACTIVE'") suspend fun softDeletePurchase(id:String):Int

@@ -1102,6 +1102,20 @@ fun Customers(vm: PosViewModel) {
                             onClick = { editTarget = c },
                             modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
                         ) { Text("CHỈNH SỬA THÔNG TIN") }
+                        if (current?.role == "ADMIN") {
+                            var confirmHide by remember(c.id) { mutableStateOf(false) }
+                            if (!confirmHide) {
+                                OutlinedButton(onClick = { confirmHide = true }, modifier = Modifier.fillMaxWidth()) {
+                                    Text("ẨN KHÁCH HÀNG")
+                                }
+                            } else {
+                                Text("Ẩn khách khỏi danh sách? Bill và lịch sử giao dịch vẫn được giữ.", fontSize = 12.sp)
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    TextButton(onClick = { confirmHide = false }) { Text("HỦY") }
+                                    Button(onClick = { vm.softDeleteCustomer(c); selected = null }) { Text("XÁC NHẬN ẨN") }
+                                }
+                            }
+                        }
                         Text("Tổng chi tiêu: ${money(c.totalSpend)}")
                         Text("Điểm: ${c.points}")
                         Text("Lượt ghé: ${c.visitCount}")

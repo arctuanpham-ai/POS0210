@@ -2,7 +2,7 @@ name: POS0210 Build
 # legacy signing secrets configured
 on:
   push:
-    branches: [ main, offline-first, candidate34-dev, candidate35-dev ]
+    branches: [ main, offline-first, candidate34-dev, candidate35-dev, fix/receipt-customer-preopening-20261009 ]
   workflow_dispatch:
 permissions:
   contents: write

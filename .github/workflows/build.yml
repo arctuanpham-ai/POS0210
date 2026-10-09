@@ -5,7 +5,7 @@ on:
     branches: [ main, offline-first, candidate34-dev, candidate35-dev ]
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -49,3 +49,13 @@ jobs:
           name: POS0210-signed-${{ github.sha }}
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+      - name: Publish signed APK for direct installation
+        if: github.ref == 'refs/heads/candidate35-dev'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: candidate35-${{ github.sha }}
+          name: POS0210 Candidate 35 ${{ github.sha }}
+          prerelease: true
+          make_latest: false
+          files: app/build/outputs/apk/debug/app-debug.apk
+          fail_on_unmatched_files: true

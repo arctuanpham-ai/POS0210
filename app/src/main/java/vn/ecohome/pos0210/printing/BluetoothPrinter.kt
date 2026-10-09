@@ -253,7 +253,8 @@ object ReceiptRenderer {
             c.drawText("TECHCOMBANK · SOUNDBOX",W/2f,y,paint(20f,true,Paint.Align.CENTER));y+=30
             c.drawText("CHUYỂN KHOẢN: ${money(total)}",W/2f,y,paint(23f,true,Paint.Align.CENTER));y+=18
             val qrSize=292
-            val q=Bitmap.createScaledBitmap(qr,qrSize,qrSize,true)
+            // Thermal printers need hard pixel edges; bilinear scaling blurs QR modules.
+            val q=Bitmap.createScaledBitmap(qr,qrSize,qrSize,false)
             c.drawBitmap(q,(W-qrSize)/2f,y,null);y+=qrSize+14
             c.drawText("NHẬP ĐÚNG SỐ TIỀN TRÊN",W/2f,y,paint(16f,true,Paint.Align.CENTER));y+=23
             c.drawText("CHỜ LOA XÁC NHẬN TIỀN VỀ",W/2f,y,paint(16f,true,Paint.Align.CENTER));y+=24

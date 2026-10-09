@@ -1146,7 +1146,17 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
   val e=currentEmployee.value?:return
   if(e.role!="ADMIN"){printerMessage.value="CHỈ ADMIN ĐƯỢC XÓA DỮ LIỆU BÁN THỬ";return}
   viewModelScope.launch(Dispatchers.IO){
-   autoBackup()
+   // Require a verified backup before touching sales and attendance records.
+   val backupRoot=setting("storage_root_uri")
+   if(backupRoot.isBlank() || setting("storage_write_enabled")=="false"){
+    printerMessage.value="CHƯA DỌN DỮ LIỆU · Hãy chọn thư mục backup và bật quyền ghi trước."
+    return@launch
+   }
+   val backupResult=DataBackup.backupLatest(getApplication(),backupRoot,includeMedia=false)
+   if(backupResult.isFailure){
+    printerMessage.value="CHƯA DỌN DỮ LIỆU · Backup thất bại: ${backupResult.exceptionOrNull()?.message}"
+    return@launch
+   }
    val result=repo.resetPreOpeningData(
     actorId=e.id,
     autoTier=setting("loyalty_auto_tier").ifBlank{"true"}.toBoolean(),

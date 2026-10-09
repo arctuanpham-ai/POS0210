@@ -1598,6 +1598,8 @@ fun ResetPreOpeningSales(vm:PosViewModel){
 @Composable
 fun CloudSyncSettings(vm:PosViewModel){
     val cloudTrace by vn.ecohome.pos0210.cloud.CloudExecution.history.collectAsState()
+    val cloudActive by vn.ecohome.pos0210.cloud.CloudExecution.active.collectAsState()
+    val realtimeBusy=cloudActive.keys.any{it in setOf("REALTIME","DASHBOARD","PUBLISH_MENU","BACKUP_SNAPSHOT","RESTORE_DB")}
     val settings by vm.settings.collectAsState();val state by vm.cloudSyncState.collectAsState();val message by vm.cloudMessage.collectAsState();val dashboard by vm.cloudDashboard.collectAsState()
     fun current(key:String)=settings.firstOrNull{it.key==key}?.value.orEmpty()
     val firebaseDefaults=vn.ecohome.pos0210.cloud.FirebaseCloudSync.defaultConfig();var projectId by remember(settings){mutableStateOf(current("firebase_project_id").ifBlank{firebaseDefaults.projectId})};var applicationId by remember(settings){mutableStateOf(current("firebase_application_id").ifBlank{firebaseDefaults.applicationId})};var apiKey by remember(settings){mutableStateOf(current("firebase_api_key").ifBlank{firebaseDefaults.apiKey})}
@@ -1619,7 +1621,7 @@ fun CloudSyncSettings(vm:PosViewModel){
             OutlinedTextField(password,{password=it},Modifier.fillMaxWidth(),label={Text("Mật khẩu")},visualTransformation=PasswordVisualTransformation(),singleLine=true)
             if(state?.syncedUid==null)Button({vm.firebaseSignIn(email,password);password=""},Modifier.fillMaxWidth(),enabled=email.isNotBlank()&&password.length>=6){Text("ĐĂNG NHẬP & BẬT ĐỒNG BỘ")}
             else OutlinedButton({vm.firebaseSignOut()},Modifier.fillMaxWidth()){Text("ĐĂNG XUẤT FIREBASE")}
-            Button({vm.syncFirebase()},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null){Text("ĐỒNG BỘ REALTIME NGAY")}
+            Button({vm.syncFirebase()},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null&&!realtimeBusy){Text(if(realtimeBusy)"TÁC VỤ CLOUD ĐANG CHẠY…" else "ĐỒNG BỘ REALTIME NGAY")}
             Button({vm.transferCloudMedia(true)},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null){Text("ĐẨY TOÀN BỘ ẢNH LÊN CLOUD (MÁY GỐC)")}
             OutlinedButton({vm.transferCloudMedia(false)},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null){Text("TẢI ẢNH TỪ CLOUD (MÁY ORDER)")}
             Text("Chỉ bấm ĐẨY trên máy còn ảnh gốc. Màn hình sẽ báo số file và lỗi đầu tiên nếu Storage/URI không đọc được.",fontSize=11.sp)
@@ -1628,12 +1630,12 @@ fun CloudSyncSettings(vm:PosViewModel){
             Text("Tự động backup mỗi 1 giờ khi có mạng · giữ 2 bản A/B luân phiên. Restore ưu tiên bản mới nhất hợp lệ và tự fallback sang bản còn lại nếu checksum lỗi.",fontSize=11.sp)
             if(message.isNotBlank())Text(message,fontWeight=FontWeight.Bold)
             val backupOnlyError=state?.lastError?.takeIf{it.startsWith("PRIVATE_BACKUP_ONLY:")}
-            Text("Realtime sync: "+when{state?.syncedUid==null->"Chưa đăng nhập";state?.lastSuccessAt!=null->"Thành công";else->"Chưa có lần thành công"},fontWeight=FontWeight.Bold)
+            Text("Realtime sync: "+when{state?.syncedUid==null->"Chưa đăng nhập";realtimeBusy->"Đang chạy";state?.lastError!=null&&backupOnlyError==null->"Lần gần nhất chưa hoàn tất";state?.lastSuccessAt!=null->"Đã có lần thành công (xem thời gian bên dưới)";else->"Chưa có lần thành công"},fontWeight=FontWeight.Bold)
             state?.lastSuccessAt?.let{Text("Lần realtime thành công: ${time(it)}",fontSize=12.sp)}
             val backupConfirmed=current("cloud_backup_confirmed_at").toLongOrNull()
             Text("Cloud backup: "+if(backupOnlyError!=null)"Có lỗi" else if(backupConfirmed!=null)"Đã được server xác nhận" else "Chưa có xác nhận trên máy này",fontWeight=FontWeight.Bold)
             backupConfirmed?.let{Text("Backup server xác nhận: "+java.text.SimpleDateFormat("dd/MM/yyyy HH:mm:ss",java.util.Locale.getDefault()).format(java.util.Date(it)),fontSize=12.sp)}
-            cloudTrace.takeLast(6).forEach{Text(it,fontSize=11.sp)}
+            cloudTrace.takeLast(6).forEach{entry->val parts=entry.split(" ",limit=2);val stamp=parts.firstOrNull()?.toLongOrNull();Text(if(stamp!=null)java.text.SimpleDateFormat("HH:mm:ss",java.util.Locale.getDefault()).format(java.util.Date(stamp))+" "+parts.getOrElse(1){""} else entry,fontSize=11.sp)}
             backupOnlyError?.let{Text(it.removePrefix("PRIVATE_BACKUP_ONLY:").trim(),color=Color(0xFF9A4B3D),fontSize=12.sp)}
             HorizontalDivider()
             Text("MANAGER REALTIME",fontWeight=FontWeight.Black,fontSize=18.sp)

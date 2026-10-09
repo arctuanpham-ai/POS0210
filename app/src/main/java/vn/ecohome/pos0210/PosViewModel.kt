@@ -626,7 +626,7 @@ fun syncFirebase(){
   cloudMessage.value="Đang đồng bộ · các bước hiển thị bên dưới…"
   FirebaseCloudSync.syncNow(getApplication())
    .onSuccess{cloudMessage.value="Dữ liệu realtime đã được server xác nhận · backup và ảnh chạy riêng"}
-   .onFailure{cloudMessage.value="Đồng bộ chưa hoàn tất: ${it.message} · giữ dữ liệu và hàng đợi local"}
+   .onFailure{cloudMessage.value=if(it.message?.contains("MUTEX_BUSY")==true)"Tác vụ Cloud khác đang chạy · lần bấm này chưa bắt đầu; theo dõi các bước bên dưới" else "Đồng bộ chưa hoàn tất: ${it.message} · giữ dữ liệu và hàng đợi local"}
  }
 }
 fun transferCloudMedia(upload:Boolean){val e=currentEmployee.value?:return;if(e.role!="ADMIN")return;viewModelScope.launch(Dispatchers.IO){cloudMessage.value=if(upload)"Đang đẩy ảnh lên Cloud…" else "Đang tải ảnh từ Cloud…";runCatching{val uid=FirebaseCloudSync.currentUid(getApplication())?:error("Chưa đăng nhập Firebase");val cfg=FirebaseCloudSync.config(getApplication());val app=FirebaseCloudSync.firebaseApp(getApplication(),cfg);val fs=com.google.firebase.firestore.FirebaseFirestore.getInstance(app);val r=if(upload)CloudMediaSync.uploadLocal(getApplication(),fs,uid) else CloudMediaSync.restoreMissing(getApplication(),fs,uid);val count=CloudMediaSync.cloudManifestCount(getApplication(),fs,uid);cloudMessage.value="Media: upload ${r.uploaded} · tải ${r.downloaded} · bỏ qua ${r.skipped} · lỗi ${r.errors} · Cloud ${count} file"+(r.firstError?.let{" · Lỗi đầu: $it"}?:"")}.onFailure{cloudMessage.value="Lỗi Media: ${it.message}"}}}

@@ -6,6 +6,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class CloudExecutionTest {
+    @Test fun active_operation_is_visible_and_removed_after_completion() = runBlocking {
+        val mutex=Mutex()
+        CloudExecution.operation("REALTIME",mutex) {
+            assertTrue(CloudExecution.active.value.containsKey("REALTIME"))
+        }.getOrThrow()
+        assertFalse(CloudExecution.active.value.containsKey("REALTIME"))
+    }
     @Test fun busy_operation_returns_without_waiting() = runBlocking {
         val mutex=Mutex(locked=true)
         val result=withTimeout(500) { CloudExecution.operation("REALTIME",mutex) { error("must not run") } }

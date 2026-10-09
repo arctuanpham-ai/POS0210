@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 
 internal object CloudExecution {
+    val active=MutableStateFlow<Map<String,Long>>(emptyMap())
     val history=MutableStateFlow<List<String>>(emptyList())
     fun trace(message:String) {
         history.update { (it+"${System.currentTimeMillis()} $message").takeLast(60) }
@@ -16,6 +17,7 @@ internal object CloudExecution {
             return Result.failure(IllegalStateException("$name MUTEX_BUSY: tác vụ cùng loại đang chạy; không chờ khóa"))
         }
         val start=System.nanoTime()
+        active.update{it+(name to System.currentTimeMillis())}
         trace("$name LOCK_ACQUIRED")
         try {
             val value=block()
@@ -27,7 +29,7 @@ internal object CloudExecution {
         } catch(e:Exception) {
             trace("$name FAILED ${e.message}")
             return Result.failure(e)
-        } finally { mutex.unlock() }
+        } finally { active.update{it-name};mutex.unlock() }
     }
     suspend fun <T> stage(name:String,timeoutMs:Long,block:suspend()->T):T {
         val start=System.nanoTime()

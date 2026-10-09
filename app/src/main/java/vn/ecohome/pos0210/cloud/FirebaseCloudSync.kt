@@ -62,11 +62,11 @@ object FirebaseCloudSync {
             settings["firebase_api_key"].orEmpty().ifBlank{DEFAULT_API_KEY}
         )
     }
-    internal fun firebaseApp(context:Context,c:FirebaseConfig):FirebaseApp{
-        FirebaseApp.getApps(context).firstOrNull{it.name==APP_NAME}?.let{return it}
-        return FirebaseApp.initializeApp(context,FirebaseOptions.Builder().setProjectId(c.projectId).setApplicationId(c.applicationId).setApiKey(c.apiKey).setStorageBucket("${c.projectId}.firebasestorage.app").build(),APP_NAME)
-            ?: error("Không thể khởi tạo Firebase")
-    }
+    internal fun firebaseApp(context:Context,c:FirebaseConfig):FirebaseApp = CloudAppLifecycle.getOrCreate(
+        find={FirebaseApp.getApps(context).firstOrNull{it.name==APP_NAME}},
+        create={FirebaseApp.initializeApp(context.applicationContext,FirebaseOptions.Builder().setProjectId(c.projectId).setApplicationId(c.applicationId).setApiKey(c.apiKey).setStorageBucket("${c.projectId}.firebasestorage.app").build(),APP_NAME)
+            ?: error("Không thể khởi tạo Firebase")}
+    )
     internal suspend fun authenticatedUid(context:Context,app:FirebaseApp):String {
         val auth=FirebaseAuth.getInstance(app)
         val user=auth.currentUser?:error("AUTH_SESSION_MISSING: giữ nguyên UID đã lưu; cần xác thực lại tài khoản cũ")
@@ -83,7 +83,7 @@ object FirebaseCloudSync {
         return uid
     }
     fun signOut(context:Context){runCatching{FirebaseApp.getApps(context).firstOrNull{it.name==APP_NAME}?.let{FirebaseAuth.getInstance(it).signOut()}}}
-    fun reset(context:Context){runCatching{FirebaseApp.getApps(context).firstOrNull{it.name==APP_NAME}?.delete()}}
+    fun reset(context:Context){CloudAppLifecycle.mutate{runCatching{FirebaseApp.getApps(context).firstOrNull{it.name==APP_NAME}?.delete()}}}
     fun currentUid(context:Context):String?=runCatching{FirebaseApp.getApps(context).firstOrNull{it.name==APP_NAME}?.let{FirebaseAuth.getInstance(it).currentUser?.uid}}.getOrNull()
 
     private suspend fun <T> stage(name:String,timeoutMs:Long=25_000L,block:suspend()->T):T =
@@ -194,6 +194,7 @@ object FirebaseCloudSync {
         val currentState=dao.cloudSyncStateSnapshot()?:old
         dao.saveCloudSyncState(currentState.copy(enabled=true,dirty=false,lastAttemptAt=now,lastSuccessAt=now,lastError=null,syncedUid=uid))
     }.onFailure{e->
+        if(e.message?.contains("MUTEX_BUSY")==true)return@onFailure
         val dao=PosDatabase.get(context).dao();val old=dao.cloudSyncStateSnapshot()?:CloudSyncStateEntity();dao.saveCloudSyncState(old.copy(lastAttemptAt=System.currentTimeMillis(),lastError=e.message?.take(300)))
         dao.saveSetting(vn.ecohome.pos0210.data.AppSettingEntity("cloud_sync_last_trace",CloudExecution.history.value.joinToString("\n")))
     }

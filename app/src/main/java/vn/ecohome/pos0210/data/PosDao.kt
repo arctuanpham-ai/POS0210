@@ -13,6 +13,7 @@ data class TableServiceTimingRow(val sessionId:String,val firstOrderAt:Long?,val
 @Query("UPDATE AttendanceSessionEntity SET checkInAt=:checkInAt,checkOutAt=:checkOutAt,status=:status,note=:note,updatedAt=:updatedAt WHERE id=:id AND dataScope='LIVE'") suspend fun correctAttendance(id:String,checkInAt:Long,checkOutAt:Long?,status:String,note:String,updatedAt:Long):Int
 @Query("UPDATE AttendanceSessionEntity SET checkOutAt=:at,status='CLOSED',updatedAt=:at WHERE id=:id AND status='OPEN' AND dataScope='LIVE'") suspend fun closeAttendance(id:String,at:Long):Int
 @Query("DELETE FROM AttendanceSessionEntity WHERE dataScope=\'TEST\'") suspend fun deleteTestAttendances():Int
+@Query("DELETE FROM AttendanceSessionEntity WHERE dataScope=\'LIVE\'") suspend fun deleteLiveAttendances():Int
 
 @Query("SELECT * FROM AreaEntity WHERE active=1 ORDER BY sortOrder,name") fun areas():Flow<List<AreaEntity>>
 @Query("SELECT * FROM DiningTableEntity WHERE active=1 ORDER BY sortOrder,name") fun tables():Flow<List<DiningTableEntity>>
@@ -139,6 +140,7 @@ WHERE s.status='OPEN' GROUP BY s.id""") fun tableServiceTimings():Flow<List<Tabl
 @Query("SELECT * FROM OrderItemEntity") suspend fun cloudOrderItemsSnapshot():List<OrderItemEntity>
 @Query("SELECT * FROM BillEntity ORDER BY openedAt DESC") suspend fun cloudBillsSnapshot():List<BillEntity>
 @Query("SELECT * FROM PaymentEntity WHERE dataScope='LIVE' ORDER BY paidAt DESC") suspend fun cloudPaymentsSnapshot():List<PaymentEntity>
+@Query("SELECT * FROM PaymentEntity ORDER BY paidAt DESC") suspend fun cloudPaymentMirrorSnapshot():List<PaymentEntity>
 @Query("SELECT * FROM PurchaseEntity ORDER BY purchasedAt DESC") suspend fun cloudPurchasesSnapshot():List<PurchaseEntity>
 @Query("SELECT * FROM MonthlyAccountingEntity ORDER BY monthKey") suspend fun cloudAccountingSnapshot():List<MonthlyAccountingEntity>
 @Query("SELECT * FROM AssetEntity ORDER BY purchaseDate") suspend fun cloudAssetsSnapshot():List<AssetEntity>
@@ -241,6 +243,8 @@ WHERE s.status='OPEN' GROUP BY s.id""") fun tableServiceTimings():Flow<List<Tabl
 @Query("UPDATE PrintJobEntity SET status='FAILED',error=:error WHERE id=:id AND status='CLAIMED'") suspend fun markPrintFailed(id:String,error:String):Int
 @Query("UPDATE BillEntity SET status='DELETED' WHERE id=:id AND status='PAID'") suspend fun softDeleteBill(id:String):Int
 @Query("UPDATE BillEntity SET status='DELETED' WHERE id IN (:ids) AND status='PAID'") suspend fun softDeleteBills(ids:List<String>):Int
+@Query("UPDATE PaymentEntity SET dataScope='PREOPENING_RESET' WHERE billId IN (:billIds) AND dataScope='LIVE'") suspend fun archivePaymentsForBills(billIds:List<String>):Int
+@Query("UPDATE CustomerRewardEntity SET status='CANCELLED' WHERE sourceBillId IN (:billIds) AND status='AVAILABLE'") suspend fun cancelRewardsForBills(billIds:List<String>):Int
 @Query("UPDATE CustomerEntity SET points=points+:pointsDelta,totalSpend=MAX(0,totalSpend+:spendDelta),visitCount=MAX(0,visitCount+:visitDelta),lastVisitAt=:lastVisitAt WHERE id=:customerId") suspend fun updateCustomerStats(customerId:String,pointsDelta:Int,spendDelta:Long,visitDelta:Int,lastVisitAt:Long?)
 @Query("UPDATE CustomerEntity SET name=:name,phone=:phone,address=:address WHERE id=:id") suspend fun updateCustomerProfileFields(id:String,name:String,phone:String,address:String):Int
 @Query("UPDATE CustomerEntity SET tier=:tier,tierManual=:manual WHERE id=:id") suspend fun updateCustomerTierFields(id:String,tier:String,manual:Boolean):Int

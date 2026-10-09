@@ -1,8 +1,11 @@
 package vn.ecohome.pos0210.cloud
 
-import com.sun.net.httpserver.HttpServer
-import java.net.InetSocketAddress
+import java.net.ServerSocket
+import java.net.InetAddress
 import java.net.URL
+import java.io.IOException
+import java.util.concurrent.atomic.AtomicReference
+import kotlin.concurrent.thread
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
@@ -43,18 +46,36 @@ class FirestoreHttpCommitTest {
         }
     }
     private fun server(status:Int,reply:String,delayMs:Long=0,block:(URL)->Unit) {
-        val server=HttpServer.create(InetSocketAddress("127.0.0.1",0),0)
-        server.createContext("/commit") { exchange ->
-            val request=JSONObject(exchange.requestBody.bufferedReader().readText())
-            check(exchange.requestMethod=="POST")
-            check(exchange.requestHeaders.getFirst("Authorization")=="Bearer test-token")
-            check(request.getJSONArray("writes").length()==1)
-            val bytes=reply.toByteArray()
-            if(delayMs>0)Thread.sleep(delayMs)
-            exchange.sendResponseHeaders(status,bytes.size.toLong())
-            exchange.responseBody.use{it.write(bytes)}
+        val server=ServerSocket(0,1,InetAddress.getByName("127.0.0.1"))
+        val failure=AtomicReference<Throwable?>()
+        val worker=thread(isDaemon=true) {
+            try { server.accept().use { socket ->
+                socket.soTimeout=3000
+                val input=socket.getInputStream()
+                val header=StringBuilder()
+                while(!header.endsWith("\r\n\r\n")){
+                    val byte=input.read();check(byte>=0);header.append(byte.toChar())
+                }
+                val lines=header.toString().split("\r\n")
+                check(lines.first().startsWith("POST /commit "))
+                val headers=lines.drop(1).mapNotNull{line->line.indexOf(':').takeIf{it>0}?.let{line.substring(0,it).lowercase() to line.substring(it+1).trim()}}.toMap()
+                check(headers["authorization"]=="Bearer test-token")
+                val body=ByteArray(headers["content-length"]!!.toInt())
+                var read=0
+                while(read<body.size){val count=input.read(body,read,body.size-read);check(count>0);read+=count}
+                check(JSONObject(String(body,Charsets.UTF_8)).getJSONArray("writes").length()==1)
+                val bytes=reply.toByteArray(Charsets.UTF_8)
+                if(delayMs>0)Thread.sleep(delayMs)
+                socket.getOutputStream().use { out ->
+                    out.write("HTTP/1.1 $status Reply\r\nContent-Type: application/json\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n".toByteArray(Charsets.US_ASCII))
+                    out.write(bytes)
+                }
+            } } catch(e:Throwable){if(!(delayMs>0&&e is IOException))failure.set(e)}
         }
-        server.start()
-        try { block(URL("http://127.0.0.1:${server.address.port}/commit")) } finally {server.stop(0)}
+        try {
+            block(URL("http://127.0.0.1:${server.localPort}/commit"))
+            worker.join(1000)
+            failure.get()?.let{throw it}
+        } finally {server.close()}
     }
 }

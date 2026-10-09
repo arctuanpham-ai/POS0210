@@ -82,17 +82,8 @@ object FirebaseCloudSync {
         val uid=FirebaseAuth.getInstance(app).currentUser?.uid?:error("Chưa đăng nhập Firebase")
         val fs=FirebaseFirestore.getInstance(app)
         val backup=stage("PRIVATE_BACKUP",90_000L){FirestorePrivateBackup.upload(context,fs,uid,System.currentTimeMillis())}
-        // Media is best effort and independently bounded. The backup snapshot
-        // remains valid even when an image is temporarily unavailable.
-        val media=runCatching { stage("MEDIA_UPLOAD",60_000L){CloudMediaSync.uploadLocal(context,fs,uid)} }
-        val restore=runCatching { stage("MEDIA_RESTORE",60_000L){CloudMediaSync.restoreMissing(context,fs,uid)} }
-        val dao=PosDatabase.get(context).dao()
-        if(media.isSuccess && restore.isSuccess && media.getOrThrow().errors==0 && restore.getOrThrow().errors==0){
-            dao.recoverInflightSync()
-            dao.pendingSync(System.currentTimeMillis(),500).filter{it.entityType=="MEDIA"}.forEach{q->
-                if(dao.claimSync(q.id,System.currentTimeMillis())==1)dao.completeSync(q.id)
-            }
-        }
+        // Backup only: media upload/download is a separate explicit operation.
+        // Avoid holding CloudOperationGuard for another 120 seconds after DB backup.
         backup
     }}
 

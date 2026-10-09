@@ -270,7 +270,7 @@ object FirestorePrivateBackup {
             val version=db.rawQuery("PRAGMA user_version",null).use{cursor->
                 if(cursor.moveToFirst())cursor.getInt(0) else 0
             }
-            require(version in 3..24){"Cloud backup DB schema không được hỗ trợ: v$version"}
+            require(version in 3..27){"Cloud backup DB schema không được hỗ trợ: v$version"}
             val required=setOf("BillEntity","PaymentEntity","OrderBatchEntity","PurchaseEntity","EmployeeEntity","AppSettingEntity")
             val found=mutableSetOf<String>()
             db.rawQuery("SELECT name FROM sqlite_master WHERE type='table'",null).use{cursor->
@@ -338,7 +338,7 @@ object FirestorePrivateBackup {
                 if(cursor.moveToFirst())cursor.getString(0) else ""
             }
             require(integrity.equals("ok",ignoreCase=true)){"DB sau restore integrity_check lỗi: $integrity"}
-            require(live.version==24){"DB sau restore sai schema: v${live.version}"}
+            require(live.version==27){"DB sau restore sai schema: v${live.version}"}
         }catch(e:Throwable){
             PosDatabase.closeForRestore()
             File(target.path+"-wal").delete()

@@ -80,7 +80,20 @@ object FirebaseCloudSync {
         val c=config(context);require(c.valid){"Chưa cấu hình Firebase"}
         val app=firebaseApp(context,c)
         val uid=FirebaseAuth.getInstance(app).currentUser?.uid?:error("Chưa đăng nhập Firebase")
-        FirestorePrivateBackup.upload(context,FirebaseFirestore.getInstance(app),uid,System.currentTimeMillis())
+        val fs=FirebaseFirestore.getInstance(app)
+        val backup=stage("PRIVATE_BACKUP",90_000L){FirestorePrivateBackup.upload(context,fs,uid,System.currentTimeMillis())}
+        // Media is best effort and independently bounded. The backup snapshot
+        // remains valid even when an image is temporarily unavailable.
+        val media=runCatching { stage("MEDIA_UPLOAD",60_000L){CloudMediaSync.uploadLocal(context,fs,uid)} }
+        val restore=runCatching { stage("MEDIA_RESTORE",60_000L){CloudMediaSync.restoreMissing(context,fs,uid)} }
+        val dao=PosDatabase.get(context).dao()
+        if(media.isSuccess && restore.isSuccess && media.getOrThrow().errors==0 && restore.getOrThrow().errors==0){
+            dao.recoverInflightSync()
+            dao.pendingSync(System.currentTimeMillis(),500).filter{it.entityType=="MEDIA"}.forEach{q->
+                if(dao.claimSync(q.id,System.currentTimeMillis())==1)dao.completeSync(q.id)
+            }
+        }
+        backup
     }}
 
     // Explicit catalog publication: called only after an authorized local menu edit.
@@ -192,39 +205,29 @@ object FirebaseCloudSync {
         writeMaps(fs,root.collection("bills"),bills.map{b->b.id to mapOf("id" to b.id,"sessionId" to b.sessionId,"billNo" to b.billNo,"openedAt" to b.openedAt,"closedAt" to b.closedAt,"subtotal" to b.subtotal,"total" to b.total,"status" to b.status)})
         writeMaps(fs,root.collection("payments"),paymentMirror.map{p->p.id to mapOf("id" to p.id,"billId" to p.billId,"method" to p.method,"amount" to p.amount,"cashierId" to p.cashierId,"paidAt" to p.paidAt,"reference" to p.reference,"dataScope" to p.dataScope)})
         val settings=dao.allSettingsSnapshot().filter{CloudSyncPolicy.shouldUploadSetting(it.key)}.associate{it.key to it.value};root.collection("config").document("safe").set(settings+mapOf("updatedAt" to now)).await()
-        // Realtime/business sync must not fail just because the independent private backup fails.
-        // Backup is handled separately and keeps its own status/error.
-        val backupError=runCatching{FirestorePrivateBackup.upload(context,fs,uid,now)}.exceptionOrNull()?.message?.take(180)
-        // Reconcile both directions on every normal sync. A fresh device may have missed
-        // Storage during bootstrap; READY must therefore keep retrying missing media.
-        val mediaUploadAttempt=runCatching{CloudMediaSync.uploadLocal(context,fs,uid)}
-        val mediaResult=mediaUploadAttempt.getOrNull()
-        val mediaRestoreAttempt=runCatching{CloudMediaSync.restoreMissing(context,fs,uid)}
-        val mediaRestoreResult=mediaRestoreAttempt.getOrNull()
-        val mediaErrors=(mediaResult?.errors?:0)+(mediaRestoreResult?.errors?:0)
-        val mediaError=mediaUploadAttempt.exceptionOrNull()?.message?.take(100)
-            ?:mediaRestoreAttempt.exceptionOrNull()?.message?.take(100)
-            ?:mediaErrors.takeIf{it>0}?.let{"$it media item(s) failed"}
+        // Heavy private backup and media transfer are handled by a separate worker.
+        // They must never block the foreground "Sync now" action.
+        enqueueBackup(context)
         dao.recoverInflightSync()
         val queued=dao.pendingSync(System.currentTimeMillis(),500)
-        queued.forEach { q ->
+        queued.filter { it.entityType != "MEDIA" }.forEach { q ->
             if(dao.claimSync(q.id,System.currentTimeMillis())==1){
                 val ok=when(q.entityType){
                     "MENU_ITEM" -> true // menu mirror write above completed successfully
                     "COMBO" -> true // combo metadata is covered by private snapshot; media has its own intent
-                    "MEDIA" -> mediaResult!=null&&mediaResult.errors==0&&mediaRestoreAttempt.isSuccess
+                    "MEDIA" -> false
                     else -> false
                 }
                 if(ok) dao.completeSync(q.id) else {
                     val attempts=(q.attempts+1).coerceAtMost(10)
                     val delayMs=(15_000L shl attempts.coerceAtMost(8)).coerceAtMost(60L*60L*1000L)
                     dao.retrySync(q.id,System.currentTimeMillis()+delayMs,System.currentTimeMillis(),
-                        mediaError ?: "SYNC_QUEUE_UNSUPPORTED_OR_RETRY")
+                        "SYNC_QUEUE_UNSUPPORTED_OR_RETRY")
                 }
             }
         }
         val currentState=dao.cloudSyncStateSnapshot()?:old
-        dao.saveCloudSyncState(currentState.copy(enabled=true,dirty=false,lastAttemptAt=now,lastSuccessAt=now,lastError=listOfNotNull(backupError?.let{"PRIVATE_BACKUP_ONLY: $it"},mediaError?.let{"MEDIA_SYNC_ONLY: $it"}).takeIf{it.isNotEmpty()}?.joinToString(" · "),syncedUid=uid))
+        dao.saveCloudSyncState(currentState.copy(enabled=true,dirty=false,lastAttemptAt=now,lastSuccessAt=now,lastError=null,syncedUid=uid))
     }.onFailure{e->
         val dao=PosDatabase.get(context).dao();val old=dao.cloudSyncStateSnapshot()?:CloudSyncStateEntity();dao.saveCloudSyncState(old.copy(lastAttemptAt=System.currentTimeMillis(),lastError=e.message?.take(300)))
     }}

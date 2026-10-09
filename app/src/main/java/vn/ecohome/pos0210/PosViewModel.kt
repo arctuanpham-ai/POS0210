@@ -1081,6 +1081,15 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    autoBackup()
   }
  }
+ fun softDeleteCustomer(customer:CustomerEntity){
+  val e=currentEmployee.value?:return
+  if(e.role!="ADMIN"){customerUpdateMessage.value="Chỉ Admin được ẩn hồ sơ khách";return}
+  viewModelScope.launch{
+   val changed=repo.softDeleteCustomerAudited(customer.id,e.id)
+   customerUpdateMessage.value=if(changed)"Đã ẩn khách khỏi danh sách; lịch sử bill được giữ nguyên" else "Không thể ẩn khách"
+   if(changed){autoBackup();syncFirebase()}
+  }
+ }
  fun clearCustomerUpdateMessage(){customerUpdateMessage.value=""}
  fun customerPoints(id:String)=dao.customerPoints(id)
  fun purchaseItems(id:String)=dao.purchaseItems(id)

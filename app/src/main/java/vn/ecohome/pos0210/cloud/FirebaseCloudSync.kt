@@ -180,7 +180,7 @@ object FirebaseCloudSync {
         // cloud menu with a stale local snapshot during ordinary realtime sync.
         // Flush locally edited menu entities BEFORE pulling remote state.
         // Otherwise a remote snapshot can overwrite an offline edit before upload.
-        stage("PUSH_PENDING_MENU"){pushPendingCatalog(root,dao)}
+        pushPendingCatalog(root,dao)
         stage("PULL_MENU"){pullCloudMenu(root,dao)}
         stage("PULL_FINANCE"){pullCloudFinance(root,dao)}
         stage("WRITE_FINANCE"){writeFinanceMirror(fs,root,dao)}
@@ -250,10 +250,11 @@ object FirebaseCloudSync {
 
     private suspend fun pushPendingCatalog(root:com.google.firebase.firestore.DocumentReference,dao:PosDao){
         dao.recoverInflightSync()
-        val pending=dao.pendingSync(System.currentTimeMillis(),500).filter{it.entityType=="MENU_ITEM"||it.entityType=="MENU_CATEGORY"}
+        val pending=dao.pendingSync(System.currentTimeMillis(),500).filter{it.entityType=="MENU_ITEM"||it.entityType=="MENU_CATEGORY"}.take(30)
         for(q in pending){
             if(dao.claimSync(q.id,System.currentTimeMillis())!=1)continue
             try{
+                stage("MENU_ITEM_${q.entityId}",8_000L){
                 if(q.entityType=="MENU_ITEM"){
                     val item=dao.menuItemById(q.entityId)
                     if(item!=null)root.collection("menu").document(item.id).set(mapOf(
@@ -267,10 +268,11 @@ object FirebaseCloudSync {
                         "id" to cat.id,"name" to cat.name,"sortOrder" to cat.sortOrder,
                         "active" to cat.active,"updatedAt" to System.currentTimeMillis())).await()
                 }
+                }
                 dao.completeSync(q.id)
             }catch(e:Exception){
                 dao.retrySync(q.id,System.currentTimeMillis()+30000L,System.currentTimeMillis(),e.message)
-                throw e
+                // Keep the unsent local mutation pending; do not block other cloud operations.
             }
         }
     }
@@ -287,8 +289,13 @@ object FirebaseCloudSync {
                 active=doc.getBoolean("active")?:true))
         }
         val local=dao.allMenuSnapshot().associateBy{it.id}
+        // Cloud must not overwrite unsent local catalog edits after a timeout.
+        val unsent=dao.pendingSync(System.currentTimeMillis()+86_400_000L,5000)
+            .filter{it.entityType=="MENU_ITEM"||it.entityType=="MENU_CATEGORY"}
+        val unsentItems=unsent.filter{it.entityType=="MENU_ITEM"}.map{it.entityId}.toSet()
         for(doc in itemDocs){
             val id=doc.getString("id")?:doc.id
+            if(id in unsentItems)continue
             val name=doc.getString("name")?:continue
             val categoryId=doc.getString("categoryId")?:continue
             val old=local[id]

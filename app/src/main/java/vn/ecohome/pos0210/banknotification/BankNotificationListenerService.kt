@@ -20,10 +20,10 @@ class BankNotificationListenerService:NotificationListenerService(){
  }
  private suspend fun process(packageName:String,title:String,body:String,receivedAt:Long,parser:BankNotificationParser){
   val dao=PosDatabase.get(applicationContext).dao()
-  if(!PaymentQrMode.allowsPhoneBankAnnouncements(dao.settingValue("payment_qr_mode")))return
+  if(!PaymentQrMode.allowsPhoneBankAnnouncements(dao.settingValue("payment_qr_mode").orEmpty()))return
   if(dao.settingValue("bank_notification_enabled")!="true")return
   val tx=runCatching{parser.parse(title,body,receivedAt)}.getOrNull()
-  val fallbackHash=sha256("${packageName}|${title}|${body}|${receivedAt}")
+  val fallbackHash=sha256("$packageName|$title|$body|$receivedAt")
   val event=BankNotificationEventEntity(
    fingerprint=tx?.rawHash?:fallbackHash,packageName=packageName,bank=tx?.bank,title=title.take(160),body=body.take(2000),receivedAt=receivedAt,
    parserResult=if(tx==null)"PARSE_FAILED" else "PARSED",amount=tx?.amount,account=tx?.account,transactionTime=tx?.transactionTime,

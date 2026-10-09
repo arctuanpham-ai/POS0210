@@ -1142,19 +1142,23 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
    }.onFailure{printerMessage.value="XUẤT DỮ LIỆU LỖI · ${it.message?:"UNKNOWN"}"}
   }
  }
- fun resetPreOpeningSales(){
+ fun resetPreOpeningData(){
   val e=currentEmployee.value?:return
   if(e.role!="ADMIN"){printerMessage.value="CHỈ ADMIN ĐƯỢC XÓA DỮ LIỆU BÁN THỬ";return}
   viewModelScope.launch(Dispatchers.IO){
-   val changed=repo.resetPreOpeningSales(
+   autoBackup()
+   val result=repo.resetPreOpeningData(
     actorId=e.id,
     autoTier=setting("loyalty_auto_tier").ifBlank{"true"}.toBoolean(),
     vipMinPoints=setting("vip_min_points").toIntOrNull() ?: 200,
     vvipMinPoints=setting("vvip_min_points").toIntOrNull() ?: 500
    )
-   audit("SYSTEM","PREOPENING_SALES","RESET_PREOPENING_SALES","bills=$changed,operator=${e.name}")
-   printerMessage.value=if(changed>0)"ĐÃ XÓA $changed BILL BÁN THỬ · DỮ LIỆU NHẬP HÀNG GIỮ NGUYÊN" else "KHÔNG CÓ BILL ĐÃ THANH TOÁN ĐỂ XÓA"
-   if(changed>0) autoBackup()
+   myAttendance.value=null
+   refreshPayroll()
+   audit("SYSTEM","PREOPENING_DATA","RESET_PREOPENING_DATA","bills=${result.bills},attendance=${result.attendance},operator=${e.name}")
+   autoBackup()
+   syncFirebase()
+   printerMessage.value="ĐÃ DỌN DỮ LIỆU TRƯỚC KHAI TRƯƠNG · ${result.bills} BILL · ${result.attendance} CA CÔNG"
   }
  }
  fun setCheckoutPrintTestMode(enabled:Boolean){

@@ -6,6 +6,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class CloudExecutionTest {
+    @Test fun quota_deferral_survives_nested_stages_without_retry() = runBlocking {
+        val deferred=CloudQuotaDeferred(12345L,"backup chờ lượt")
+        val result=CloudExecution.operation("BACKUP",Mutex()){
+            CloudExecution.stage("PRIVATE_BACKUP",1000){CloudExecution.stage("BACKUP_MARK_WRITING",1000){throw deferred}}
+        }
+        assertSame(deferred,result.exceptionOrNull())
+    }
     @Test fun active_operation_is_visible_and_removed_after_completion() = runBlocking {
         val mutex=Mutex()
         CloudExecution.operation("REALTIME",mutex) {

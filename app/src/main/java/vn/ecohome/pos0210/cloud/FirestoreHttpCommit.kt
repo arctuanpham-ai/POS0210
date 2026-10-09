@@ -36,30 +36,51 @@ internal object FirestoreHttpCommit {
         require(writes.isNotEmpty()&&writes.size<=400)
         val body=JSONObject(mapOf("writes" to writes)).toString().toByteArray(Charsets.UTF_8)
         require(body.size<8_000_000){"COMMIT_REQUEST_TOO_LARGE"}
+        return request(url,token,body,deadlineMs).let { response ->
+            val receipt=JSONObject(response)
+            val time=receipt.optString("commitTime")
+            check(time.isNotBlank()&&receipt.optJSONArray("writeResults")?.length()==writes.size){"COMMIT_UNCONFIRMED"}
+            time
+        }
+    }
+    fun readQuota(url:URL,token:String):QuotaSnapshot {
+        val response=request(url,token,null,12_000L,allowMissing=true)
+        if(response==null)return QuotaSnapshot(null,emptyMap())
+        val doc=JSONObject(response)
+        val time=doc.getString("updateTime").also{require(it.isNotBlank())}
+        val fields=doc.getJSONObject("fields")
+        val data=fields.keys().asSequence().associateWith{key->
+            val field=fields.getJSONObject(key)
+            when {field.has("integerValue")->field.getString("integerValue").toLong();field.has("stringValue")->field.getString("stringValue");else->error("QUOTA_COUNTER_INVALID $key")}
+        }
+        return QuotaSnapshot(time,data)
+    }
+    private fun request(url:URL,token:String,body:ByteArray?,deadlineMs:Long,allowMissing:Boolean=false):String? {
+        require(token.isNotBlank())
         val connection=url.openConnection() as HttpURLConnection
         val expired=AtomicBoolean(false)
         val abort=watchdog.schedule({expired.set(true);connection.disconnect()},deadlineMs,TimeUnit.MILLISECONDS)
         try {
-            connection.requestMethod="POST"
+            connection.requestMethod=if(body==null)"GET" else "POST"
             connection.instanceFollowRedirects=false
             connection.connectTimeout=5_000
             connection.readTimeout=8_000
             connection.setRequestProperty("Authorization","Bearer $token")
             connection.setRequestProperty("Content-Type","application/json; charset=utf-8")
-            connection.doOutput=true
-            connection.setFixedLengthStreamingMode(body.size)
-            connection.outputStream.use{it.write(body)}
+            if(body!=null){
+                connection.doOutput=true
+                connection.setFixedLengthStreamingMode(body.size)
+                connection.outputStream.use{it.write(body)}
+            }
             val status=connection.responseCode
             val stream=if(status in 200..299)connection.inputStream else connection.errorStream
             val response=stream?.bufferedReader(Charsets.UTF_8)?.use{it.readText()}.orEmpty()
+            if(status==404&&allowMissing)return null
             if(status !in 200..299){
                 val err=runCatching{JSONObject(response).optJSONObject("error")}.getOrNull()
                 throw IOException("HTTP_$status ${err?.optString("status").orEmpty()} ${err?.optString("message").orEmpty().take(180)}")
             }
-            val receipt=JSONObject(response)
-            val time=receipt.optString("commitTime")
-            check(time.isNotBlank()&&receipt.optJSONArray("writeResults")?.length()==writes.size){"COMMIT_UNCONFIRMED"}
-            return time
+            return response
         } catch(e:Exception){
             if(expired.get())throw IOException("HTTP_TIMEOUT: server chưa xác nhận sau ${deadlineMs}ms",e)
             throw e

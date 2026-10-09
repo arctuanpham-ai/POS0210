@@ -38,6 +38,9 @@ internal object CloudExecution {
             val value=withTimeout(timeoutMs) { block() }
             trace("$name ACK elapsedMs=${(System.nanoTime()-start)/1_000_000}")
             return value
+        } catch(e:CloudQuotaDeferred) {
+            trace("$name DEFERRED ${e.message}")
+            throw e
         } catch(e:TimeoutCancellationException) {
             currentCoroutineContext().ensureActive()
             trace("$name TIMEOUT elapsedMs=${(System.nanoTime()-start)/1_000_000}")

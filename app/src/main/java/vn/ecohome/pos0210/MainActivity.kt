@@ -1598,6 +1598,7 @@ fun ResetPreOpeningSales(vm:PosViewModel){
 @Composable
 fun CloudSyncSettings(vm:PosViewModel){
     val cloudTrace by vn.ecohome.pos0210.cloud.CloudExecution.history.collectAsState()
+    val quotaStatus by vn.ecohome.pos0210.cloud.CloudQuotaGuard.status.collectAsState()
     val cloudActive by vn.ecohome.pos0210.cloud.CloudExecution.active.collectAsState()
     val realtimeBusy=cloudActive.keys.any{it in setOf("REALTIME","DASHBOARD","PUBLISH_MENU","BACKUP_SNAPSHOT","RESTORE_DB")}
     val settings by vm.settings.collectAsState();val state by vm.cloudSyncState.collectAsState();val message by vm.cloudMessage.collectAsState();val dashboard by vm.cloudDashboard.collectAsState()
@@ -1627,7 +1628,7 @@ fun CloudSyncSettings(vm:PosViewModel){
             Text("Chỉ bấm ĐẨY trên máy còn ảnh gốc. Màn hình sẽ báo số file và lỗi đầu tiên nếu Storage/URI không đọc được.",fontSize=11.sp)
             OutlinedButton({vm.createFirebaseBackup()},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null){Text("TẠO CLOUD BACKUP NGAY")}
             OutlinedButton({confirmRestore=true},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null){Text("KHÔI PHỤC CLOUD BACKUP")}
-            Text("Tự động backup mỗi 1 giờ khi có mạng · giữ 2 bản A/B luân phiên. Restore ưu tiên bản mới nhất hợp lệ và tự fallback sang bản còn lại nếu checksum lỗi.",fontSize=11.sp)
+            Text("Backup khi dữ liệu thay đổi, tối thiểu 1 giờ/lần có mạng · giữ 2 bản A/B luân phiên. Restore ưu tiên bản mới nhất hợp lệ và tự fallback sang bản còn lại nếu checksum lỗi.",fontSize=11.sp)
             if(message.isNotBlank())Text(message,fontWeight=FontWeight.Bold)
             val backupOnlyError=state?.lastError?.takeIf{it.startsWith("PRIVATE_BACKUP_ONLY:")}
             Text("Realtime sync: "+when{state?.syncedUid==null->"Chưa đăng nhập";realtimeBusy->"Đang chạy";state?.lastError!=null&&backupOnlyError==null->"Lần gần nhất chưa hoàn tất";state?.lastSuccessAt!=null->"Đã có lần thành công (xem thời gian bên dưới)";else->"Chưa có lần thành công"},fontWeight=FontWeight.Bold)
@@ -1635,6 +1636,8 @@ fun CloudSyncSettings(vm:PosViewModel){
             val backupConfirmed=current("cloud_backup_confirmed_at").toLongOrNull()
             Text("Cloud backup: "+if(backupOnlyError!=null)"Có lỗi" else if(backupConfirmed!=null)"Đã được server xác nhận" else "Chưa có xác nhận trên máy này",fontWeight=FontWeight.Bold)
             backupConfirmed?.let{Text("Backup server xác nhận: "+java.text.SimpleDateFormat("dd/MM/yyyy HH:mm:ss",java.util.Locale.getDefault()).format(java.util.Date(it)),fontSize=12.sp)}
+            Text(quotaStatus,fontSize=12.sp,fontWeight=FontWeight.Bold)
+            Text("Dashboard tối đa 1 phút/lần; gần trần 5 phút. Backup khi dữ liệu thay đổi: 1 giờ/lần; gần trần 3 giờ. Cloud bị chặn vẫn giữ dữ liệu local.",fontSize=11.sp)
             cloudTrace.takeLast(6).forEach{entry->val parts=entry.split(" ",limit=2);val stamp=parts.firstOrNull()?.toLongOrNull();Text(if(stamp!=null)java.text.SimpleDateFormat("HH:mm:ss",java.util.Locale.getDefault()).format(java.util.Date(stamp))+" "+parts.getOrElse(1){""} else entry,fontSize=11.sp)}
             backupOnlyError?.let{Text(it.removePrefix("PRIVATE_BACKUP_ONLY:").trim(),color=Color(0xFF9A4B3D),fontSize=12.sp)}
             HorizontalDivider()

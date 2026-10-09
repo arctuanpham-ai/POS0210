@@ -66,6 +66,7 @@ object CloudMediaSync {
         withTimeout(TIMEOUT_MS){collection(fs,uid).get().await().size()}
 
     suspend fun uploadLocal(context:Context,fs:FirebaseFirestore,uid:String):CloudMediaResult=withContext(Dispatchers.IO){
+        CloudQuotaGuard.check(fs)
         val dao=PosDatabase.get(context).dao()
         val items=dao.allMenuSnapshot().mapNotNull{m->m.imageUri?.takeIf(String::isNotBlank)?.let{Triple("menu",m.id,it)}}
         val combos=dao.allCombosSnapshot().mapNotNull{m->m.imageUri?.takeIf(String::isNotBlank)?.let{Triple("combo",m.id,it)}}
@@ -84,9 +85,13 @@ object CloudMediaSync {
                     "encoding" to "jpeg-base64-v1","payload" to payload,"sha256" to sha256(compressed),
                     "sourceSha256" to sourceHash,"bytes" to compressed.size,
                     "version" to ((old.getLong("version")?:0L)+1L),"updatedAt" to System.currentTimeMillis())
-                withTimeout(TIMEOUT_MS){doc.set(data).await()}
+                withTimeout(45_000L){FirestoreServerWriter.set(doc,data)}
                 uploaded++
-            }catch(e:Exception){errors++;if(firstError==null)firstError=e.message?:e.javaClass.simpleName}
+            }catch(e:Exception){
+                if(e is kotlinx.coroutines.CancellationException)throw e
+                errors++;if(firstError==null)firstError=e.message?:e.javaClass.simpleName
+                if(!CloudQuotaGuard.retry(e))break
+            }
         }
         CloudMediaResult(uploaded=uploaded,skipped=skipped,errors=errors,firstError=firstError)
     }
@@ -122,7 +127,11 @@ object CloudMediaSync {
                     val localUri=Uri.fromFile(target).toString()
                     if(type=="menu")dao.updateMenuImage(id,localUri) else dao.updateComboImage(id,localUri)
                 }
-            }catch(e:Exception){errors++;if(firstError==null)firstError=e.message?:e.javaClass.simpleName}
+            }catch(e:Exception){
+                if(e is kotlinx.coroutines.CancellationException)throw e
+                errors++;if(firstError==null)firstError=e.message?:e.javaClass.simpleName
+                if(!CloudQuotaGuard.retry(e))break
+            }
         }
         CloudMediaResult(downloaded=downloaded,skipped=skipped,errors=errors,firstError=firstError)
     }

@@ -72,6 +72,7 @@ object FirebaseCloudSync {
         val user=auth.currentUser?:error("AUTH_SESSION_MISSING: giữ nguyên UID đã lưu; cần xác thực lại tài khoản cũ")
         val expected=PosDatabase.get(context).dao().cloudSyncStateSnapshot()?.syncedUid
         require(expected==null||expected==user.uid){"AUTH_UID_MISMATCH: không đồng bộ sang UID khác"}
+        CloudQuotaGuard.check(FirebaseFirestore.getInstance(app))
         stage("AUTH_TOKEN"){user.getIdToken(false).await()}
         return user.uid
     }
@@ -94,7 +95,10 @@ object FirebaseCloudSync {
         val app=firebaseApp(context,c)
         val uid=authenticatedUid(context,app)
         val fs=FirebaseFirestore.getInstance(app)
+        val dao=PosDatabase.get(context).dao()
+        val coveredCombos=dao.pendingSync(System.currentTimeMillis(),500).filter{it.entityType=="COMBO"}
         val backup=stage("PRIVATE_BACKUP",90_000L){FirestorePrivateBackup.upload(context,fs,uid,System.currentTimeMillis())}
+        coveredCombos.forEach{dao.completeSync(it.id)}
         // Backup only: media upload/download is a separate explicit operation.
         // Avoid holding CloudOperationGuard for another 120 seconds after DB backup.
         PosDatabase.get(context).dao().saveSetting(vn.ecohome.pos0210.data.AppSettingEntity("cloud_backup_confirmed_at",backup.createdAt.toString()))
@@ -152,9 +156,9 @@ object FirebaseCloudSync {
         val tables=dao.cloudTablesSnapshot();val sessions=dao.cloudSessionsSnapshot();val bills=dao.cloudBillsSnapshot();val payments=dao.cloudPaymentsSnapshot();val paymentMirror=dao.cloudPaymentMirrorSnapshot()
         val today=Calendar.getInstance().apply{set(Calendar.HOUR_OF_DAY,0);set(Calendar.MINUTE,0);set(Calendar.SECOND,0);set(Calendar.MILLISECOND,0)}.timeInMillis
         val paidToday=bills.filter{it.status=="PAID"&&(it.closedAt?:0)>=today};val open=sessions.filter{it.status=="OPEN"};val now=System.currentTimeMillis()
-        stage("STORE_ROOT"){FirestoreServerWriter.set(root,mapOf("name" to "0210","updatedAt" to now,"schemaVersion" to 1))}
+        stage("STORE_ROOT",60_000L){FirestoreServerWriter.set(root,mapOf("name" to "0210","updatedAt" to now,"schemaVersion" to 1))}
         val openByTable=open.associateBy{it.tableId}
-        stage("DASHBOARD"){FirestoreServerWriter.set(root.collection("dashboard").document("current"),financialDashboard(dao,bills,payments,now)+mapOf("openTables" to open.size,"openTableNames" to tables.filter{openByTable.containsKey(it.id)}.map{it.name},"revenueToday" to paidToday.sumOf{it.total},"paidBillsToday" to paidToday.size,"lastUpdatedAt" to now))}
+        stage("DASHBOARD",60_000L){writeDashboard(root.collection("dashboard").document("current"),financialDashboard(dao,bills,payments,now)+mapOf("openTables" to open.size,"openTableNames" to tables.filter{openByTable.containsKey(it.id)}.map{it.name},"revenueToday" to paidToday.sumOf{it.total},"paidBillsToday" to paidToday.size,"lastUpdatedAt" to now))}
         writeMaps(fs,root.collection("tableStatus"),tables.map{t->t.id to mapOf("id" to t.id,"name" to t.name,"areaId" to t.areaId,"active" to t.active,"occupied" to openByTable.containsKey(t.id),"openedAt" to openByTable[t.id]?.openedAt,"updatedAt" to now)})
         // A full menu mirror is only seeded when no cloud menu exists. Edits must
         // publish through an explicit versioned menu mutation, not generic sync.
@@ -169,7 +173,7 @@ object FirebaseCloudSync {
         writeMaps(fs,root.collection("orderItems"),dao.cloudOrderItemsSnapshot().map{i->i.id to mapOf("id" to i.id,"batchId" to i.batchId,"menuItemId" to i.menuItemId,"itemName" to i.itemNameSnapshot,"unitPrice" to i.unitPriceSnapshot,"qty" to i.qty,"note" to i.note,"adjustmentOfItemId" to i.adjustmentOfItemId)})
         writeMaps(fs,root.collection("bills"),bills.map{b->b.id to mapOf("id" to b.id,"sessionId" to b.sessionId,"billNo" to b.billNo,"openedAt" to b.openedAt,"closedAt" to b.closedAt,"subtotal" to b.subtotal,"total" to b.total,"status" to b.status)})
         writeMaps(fs,root.collection("payments"),paymentMirror.map{p->p.id to mapOf("id" to p.id,"billId" to p.billId,"method" to p.method,"amount" to p.amount,"cashierId" to p.cashierId,"paidAt" to p.paidAt,"reference" to p.reference,"dataScope" to p.dataScope)})
-        val settings=dao.allSettingsSnapshot().filter{CloudSyncPolicy.shouldUploadSetting(it.key)}.associate{it.key to it.value};stage("WRITE_CONFIG"){FirestoreServerWriter.set(root.collection("config").document("safe"),settings+mapOf("updatedAt" to now))}
+        val settings=dao.allSettingsSnapshot().filter{CloudSyncPolicy.shouldUploadSetting(it.key)}.associate{it.key to it.value};stage("WRITE_CONFIG",60_000L){FirestoreServerWriter.set(root.collection("config").document("safe"),settings+mapOf("updatedAt" to now))}
         // Heavy private backup and media transfer are handled by a separate worker.
         // They must never block the foreground "Sync now" action.
         enqueueBackup(context)
@@ -179,7 +183,7 @@ object FirebaseCloudSync {
             if(dao.claimSync(q.id,System.currentTimeMillis())==1){
                 val ok=when(q.entityType){
                     "MENU_ITEM" -> false // Only pushPendingCatalog can acknowledge the exact queued edit.
-                    "COMBO" -> true // combo metadata is covered by private snapshot; media has its own intent
+                    "COMBO" -> false // A pending combo is acknowledged only after its backup is server-confirmed.
                     "MEDIA" -> false
                     else -> false
                 }
@@ -192,8 +196,9 @@ object FirebaseCloudSync {
             }
         }
         val currentState=dao.cloudSyncStateSnapshot()?:old
-        dao.saveCloudSyncState(currentState.copy(enabled=true,dirty=false,lastAttemptAt=now,lastSuccessAt=now,lastError=null,syncedUid=uid))
+        dao.saveCloudSyncState(currentState.copy(dirty=false,lastAttemptAt=now,lastSuccessAt=now,lastError=null,syncedUid=uid))
     }.onFailure{e->
+        if(e is Exception)CloudQuotaGuard.recordFailure(context,e)
         if(e.message?.contains("MUTEX_BUSY")==true)return@onFailure
         val dao=PosDatabase.get(context).dao();val old=dao.cloudSyncStateSnapshot()?:CloudSyncStateEntity();dao.saveCloudSyncState(old.copy(lastAttemptAt=System.currentTimeMillis(),lastError=e.message?.take(300)))
         dao.saveSetting(vn.ecohome.pos0210.data.AppSettingEntity("cloud_sync_last_trace",CloudExecution.history.value.joinToString("\n")))
@@ -205,14 +210,16 @@ object FirebaseCloudSync {
         // Immediate worker is lightweight: finance reconciliation belongs to full sync.
         val tables=dao.cloudTablesSnapshot();val sessions=dao.cloudSessionsSnapshot();val batches=dao.cloudOrderBatchesSnapshot();val items=dao.cloudOrderItemsSnapshot();val bills=dao.cloudBillsSnapshot();val open=sessions.filter{it.status=="OPEN"};val openByTable=open.associateBy{it.tableId}
         val today=Calendar.getInstance().apply{set(Calendar.HOUR_OF_DAY,0);set(Calendar.MINUTE,0);set(Calendar.SECOND,0);set(Calendar.MILLISECOND,0)}.timeInMillis;val paidToday=bills.filter{it.status=="PAID"&&(it.closedAt?:0)>=today};val now=System.currentTimeMillis()
-        stage("DASHBOARD_WRITE"){FirestoreServerWriter.set(root.collection("dashboard").document("current"),financialDashboard(dao,bills,dao.cloudPaymentsSnapshot(),now)+mapOf("openTables" to open.size,"openTableNames" to tables.filter{openByTable.containsKey(it.id)}.map{it.name},"revenueToday" to paidToday.sumOf{it.total},"paidBillsToday" to paidToday.size,"lastUpdatedAt" to now))}
+        stage("DASHBOARD_WRITE",60_000L){writeDashboard(root.collection("dashboard").document("current"),financialDashboard(dao,bills,dao.cloudPaymentsSnapshot(),now)+mapOf("openTables" to open.size,"openTableNames" to tables.filter{openByTable.containsKey(it.id)}.map{it.name},"revenueToday" to paidToday.sumOf{it.total},"paidBillsToday" to paidToday.size,"lastUpdatedAt" to now))}
         writeMaps(fs,root.collection("tableStatus"),tables.map{t->t.id to mapOf("id" to t.id,"name" to t.name,"areaId" to t.areaId,"active" to t.active,"occupied" to openByTable.containsKey(t.id),"openedAt" to openByTable[t.id]?.openedAt,"updatedAt" to now)})
         // The browser manager is read-only, but it needs these live records to show
         // the current order and elapsed serving time without waiting for the backup job.
         writeMaps(fs,root.collection("sessions"),sessions.map{s->s.id to mapOf("id" to s.id,"tableId" to s.tableId,"openedAt" to s.openedAt,"openedBy" to s.openedBy,"status" to s.status,"version" to s.version)})
         writeMaps(fs,root.collection("orderBatches"),batches.map{b->b.id to mapOf("id" to b.id,"sessionId" to b.sessionId,"sequence" to b.sequence,"ordererId" to b.ordererId,"createdAt" to b.createdAt,"sentAt" to b.sentAt,"status" to b.status,"serviceNo" to b.serviceNo,"deliveredAt" to b.deliveredAt,"deliveredBy" to b.deliveredBy)})
         writeMaps(fs,root.collection("orderItems"),items.map{i->i.id to mapOf("id" to i.id,"batchId" to i.batchId,"menuItemId" to i.menuItemId,"itemName" to i.itemNameSnapshot,"unitPrice" to i.unitPriceSnapshot,"qty" to i.qty,"note" to i.note,"adjustmentOfItemId" to i.adjustmentOfItemId)})
-    }
+        writeMaps(fs,root.collection("bills"),bills.map{b->b.id to mapOf("id" to b.id,"sessionId" to b.sessionId,"billNo" to b.billNo,"openedAt" to b.openedAt,"closedAt" to b.closedAt,"subtotal" to b.subtotal,"total" to b.total,"status" to b.status)})
+        writeMaps(fs,root.collection("payments"),dao.cloudPaymentMirrorSnapshot().map{p->p.id to mapOf("id" to p.id,"billId" to p.billId,"method" to p.method,"amount" to p.amount,"cashierId" to p.cashierId,"paidAt" to p.paidAt,"reference" to p.reference,"dataScope" to p.dataScope)})
+    }.onFailure{e->if(e is Exception)CloudQuotaGuard.recordFailure(context,e)}
 
     private suspend fun pushPendingCatalog(root:com.google.firebase.firestore.DocumentReference,dao:PosDao){
         dao.recoverInflightSync()
@@ -237,7 +244,7 @@ object FirebaseCloudSync {
                         "active" to cat.active,"updatedAt" to System.currentTimeMillis()))
                 }
                 }
-                stage("PUSH_PENDING_CATALOG count=${claimed.size}"){FirestoreServerWriter.commit(root.firestore,writes)}
+                stage("PUSH_PENDING_CATALOG count=${claimed.size}",60_000L){FirestoreServerWriter.commit(root.firestore,writes)}
                 claimed.forEach{dao.completeSync(it.id)}
             }catch(e:CancellationException){ throw e
             }catch(e:Exception){
@@ -384,6 +391,17 @@ object FirebaseCloudSync {
         writeMaps(fs,root.collection("financialMovements"),dao.cloudMovementsSnapshot().map{m->m.id to mapOf("id" to m.id,"type" to m.type,"amount" to m.amount,"occurredAt" to m.occurredAt,"partnerId" to m.partnerId,"method" to m.method,"note" to m.note,"counterpartyName" to m.counterpartyName)})
     }
 
+    private suspend fun writeDashboard(doc:com.google.firebase.firestore.DocumentReference,data:Map<String,Any?>){
+        try {FirestoreServerWriter.set(doc,data)}
+        catch(e:CloudQuotaDeferred){
+            CloudExecution.trace("DASHBOARD DEFERRED ${e.message}")
+            val context=doc.firestore.app.applicationContext
+            val delay=(e.until-System.currentTimeMillis()).coerceAtLeast(1000L)
+            val request=OneTimeWorkRequestBuilder<FirebaseRealtimeWorker>().setInitialDelay(delay,TimeUnit.MILLISECONDS).setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build()
+            WorkManager.getInstance(context).enqueueUniqueWork("pos0210-dashboard-deferred-${e.until}",ExistingWorkPolicy.KEEP,request)
+        }
+    }
+
     private suspend fun writeMaps(fs:FirebaseFirestore,collection:com.google.firebase.firestore.CollectionReference,rows:List<Pair<String,Map<String,Any?>>>){
         val ack=fs.app.applicationContext.getSharedPreferences("pos0210_cloud_ack_v1",Context.MODE_PRIVATE)
         // Persist only hashes of server-acknowledged payloads. UID is part of the path.
@@ -392,14 +410,14 @@ object FirebaseCloudSync {
             val stable=if(collection.id=="tableStatus")data-"updatedAt" else data
             return java.security.MessageDigest.getInstance("SHA-256").digest(stable.toSortedMap().toString().toByteArray(Charsets.UTF_8)).joinToString(""){"%02x".format(it)}
         }
-        val changed=rows.filter{(id,data)->ack.getString(collection.path+"/"+id,null)!=fingerprint(data)}
+        val changed=rows.filter{(id,data)->ack.getString(fs.app.options.projectId+"/"+collection.path+"/"+id,null)!=fingerprint(data)}
         CloudExecution.trace("WRITE_${collection.id} changed=${changed.size} total=${rows.size}")
-        changed.chunked(400).forEachIndexed{index,chunk->
-            stage("WRITE_${collection.id}_BATCH_${index+1}",15_000L){
+        changed.chunked(399).forEachIndexed{index,chunk->
+            stage("WRITE_${collection.id}_BATCH_${index+1}",60_000L){
                 FirestoreServerWriter.commit(fs,chunk.map{(id,data)->collection.document(id).path to data})
             }
             val editor=ack.edit()
-            chunk.forEach{(id,data)->editor.putString(collection.path+"/"+id,fingerprint(data))}
+            chunk.forEach{(id,data)->editor.putString(fs.app.options.projectId+"/"+collection.path+"/"+id,fingerprint(data))}
             editor.commit()
         }
     }
@@ -440,9 +458,17 @@ object FirebaseCloudSync {
         val request=OneTimeWorkRequestBuilder<FirebaseRealtimeWorker>().setInitialDelay(3,TimeUnit.SECONDS).setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build()
         WorkManager.getInstance(context).enqueueUniqueWork("pos0210-firebase-immediate",ExistingWorkPolicy.KEEP,request)
     }
+    fun enqueueCatalog(context:Context){
+        val request=OneTimeWorkRequestBuilder<FirebaseCatalogWorker>().setInitialDelay(30,TimeUnit.SECONDS).setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build()
+        WorkManager.getInstance(context).enqueueUniqueWork("pos0210-catalog",ExistingWorkPolicy.KEEP,request)
+    }
+    fun enqueueFinance(context:Context){
+        val request=OneTimeWorkRequestBuilder<FirebaseSyncWorker>().setInitialDelay(60,TimeUnit.SECONDS).setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build()
+        WorkManager.getInstance(context).enqueueUniqueWork("pos0210-finance",ExistingWorkPolicy.KEEP,request)
+    }
     fun enqueueBackup(context:Context){
         val request=OneTimeWorkRequestBuilder<FirebaseBackupWorker>()
-            .setInitialDelay(5,TimeUnit.MINUTES)
+            .setInitialDelay(1,TimeUnit.HOURS)
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
@@ -455,14 +481,16 @@ class FirebaseSyncWorker(context:Context,params:WorkerParameters):CoroutineWorke
     override suspend fun doWork():Result{
         val state=PosDatabase.get(applicationContext).dao().cloudSyncStateSnapshot()
         if(state?.enabled!=true)return Result.success()
-        return if(FirebaseCloudSync.syncNow(applicationContext).isSuccess)Result.success() else Result.retry()
+        val result=FirebaseCloudSync.syncNow(applicationContext)
+        return if(result.isSuccess||!CloudQuotaGuard.retry(result.exceptionOrNull()))Result.success() else Result.retry()
     }
 }
 class FirebaseRealtimeWorker(context:Context,params:WorkerParameters):CoroutineWorker(context,params){
     override suspend fun doWork():Result{
         val state=PosDatabase.get(applicationContext).dao().cloudSyncStateSnapshot()
         if(state?.enabled!=true)return Result.success()
-        return if(FirebaseCloudSync.syncDashboardNow(applicationContext).isSuccess)Result.success() else Result.retry()
+        val result=FirebaseCloudSync.syncDashboardNow(applicationContext)
+        return if(result.isSuccess||!CloudQuotaGuard.retry(result.exceptionOrNull()))Result.success() else Result.retry()
     }
 }
 
@@ -470,6 +498,15 @@ class FirebaseBackupWorker(context:Context,params:WorkerParameters):CoroutineWor
     override suspend fun doWork():Result{
         val state=PosDatabase.get(applicationContext).dao().cloudSyncStateSnapshot()
         if(state?.enabled!=true)return Result.success()
-        return if(FirebaseCloudSync.backupNow(applicationContext).isSuccess)Result.success() else Result.retry()
+        val result=FirebaseCloudSync.backupNow(applicationContext)
+        return if(result.isSuccess||!CloudQuotaGuard.retry(result.exceptionOrNull()))Result.success() else Result.retry()
+    }
+}
+
+class FirebaseCatalogWorker(context:Context,params:WorkerParameters):CoroutineWorker(context,params){
+    override suspend fun doWork():Result{
+        if(PosDatabase.get(applicationContext).dao().cloudSyncStateSnapshot()?.enabled!=true)return Result.success()
+        val result=FirebaseCloudSync.publishMenu(applicationContext)
+        return if(result.isSuccess||!CloudQuotaGuard.retry(result.exceptionOrNull()))Result.success() else Result.retry()
     }
 }

@@ -44,11 +44,14 @@ object FirestorePrivateBackup {
         root.collection("slots").document(slot)
 
     private suspend fun <T> stage(name:String,block:suspend()->T):T =
-        CloudExecution.stage(name,25_000L,block)
+        CloudExecution.stage(name,60_000L,block)
 
     suspend fun upload(context:Context,fs:FirebaseFirestore,uid:String,now:Long):CloudBackupInfo {
-        val staged=CloudExecution.operation("BACKUP_SNAPSHOT",CloudOperationGuard.mutex) { makeScrubbedCopy(context) }.getOrThrow()
+        CloudQuotaGuard.check(fs)
+        val quotaOperation=java.util.UUID.randomUUID().toString()
+        val staged=CloudExecution.operation("BACKUP_SNAPSHOT",CloudOperationGuard.mutex) { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO){makeScrubbedCopy(context)} }.getOrThrow()
         try {
+            val businessHash=businessFingerprint(staged)
             val zipped=gzip(staged.readBytes())
             val encoded=Base64.encodeToString(zipped,Base64.NO_WRAP)
             val chunks=encoded.chunked(CHUNK_SIZE)
@@ -59,6 +62,12 @@ object FirestorePrivateBackup {
             val privateRoot=root(fs,uid)
             val a=stage("BACKUP_READ_SLOT_A"){slotDoc(privateRoot,"A").get(Source.SERVER).await()}
             val b=stage("BACKUP_READ_SLOT_B"){slotDoc(privateRoot,"B").get(Source.SERVER).await()}
+            val unchangedInfo=CloudBackupPolicy.unchanged(businessHash,listOf(a,b).filter{isValidSlot(it)}.map{BackupFingerprint(it.id,it.getLong("createdAt")?:0L,it.getString("businessSha256"))})
+            val unchanged=listOf(a,b).firstOrNull{it.id==unchangedInfo?.slot}
+            if(unchanged!=null){
+                CloudExecution.trace("BACKUP UNCHANGED · no Cloud writes")
+                return CloudBackupInfo(unchanged.getLong("createdAt")?:0L,unchanged.getLong("bytes")?.toInt()?:0,unchanged.getLong("chunks")?.toInt()?:0,unchanged.id)
+            }
             val target=chooseTargetSlot(a,b)
             val targetDoc=slotDoc(privateRoot,target)
 
@@ -69,18 +78,18 @@ object FirestorePrivateBackup {
                     "status" to "WRITING",
                     "startedAt" to now,
                     "format" to FORMAT
-                ))
+                ),quotaOperation)
             }
 
             // Clear stale chunks only from the target slot.
-            stage("BACKUP_CLEAR_TARGET"){deleteSlotChunks(targetDoc)}
+            stage("BACKUP_CLEAR_TARGET"){deleteSlotChunks(targetDoc,quotaOperation)}
 
             chunks.chunked(8).forEachIndexed { groupIndex,group ->
                 val writes=group.mapIndexed { offset,data ->
                     val index=groupIndex*8+offset
                     targetDoc.collection("chunks").document(index.toString().padStart(4,'0')).path to mapOf<String,Any?>("index" to index,"data" to data)
                 }
-                stage("BACKUP_WRITE_CHUNKS_${groupIndex+1}"){FirestoreServerWriter.commit(fs,writes)}
+                stage("BACKUP_WRITE_CHUNKS_${groupIndex+1}"){FirestoreServerWriter.commit(fs,writes,quotaOperation)}
             }
 
             val checksum=sha256(zipped)
@@ -92,8 +101,9 @@ object FirestorePrivateBackup {
                     "bytes" to zipped.size,
                     "chunks" to chunks.size,
                     "sha256" to checksum,
+                    "businessSha256" to businessHash,
                     "format" to FORMAT
-                ))
+                ),quotaOperation)
             }
             stage("BACKUP_WRITE_ROOT"){
                 FirestoreServerWriter.set(privateRoot,mapOf(
@@ -101,7 +111,7 @@ object FirestorePrivateBackup {
                     "updatedAt" to now,
                     "format" to FORMAT,
                     "retentionSlots" to 2
-                ))
+                ),quotaOperation)
             }
             val confirmed=stage("BACKUP_CONFIRM_SERVER"){targetDoc.get(Source.SERVER).await()}
             require(!confirmed.metadata.hasPendingWrites()&&confirmed.getString("sha256")==checksum&&isValidSlot(confirmed)) {"BACKUP_SERVER_CONFIRMATION_FAILED"}
@@ -216,10 +226,10 @@ object FirestorePrivateBackup {
         )
     }
 
-    private suspend fun deleteSlotChunks(slot:com.google.firebase.firestore.DocumentReference){
+    private suspend fun deleteSlotChunks(slot:com.google.firebase.firestore.DocumentReference,quotaOperation:String){
         val docs=slot.collection("chunks").get(Source.SERVER).await().documents
         docs.chunked(400).forEach { group ->
-            FirestoreServerWriter.delete(slot.firestore,group.map{it.reference.path})
+            FirestoreServerWriter.delete(slot.firestore,group.map{it.reference.path},quotaOperation)
         }
     }
 
@@ -313,6 +323,37 @@ object FirestorePrivateBackup {
             db.execSQL("UPDATE PurchaseEntity SET invoiceImageUri=NULL")
         }
         return copy
+    }
+
+    /** Hash logical business rows, not SQLite page churn or Cloud operation logs. */
+    private fun businessFingerprint(file:File):String {
+        val digest=MessageDigest.getInstance("SHA-256")
+        fun add(value:String){val bytes=value.toByteArray(Charsets.UTF_8);digest.update(java.nio.ByteBuffer.allocate(4).putInt(bytes.size).array());digest.update(bytes)}
+        val excluded=setOf("CloudSyncStateEntity","SyncQueueEntity","AuditEventEntity","PrintJobEntity","BankNotificationEventEntity","room_master_table","android_metadata")
+        SQLiteDatabase.openDatabase(file.absolutePath,null,SQLiteDatabase.OPEN_READONLY).use{db->
+            val tables=db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name",null).use{c->buildList{while(c.moveToNext())add(c.getString(0))}}
+            for(table in tables.filter{it !in excluded}){
+                add(table)
+                val quoted="\""+table.replace("\"","\"\"")+"\""
+                val rows=db.rawQuery("SELECT * FROM $quoted",null).use{cursor->
+                    cursor.columnNames.forEach{add(it)}
+                    buildList{
+                        while(cursor.moveToNext()){
+                            if(table=="AppSettingEntity"&&CloudQuotaPolicy.businessSettings(mapOf(cursor.getString(0) to cursor.getString(1))).isEmpty())continue
+                            val row=MessageDigest.getInstance("SHA-256")
+                            for(column in 0 until cursor.columnCount){
+                                row.update(cursor.getType(column).toByte())
+                                val bytes=if(cursor.isNull(column))ByteArray(0) else if(cursor.getType(column)==android.database.Cursor.FIELD_TYPE_BLOB)cursor.getBlob(column) else cursor.getString(column).toByteArray(Charsets.UTF_8)
+                                row.update(java.nio.ByteBuffer.allocate(4).putInt(bytes.size).array());row.update(bytes)
+                            }
+                            add(row.digest().joinToString(""){"%02x".format(it)})
+                        }
+                    }
+                }
+                rows.sorted().forEach{add(it)}
+            }
+        }
+        return digest.digest().joinToString(""){"%02x".format(it)}
     }
 
     private fun gzip(raw:ByteArray)=ByteArrayOutputStream().use { out ->

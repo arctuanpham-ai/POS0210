@@ -45,7 +45,25 @@ class FirestoreHttpCommitTest {
             assertTrue((System.nanoTime()-start)/1_000_000<250)
         }
     }
-    private fun server(status:Int,reply:String,delayMs:Long=0,block:(URL)->Unit) {
+    @Test fun quota_get_preserves_version_and_exact_counts(){
+        server(200,"{\"updateTime\":\"2026-10-09T12:00:00Z\",\"fields\":{\"total\":{\"integerValue\":\"15998\"},\"publisher\":{\"stringValue\":\"device-a\"}}}",method="GET") { url ->
+            val snapshot=FirestoreHttpCommit.readQuota(url,"test-token")
+            assertEquals(15998L,snapshot.data["total"])
+            assertEquals("device-a",snapshot.data["publisher"])
+            assertEquals("2026-10-09T12:00:00Z",snapshot.updateTime)
+        }
+    }
+    @Test fun only_not_found_starts_a_new_counter(){
+        server(404,"{\"error\":{\"status\":\"NOT_FOUND\"}}",method="GET"){url->assertNull(FirestoreHttpCommit.readQuota(url,"test-token").updateTime)}
+        server(403,"{\"error\":{\"status\":\"PERMISSION_DENIED\"}}",method="GET"){url->assertThrows(IOException::class.java){FirestoreHttpCommit.readQuota(url,"test-token")}}
+    }
+    @Test fun quota_exhaustion_is_returned_as_a_failure(){
+        server(429,"{\"error\":{\"status\":\"RESOURCE_EXHAUSTED\",\"message\":\"Quota exceeded\"}}") { url ->
+            val error=assertThrows(IOException::class.java){FirestoreHttpCommit.send(url,"test-token",listOf(FirestoreWire.set("p","users/u/stores/0210/bills/a",emptyMap())))}
+            assertTrue(error.message.orEmpty().contains("HTTP_429 RESOURCE_EXHAUSTED"))
+        }
+    }
+    private fun server(status:Int,reply:String,delayMs:Long=0,method:String="POST",block:(URL)->Unit) {
         val server=ServerSocket(0,1,InetAddress.getByName("127.0.0.1"))
         val failure=AtomicReference<Throwable?>()
         val worker=thread(isDaemon=true) {
@@ -57,13 +75,13 @@ class FirestoreHttpCommitTest {
                     val byte=input.read();check(byte>=0);header.append(byte.toChar())
                 }
                 val lines=header.toString().split("\r\n")
-                check(lines.first().startsWith("POST /commit "))
+                check(lines.first().startsWith("$method /commit "))
                 val headers=lines.drop(1).mapNotNull{line->line.indexOf(':').takeIf{it>0}?.let{line.substring(0,it).lowercase() to line.substring(it+1).trim()}}.toMap()
                 check(headers["authorization"]=="Bearer test-token")
-                val body=ByteArray(headers["content-length"]!!.toInt())
+                val body=ByteArray(headers["content-length"]?.toInt()?:0)
                 var read=0
                 while(read<body.size){val count=input.read(body,read,body.size-read);check(count>0);read+=count}
-                check(JSONObject(String(body,Charsets.UTF_8)).getJSONArray("writes").length()==1)
+                if(method=="POST")check(JSONObject(String(body,Charsets.UTF_8)).getJSONArray("writes").length()==1) else check(body.isEmpty())
                 val bytes=reply.toByteArray(Charsets.UTF_8)
                 if(delayMs>0)Thread.sleep(delayMs)
                 socket.getOutputStream().use { out ->

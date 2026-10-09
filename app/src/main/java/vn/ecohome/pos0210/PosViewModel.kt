@@ -171,8 +171,8 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
   dao.enqueueSync(SyncQueueEntity(UUID.randomUUID().toString(),type,id,"UPSERT","",now,now))
  }
  private suspend fun publishCatalogChange(){
-  val result=FirebaseCloudSync.publishMenu(getApplication())
-  result.onFailure{e->cloudMessage.value="Menu đã lưu trên máy · chưa đẩy Cloud: ${e.message}"}
+  FirebaseCloudSync.enqueueCatalog(getApplication())
+  cloudMessage.value="Menu đã lưu trên máy · chờ gom thay đổi 30 giây để đẩy Cloud"
  }
  private suspend fun autoMasterConfig(){
   val root=dao.allSettingsSnapshot().firstOrNull{it.key=="storage_root_uri"}?.value.orEmpty()

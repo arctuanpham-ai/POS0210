@@ -89,4 +89,22 @@ class CoffeeSalesRoomTest {
         assertEquals(2, rows.map { it.name }.distinct().count { it.contains("kem muối") })
         // Existing report groups by name; the stable menuItemId is absent from paidItemSales.
     }
+    @Test fun paidBillWithoutOrderRowsIsDetectedByReconciliation() = runBlocking {
+        dao.insertSession(TableSessionEntity("orphan", "table_orphan", 1000L, "staff", status = "CLOSED"))
+        dao.insertBill(BillEntity("bill_orphan", "orphan", "0210-orphan", 1000L, 2000L, 70000L, 70000L, "PAID"))
+        dao.insertPayment(PaymentEntity("pay_orphan", "bill_orphan", "TRANSFER", 70000L, "staff", 2000L))
+        assertEquals(70000L, dao.allPaidBillsSnapshot().single().total)
+        assertTrue(dao.paidItemSales().first().isEmpty())
+        assertEquals(0L, dao.sessionTotalSnapshot("orphan"))
+    }
+
+    @Test fun twoPaidBillsForOneSessionDoubleCountItemsInCurrentQuery() = runBlocking {
+        paidSession("duplicate", coffeeQty = 2, foodQty = 0)
+        dao.insertBill(BillEntity("bill_second", "duplicate", "0210-second", 1000L, 2001L, 70000L, 70000L, "PAID"))
+        dao.insertPayment(PaymentEntity("pay_second", "bill_second", "TRANSFER", 70000L, "staff", 2001L))
+        assertEquals(4, dao.paidItemSales().first().sumOf { it.qty })
+        assertEquals(140000L, dao.allPaidBillsSnapshot().sumOf { it.total })
+        assertEquals(70000L, dao.sessionTotalSnapshot("duplicate"))
+    }
+
 }

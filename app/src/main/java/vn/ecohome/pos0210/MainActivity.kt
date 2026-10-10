@@ -1,4 +1,6 @@
 package vn.ecohome.pos0210
+import vn.ecohome.pos0210.report.SalesReport
+import vn.ecohome.pos0210.report.SalesItemsReport
 
 import android.net.Uri
 import android.Manifest
@@ -3390,13 +3392,14 @@ fun Report(vm: PosViewModel) {
         }
         return
     }
-    val bills by vm.bills.collectAsState()
-    val payments by vm.payments.collectAsState()
+    val reportData by vm.salesReport.collectAsState()
+    val bills = reportData.bills
+    val payments = reportData.payments.filter { it.dataScope == "LIVE" }
     val purchases by vm.purchases.collectAsState()
     val purchaseCosts by vm.purchaseCosts.collectAsState()
     val purchaseCategories by vm.purchaseCategories.collectAsState()
     val profitPartners by vm.profitPartners.collectAsState()
-    val itemSales by vm.itemSales.collectAsState()
+    val itemSales = reportData.items
     val current by vm.currentEmployee.collectAsState()
     var section by remember { mutableStateOf("OVERVIEW") }
     var periodDays by remember { mutableStateOf(1) }
@@ -3552,8 +3555,8 @@ fun Report(vm: PosViewModel) {
     val salesInPeriod = itemSales.filter { it.sessionId in sessionIds }
     val totalItemQty = salesInPeriod.sumOf { it.qty }
     val favoriteRows = salesInPeriod
-        .groupBy { it.name }
-        .map { (name, rows) -> name to rows.sumOf { it.qty } }
+        .groupBy { it.menuItemId ?: "legacy:${it.name}" }
+        .map { (_, rows) -> rows.first().name to rows.sumOf { it.qty } }
         .sortedByDescending { it.second }
         .take(8)
 
@@ -3593,6 +3596,7 @@ fun Report(vm: PosViewModel) {
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             FilterChip(section == "OVERVIEW", { section = "OVERVIEW" }, { Text("TỔNG QUAN") })
+            FilterChip(section == "ITEMS", { section = "ITEMS" }, { Text("THỐNG KÊ MÓN") })
             FilterChip(section == "BILLS", { section = "BILLS" }, { Text("LỊCH SỬ BILL") })
             FilterChip(section == "PURCHASES", { section = "PURCHASES" }, { Text("CHI / NGƯỜI CHI") })
             FilterChip(section == "MONTHLY", { section = "MONTHLY" }, { Text("BÁO CÁO THÁNG") })
@@ -3618,6 +3622,7 @@ fun Report(vm: PosViewModel) {
             }
         }
         when (section) {
+            "ITEMS" -> SalesItemsReport(reportData) { selectedBill = it }
             "EXPORT" -> {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal=12.dp,vertical=10.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
                     Text("XUẤT BÁO CÁO",fontWeight=FontWeight.Bold)
@@ -3655,6 +3660,13 @@ fun Report(vm: PosViewModel) {
                     FilterChip(periodDays == 0, { periodDays = 0 }, { Text("Tất cả") })
                 }
                 LazyColumn(Modifier.fillMaxSize().padding(12.dp)) {
+                    item {
+                        val ids = filteredBills.map { it.id }.toSet()
+                        val alerts = SalesReport.reconcile(reportData.bills,reportData.items,reportData.adjustments,reportData.payments,reportData.sessions).count { it.bill.id in ids && it.issues.isNotEmpty() }
+                        if(alerts > 0 || reportData.orphanLines > 0) {
+                            OutlinedButton(onClick={section="ITEMS"},modifier=Modifier.fillMaxWidth()) { Text("ĐỐI SOÁT: $alerts bill cần kiểm tra · ${reportData.orphanLines} dòng mất liên kết") }
+                        }
+                    }
                     item { MetricCard("Doanh thu", money(revenue)) }
                     item { MetricCard("Số bill", filteredBills.size.toString()) }
                     item { MetricCard("Bill trung bình", money(avgBill)) }

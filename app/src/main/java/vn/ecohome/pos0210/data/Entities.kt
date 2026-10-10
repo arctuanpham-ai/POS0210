@@ -11,7 +11,7 @@ import androidx.room.PrimaryKey
 @Entity(indices=[Index("categoryId"),Index(value=["productCode"],unique=true)]) data class MenuItemEntity(@PrimaryKey val id:String,val categoryId:String,val name:String,val price:Long,val imageUri:String?=null,val sortOrder:Int=0,val active:Boolean=true,val productCode:String="",val description:String="")
 @Entity(indices=[Index(value=["tableId","status"])]) data class TableSessionEntity(@PrimaryKey val id:String,val tableId:String,val openedAt:Long,val openedBy:String,val status:String="OPEN",val version:Long=1,val dataScope:String="LIVE")
 @Entity(indices=[Index("sessionId"),Index("serviceNo"),Index("status")]) data class OrderBatchEntity(@PrimaryKey val id:String,val sessionId:String,val sequence:Int,val ordererId:String,val createdAt:Long,val sentAt:Long?=null,val status:String="DRAFT",val serviceNo:Int=0,val deliveredAt:Long?=null,val deliveredBy:String?=null)
-@Entity(indices=[Index("batchId"),Index("buyGetPromotionId")]) data class OrderItemEntity(@PrimaryKey val id:String,val batchId:String,val menuItemId:String?,val itemNameSnapshot:String,val unitPriceSnapshot:Long,val qty:Int,val note:String="",val adjustmentOfItemId:String?=null,val loyaltyRewardId:String?=null,val loyaltyLabel:String?=null,val buyGetPromotionId:String?=null,val buyGetLabel:String?=null)
+@Entity(indices=[Index("batchId"),Index("buyGetPromotionId")]) data class OrderItemEntity(@PrimaryKey val id:String,val batchId:String,val menuItemId:String?,val itemNameSnapshot:String,val unitPriceSnapshot:Long,val qty:Int,val note:String="",val adjustmentOfItemId:String?=null,val loyaltyRewardId:String?=null,val loyaltyLabel:String?=null,val buyGetPromotionId:String?=null,val buyGetLabel:String?=null,val categoryIdSnapshot:String?=null,val categoryNameSnapshot:String?=null,val comboPartsSnapshot:String?=null)
 @Entity(indices=[Index("sessionId"),Index("customerId")]) data class BillEntity(@PrimaryKey val id:String,val sessionId:String,val billNo:String,val openedAt:Long,val closedAt:Long?,val subtotal:Long,val total:Long,val status:String,val customerId:String?=null,val dataScope:String="LIVE")
 @Entity(indices=[Index(value=["billId"],unique=true)]) data class PaymentEntity(@PrimaryKey val id:String,val billId:String,val method:String,val amount:Long,val cashierId:String,val paidAt:Long,val reference:String?=null,val dataScope:String="LIVE")
 @Entity(indices=[Index(value=["phone"],unique=true),Index("tier")]) data class CustomerEntity(@PrimaryKey val id:String,val phone:String,val name:String="",val tier:String="MEMBER",val points:Int=0,val totalSpend:Long=0,val visitCount:Int=0,val lastVisitAt:Long?=null,val active:Boolean=true,val tierManual:Boolean=false,val address:String="")
@@ -63,7 +63,15 @@ data class PaymentSessionEntity(@PrimaryKey val id:String,val tableSessionId:Str
 @Entity(indices=[Index("receivedAt"),Index("matchStatus"),Index("paymentSessionId")])
 data class BankNotificationEventEntity(@PrimaryKey val fingerprint:String,val packageName:String,val bank:String?=null,val title:String,val body:String,val receivedAt:Long,val parserResult:String,val amount:Long?=null,val account:String?=null,val transactionTime:Long?=null,val content:String?=null,val reference:String?=null,val direction:String?=null,val matchStatus:String="UNMATCHED",val paymentSessionId:String?=null)
 
-data class ItemSaleRow(val name:String,val qty:Int,val sessionId:String)
+data class ItemSaleRow(val name:String,val qty:Int,val sessionId:String,
+ val lineId:String="",val menuItemId:String?=null,val unitPrice:Long=0,
+ val categoryId:String?=null,val categoryName:String?=null,val comboPartsJson:String?=null,
+ val loyaltyRewardId:String?=null,val buyGetPromotionId:String?=null,val adjustmentOfItemId:String?=null,
+ val discounted:Boolean=false)
+
+data class SalesReportData(val bills:List<BillEntity> = emptyList(),val items:List<ItemSaleRow> = emptyList(),
+ val payments:List<PaymentEntity> = emptyList(),val adjustments:List<BillAdjustmentEntity> = emptyList(),
+ val sessions:List<TableSessionEntity> = emptyList(),val orphanLines:Int=0)
 
 data class PurchaseCostRow(val purchaseId:String,val categoryId:String,val amount:Long,val purchasedAt:Long)
 

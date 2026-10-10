@@ -111,4 +111,17 @@ class SalesIntegrityRoomTest {
         dao.transitionBatch(correction.id,"DRAFT","WAITING",1);dao.markDelivered(correction.id,2,"e");pay(s)
         assertEquals(2,dao.paidItemSales().first().sumOf{it.qty});assertEquals(70000L,dao.allPaidBillsSnapshot().single().total)
     }
+    @Test fun correctionCannotChangeHistoricalCategory()=runBlocking {
+        val s=repo.openSession("t","e");val b=batch(s,mapOf("c" to 2));val original=dao.batchItems(b.id).first().single()
+        val cb=repo.createBatch(s.id,2,"e",listOf(original.copy(id="",batchId="",qty=-1,adjustmentOfItemId=original.id,categoryIdSnapshot="food",categoryNameSnapshot="Đồ ăn")))
+        assertEquals("coffee",dao.batchItems(cb.id).first().single().categoryIdSnapshot)
+        assertEquals("Cà phê",dao.batchItems(cb.id).first().single().categoryNameSnapshot)
+    }
+    @Test fun repeatedCorrectionCannotExceedOriginalQuantity()=runBlocking {
+        val s=repo.openSession("t","e");val b=batch(s,mapOf("c" to 2));val original=dao.batchItems(b.id).first().single()
+        repo.createBatch(s.id,2,"e",listOf(original.copy(id="",batchId="",qty=-1,adjustmentOfItemId=original.id)))
+        assertTrue(runCatching{repo.createBatch(s.id,3,"e",listOf(original.copy(id="",batchId="",qty=-2,adjustmentOfItemId=original.id)))}.isFailure)
+        assertEquals(2,dao.batches(s.id).first().size);assertEquals(35000L,dao.sessionTotalSnapshot(s.id))
+    }
+
 }

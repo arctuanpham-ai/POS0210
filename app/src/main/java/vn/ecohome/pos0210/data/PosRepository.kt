@@ -90,15 +90,22 @@ class PosRepository(private val db:PosDatabase){
             check(session.status=="OPEN"){"SESSION_ALREADY_CLOSED_OR_CHANGED"}
             require(items.isNotEmpty()){ "EMPTY_ORDER" }
             val stamped=OrderSnapshots.stamp(items,dao.allMenuSnapshot(),dao.allCombosSnapshot(),dao.allComboItemsSnapshot(),dao.allCategoriesSnapshot())
-            stamped.filter{it.qty<0}.forEach{item->
-                val original=dao.orderItemById(item.adjustmentOfItemId!!) ?: error("ADJUSTMENT_SOURCE_MISSING")
-                val source=dao.orderBatchById(original.batchId) ?: error("ADJUSTMENT_SOURCE_MISSING")
-                check(source.sessionId==sessionId&&source.status!="CANCELLED"&&original.menuItemId==item.menuItemId&&original.unitPriceSnapshot==item.unitPriceSnapshot){"INVALID_ADJUSTMENT_SOURCE"}
+            val pendingCorrections=mutableMapOf<String,Int>()
+            val protectedSnapshots=stamped.map{item->
+                if(item.qty>=0)item else {
+                    val original=dao.orderItemById(item.adjustmentOfItemId!!) ?: error("ADJUSTMENT_SOURCE_MISSING")
+                    val source=dao.orderBatchById(original.batchId) ?: error("ADJUSTMENT_SOURCE_MISSING")
+                    check(source.sessionId==sessionId&&source.status!="CANCELLED"&&original.menuItemId==item.menuItemId&&original.unitPriceSnapshot==item.unitPriceSnapshot){"INVALID_ADJUSTMENT_SOURCE"}
+                    val already=dao.sourceCorrectionQty(original.id)+(pendingCorrections[original.id] ?: 0)
+                    val correction=OrderSnapshots.correction(original,item,already)
+                    pendingCorrections[original.id]=(pendingCorrections[original.id] ?: 0)+item.qty
+                    correction
+                }
             }
             val serviceNo=dao.maxServiceNoSince(cal.timeInMillis)+1
             val nextSequence=dao.maxBatchSequence(sessionId)+1
             b=OrderBatchEntity(UUID.randomUUID().toString(),sessionId,nextSequence,ordererId,now,serviceNo=serviceNo)
-            val fixed=stamped.map{it.copy(id=if(it.id.isBlank()) UUID.randomUUID().toString() else it.id,batchId=b.id)}
+            val fixed=protectedSnapshots.map{it.copy(id=if(it.id.isBlank()) UUID.randomUUID().toString() else it.id,batchId=b.id)}
             dao.insertBatch(b)
             dao.insertItems(fixed)
             dao.audit(AuditEventEntity(UUID.randomUUID().toString(),"BATCH",b.id,"CREATE",ordererId,null,now,"serviceNo=$serviceNo,items=${fixed.size}"))

@@ -6,6 +6,11 @@ import vn.ecohome.pos0210.data.*
 
 /** All-or-nothing local cart validation. Called with database snapshots, never UI flow caches. */
 object OrderSnapshots {
+    fun correction(original:OrderItemEntity,requested:OrderItemEntity,alreadyCorrected:Int):OrderItemEntity {
+        require(original.qty>0&&original.adjustmentOfItemId==null&&requested.qty<0){"INVALID_ADJUSTMENT_SOURCE"}
+        require(original.qty.toLong()+alreadyCorrected+requested.qty>=0){"ADJUSTMENT_EXCEEDS_QUANTITY"}
+        return original.copy(id=requested.id,batchId=requested.batchId,qty=requested.qty,note=requested.note,adjustmentOfItemId=original.id)
+    }
     fun cart(lines:Map<String,Int>,notes:Map<String,String>,menu:List<MenuItemEntity>,
         combos:List<ComboEntity>,parts:List<ComboItemEntity>,categories:List<MenuCategoryEntity>):List<OrderItemEntity> {
         require(lines.isNotEmpty()){ "EMPTY_CART" }

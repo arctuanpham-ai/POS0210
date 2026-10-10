@@ -292,6 +292,7 @@ fun Order(vm: PosViewModel, t: DiningTableEntity) {
     var voucherDialog by remember { mutableStateOf(false) }
     var showCart by remember { mutableStateOf(false) }
     var noteTarget by remember { mutableStateOf<Pair<String,String>?>(null) }
+    val orderMessage by vm.orderMessage.collectAsState()
     var selectedCat by remember(cats) { mutableStateOf(cats.firstOrNull()?.id ?: "") }
     val visible = ms.filter { it.active && (selectedCat.isBlank() || it.categoryId == selectedCat) }
     val activeCombos = combos.filter { it.active }
@@ -307,6 +308,10 @@ fun Order(vm: PosViewModel, t: DiningTableEntity) {
 
     Column {
         Header(t.name) { vm.screen.value = "TABLES" }
+        if(orderMessage.isNotBlank()) {
+            Text(orderMessage,Modifier.padding(horizontal=14.dp,vertical=4.dp),fontWeight=FontWeight.Bold)
+            TextButton(onClick={vm.cart.value=emptyMap();vm.cartNotes.value=emptyMap();vm.orderMessage.value=""}){Text("XÓA GIỎ ĐỂ CHỌN LẠI")}
+        }
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp).horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(6.dp)

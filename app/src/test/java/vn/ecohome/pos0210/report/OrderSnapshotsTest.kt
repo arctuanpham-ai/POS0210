@@ -26,4 +26,16 @@ class OrderSnapshotsTest {
         val prepared=OrderSnapshots.cart(mapOf("coffee" to 1),emptyMap(),menu,emptyList(),emptyList(),cats)
         assertTrue(runCatching{OrderSnapshots.stamp(prepared,menu.map{it.copy(price=40000)},emptyList(),emptyList(),cats)}.isFailure)
     }
+    @Test fun correctionCopiesImmutableOriginalSnapshots() {
+        val original=OrderItemEntity("source","b","coffee","Cà phê",35000,2,categoryIdSnapshot="cat",categoryNameSnapshot="Cà phê")
+        val requested=original.copy(id="new",qty=-1,adjustmentOfItemId="source",categoryIdSnapshot="food",categoryNameSnapshot="Đồ ăn")
+        val result=OrderSnapshots.correction(original,requested,0)
+        assertEquals("cat",result.categoryIdSnapshot);assertEquals("Cà phê",result.categoryNameSnapshot)
+        assertEquals(-1,result.qty);assertEquals("new",result.id)
+    }
+    @Test fun correctionCannotExceedRemainingQuantity() {
+        val original=OrderItemEntity("source","b","coffee","Cà phê",35000,2)
+        assertTrue(runCatching{OrderSnapshots.correction(original,original.copy(qty=-2),-1)}.isFailure)
+    }
+
 }

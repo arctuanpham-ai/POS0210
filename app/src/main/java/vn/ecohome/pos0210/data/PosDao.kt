@@ -42,6 +42,7 @@ WHERE s.status='OPEN' GROUP BY s.id""") fun tableServiceTimings():Flow<List<Tabl
 @Query("SELECT COUNT(*) FROM OrderBatchEntity WHERE sessionId=:sessionId AND status IN ('DRAFT','WAITING')") suspend fun unfulfilledCountForSession(sessionId:String):Int
 @Query("SELECT COALESCE(MAX(sequence),0) FROM OrderBatchEntity WHERE sessionId=:sessionId") suspend fun maxBatchSequence(sessionId:String):Int
 @Query("SELECT COALESCE(MAX(serviceNo),0) FROM OrderBatchEntity WHERE createdAt>=:dayStart") suspend fun maxServiceNoSince(dayStart:Long):Int
+@Query("SELECT COALESCE(SUM(oi.qty),0) FROM OrderItemEntity oi JOIN OrderBatchEntity ob ON ob.id=oi.batchId WHERE oi.adjustmentOfItemId=:sourceId AND oi.qty<0 AND ob.status!='CANCELLED'") suspend fun sourceCorrectionQty(sourceId:String):Int
 @Query("SELECT * FROM OrderItemEntity WHERE id=:id LIMIT 1") suspend fun orderItemById(id:String):OrderItemEntity?
 @Query("SELECT * FROM OrderBatchEntity WHERE id=:id LIMIT 1") suspend fun orderBatchById(id:String):OrderBatchEntity?
 @Query("SELECT * FROM OrderItemEntity WHERE batchId=:batchId") fun batchItems(batchId:String):Flow<List<OrderItemEntity>>

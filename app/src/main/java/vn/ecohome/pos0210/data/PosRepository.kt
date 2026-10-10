@@ -2,11 +2,33 @@ package vn.ecohome.pos0210.data
 
 import androidx.room.withTransaction
 import vn.ecohome.pos0210.LoyaltyAwardPolicy
+import vn.ecohome.pos0210.report.OrderSnapshots
 import java.util.UUID
+import androidx.room.InvalidationTracker
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.buffer
+import kotlinx.coroutines.flow.map
+
 
 class PosRepository(private val db:PosDatabase){
     private val dao=db.dao()
     fun areas()=dao.areas(); fun tables()=dao.tables(); fun categories()=dao.categories(); fun menuItems()=dao.menuItems(); fun employees()=dao.employees(); fun openSessions()=dao.openSessions(); fun paidBills()=dao.paidBills(); fun purchases()=dao.purchases()
+    fun salesReportData()=callbackFlow {
+        val observer=object:InvalidationTracker.Observer("BillEntity","PaymentEntity","BillAdjustmentEntity","OrderItemEntity","OrderBatchEntity","TableSessionEntity"){
+            override fun onInvalidated(tables:Set<String>){trySend(Unit)}
+        }
+        db.invalidationTracker.addObserver(observer)
+        trySend(Unit)
+        awaitClose{db.invalidationTracker.removeObserver(observer)}
+    }.buffer(Channel.CONFLATED).map {
+        db.withTransaction {
+            SalesReportData(dao.allPaidBillsSnapshot(),dao.paidItemSalesSnapshot(),dao.reportPaymentsSnapshot(),
+                dao.reportAdjustmentsSnapshot(),dao.cloudSessionsSnapshot(),dao.reportOrphanLineCount())
+        }
+    }
+
     suspend fun saveArea(v:AreaEntity)=dao.saveArea(v)
     suspend fun saveTable(v:DiningTableEntity)=dao.saveTable(v)
     suspend fun saveCategory(v:MenuCategoryEntity)=dao.saveCategory(v)
@@ -52,6 +74,10 @@ class PosRepository(private val db:PosDatabase){
         return s
     }
 
+    suspend fun prepareCart(lines:Map<String,Int>,notes:Map<String,String>):List<OrderItemEntity> = db.withTransaction {
+        OrderSnapshots.cart(lines,notes,dao.allMenuSnapshot(),dao.allCombosSnapshot(),dao.allComboItemsSnapshot(),dao.allCategoriesSnapshot())
+    }
+
     suspend fun createBatch(sessionId:String,sequence:Int,ordererId:String,items:List<OrderItemEntity>):OrderBatchEntity {
         val now=System.currentTimeMillis()
         val cal=java.util.Calendar.getInstance().apply{
@@ -60,10 +86,26 @@ class PosRepository(private val db:PosDatabase){
         }
         lateinit var b:OrderBatchEntity
         db.withTransaction {
+            val session=dao.sessionSnapshotById(sessionId) ?: error("SESSION_MISSING")
+            check(session.status=="OPEN"){"SESSION_ALREADY_CLOSED_OR_CHANGED"}
+            require(items.isNotEmpty()){ "EMPTY_ORDER" }
+            val stamped=OrderSnapshots.stamp(items,dao.allMenuSnapshot(),dao.allCombosSnapshot(),dao.allComboItemsSnapshot(),dao.allCategoriesSnapshot())
+            val pendingCorrections=mutableMapOf<String,Int>()
+            val protectedSnapshots=stamped.map{item->
+                if(item.qty>=0)item else {
+                    val original=dao.orderItemById(item.adjustmentOfItemId!!) ?: error("ADJUSTMENT_SOURCE_MISSING")
+                    val source=dao.orderBatchById(original.batchId) ?: error("ADJUSTMENT_SOURCE_MISSING")
+                    check(source.sessionId==sessionId&&source.status!="CANCELLED"&&original.menuItemId==item.menuItemId&&original.unitPriceSnapshot==item.unitPriceSnapshot){"INVALID_ADJUSTMENT_SOURCE"}
+                    val already=dao.sourceCorrectionQty(original.id)+(pendingCorrections[original.id] ?: 0)
+                    val correction=OrderSnapshots.correction(original,item,already)
+                    pendingCorrections[original.id]=(pendingCorrections[original.id] ?: 0)+item.qty
+                    correction
+                }
+            }
             val serviceNo=dao.maxServiceNoSince(cal.timeInMillis)+1
             val nextSequence=dao.maxBatchSequence(sessionId)+1
             b=OrderBatchEntity(UUID.randomUUID().toString(),sessionId,nextSequence,ordererId,now,serviceNo=serviceNo)
-            val fixed=items.map{it.copy(id=if(it.id.isBlank()) UUID.randomUUID().toString() else it.id,batchId=b.id)}
+            val fixed=protectedSnapshots.map{it.copy(id=if(it.id.isBlank()) UUID.randomUUID().toString() else it.id,batchId=b.id)}
             dao.insertBatch(b)
             dao.insertItems(fixed)
             dao.audit(AuditEventEntity(UUID.randomUUID().toString(),"BATCH",b.id,"CREATE",ordererId,null,now,"serviceNo=$serviceNo,items=${fixed.size}"))
@@ -153,6 +195,8 @@ class PosRepository(private val db:PosDatabase){
         val normalizedPhone=if(isTest) "" else customerPhone.filter(Char::isDigit).take(15)
         if(normalizedPhone.isNotBlank()) require(normalizedPhone.length>=9) { "INVALID_CUSTOMER_PHONE" }
         return db.withTransaction {
+            val storedSession=dao.sessionSnapshotById(session.id) ?: error("SESSION_MISSING")
+            check(storedSession.status=="OPEN"&&storedSession.version==session.version&&storedSession.dataScope==session.dataScope){"SESSION_ALREADY_CLOSED_OR_CHANGED"}
             if(dao.unfulfilledCountForSession(session.id)>0) error("PENDING_ORDER_NOT_COMPLETED")
             val liveSubtotal=dao.sessionTotalSnapshot(session.id)
             if(liveSubtotal!=preview.subtotal) error("ORDER_TOTAL_CHANGED")
@@ -232,10 +276,12 @@ class PosRepository(private val db:PosDatabase){
                     preview.subtotal*rule.percent/100L,rule.code,now,cashierId
                 ))
             }
-            preview.discountRule?.let { rule ->
+            if(preview.discount>0L) {
+                val rule=preview.discountRule
                 adjustments.add(BillAdjustmentEntity(
-                    UUID.randomUUID().toString(),bill.id,rule.id,rule.name,"DISCOUNT",rule.percent,
-                    preview.discount,rule.code,now,cashierId
+                    UUID.randomUUID().toString(),bill.id,rule?.id,
+                    rule?.name ?: preview.buyGetLabel ?: if(loyaltyRewardId!=null) "Ưu đãi tích điểm" else "Giảm giá",
+                    "DISCOUNT",rule?.percent ?: 0,preview.discount,rule?.code ?: "",now,cashierId
                 ))
             }
             if(adjustments.isNotEmpty()) dao.insertBillAdjustments(adjustments)

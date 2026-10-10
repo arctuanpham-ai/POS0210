@@ -42,6 +42,9 @@ WHERE s.status='OPEN' GROUP BY s.id""") fun tableServiceTimings():Flow<List<Tabl
 @Query("SELECT COUNT(*) FROM OrderBatchEntity WHERE sessionId=:sessionId AND status IN ('DRAFT','WAITING')") suspend fun unfulfilledCountForSession(sessionId:String):Int
 @Query("SELECT COALESCE(MAX(sequence),0) FROM OrderBatchEntity WHERE sessionId=:sessionId") suspend fun maxBatchSequence(sessionId:String):Int
 @Query("SELECT COALESCE(MAX(serviceNo),0) FROM OrderBatchEntity WHERE createdAt>=:dayStart") suspend fun maxServiceNoSince(dayStart:Long):Int
+@Query("SELECT COALESCE(SUM(oi.qty),0) FROM OrderItemEntity oi JOIN OrderBatchEntity ob ON ob.id=oi.batchId WHERE oi.adjustmentOfItemId=:sourceId AND oi.qty<0 AND ob.status!='CANCELLED'") suspend fun sourceCorrectionQty(sourceId:String):Int
+@Query("SELECT * FROM OrderItemEntity WHERE id=:id LIMIT 1") suspend fun orderItemById(id:String):OrderItemEntity?
+@Query("SELECT * FROM OrderBatchEntity WHERE id=:id LIMIT 1") suspend fun orderBatchById(id:String):OrderBatchEntity?
 @Query("SELECT * FROM OrderItemEntity WHERE batchId=:batchId") fun batchItems(batchId:String):Flow<List<OrderItemEntity>>
 @Query("SELECT COALESCE(SUM(qty*unitPriceSnapshot),0) FROM OrderItemEntity WHERE batchId IN (SELECT id FROM OrderBatchEntity WHERE sessionId=:sessionId AND status!='CANCELLED')") fun sessionTotal(sessionId:String):Flow<Long>
 @Query("SELECT COALESCE(SUM(qty*unitPriceSnapshot),0) FROM OrderItemEntity WHERE batchId IN (SELECT id FROM OrderBatchEntity WHERE sessionId=:sessionId AND status!='CANCELLED')") suspend fun sessionTotalSnapshot(sessionId:String):Long
@@ -83,7 +86,23 @@ WHERE s.status='OPEN' GROUP BY s.id""") fun tableServiceTimings():Flow<List<Tabl
 @Query("SELECT * FROM PricingRuleEntity WHERE active=1") suspend fun activePricingRulesSnapshot():List<PricingRuleEntity>
 @Query("SELECT * FROM PricingRuleEntity ORDER BY name") suspend fun allPricingRulesSnapshot():List<PricingRuleEntity>
 @Query("SELECT * FROM BillAdjustmentEntity ORDER BY appliedAt DESC") fun billAdjustments():Flow<List<BillAdjustmentEntity>>
-@Query("SELECT oi.itemNameSnapshot AS name, oi.qty AS qty, ob.sessionId AS sessionId FROM OrderItemEntity oi INNER JOIN OrderBatchEntity ob ON ob.id=oi.batchId INNER JOIN BillEntity b ON b.sessionId=ob.sessionId WHERE b.status='PAID' AND b.dataScope='LIVE' AND ob.status!='CANCELLED'") fun paidItemSales():Flow<List<ItemSaleRow>>
+@Query("""SELECT oi.itemNameSnapshot AS name, oi.qty AS qty, ob.sessionId AS sessionId,
+oi.id AS lineId, oi.menuItemId AS menuItemId, oi.unitPriceSnapshot AS unitPrice,
+oi.categoryIdSnapshot AS categoryId, oi.categoryNameSnapshot AS categoryName, oi.comboPartsSnapshot AS comboPartsJson,
+oi.loyaltyRewardId AS loyaltyRewardId, oi.buyGetPromotionId AS buyGetPromotionId, oi.adjustmentOfItemId AS adjustmentOfItemId,
+EXISTS(SELECT 1 FROM BillAdjustmentEntity a JOIN BillEntity b ON b.id=a.billId WHERE b.sessionId=ob.sessionId AND b.status='PAID' AND b.dataScope='LIVE' AND a.kind='DISCOUNT' AND a.amount>0) AS discounted
+FROM OrderItemEntity oi JOIN OrderBatchEntity ob ON ob.id=oi.batchId JOIN TableSessionEntity s ON s.id=ob.sessionId
+WHERE s.dataScope='LIVE' AND ob.status!='CANCELLED' AND EXISTS(SELECT 1 FROM BillEntity b WHERE b.sessionId=ob.sessionId AND b.status='PAID' AND b.dataScope='LIVE')""") fun paidItemSales():Flow<List<ItemSaleRow>>
+@Query("""SELECT oi.itemNameSnapshot AS name, oi.qty AS qty, ob.sessionId AS sessionId,
+oi.id AS lineId, oi.menuItemId AS menuItemId, oi.unitPriceSnapshot AS unitPrice,
+oi.categoryIdSnapshot AS categoryId, oi.categoryNameSnapshot AS categoryName, oi.comboPartsSnapshot AS comboPartsJson,
+oi.loyaltyRewardId AS loyaltyRewardId, oi.buyGetPromotionId AS buyGetPromotionId, oi.adjustmentOfItemId AS adjustmentOfItemId,
+EXISTS(SELECT 1 FROM BillAdjustmentEntity a JOIN BillEntity b ON b.id=a.billId WHERE b.sessionId=ob.sessionId AND b.status='PAID' AND b.dataScope='LIVE' AND a.kind='DISCOUNT' AND a.amount>0) AS discounted
+FROM OrderItemEntity oi JOIN OrderBatchEntity ob ON ob.id=oi.batchId JOIN TableSessionEntity s ON s.id=ob.sessionId
+WHERE s.dataScope='LIVE' AND ob.status!='CANCELLED' AND EXISTS(SELECT 1 FROM BillEntity b WHERE b.sessionId=ob.sessionId AND b.status='PAID' AND b.dataScope='LIVE')""") suspend fun paidItemSalesSnapshot():List<ItemSaleRow>
+@Query("SELECT * FROM PaymentEntity") suspend fun reportPaymentsSnapshot():List<PaymentEntity>
+@Query("SELECT * FROM BillAdjustmentEntity") suspend fun reportAdjustmentsSnapshot():List<BillAdjustmentEntity>
+@Query("SELECT COUNT(*) FROM OrderItemEntity oi LEFT JOIN OrderBatchEntity ob ON ob.id=oi.batchId LEFT JOIN TableSessionEntity s ON s.id=ob.sessionId WHERE ob.id IS NULL OR s.id IS NULL") suspend fun reportOrphanLineCount():Int
 @Query("SELECT * FROM PurchaseEntity WHERE status='ACTIVE' ORDER BY purchasedAt DESC") fun purchases():Flow<List<PurchaseEntity>>
 @Query("SELECT * FROM PurchaseEntity ORDER BY purchasedAt DESC") suspend fun allPurchasesSnapshot():List<PurchaseEntity>
 @Query("SELECT pi.purchaseId AS purchaseId, pi.categoryId AS categoryId, pi.amount AS amount, p.purchasedAt AS purchasedAt FROM PurchaseItemEntity pi INNER JOIN PurchaseEntity p ON p.id=pi.purchaseId WHERE p.status='ACTIVE'") fun purchaseCosts():Flow<List<PurchaseCostRow>>
@@ -236,7 +255,7 @@ WHERE s.status='OPEN' GROUP BY s.id""") fun tableServiceTimings():Flow<List<Tabl
 @Query("UPDATE OrderBatchEntity SET status=:newStatus,sentAt=:sentAt WHERE id=:id AND status=:expected") suspend fun transitionBatch(id:String,expected:String,newStatus:String,sentAt:Long?):Int
 @Query("UPDATE OrderBatchEntity SET status='DELIVERED',deliveredAt=:at,deliveredBy=:employeeId WHERE id=:id AND status='WAITING'") suspend fun markDelivered(id:String,at:Long,employeeId:String):Int
 @Query("UPDATE OrderBatchEntity SET status='RECONCILED',deliveredAt=COALESCE((SELECT b.closedAt FROM BillEntity b WHERE b.sessionId=OrderBatchEntity.sessionId ORDER BY b.closedAt DESC LIMIT 1),deliveredAt,sentAt,createdAt) WHERE status='WAITING' AND sessionId IN (SELECT id FROM TableSessionEntity WHERE status='CLOSED')") suspend fun reconcileClosedSessionWaiting():Int
-@Query("UPDATE OrderBatchEntity SET status='CANCELLED' WHERE id=:id AND status IN ('DRAFT','WAITING')") suspend fun cancelBatch(id:String):Int
+@Query("UPDATE OrderBatchEntity SET status='CANCELLED' WHERE id=:id AND status IN ('DRAFT','WAITING') AND EXISTS(SELECT 1 FROM TableSessionEntity s WHERE s.id=OrderBatchEntity.sessionId AND s.status='OPEN')") suspend fun cancelBatch(id:String):Int
 @Query("UPDATE TableSessionEntity SET status='CLOSED',version=version+1 WHERE id=:id AND status='OPEN' AND version=:version") suspend fun closeSession(id:String,version:Long):Int
 @Query("UPDATE PrintJobEntity SET status=:newStatus,claimedByDeviceId=:deviceId,attempts=attempts+1 WHERE id=:id AND status=:expected") suspend fun claimPrint(id:String,expected:String,newStatus:String,deviceId:String):Int
 @Query("UPDATE PrintJobEntity SET status='REVIEW',error='APP_RESTART_DURING_PRINT' WHERE status='CLAIMED'") suspend fun recoverClaimedPrints():Int

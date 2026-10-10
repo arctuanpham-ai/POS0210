@@ -98,13 +98,38 @@ class CoffeeSalesRoomTest {
         assertEquals(0L, dao.sessionTotalSnapshot("orphan"))
     }
 
-    @Test fun twoPaidBillsForOneSessionDoubleCountItemsInCurrentQuery() = runBlocking {
+    @Test fun twoPaidBillsForOneSessionMustNotDoubleCountItems() = runBlocking {
         paidSession("duplicate", coffeeQty = 2, foodQty = 0)
         dao.insertBill(BillEntity("bill_second", "duplicate", "0210-second", 1000L, 2001L, 70000L, 70000L, "PAID"))
         dao.insertPayment(PaymentEntity("pay_second", "bill_second", "TRANSFER", 70000L, "staff", 2001L))
-        assertEquals(4, dao.paidItemSales().first().sumOf { it.qty })
+        assertEquals(2, dao.paidItemSales().first().sumOf { it.qty })
         assertEquals(140000L, dao.allPaidBillsSnapshot().sumOf { it.total })
         assertEquals(70000L, dao.sessionTotalSnapshot("duplicate"))
+    }
+
+    @Test fun closedSessionRejectsNewBatch() = runBlocking {
+        paidSession("closed")
+        val result = runCatching { PosRepository(db).createBatch("closed", 2, "staff", listOf(
+            OrderItemEntity("", "", "coffee_id", "Cà phê", 35000L, 1)
+        )) }
+        assertTrue("Closed paid session must reject new order", result.isFailure)
+        assertEquals(1, dao.batches("closed").first().size)
+    }
+
+    @Test fun giftDiscountHasPersistedAdjustment() = runBlocking {
+        dao.insertSession(TableSessionEntity("gift", "t", 1000L, "staff"))
+        dao.insertBatch(OrderBatchEntity("bg", "gift", 1, "staff", 1000L, status="DELIVERED"))
+        dao.insertItems(listOf(OrderItemEntity("ig", "bg", "coffee", "🎁 Cà phê", 35000L, 1, buyGetPromotionId="promo")))
+        val result = PosRepository(db).completePayment(dao.sessionSnapshotById("gift")!!,
+            PricingPreview(35000L, 0L, 35000L, 0L, emptyList(), null, buyGetDiscount=35000L, buyGetLabel="Mua X tặng Y"),
+            "CASH", "staff", "gift-bill")
+        assertEquals(35000L, dao.adjustmentsByBillId(result.bill.id).filter { it.kind=="DISCOUNT" }.sumOf { it.amount })
+    }
+
+    @Test fun liveBillWithTestSessionMustNotLeakItems() = runBlocking {
+        paidSession("cross", scope="TEST")
+        dao.insertBill(BillEntity("cross_live", "cross", "cross-live", 1000L, 2000L, 110000L, 110000L, "PAID", dataScope="LIVE"))
+        assertTrue("TEST order cannot become LIVE sales through bad bill scope", dao.paidItemSales().first().isEmpty())
     }
 
 }

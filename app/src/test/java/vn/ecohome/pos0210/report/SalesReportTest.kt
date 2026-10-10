@@ -77,4 +77,16 @@ class SalesReportTest {
         val bs=listOf(bill("before").copy(closedAt=start-1),bill("start").copy(closedAt=start),bill("last").copy(closedAt=end-1),bill("next").copy(closedAt=end),bill("test").copy(closedAt=start,dataScope="TEST"))
         assertEquals(listOf("start","last"),SalesReport.period(bs,start,end).map{it.id})
     }
+    @Test fun malformedComboIsFlaggedEvenWhenMoneyMatches() {
+        val r=line("COMBO",2,"combo:c").copy(comboPartsJson="broken")
+        val result=SalesReport.reconcile(listOf(bill()),listOf(r),emptyList(),listOf(payment()),listOf(TableSessionEntity("s","t",0,"e",status="CLOSED"))).single()
+        assertTrue(result.issues.any{it.contains("combo")})
+    }
+    @Test fun undatedPaidBillAppearsInAllTimeAndHasWarning() {
+        val b=bill().copy(closedAt=null)
+        assertEquals(1,SalesReport.period(listOf(b),null,null).size)
+        assertTrue(SalesReport.reconcile(listOf(b),listOf(line()),emptyList(),listOf(payment()),listOf(TableSessionEntity("s","t",0,"e",status="CLOSED"))).single().issues.any{it.contains("ngày")})
+        assertTrue(SalesReport.period(listOf(b),0,2000).isEmpty())
+    }
+
 }

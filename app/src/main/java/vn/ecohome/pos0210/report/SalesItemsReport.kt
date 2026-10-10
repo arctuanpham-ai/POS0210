@@ -8,6 +8,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import vn.ecohome.pos0210.data.*
@@ -41,7 +42,7 @@ fun SalesItemsReport(data:SalesReportData,onBill:(BillEntity)->Unit) {
     val rows=all.filter{group=="ALL"||groupKey(it)==group}
     val reconciliation=SalesReport.reconcile(data.bills,data.items,data.adjustments,data.payments,data.sessions).filter{it.bill.id in ids}
     val issues=reconciliation.filter{it.issues.isNotEmpty()}
-    LazyColumn(Modifier.fillMaxSize().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+    LazyColumn(Modifier.fillMaxSize().padding(12.dp).testTag("sales-items-report"),verticalArrangement=Arrangement.spacedBy(8.dp)) {
         item {
             Text("THỐNG KÊ MÓN",fontWeight=FontWeight.Bold)
             Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -56,6 +57,8 @@ fun SalesItemsReport(data:SalesReportData,onBill:(BillEntity)->Unit) {
             Text("${bills.size} bill · Doanh thu ${amount(bills.sumOf{it.total})}")
             Text("Giá trị món = số lượng × giá chốt khi order, trước giảm giá/phụ thu bill. Quà tặng giữ riêng giá trị danh nghĩa. Thành phần combo chỉ cộng số lượng; tiền tính ở combo.")
             if(lines.any{it.categoryName==null})Text("Dữ liệu cũ chưa lưu nhóm: hiển thị ‘Chưa có nhóm lịch sử’, không suy ra từ menu hiện tại.")
+            if(data.bills.any{it.closedAt==null})Text("${data.bills.count{it.closedAt==null}} bill thiếu ngày thanh toán; xem khi chọn TẤT CẢ.")
+            if(lines.any{SalesReport.compositionIssue(it)!=null&&it.comboPartsJson!=null})Text("Có snapshot combo lỗi/không đầy đủ: số lượng thành phần chưa thể xác nhận. Xem cảnh báo đối soát.")
             if(lines.any{it.menuItemId?.startsWith("combo:")==true&&it.comboPartsJson==null})Text("Combo cũ thiếu snapshot thành phần; chưa thể xác nhận số Cà phê bên trong.")
         }
         item {

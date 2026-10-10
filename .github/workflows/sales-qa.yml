@@ -4,7 +4,7 @@ on:
     branches: [qa/coffee-sales-reconciliation-build285]
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   room:
     runs-on: ubuntu-latest
@@ -58,3 +58,18 @@ jobs:
             app/build/reports
             app/build/outputs/androidTest-results
             app/build/outputs/apk
+      - name: Verify upgrade APK signature and version
+        run: |
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs app/build/outputs/apk/debug/app-debug.apk | tee apk-certificate.txt
+          grep -qi 'f552d0f158efb1a3573060ce496b3bf456ab005d20df0f7d893d9ec3bca11fe3' apk-certificate.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging app/build/outputs/apk/debug/app-debug.apk | head -1
+          sha256sum app/build/outputs/apk/debug/app-debug.apk
+      - name: Publish QA installation APK only after tests pass
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: sales-qa-${{ github.sha }}
+          name: POS0210 Sales QA ${{ github.sha }}
+          prerelease: true
+          make_latest: false
+          files: app/build/outputs/apk/debug/app-debug.apk
+          fail_on_unmatched_files: true

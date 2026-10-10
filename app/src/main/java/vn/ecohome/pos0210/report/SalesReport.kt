@@ -13,8 +13,9 @@ object SalesReport {
         val issues:List<String>)
 
     fun period(bills:List<BillEntity>,from:Long?,until:Long?):List<BillEntity> = bills.filter {
-        it.status=="PAID" && it.dataScope=="LIVE" && it.closedAt!=null &&
-            (from==null || it.closedAt>=from) && (until==null || it.closedAt<until)
+        it.status=="PAID" && it.dataScope=="LIVE" &&
+            ((from==null&&until==null) || (it.closedAt!=null &&
+            (from==null || it.closedAt>=from) && (until==null || it.closedAt<until)))
     }
     fun kind(row:ItemSaleRow):String = when {
         row.menuItemId?.startsWith("combo:")==true -> "COMBO"
@@ -22,17 +23,29 @@ object SalesReport {
         row.discounted -> "DISCOUNTED"
         else -> "NORMAL"
     }
+    private fun validPart(p:org.json.JSONObject):Boolean = p.optString("id").isNotBlank() &&
+        p.optString("name").isNotBlank() && p.optInt("qty",0)>0 &&
+        p.optString("categoryId").isNotBlank() && p.optString("categoryName").isNotBlank()
+    fun compositionIssue(r:ItemSaleRow):String? {
+        if(r.menuItemId?.startsWith("combo:")!=true)return null
+        if(r.comboPartsJson==null)return "Thiếu snapshot thành phần combo lịch sử"
+        return runCatching {
+            val parts=JSONArray(r.comboPartsJson)
+            if(parts.length()==0 || (0 until parts.length()).any{!validPart(parts.getJSONObject(it))})
+                "Snapshot thành phần combo không hợp lệ" else null
+        }.getOrElse { "Snapshot thành phần combo không đọc được" }
+    }
     fun aggregate(rows:List<ItemSaleRow>):List<ItemSummary> {
         val components=rows.flatMap { r ->
-            runCatching {
-                val parts=JSONArray(r.comboPartsJson ?: "[]")
-                (0 until parts.length()).map { n ->
+            val parts=runCatching{JSONArray(r.comboPartsJson ?: "[]")}.getOrNull()
+            if(parts==null)emptyList() else (0 until parts.length()).mapNotNull { n ->
+                runCatching {
                     val p=parts.getJSONObject(n)
+                    if(!validPart(p))null else
                     r.copy(name=p.getString("name"),menuItemId=p.getString("id"),qty=r.qty*p.getInt("qty"),
-                        unitPrice=0,categoryId=p.optString("categoryId").takeIf{it.isNotBlank()},
-                        categoryName=p.optString("categoryName").takeIf{it.isNotBlank()},comboPartsJson=null)
-                }
-            }.getOrDefault(emptyList())
+                        unitPrice=0,categoryId=p.getString("categoryId"),categoryName=p.getString("categoryName"),comboPartsJson=null)
+                }.getOrNull()
+            }
         }
         return summarize(rows,false)+summarize(components,true)
     }
@@ -68,6 +81,8 @@ object SalesReport {
             val aDelta=(b.subtotal-discount+surcharge).coerceAtLeast(0)-b.total
             val pDelta=paid-b.total
             val problems=buildList {
+                if(b.closedAt==null)add("Thiếu ngày thanh toán")
+                items.mapNotNull{compositionIssue(it)}.distinct().forEach{add(it)}
                 if(d!=0L)add("Chi tiết món lệch subtotal")
                 if(items.isEmpty())add("Thiếu chi tiết món hợp lệ")
                 if(aDelta!=0L)add("Giảm giá/phụ thu chưa đối soát")

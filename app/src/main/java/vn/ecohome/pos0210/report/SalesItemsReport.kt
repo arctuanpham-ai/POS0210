@@ -23,7 +23,7 @@ private fun amount(n:Long)=NumberFormat.getNumberInstance(Locale("vi","VN")).for
 private fun kindLabel(kind:String)=when(kind){"COMBO"->"Combo";"COMPONENT"->"Thành phần combo · chỉ số lượng";"GIFT"->"Quà tặng";"DISCOUNTED"->"Có giảm giá bill";else->"Món thường"}
 
 @Composable
-fun SalesItemsReport(data:SalesReportData,onBill:(BillEntity)->Unit) {
+fun SalesItemsReport(data:SalesReportData, menu:List<MenuItemEntity>, categories:List<MenuCategoryEntity>, onBill:(BillEntity)->Unit) {
     val zone=ZoneId.of("Asia/Ho_Chi_Minh")
     val fmt=DateTimeFormatter.ofPattern("dd/MM/uuuu").withResolverStyle(ResolverStyle.STRICT)
     var fromText by remember{mutableStateOf(LocalDate.now(zone).format(fmt))}
@@ -37,7 +37,16 @@ fun SalesItemsReport(data:SalesReportData,onBill:(BillEntity)->Unit) {
     val sessions=bills.map{it.sessionId}.toSet()
     val lines=data.items.filter{it.sessionId in sessions}
     val all=SalesReport.aggregate(lines)
-    fun groupKey(r:SalesReport.ItemSummary)=(r.categoryId ?: "UNKNOWN")+"|"+r.categoryName
+    // Read-only fallback; never persist inferred category into historical sales.
+    val menuById=menu.associateBy{it.id}
+    val categoryById=categories.associateBy{it.id}
+    fun resolvedGroup(r:SalesReport.ItemSummary):Pair<String,String> {
+        if(r.categoryId!=null) return r.categoryId to r.categoryName
+        val current=r.menuItemId?.let{menuById[it]}?.categoryId?.let{categoryById[it]}
+        return if(current!=null) "CURRENT:"+current.id to (current.name+" (nhóm hiện tại)")
+               else "UNKNOWN" to "Chưa xác định nhóm"
+    }
+    fun groupKey(r:SalesReport.ItemSummary)=resolvedGroup(r).first
     val groups=all.groupBy{groupKey(it)}
     val rows=all.filter{group=="ALL"||groupKey(it)==group}
     val reconciliation=SalesReport.reconcile(data.bills,data.items,data.adjustments,data.payments,data.sessions).filter{it.bill.id in ids}
@@ -56,7 +65,7 @@ fun SalesItemsReport(data:SalesReportData,onBill:(BillEntity)->Unit) {
             if(invalid)Text("Ngày không hợp lệ; nhập dd/MM/yyyy, từ ngày không sau đến ngày.")
             Text("${bills.size} bill · Doanh thu ${amount(bills.sumOf{it.total})}")
             Text("Giá trị món = số lượng × giá chốt khi order, trước giảm giá/phụ thu bill. Quà tặng giữ riêng giá trị danh nghĩa. Thành phần combo chỉ cộng số lượng; tiền tính ở combo.")
-            if(lines.any{it.categoryName==null})Text("Dữ liệu cũ chưa lưu nhóm: hiển thị ‘Chưa có nhóm lịch sử’, không suy ra từ menu hiện tại.")
+            if(lines.any{it.categoryName==null})Text("Dữ liệu cũ thiếu nhóm lịch sử: chỉ tham chiếu nhóm hiện tại theo ID món, không phải nhóm lúc bán.")
             if(data.bills.any{it.closedAt==null})Text("${data.bills.count{it.closedAt==null}} bill thiếu ngày thanh toán; xem khi chọn TẤT CẢ.")
             if(lines.any{SalesReport.compositionIssue(it)!=null&&it.comboPartsJson!=null})Text("Có snapshot combo lỗi/không đầy đủ: số lượng thành phần chưa thể xác nhận. Xem cảnh báo đối soát.")
             if(lines.any{it.menuItemId?.startsWith("combo:")==true&&it.comboPartsJson==null})Text("Combo cũ thiếu snapshot thành phần; chưa thể xác nhận số Cà phê bên trong.")
@@ -64,14 +73,14 @@ fun SalesItemsReport(data:SalesReportData,onBill:(BillEntity)->Unit) {
         item {
             Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
                 FilterChip(group=="ALL",{group="ALL"},{Text("Tất cả nhóm")})
-                groups.forEach{(key,rs)->FilterChip(group==key,{group=key},{Text(rs.first().categoryName)})}
+                groups.forEach{(key,rs)->FilterChip(group==key,{group=key},{Text(resolvedGroup(rs.first()).second)})}
             }
         }
         item { Text("TỔNG THEO NHÓM",fontWeight=FontWeight.Bold) }
         items(groups.values.toList().filter{group=="ALL"||groupKey(it.first())==group}){rs->
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp)) {
-                    Text(rs.first().categoryName,fontWeight=FontWeight.Bold)
+                    Text(resolvedGroup(rs.first()).second,fontWeight=FontWeight.Bold)
                     val direct=rs.filter{it.kind!="COMPONENT"}
                     val parts=rs.filter{it.kind=="COMPONENT"}.sumOf{it.qty}
                     Text("${direct.sumOf{it.qty}} phần trực tiếp · ${amount(direct.sumOf{it.gross})}")

@@ -2,9 +2,13 @@ package vn.ecohome.pos0210.report
 
 import org.json.JSONArray
 import vn.ecohome.pos0210.data.*
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 
 /** Read-only calculations. No database writes or inferred historical menu categories. */
 object SalesReport {
+    data class Activity(val dailyRevenue:Map<LocalDate,Long>,val hourlyBills:Map<Int,Int>,val peakDay:LocalDate?,val peakHour:Int?)
     data class ItemSummary(val menuItemId:String?, val names:List<String>, val categoryId:String?,
         val categoryName:String, val kind:String, val qty:Int, val gross:Long,
         val minPrice:Long, val maxPrice:Long)
@@ -16,6 +20,18 @@ object SalesReport {
         it.status=="PAID" && it.dataScope=="LIVE" &&
             ((from==null&&until==null) || (it.closedAt!=null &&
             (from==null || it.closedAt>=from) && (until==null || it.closedAt<until)))
+    }
+    fun relativeDayRange(today:LocalDate,daysAgo:Int,zone:ZoneId):Pair<Long,Long> {
+        val day=today.minusDays(daysAgo.toLong())
+        return day.atStartOfDay(zone).toInstant().toEpochMilli() to day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+    }
+    fun activity(bills:List<BillEntity>,zone:ZoneId):Activity {
+        val paid=bills.filter{it.status=="PAID"&&it.dataScope=="LIVE"&&it.closedAt!=null}
+        val dated=paid.map{it to Instant.ofEpochMilli(it.closedAt!!).atZone(zone)}
+        val daily=dated.groupBy{it.second.toLocalDate()}.mapValues{(_,rs)->rs.sumOf{it.first.total}}
+        val hourly=(0..23).associateWith{hour->dated.count{it.second.hour==hour}}
+        val peakHour=hourly.maxByOrNull{it.value}?.takeIf{it.value>0}?.key
+        return Activity(daily,hourly,daily.maxWithOrNull(compareBy<Map.Entry<LocalDate,Long>>{it.value}.thenBy{it.key})?.takeIf{it.value>0}?.key,peakHour)
     }
     fun kind(row:ItemSaleRow):String = when {
         row.menuItemId?.startsWith("combo:")==true -> "COMBO"

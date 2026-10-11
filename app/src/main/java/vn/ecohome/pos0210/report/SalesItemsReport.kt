@@ -37,18 +37,9 @@ fun SalesItemsReport(data:SalesReportData, menu:List<MenuItemEntity>, categories
     val sessions=bills.map{it.sessionId}.toSet()
     val lines=data.items.filter{it.sessionId in sessions}
     val all=SalesReport.aggregate(lines)
-    // Read-only fallback; never persist inferred category into historical sales.
-    val menuById=menu.associateBy{it.id}
-    val categoryById=categories.associateBy{it.id}
-    fun resolvedGroup(r:SalesReport.ItemSummary):Pair<String,String> {
-        if(r.categoryId!=null) return r.categoryId to r.categoryName
-        val current=r.menuItemId?.let{menuById[it]}?.categoryId?.let{categoryById[it]}
-        return if(current!=null) "CURRENT:"+current.id to (current.name+" (nhóm hiện tại)")
-               else "UNKNOWN" to "Chưa xác định nhóm"
-    }
-    fun groupKey(r:SalesReport.ItemSummary)=resolvedGroup(r).first
-    val groups=all.groupBy{groupKey(it)}
-    val rows=all.filter{group=="ALL"||groupKey(it)==group}
+    // Read-only fallback; categories inferred from today's menu are merged with the same historical group.
+    val groups=SalesItemGrouping.group(all,menu,categories)
+    val rows=all.filter{group=="ALL"||groups.firstOrNull{it.id==group}?.rows?.contains(it)==true}
     val reconciliation=SalesReport.reconcile(data.bills,data.items,data.adjustments,data.payments,data.sessions).filter{it.bill.id in ids}
     val issues=reconciliation.filter{it.issues.isNotEmpty()}
     LazyColumn(Modifier.fillMaxSize().padding(12.dp).testTag("sales-items-report"),verticalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -60,6 +51,8 @@ fun SalesItemsReport(data:SalesReportData, menu:List<MenuItemEntity>, categories
             }
             Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick={val d=LocalDate.now(zone).format(fmt);fromText=d;untilText=d}){Text("HÔM NAY")}
+                TextButton(onClick={val d=LocalDate.now(zone).minusDays(1).format(fmt);fromText=d;untilText=d}){Text("HÔM QUA")}
+                TextButton(onClick={val d=LocalDate.now(zone).minusDays(2).format(fmt);fromText=d;untilText=d}){Text("HÔM KIA")}
                 TextButton(onClick={fromText="";untilText=""}){Text("TẤT CẢ")}
             }
             if(invalid)Text("Ngày không hợp lệ; nhập dd/MM/yyyy, từ ngày không sau đến ngày.")
@@ -73,18 +66,17 @@ fun SalesItemsReport(data:SalesReportData, menu:List<MenuItemEntity>, categories
         item {
             Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
                 FilterChip(group=="ALL",{group="ALL"},{Text("Tất cả nhóm")})
-                groups.forEach{(key,rs)->FilterChip(group==key,{group=key},{Text(resolvedGroup(rs.first()).second)})}
+                groups.forEach{g->FilterChip(group==g.id,{group=g.id},{Text(g.name)})}
             }
         }
         item { Text("TỔNG THEO NHÓM",fontWeight=FontWeight.Bold) }
-        items(groups.values.toList().filter{group=="ALL"||groupKey(it.first())==group}){rs->
+        items(groups.filter{group=="ALL"||it.id==group}){g->
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp)) {
-                    Text(resolvedGroup(rs.first()).second,fontWeight=FontWeight.Bold)
-                    val direct=rs.filter{it.kind!="COMPONENT"}
-                    val parts=rs.filter{it.kind=="COMPONENT"}.sumOf{it.qty}
-                    Text("${direct.sumOf{it.qty}} phần trực tiếp · ${amount(direct.sumOf{it.gross})}")
-                    if(parts!=0)Text("$parts phần trong combo · tiền nằm ở nhóm Combo")
+                    Text(g.name,fontWeight=FontWeight.Bold)
+                    Text("${g.directQty} phần trực tiếp · ${amount(g.directGross)}")
+                    if(g.inferredLineCount>0)Text("${g.inferredLineCount} dòng cũ được suy ra theo nhóm menu hiện tại",style=MaterialTheme.typography.bodySmall)
+                    if(g.componentQty!=0)Text("${g.componentQty} phần trong combo · tiền nằm ở nhóm Combo")
                 }
             }
         }

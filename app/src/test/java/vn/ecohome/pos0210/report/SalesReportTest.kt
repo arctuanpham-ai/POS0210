@@ -88,5 +88,24 @@ class SalesReportTest {
         assertTrue(SalesReport.reconcile(listOf(b),listOf(line()),emptyList(),listOf(payment()),listOf(TableSessionEntity("s","t",0,"e",status="CLOSED"))).single().issues.any{it.contains("ngày")})
         assertTrue(SalesReport.period(listOf(b),0,2000).isEmpty())
     }
+    @Test fun relativeDayRangeUsesVietnamMidnightAndKeepsYesterdaySeparate() {
+        val zone=ZoneId.of("Asia/Ho_Chi_Minh")
+        val today=java.time.LocalDate.of(2026,10,11)
+        val todayRange=SalesReport.relativeDayRange(today,0,zone)
+        val yesterdayRange=SalesReport.relativeDayRange(today,1,zone)
+        assertEquals(today.atStartOfDay(zone).toInstant().toEpochMilli(),todayRange.first)
+        assertEquals(todayRange.first,yesterdayRange.second)
+        assertEquals(today.minusDays(1).atStartOfDay(zone).toInstant().toEpochMilli(),yesterdayRange.first)
+    }
+    @Test fun activityUsesPaidClosedTimeForPeakDayAndPeakHour() {
+        val zone=ZoneId.of("Asia/Ho_Chi_Minh")
+        fun at(day:Int,hour:Int)=ZonedDateTime.of(2026,10,day,hour,0,0,0,zone).toInstant().toEpochMilli()
+        val rows=listOf(bill("a").copy(openedAt=at(9,7),closedAt=at(10,11),total=100000),bill("b").copy(openedAt=at(9,7),closedAt=at(10,11),total=120000),bill("c").copy(openedAt=at(9,19),closedAt=at(9,19),total=300000),bill("draft").copy(status="DRAFT",closedAt=at(10,11),total=999999))
+        val activity=SalesReport.activity(rows,zone)
+        assertEquals(11,activity.peakHour)
+        assertEquals(java.time.LocalDate.of(2026,10,9),activity.peakDay)
+        assertEquals(2,activity.hourlyBills.getValue(11))
+        assertEquals(220000L,activity.dailyRevenue.getValue(java.time.LocalDate.of(2026,10,10)))
+    }
 
 }

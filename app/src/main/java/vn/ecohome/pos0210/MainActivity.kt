@@ -1,4 +1,6 @@
 package vn.ecohome.pos0210
+import vn.ecohome.pos0210.report.SalesReport
+import vn.ecohome.pos0210.report.SalesItemsReport
 
 import android.net.Uri
 import android.Manifest
@@ -52,6 +54,8 @@ import vn.ecohome.pos0210.payment.PaymentQrMode
 import vn.ecohome.pos0210.banknotification.NotificationAccess
 import vn.ecohome.pos0210.banknotification.BankPaymentAnnouncer
 import java.text.SimpleDateFormat
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.*
 
 private val Cream = Color(0xFFF6F0E6)
@@ -290,6 +294,7 @@ fun Order(vm: PosViewModel, t: DiningTableEntity) {
     var voucherDialog by remember { mutableStateOf(false) }
     var showCart by remember { mutableStateOf(false) }
     var noteTarget by remember { mutableStateOf<Pair<String,String>?>(null) }
+    val orderMessage by vm.orderMessage.collectAsState()
     var selectedCat by remember(cats) { mutableStateOf(cats.firstOrNull()?.id ?: "") }
     val visible = ms.filter { it.active && (selectedCat.isBlank() || it.categoryId == selectedCat) }
     val activeCombos = combos.filter { it.active }
@@ -305,6 +310,10 @@ fun Order(vm: PosViewModel, t: DiningTableEntity) {
 
     Column {
         Header(t.name) { vm.screen.value = "TABLES" }
+        if(orderMessage.isNotBlank()) {
+            Text(orderMessage,Modifier.padding(horizontal=14.dp,vertical=4.dp),fontWeight=FontWeight.Bold)
+            TextButton(onClick={vm.cart.value=emptyMap();vm.cartNotes.value=emptyMap();vm.orderMessage.value=""}){Text("XÓA GIỎ ĐỂ CHỌN LẠI")}
+        }
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp).horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -465,6 +474,9 @@ fun Sent(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
     var deleteDraftTarget by remember { mutableStateOf<OrderBatchEntity?>(null) }
     var cancelTarget by remember { mutableStateOf<OrderBatchEntity?>(null) }
     var cancelReason by remember { mutableStateOf("") }
+    var adjustmentTarget by remember { mutableStateOf<Pair<OrderBatchEntity,OrderItemEntity>?>(null) }
+    var adjustmentQty by remember { mutableStateOf("1") }
+    var adjustmentReason by remember { mutableStateOf("") }
 
     Column {
         Header(t.name) { vm.screen.value = "TABLES" }
@@ -536,6 +548,14 @@ fun Sent(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                     its.forEach { item ->
                         Text("${item.qty} × ${item.itemNameSnapshot}")
                         if(item.note.isNotBlank()) Text("↳ ${item.note}", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        if(b.status=="DELIVERED"&&item.qty>0&&item.adjustmentOfItemId==null&&(current?.role=="ADMIN"||current?.role=="MANAGER"||current?.role=="STAFF")){
+                            val correctedQty by vm.correctedQty(item.id).collectAsState(initial=0)
+                            val remaining=item.qty+correctedQty
+                            if(remaining>0) OutlinedButton(
+                                onClick={ adjustmentTarget=b to item;adjustmentQty="1";adjustmentReason="" },
+                                modifier=Modifier.fillMaxWidth().padding(top=6.dp)
+                            ){Text("GIẢM / HỦY MÓN CÒN $remaining")}
+                        }
                     }
                     if (b.status == "WAITING") {
                         Button(
@@ -550,12 +570,12 @@ fun Sent(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("XÓA ĐƠN NHÁP") }
                     }
-                    if (b.status == "WAITING" && (current?.role == "ADMIN" || current?.role == "MANAGER")) {
+                    if ((b.status == "WAITING" || b.status == "DELIVERED") && (current?.role == "ADMIN" || current?.role == "MANAGER" || current?.role == "STAFF")) {
                         Spacer(Modifier.height(14.dp))
                         OutlinedButton(
                             onClick = { cancelTarget = b; cancelReason = ""; pv = null },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("HỦY ĐƠN · MANAGER") }
+                        ) { Text("HỦY ĐƠN · TRƯỚC THANH TOÁN") }
                     }
                 }
             }
@@ -580,7 +600,7 @@ fun Sent(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
             title = { Text("Hủy Đơn #${b.sequence}") },
             text = {
                 Column {
-                    Text("Chỉ hủy khi bếp chưa làm. Đơn vẫn được lưu trong lịch sử.")
+                    Text("Chỉ hủy khi bàn chưa thanh toán. Toàn bộ đơn sẽ bị hủy; lịch sử và lý do được lưu lại. Muốn đổi một món, hãy kiểm tra kỹ trước khi xác nhận.")
                     OutlinedTextField(
                         cancelReason,
                         { cancelReason = it },
@@ -600,6 +620,24 @@ fun Sent(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                 ) { Text("XÁC NHẬN HỦY") }
             },
             dismissButton = { TextButton(onClick = { cancelTarget = null }) { Text("KHÔNG HỦY") } }
+        )
+    }
+
+    adjustmentTarget?.let { (batch,item) ->
+        val correctedQty by vm.correctedQty(item.id).collectAsState(initial=0)
+        val remaining=item.qty+correctedQty
+        val quantity=adjustmentQty.toIntOrNull()?:0
+        AlertDialog(
+            onDismissRequest={adjustmentTarget=null},
+            title={Text("Giảm / hủy ${item.itemNameSnapshot}")},
+            text={Column{
+                Text("Đã gọi: ${item.qty} · còn có thể giảm/hủy: $remaining")
+                Text("Hệ thống tạo một dòng điều chỉnh riêng; món gốc và lịch sử giao không bị sửa.",fontSize=12.sp,modifier=Modifier.padding(top=6.dp))
+                OutlinedTextField(adjustmentQty,{adjustmentQty=it.filter(Char::isDigit).take(2)},modifier=Modifier.fillMaxWidth().padding(top=10.dp),label={Text("Số lượng giảm/hủy")})
+                OutlinedTextField(adjustmentReason,{adjustmentReason=it.take(120)},modifier=Modifier.fillMaxWidth().padding(top=8.dp),label={Text("Lý do bắt buộc")},minLines=2)
+            }},
+            confirmButton={Button(onClick={vm.correctDeliveredItem(batch,item,quantity,adjustmentReason);adjustmentTarget=null},enabled=quantity in 1..remaining&&adjustmentReason.isNotBlank()){Text("XÁC NHẬN ĐIỀU CHỈNH")}},
+            dismissButton={TextButton(onClick={adjustmentTarget=null}){Text("KHÔNG ĐỔI")}}
         )
     }
 }
@@ -728,6 +766,7 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
         buyGetLabel=if(applyReward)"Ưu đãi tích điểm" else manualLabel)
     val paymentSession by vm.paymentSession(s.id).collectAsState(initial = null)
     val printedCheckoutKey by vm.printedCheckoutKey.collectAsState()
+    val checkoutPrinting by vm.checkoutPrinting.collectAsState()
     val bankEvents by vm.recentBankNotifications.collectAsState()
     LaunchedEffect(preview.total, s.id) { vm.openPaymentSession(s,t,preview.total) }
     val validPaymentSession=paymentSession?.takeIf{it.expectedAmount==preview.total}
@@ -883,6 +922,7 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
             }
         }
         Column(Modifier.fillMaxWidth().padding(18.dp)) {
+            if(checkoutPrinting) Text("ĐANG IN BILL… · Hóa đơn và QR vẫn hiển thị để khách xem", fontWeight=FontWeight.Bold)
             if(!billPrinted){
                 Button(
                     onClick={
@@ -890,26 +930,23 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                         else vm.printCheckoutBill(preview,qrInfo,matchedCustomer?.name?:customerName)
                     },
                     modifier=Modifier.fillMaxWidth(),
-                    enabled=preview.total>0&&pendingDelivery.isEmpty()&&validPaymentSession!=null
+                    enabled=!checkoutPrinting&&preview.total>0&&pendingDelivery.isEmpty()&&validPaymentSession!=null
                 ){
-                    Text(
-                        if(pendingDelivery.isNotEmpty())"CHƯA GIAO ĐỦ · CHƯA THỂ IN BILL"
-                        else if(checkoutPrintTestMode)"QA · XÁC NHẬN BILL TEST (KHÔNG IN)"
-                        else "IN BILL TRƯỚC"
-                    )
+                    Text(if(pendingDelivery.isNotEmpty()) "CHƯA GIAO ĐỦ · CHƯA THỂ IN BILL" else "IN BILL")
                 }
-                Text(
-                    if(checkoutPrintTestMode)"Chế độ QA: chỉ giả lập bước đã in bill để kiểm thử thanh toán; không gửi lệnh tới máy in."
-                    else "Phải in bill để khách kiểm tra trước khi xác nhận thanh toán.",
-                    Modifier.padding(top=6.dp),fontSize=11.sp,
-                    color=if(checkoutPrintTestMode)Color(0xFF9A4B3D) else Color.Unspecified,
-                    fontWeight=if(checkoutPrintTestMode)FontWeight.Bold else FontWeight.Normal
-                )
-            }else{
-                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)){
-                    OutlinedButton(onClick={vm.close("CASH",preview,customerPhone,customerName,if(applyReward)billReward?.id else null)},modifier=Modifier.weight(1f)){Text("XÁC NHẬN\nTIỀN MẶT",textAlign=TextAlign.Center)}
-                    Button(onClick={vm.close("TRANSFER",preview,customerPhone,customerName,if(applyReward)billReward?.id else null)},modifier=Modifier.weight(1f)){Text("XÁC NHẬN\nCHUYỂN KHOẢN",textAlign=TextAlign.Center)}
-                }
+                Text("Bill trên màn hình và mã QR luôn khả dụng. Nếu máy in lỗi, vẫn có thể xác nhận sau khi nhận đủ tiền.", Modifier.padding(top=6.dp),fontSize=11.sp)
+            }
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)){
+                OutlinedButton(
+                    onClick={vm.close("CASH",preview,qrInfo,customerPhone,customerName,if(applyReward)billReward?.id else null)},
+                    modifier=Modifier.weight(1f),
+                    enabled=!checkoutPrinting&&preview.total>0&&pendingDelivery.isEmpty()&&validPaymentSession!=null
+                ){Text("XÁC NHẬN\\nTIỀN MẶT".replace("\\n","\n"),textAlign=TextAlign.Center)}
+                Button(
+                    onClick={vm.close("TRANSFER",preview,qrInfo,customerPhone,customerName,if(applyReward)billReward?.id else null)},
+                    modifier=Modifier.weight(1f),
+                    enabled=!checkoutPrinting&&preview.total>0&&pendingDelivery.isEmpty()&&validPaymentSession!=null
+                ){Text("XÁC NHẬN\\nCHUYỂN KHOẢN".replace("\\n","\n"),textAlign=TextAlign.Center)}
             }
         }
     }
@@ -3390,16 +3427,18 @@ fun Report(vm: PosViewModel) {
         }
         return
     }
-    val bills by vm.bills.collectAsState()
-    val payments by vm.payments.collectAsState()
+    val reportData by vm.salesReport.collectAsState()
+    val bills = reportData.bills
+    val payments = reportData.payments.filter { it.dataScope == "LIVE" }
     val purchases by vm.purchases.collectAsState()
     val purchaseCosts by vm.purchaseCosts.collectAsState()
     val purchaseCategories by vm.purchaseCategories.collectAsState()
     val profitPartners by vm.profitPartners.collectAsState()
-    val itemSales by vm.itemSales.collectAsState()
+    val itemSales = reportData.items
     val current by vm.currentEmployee.collectAsState()
     var section by remember { mutableStateOf("OVERVIEW") }
     var periodDays by remember { mutableStateOf(1) }
+    var singleDayOffset by remember { mutableStateOf<Int?>(0) }
     var selectedBill by remember { mutableStateOf<BillEntity?>(null) }
     var selectedPurchase by remember { mutableStateOf<PurchaseEntity?>(null) }
     var paymentFilter by remember { mutableStateOf("ALL") }
@@ -3496,8 +3535,12 @@ fun Report(vm: PosViewModel) {
         }.timeInMillis
     }
 
-    val from = if (periodDays == 0) null else periodStart(periodDays)
-    val filteredBills = if (from == null) bills else bills.filter { (it.closedAt ?: 0L) >= from }
+    val reportZone=ZoneId.of("Asia/Ho_Chi_Minh")
+    val dayRange=singleDayOffset?.let{SalesReport.relativeDayRange(LocalDate.now(reportZone),it,reportZone)}
+    val from=dayRange?.first ?: if(periodDays==0)null else periodStart(periodDays)
+    val until=dayRange?.second
+    val filteredBills=SalesReport.period(bills,from,until)
+    val reportPeriodLabel=when(singleDayOffset){0->"Hôm nay";1->"Hôm qua";2->"Hôm kia";else->when(periodDays){7->"7 ngày";30->"30 ngày";0->"Tất cả";else->"$periodDays ngày"}}
     val purchaseFrom = when(purchasePeriod){
         "TODAY" -> periodStart(1)
         "WEEK" -> periodStart(7)
@@ -3552,18 +3595,14 @@ fun Report(vm: PosViewModel) {
     val salesInPeriod = itemSales.filter { it.sessionId in sessionIds }
     val totalItemQty = salesInPeriod.sumOf { it.qty }
     val favoriteRows = salesInPeriod
-        .groupBy { it.name }
-        .map { (name, rows) -> name to rows.sumOf { it.qty } }
+        .groupBy { it.menuItemId ?: "legacy:${it.name}" }
+        .map { (_, rows) -> rows.first().name to rows.sumOf { it.qty } }
         .sortedByDescending { it.second }
         .take(8)
 
-    val hourlyBillCounts = (5..23).associateWith { hour ->
-        filteredBills.count { bill ->
-            Calendar.getInstance().apply { timeInMillis = bill.openedAt }
-                .get(Calendar.HOUR_OF_DAY) == hour
-        }
-    }
-    val peakHour = hourlyBillCounts.maxByOrNull { it.value }?.takeIf { it.value > 0 }
+    val salesActivity=SalesReport.activity(filteredBills,reportZone)
+    val hourlyBillCounts=salesActivity.hourlyBills
+    val peakHour=salesActivity.peakHour?.let{it to hourlyBillCounts.getValue(it)}
 
     val exactDayRange = runCatching {
         if (historyDateText.isBlank()) null else {
@@ -3593,6 +3632,7 @@ fun Report(vm: PosViewModel) {
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             FilterChip(section == "OVERVIEW", { section = "OVERVIEW" }, { Text("TỔNG QUAN") })
+            FilterChip(section == "ITEMS", { section = "ITEMS" }, { Text("THỐNG KÊ MÓN") })
             FilterChip(section == "BILLS", { section = "BILLS" }, { Text("LỊCH SỬ BILL") })
             FilterChip(section == "PURCHASES", { section = "PURCHASES" }, { Text("CHI / NGƯỜI CHI") })
             FilterChip(section == "MONTHLY", { section = "MONTHLY" }, { Text("BÁO CÁO THÁNG") })
@@ -3618,6 +3658,7 @@ fun Report(vm: PosViewModel) {
             }
         }
         when (section) {
+            "ITEMS" -> { val reportMenu by vm.menu.collectAsState(); val reportCategories by vm.categories.collectAsState(); SalesItemsReport(reportData, reportMenu, reportCategories) { selectedBill = it } }
             "EXPORT" -> {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal=12.dp,vertical=10.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
                     Text("XUẤT BÁO CÁO",fontWeight=FontWeight.Bold)
@@ -3646,15 +3687,24 @@ fun Report(vm: PosViewModel) {
             "MONTHLY" -> MonthlyProfitReport(vm)
             "OVERVIEW" -> {
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    FilterChip(periodDays == 1, { periodDays = 1 }, { Text("Hôm nay") })
-                    FilterChip(periodDays == 7, { periodDays = 7 }, { Text("7 ngày") })
-                    FilterChip(periodDays == 30, { periodDays = 30 }, { Text("30 ngày") })
-                    FilterChip(periodDays == 0, { periodDays = 0 }, { Text("Tất cả") })
+                    FilterChip(singleDayOffset==0, { periodDays=1;singleDayOffset=0 }, { Text("Hôm nay") })
+                    FilterChip(singleDayOffset==1, { periodDays=1;singleDayOffset=1 }, { Text("Hôm qua") })
+                    FilterChip(singleDayOffset==2, { periodDays=1;singleDayOffset=2 }, { Text("Hôm kia") })
+                    FilterChip(singleDayOffset==null&&periodDays==7, { periodDays=7;singleDayOffset=null }, { Text("7 ngày") })
+                    FilterChip(singleDayOffset==null&&periodDays==30, { periodDays=30;singleDayOffset=null }, { Text("30 ngày") })
+                    FilterChip(singleDayOffset==null&&periodDays==0, { periodDays=0;singleDayOffset=null }, { Text("Tất cả") })
                 }
                 LazyColumn(Modifier.fillMaxSize().padding(12.dp)) {
+                    item {
+                        val ids = filteredBills.map { it.id }.toSet()
+                        val alerts = SalesReport.reconcile(reportData.bills,reportData.items,reportData.adjustments,reportData.payments,reportData.sessions).count { it.bill.id in ids && it.issues.isNotEmpty() }
+                        if(alerts > 0 || reportData.orphanLines > 0) {
+                            OutlinedButton(onClick={section="ITEMS"},modifier=Modifier.fillMaxWidth()) { Text("ĐỐI SOÁT: $alerts bill cần kiểm tra · ${reportData.orphanLines} dòng mất liên kết") }
+                        }
+                    }
                     item { MetricCard("Doanh thu", money(revenue)) }
                     item { MetricCard("Số bill", filteredBills.size.toString()) }
                     item { MetricCard("Bill trung bình", money(avgBill)) }
@@ -3663,10 +3713,13 @@ fun Report(vm: PosViewModel) {
                     item { MetricCard("Tổng tiền chi trong kỳ", money(purchaseTotal)) }
                     item { MetricCard("Chênh lệch thu - tổng tiền chi", money(revenue - purchaseTotal)) }
                     item {
+                        SalesDayChart(salesActivity.dailyRevenue,salesActivity.peakDay,reportPeriodLabel)
+                    }
+                    item {
                         PeakHoursChart(
                             hourlyCounts = hourlyBillCounts,
                             peakHour = peakHour,
-                            periodDays = periodDays
+                            periodLabel = reportPeriodLabel
                         )
                     }
                     item {
@@ -3716,6 +3769,7 @@ fun Report(vm: PosViewModel) {
                     if (favoriteRows.isEmpty()) {
                         item { Text("Chưa đủ dữ liệu món trong kỳ.", Modifier.padding(8.dp)) }
                     } else {
+                        item { ItemQuantityChart(favoriteRows) }
                         items(favoriteRows) { row ->
                             val pct = if (totalItemQty == 0) 0 else ((row.second * 100.0 / totalItemQty) + 0.5).toInt()
                             Card(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
@@ -3731,13 +3785,15 @@ fun Report(vm: PosViewModel) {
             "BILLS" -> {
                 Column(Modifier.fillMaxSize()) {
                     Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp),
+                        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp).horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-                        FilterChip(periodDays == 1 && historyDateText.isBlank(), { periodDays = 1; historyDateText = ""; selectedBillIds = emptySet() }, { Text("Hôm nay") })
-                        FilterChip(periodDays == 7 && historyDateText.isBlank(), { periodDays = 7; historyDateText = ""; selectedBillIds = emptySet() }, { Text("7 ngày") })
-                        FilterChip(periodDays == 30 && historyDateText.isBlank(), { periodDays = 30; historyDateText = ""; selectedBillIds = emptySet() }, { Text("30 ngày") })
-                        FilterChip(periodDays == 0 && historyDateText.isBlank(), { periodDays = 0; historyDateText = ""; selectedBillIds = emptySet() }, { Text("Tất cả") })
+                        FilterChip(singleDayOffset==0&&historyDateText.isBlank(), { periodDays=1;singleDayOffset=0;historyDateText="";selectedBillIds=emptySet() }, { Text("Hôm nay") })
+                        FilterChip(singleDayOffset==1&&historyDateText.isBlank(), { periodDays=1;singleDayOffset=1;historyDateText="";selectedBillIds=emptySet() }, { Text("Hôm qua") })
+                        FilterChip(singleDayOffset==2&&historyDateText.isBlank(), { periodDays=1;singleDayOffset=2;historyDateText="";selectedBillIds=emptySet() }, { Text("Hôm kia") })
+                        FilterChip(singleDayOffset==null&&periodDays==7&&historyDateText.isBlank(), { periodDays=7;singleDayOffset=null;historyDateText="";selectedBillIds=emptySet() }, { Text("7 ngày") })
+                        FilterChip(singleDayOffset==null&&periodDays==30&&historyDateText.isBlank(), { periodDays=30;singleDayOffset=null;historyDateText="";selectedBillIds=emptySet() }, { Text("30 ngày") })
+                        FilterChip(singleDayOffset==null&&periodDays==0&&historyDateText.isBlank(), { periodDays=0;singleDayOffset=null;historyDateText="";selectedBillIds=emptySet() }, { Text("Tất cả") })
                     }
                     OutlinedTextField(
                         value = historyDateText,
@@ -4020,18 +4076,10 @@ fun MonthlyProfitReport(vm:PosViewModel){
 @Composable
 fun PeakHoursChart(
     hourlyCounts: Map<Int, Int>,
-    peakHour: Map.Entry<Int, Int>?,
-    periodDays: Int
+    peakHour: Pair<Int, Int>?,
+    periodLabel: String
 ) {
     val maxCount = (hourlyCounts.values.maxOrNull() ?: 0).coerceAtLeast(1)
-    val periodLabel = when (periodDays) {
-        1 -> "Hôm nay"
-        7 -> "7 ngày"
-        30 -> "30 ngày"
-        0 -> "Tất cả"
-        else -> "$periodDays ngày"
-    }
-
     Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
         Column(Modifier.padding(16.dp)) {
             Text("GIỜ CAO ĐIỂM", fontWeight = FontWeight.Black, fontSize = 18.sp)
@@ -4040,15 +4088,15 @@ fun PeakHoursChart(
             } else {
                 Text(
                     "Cao điểm: %02d:00–%02d:00 · %d bill".format(
-                        peakHour.key,
-                        (peakHour.key + 1) % 24,
-                        peakHour.value
+                        peakHour.first,
+                        (peakHour.first + 1) % 24,
+                        peakHour.second
                     ),
                     Modifier.padding(top = 4.dp),
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    "Biểu đồ theo giờ mở bàn · $periodLabel",
+                    "Biểu đồ theo giờ thanh toán · $periodLabel",
                     fontSize = 11.sp
                 )
             }
@@ -4086,6 +4134,47 @@ fun PeakHoursChart(
                 Modifier.padding(top = 8.dp),
                 fontSize = 10.sp
             )
+        }
+    }
+}
+
+@Composable
+fun SalesDayChart(dailyRevenue:Map<LocalDate,Long>,peakDay:LocalDate?,periodLabel:String) {
+    val rows=dailyRevenue.entries.sortedBy{it.key}
+    val max=(rows.maxOfOrNull{it.value} ?: 0L).coerceAtLeast(1L)
+    Card(Modifier.fillMaxWidth().padding(vertical=6.dp)) {
+        Column(Modifier.padding(16.dp)) {
+            Text("DOANH THU THEO NGÀY",fontWeight=FontWeight.Black,fontSize=18.sp)
+            if(peakDay==null) Text("Chưa có bill PAID trong kỳ $periodLabel.",Modifier.padding(top=6.dp))
+            else Text("Ngày cao điểm: ${"%02d/%02d".format(peakDay.dayOfMonth,peakDay.monthValue)} · ${money(dailyRevenue.getValue(peakDay))}",Modifier.padding(top=4.dp),fontWeight=FontWeight.Bold)
+            if(rows.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top=12.dp),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.Bottom) {
+                rows.forEach{(day,total)->
+                    Column(Modifier.width(52.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Bottom) {
+                        Text(money(total),fontSize=9.sp,maxLines=1)
+                        Surface(Modifier.width(30.dp).height(if(total==0L)2.dp else (18f+92f*total.toFloat()/max).dp),color=if(day==peakDay) Coffee else Tint,shape=RoundedCornerShape(topStart=6.dp,topEnd=6.dp)){}
+                        Text("%02d/%02d".format(day.dayOfMonth,day.monthValue),fontSize=10.sp)
+                    }
+                }
+            }
+            Text("Trục ngang: ngày thanh toán · Trục đứng: doanh thu PAID",Modifier.padding(top=8.dp),fontSize=10.sp)
+        }
+    }
+}
+
+@Composable
+fun ItemQuantityChart(rows:List<Pair<String,Int>>) {
+    val max=(rows.maxOfOrNull{it.second} ?: 0).coerceAtLeast(1)
+    Card(Modifier.fillMaxWidth().padding(vertical=6.dp)) {
+        Column(Modifier.padding(16.dp)) {
+            Text("MÓN BÁN NHIỀU",fontWeight=FontWeight.Black,fontSize=18.sp)
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top=10.dp),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.Bottom) {
+                rows.forEach{(name,qty)->Column(Modifier.width(64.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Bottom){
+                    Text("$qty",fontSize=10.sp,fontWeight=FontWeight.Bold)
+                    Surface(Modifier.width(30.dp).height(if(qty==0)2.dp else (18f+92f*qty.toFloat()/max).dp),color=if(qty==max) Coffee else Tint,shape=RoundedCornerShape(topStart=6.dp,topEnd=6.dp)){}
+                    Text(name.take(10),fontSize=10.sp,maxLines=2,textAlign=TextAlign.Center)
+                }}
+            }
+            Text("Trục ngang: món · Trục đứng: số phần",Modifier.padding(top=8.dp),fontSize=10.sp)
         }
     }
 }

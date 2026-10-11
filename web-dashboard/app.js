@@ -348,6 +348,7 @@ function applyExpenseInputs() {
     node.querySelector("[data-field=materialCode]").value = code;
     return { ...existing, materialName: read("materialName"), materialCode: code, expenseGroup: group, qty: Number(read("qty")), unit: read("unit"), unitPrice: Number(read("unitPrice")) };
   });
+  if (state.user) localStorage.setItem(`pos0210.expense-draft.${state.user.uid}`, JSON.stringify(expenseDraft));
 }
 async function saveExpenseReceipt(event) {
   event.preventDefault(); applyExpenseInputs(); const error = $("#expense-error"); error.textContent = "";

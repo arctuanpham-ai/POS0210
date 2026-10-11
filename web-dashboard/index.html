@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#f6f0e5" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+    <title>0210 · Manager</title>
+  </head>
+  <body>
+    <main class="shell">
+      <section id="login-view" class="login-card" aria-labelledby="login-title">
+        <p class="eyebrow">0210 · BREAKFAST · COFFEE · DRINKS</p>
+        <h1 id="login-title">Manager realtime</h1>
+        <p class="muted">Theo dõi quán realtime và nhập phiếu tài chính từ xa.</p>
+        <label>Email Firebase<input id="email" type="email" autocomplete="username" inputmode="email" /></label>
+        <label>Mật khẩu<input id="password" type="password" autocomplete="current-password" /></label>
+        <button id="login-button" class="primary">Đăng nhập</button>
+        <p id="login-error" class="error" role="alert"></p>
+      </section>
+
+      <section id="dashboard-view" hidden>
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">0210 · MANAGER</p>
+            <h1>Quản lý realtime</h1>
+          </div>
+          <button id="logout-button" class="text-button">Đăng xuất</button>
+        </header>
+
+        <p id="sync-status" class="sync-status">Đang kết nối realtime…</p><p id="web-build-marker" class="muted">Web Manager build FINANCE-PARITY-23.2</p>
+
+        <section class="section-heading first-section">
+          <div><p class="eyebrow">SƠ ĐỒ BÀN</p><h2>Trạng thái phục vụ realtime</h2></div>
+        </section>
+        <section class="live-strip" aria-label="Tình trạng bàn realtime">
+          <article><span>Bàn đang phục vụ</span><strong id="live-open-tables">0</strong></article>
+          <article><span>Tổng tạm tính</span><strong id="live-open-total">0đ</strong></article>
+        </section>
+        <section id="tables" class="table-grid" aria-live="polite"></section>
+
+        <section class="section-heading report-heading">
+          <div><p class="eyebrow">TÀI CHÍNH</p><h2>Tình hình quán</h2></div>
+          <button id="open-entry" class="secondary">+ NHẬP PHIẾU</button>
+        </section>
+
+        <div class="filter-row" id="period-filters">
+          <button data-period="today" class="filter active">Hôm nay</button>
+          <button data-period="yesterday" class="filter">Hôm qua</button>
+          <button data-period="7d" class="filter">7 ngày</button>
+          <button data-period="month" class="filter">Tháng này</button>
+          <button data-period="all" class="filter">Tất cả</button>
+          <button data-period="custom" class="filter">Tùy chọn</button>
+        </div>
+        <div id="custom-range" class="custom-range" hidden>
+          <label>Từ ngày<input id="from-date" type="date" /></label>
+          <label>Đến ngày<input id="to-date" type="date" /></label>
+          <button id="apply-range" class="secondary">Áp dụng</button>
+        </div>
+        <div class="payer-filter-block">
+          <span>Người chi</span>
+          <select id="payer-filter"><option value="ALL">Tất cả người chi</option></select>
+          <strong id="payer-total"></strong>
+        </div>
+
+        <section id="period-summary" class="summary-grid" aria-label="Tổng quan theo kỳ"></section>
+
+        <section class="section-heading compact">
+          <div><p class="eyebrow">TÍCH LŨY</p><h2>Chỉ số toàn thời gian</h2></div>
+        </section>
+        <section id="summary" class="summary-grid cumulative-grid" aria-label="Chỉ số tích lũy"></section>
+
+        <section class="section-heading compact">
+          <div><p class="eyebrow">PHIẾU TÀI CHÍNH</p><h2>Lịch sử gần đây</h2></div>
+        </section>
+        <div class="filter-row" id="transaction-filters">
+          <button data-kind="ALL" class="filter active">Tất cả</button>
+          <button data-kind="EXPENSE" class="filter">Chi</button>
+          <button data-kind="MOVEMENT" class="filter">Thu / vốn / hoàn ứng</button>
+        </div>
+        <section id="transactions" class="transaction-list"></section>
+      </section>
+    </main>
+
+    <dialog id="table-detail">
+      <article>
+        <div class="dialog-header"><div><p class="eyebrow">CHI TIẾT BÀN</p><h2 id="detail-title"></h2></div><button id="close-detail" class="text-button">Đóng</button></div>
+        <p id="detail-meta" class="muted"></p>
+        <ul id="detail-items" class="order-list"></ul>
+        <footer id="detail-total" class="detail-total"></footer>
+      </article>
+    </dialog>
+
+    <dialog id="entry-dialog">
+      <article>
+        <div class="dialog-header">
+          <div><p class="eyebrow">NHẬP TRỰC TIẾP TRÊN WEB</p><h2>Giao dịch tài chính</h2></div>
+          <button id="close-entry" class="text-button">Đóng</button>
+        </div>
+        <form id="entry-form" class="entry-form">
+          <label>1. Loại giao dịch
+            <select id="entry-type">
+              <option value="OPERATING_EXPENSE">Chi phí vận hành</option>
+              <option value="ADDITIONAL_INVESTMENT">Đầu tư bổ sung</option>
+              <option value="INITIAL_INVESTMENT">Đầu tư ban đầu không thu hồi</option>
+              <option value="ASSET_PURCHASE">Mua tài sản đầu tư ban đầu</option>
+              <option value="CAPITAL_INJECTION">Góp vốn đầu tư</option>
+              <option value="WORKING_CAPITAL">Bổ sung vốn lưu động</option>
+              <option value="PROFIT_WITHDRAWAL">Rút lợi nhuận</option>
+              <option value="OWNER_WITHDRAWAL">Rút vốn</option>
+              <option value="CAPITAL_RECOVERY">Ghi nhận hoàn vốn</option>
+              <option value="OTHER_ADJUSTMENT">Thu/điều chỉnh khác</option>
+            </select>
+          </label>
+
+          <div id="purchase-fields">
+            <label id="expense-category-wrap">Nhóm chi phí
+              <select id="entry-category">
+                <option value="INVENTORY_PURCHASE">Nhập nguyên liệu / hàng hóa</option>
+                <option value="PAYROLL">Lương / nhân công</option>
+                <option value="ELECTRICITY">Điện</option>
+                <option value="WATER">Nước</option>
+                <option value="RENT">Thuê mặt bằng</option>
+                <option value="MARKETING">Marketing</option>
+                <option value="CONSUMABLES">Vật tư tiêu hao</option>
+                <option value="MAINTENANCE">Bảo trì</option>
+                <option value="SERVICES">Phần mềm / dịch vụ</option>
+                <option value="BANK_FEES">Phí ngân hàng / giao dịch</option>
+                <option value="OTHER_EXPENSE">Chi phí khác</option>
+              </select>
+            </label>
+            <label id="purchase-category-wrap">2. Phân mục chi tiết
+              <select id="entry-purchase-category"><option value="">Không phân mục</option></select>
+            </label>
+            <label>Mã chi phí theo dõi
+              <select id="entry-cost-code"><option value="">Không mã</option></select>
+            </label>
+
+            <div id="asset-fields" hidden>
+              <label>2. Nhóm tài sản
+                <select id="entry-asset-category"><option value="">Chọn nhóm tài sản</option></select>
+              </label>
+              <label>Thời gian khấu hao (tháng)<input id="entry-useful-life" type="number" min="1" step="1" /></label>
+              <label>Giá trị còn lại tối thiểu<input id="entry-residual" type="number" min="0" step="1" inputmode="numeric" value="0" /></label>
+              <label>Giá trị thanh lý dự kiến<input id="entry-liquidation" type="number" min="0" step="1" inputmode="numeric" value="0" /></label>
+            </div>
+
+            <label>Nhà cung cấp (không bắt buộc)<input id="entry-supplier" type="text" maxlength="100" /></label>
+            <label>Người chi / ứng tiền
+              <select id="entry-payer"><option value="">Chưa xác định</option></select>
+            </label>
+            <label>Tên người chi khác / chỉnh tay<input id="entry-payer-custom" type="text" maxlength="60" /></label>
+            <label id="entry-item-label">Mặt hàng / nội dung chi<input id="entry-item-name" type="text" maxlength="180" required /></label>
+            <div class="two-col">
+              <label>Khối lượng / SL<input id="entry-qty" type="number" min="0.001" step="0.001" inputmode="decimal" value="1" /></label>
+              <label>Đơn vị<input id="entry-unit" type="text" maxlength="20" value="lần" /></label>
+            </div>
+            <label id="entry-price-label">Đơn giá<input id="entry-unit-price" type="number" min="1" step="1" inputmode="numeric" /></label>
+            <p class="entry-total">Thành tiền: <strong id="entry-total">0đ</strong></p>
+          </div>
+
+          <div id="movement-fields" hidden>
+            <label>Nội dung giao dịch<input id="entry-movement-note" type="text" maxlength="180" /></label>
+            <label>Số tiền<input id="entry-amount" type="number" min="1" step="1" inputmode="numeric" /></label>
+            <label>Phương thức
+              <select id="entry-method">
+                <option value="CASH">Tiền mặt</option>
+                <option value="TRANSFER">Chuyển khoản</option>
+              </select>
+            </label>
+            <label id="movement-partner-wrap" hidden>Người rút
+              <select id="entry-partner"><option value="">Chọn người</option></select>
+            </label>
+          </div>
+
+          <label>Ngày giờ<input id="entry-datetime" type="datetime-local" required /></label>
+          <label>Ghi chú<input id="entry-note" type="text" maxlength="240" /></label>
+          <p id="entry-error" class="error"></p>
+          <button type="submit" class="primary">LƯU GIAO DỊCH</button>
+        </form>
+      </article>
+    </dialog>
+
+    <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
+    <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

@@ -9,12 +9,18 @@ import {
   collection,
   doc,
   getFirestore,
-  onSnapshot,
+  getDoc,
+  getDocs,
+  query,
+  where,
+  orderBy,
+  limit,
   setDoc,
   writeBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { matchesPayer, normalizePayer } from "./payer-filter.js";
 import { calculateReceiptTotal, createStableDraft, validateReceipt } from "./expense-domain.js";
+import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",
@@ -322,24 +328,24 @@ function render() {
   renderFinanceMetadata();
   renderTransactions();
 }
-function clearListeners() { state.unsubs.splice(0).forEach((unsubscribe) => unsubscribe()); }
-function subscribe() {
-  clearListeners();
-  const watch = (path, key, transform = rows) => state.unsubs.push(onSnapshot(path, (snapshot) => { state[key] = transform(snapshot); render(); }, (error) => { $("#sync-status").textContent = `Không đọc được dữ liệu: ${error.message}`; }));
-  watch(doc(db, ...root, "dashboard", "current"), "dashboard", (snapshot) => snapshot.exists() ? snapshot.data() : {});
-  watch(collection(db, ...root, "tableStatus"), "tables");
-  watch(collection(db, ...root, "sessions"), "sessions");
-  watch(collection(db, ...root, "orderBatches"), "batches");
-  watch(collection(db, ...root, "orderItems"), "items");
-  watch(collection(db, ...root, "bills"), "bills");
-  watch(collection(db, ...root, "purchases"), "purchases");
-  watch(collection(db, ...root, "purchaseItems"), "purchaseItems");
-  watch(collection(db, ...root, "financialMovements"), "movements");
-  watch(collection(db, ...root, "costCodes"), "costCodes");
-  watch(collection(db, ...root, "purchaseCategories"), "purchaseCategories");
-  watch(collection(db, ...root, "profitPartners"), "profitPartners");
-  watch(collection(db, ...root, "assetCategories"), "assetCategories");
-  watch(collection(db, ...root, "suppliers"), "suppliers");
+async function refreshDashboard() {
+  if (!state.user) return;
+  $("#sync-status").textContent = "Đang đọc snapshot…";
+  try {
+    const dashboardDoc = await getDoc(doc(db, ...root, "dashboard", "current"));
+    state.dashboard = dashboardDoc.exists() ? dashboardDoc.data() : {};
+    const sevenDays = startOfDay(new Date(Date.now() - 6 * 86400000));
+    const read = async (name, key, q = null) => { const snapshot = await getDocs(q || collection(db, ...root, name)); state[key] = rows(snapshot); };
+    await Promise.all([
+      read("tableStatus", "tables"),
+      read("purchases", "purchases", query(collection(db, ...root, "purchases"), where("purchasedAt", ">=", sevenDays), orderBy("purchasedAt", "desc"), limit(300))),
+      read("financialMovements", "movements", query(collection(db, ...root, "financialMovements"), where("occurredAt", ">=", sevenDays), orderBy("occurredAt", "desc"), limit(300))),
+      read("costCodes", "costCodes"), read("purchaseCategories", "purchaseCategories"), read("profitPartners", "profitPartners"), read("assetCategories", "assetCategories"), read("suppliers", "suppliers"),
+    ]);
+    const stale = shouldMarkSnapshotStale(state.dashboard.lastUpdatedAt);
+    $("#sync-status").textContent = state.dashboard.lastUpdatedAt ? `Snapshot POS: ${dateTime(state.dashboard.lastUpdatedAt)}${stale ? " · cần kiểm tra máy POS" : ""}` : "POS chưa gửi snapshot.";
+    render();
+  } catch (error) { $("#sync-status").textContent = `Không đọc được dữ liệu: ${error.message}`; }
 }
 
 async function saveEntry(event) {
@@ -447,6 +453,7 @@ $("#login-button").addEventListener("click", async () => {
 });
 $("#password").addEventListener("keydown", (event) => { if (event.key === "Enter") $("#login-button").click(); });
 $("#logout-button").addEventListener("click", () => signOut(auth));
+$("#refresh-dashboard").addEventListener("click", refreshDashboard);
 $("#close-detail").addEventListener("click", () => $("#table-detail").close());
 $("#open-entry").addEventListener("click", () => {
   $("#entry-error").textContent = "";
@@ -533,5 +540,5 @@ onAuthStateChanged(auth, (user) => {
   state.user = user || null;
   $("#login-view").hidden = Boolean(user);
   $("#dashboard-view").hidden = !user;
-  if (user) subscribe(); else clearListeners();
+  if (user) refreshDashboard();
 });

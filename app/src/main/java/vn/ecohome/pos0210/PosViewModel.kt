@@ -984,7 +984,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
   }
  }
 
- fun canCancelOrder():Boolean{val r=currentEmployee.value?.role?:return false;return r=="ADMIN"||r=="MANAGER"}
+ fun canCancelOrder():Boolean{val r=currentEmployee.value?.role?:return false;return r=="ADMIN"||r=="MANAGER"||r=="STAFF"}
  fun canDeleteDraft(b:OrderBatchEntity):Boolean{
   val e=currentEmployee.value?:return false
   return DraftOrderPolicy.canDelete(b.status,b.ordererId,e.id,e.role)
@@ -1002,7 +1002,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
  }
  fun cancelBatch(b:OrderBatchEntity,reason:String){
   val e=currentEmployee.value?:return
-  if(e.role!="ADMIN"&&e.role!="MANAGER")return
+  if(!canCancelOrder())return
   if(reason.isBlank())return
   viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO){
    if(dao.cancelBatch(b.id)>0){

@@ -1,0 +1,29 @@
+name: Deploy POS0210 Dashboard
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "web-dashboard/**"
+      - "firebase.json"
+      - ".firebaserc"
+      - ".github/workflows/deploy-dashboard.yml"
+permissions:
+  contents: read
+jobs:
+  verify-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Test dashboard
+        working-directory: web-dashboard
+        run: npm test
+      - name: Deploy Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_POS0210_17CE4 }}
+          channelId: live
+          projectId: pos0210-17ce4

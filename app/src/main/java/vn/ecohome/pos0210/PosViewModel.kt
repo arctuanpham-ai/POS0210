@@ -19,6 +19,7 @@ import vn.ecohome.pos0210.printing.PrinterRouting
 import vn.ecohome.pos0210.printing.ReceiptRenderer
 import vn.ecohome.pos0210.payment.VietQrOffline
 import vn.ecohome.pos0210.payment.PaymentQrMode
+import vn.ecohome.pos0210.payment.CheckoutPrintPolicy
 import vn.ecohome.pos0210.promotion.BuyGetPolicy
 import vn.ecohome.pos0210.promotion.BuyGetRule
 import java.util.UUID
@@ -1017,6 +1018,32 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    }
   }
  }
+ fun correctDeliveredItem(b:OrderBatchEntity,item:OrderItemEntity,removeQty:Int,reason:String){
+  val e=currentEmployee.value?:return
+  val session=currentSession.value?:return
+  if(!canCancelOrder()||b.status!="DELIVERED"||item.qty<=0||item.adjustmentOfItemId!=null||reason.isBlank())return
+  viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO){
+   val correction=runCatching{repo.correctDeliveredItem(session.id,item.id,removeQty,e.id,reason)}.getOrElse{err->
+    printerMessage.value=when(err.message){
+     "ITEM_NOT_DELIVERED_OR_ADJUSTABLE"->"MÓN KHÔNG CÒN ĐƯỢC PHÉP ĐIỀU CHỈNH"
+     "ADJUSTMENT_EXCEEDS_QUANTITY"->"SỐ LƯỢNG ĐIỀU CHỈNH VƯỢT QUÁ MÓN ĐÃ GỌI"
+     else->"ĐIỀU CHỈNH LỖI · ${err.message?:"UNKNOWN"}"
+    };return@launch
+   }
+   audit("BATCH",correction.id,"ITEM_CORRECTION_REQUESTED","sourceBatch=${b.id},sourceItem=${item.id},removed=$removeQty,reason=${reason.trim()},operator=${e.name}")
+   autoBackup()
+   if(printerMode()=="BLUETOOTH"&&kitchenPrinterMac().isNotBlank()){
+    val job=repo.queueKitchenPrint(correction)
+    if(repo.claimPrint(job.id,"ANDROID",if(job.status=="FAILED")"FAILED" else "PENDING")){
+     val table=currentTable.value?.name?:"Bàn"
+     val profile=printerProfile()
+     val pr=BluetoothPrinter.printBitmap(getApplication(),kitchenPrinterMac(),ReceiptRenderer.kitchen(table,correction.sequence,correction.serviceNo,"${e.name} · ĐIỀU CHỈNH",listOf(Triple(item.itemNameSnapshot,-removeQty,"HỦY/GIẢM MÓN · ${reason.trim()}")),profile),profile,vn.ecohome.pos0210.printing.PrintJobType.KITCHEN)
+     if(pr.isSuccess){dao.markPrintSuccess(job.id,System.currentTimeMillis());audit("PRINT",correction.id,"ITEM_CORRECTION_PRINTED","job=${job.id}");printerMessage.value="ĐÃ ĐIỀU CHỈNH ${item.itemNameSnapshot} · ĐÃ IN PHIẾU BẾP"}
+     else{dao.markPrintFailed(job.id,pr.exceptionOrNull()?.message?:"UNKNOWN");printerMessage.value="ĐÃ ĐIỀU CHỈNH ${item.itemNameSnapshot} · IN PHIẾU BẾP LỖI"}
+    }
+   }else printerMessage.value="ĐÃ ĐIỀU CHỈNH ${item.itemNameSnapshot} · Không cấu hình máy in bếp"
+  }
+ }
  fun releaseCancelledTable(){
   val s=currentSession.value?:return
   val e=currentEmployee.value?:return
@@ -1036,6 +1063,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
  }
  fun batches(id:String)=dao.batches(id)
  fun items(id:String)=dao.batchItems(id)
+ fun correctedQty(sourceItemId:String)=dao.sourceCorrectionQtyFlow(sourceItemId)
  fun total(id:String)=dao.sessionTotal(id)
  fun buyGetDiscount(id:String)=dao.sessionBuyGetDiscount(id)
  fun voucherDiscount(id:String)=dao.sessionVoucherDiscount(id)
@@ -1196,7 +1224,7 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
   val employee=currentEmployee.value?:return
   if(employee.role!="ADMIN"){printerMessage.value="CHỈ ADMIN ĐƯỢC DÙNG BILL TEST";return}
   if(!checkoutPrintTestMode.value){printerMessage.value="CHẾ ĐỘ BILL TEST CHƯA BẬT";return}
-  printedCheckoutKey.value="${session.id}:${preview.total}:$qrInfo"
+  printedCheckoutKey.value=CheckoutPrintPolicy.key(session.id,preview.total,qrInfo)
   viewModelScope.launch(Dispatchers.IO){
    audit("PRINT",session.id,"PREPAY_BILL_TEST_BYPASS","operator=${employee.name},amount=${preview.total}")
   }
@@ -1206,7 +1234,7 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
  fun printCheckoutBill(preview:PricingPreview,qrInfo:String,customerName:String=""){
   val session=currentSession.value?:return
   val table=currentTable.value?:return
-  val printKey="${session.id}:${preview.total}:$qrInfo"
+  val printKey=CheckoutPrintPolicy.key(session.id,preview.total,qrInfo)
   printedCheckoutKey.value=null
   checkoutPrintAttemptedKey.value=printKey
   checkoutPrinting.value=true
@@ -1292,13 +1320,14 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
    else{dao.markPrintFailed(job.id,result.exceptionOrNull()?.message?:"UNKNOWN");printerMessage.value="VOUCHER ĐÃ LƯU NHƯNG IN LỖI · CÓ THỂ IN LẠI"}
   }
  }
- fun close(method:String,preview:PricingPreview,customerPhone:String="",customerName:String="",loyaltyRewardId:String?=null){
+ fun close(method:String,preview:PricingPreview,qrInfo:String,customerPhone:String="",customerName:String="",loyaltyRewardId:String?=null){
   val session=currentSession.value?:return
   val employee=currentEmployee.value?:return
   val table=currentTable.value
   if(!employee.canCheckout&&employee.role!="ADMIN")return
   if(checkoutPrinting.value){printerMessage.value="ĐANG IN BILL · Vui lòng chờ in hoàn tất";return}
-  if(checkoutPrintAttemptedKey.value?.startsWith("${session.id}:${preview.total}:")!=true && printedCheckoutKey.value?.startsWith("${session.id}:${preview.total}:")!=true){printerMessage.value="VUI LÒNG BẤM IN BILL TRƯỚC · Nếu in lỗi vẫn có thể xác nhận sau khi kiểm tra tiền";return}
+  val checkoutKey=CheckoutPrintPolicy.key(session.id,preview.total,qrInfo)
+  if(!CheckoutPrintPolicy.canConfirm(checkoutKey,printedCheckoutKey.value,checkoutPrintAttemptedKey.value)){printerMessage.value="BILL/QR ĐÃ THAY ĐỔI · VUI LÒNG IN LẠI TRƯỚC KHI XÁC NHẬN";return}
   viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO){
    val pendingPaymentSession=dao.activePaymentSessionSnapshot(session.id)
    val commit=runCatching {

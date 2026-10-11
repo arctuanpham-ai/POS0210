@@ -123,5 +123,16 @@ class SalesIntegrityRoomTest {
         assertTrue(runCatching{repo.createBatch(s.id,3,"e",listOf(original.copy(id="",batchId="",qty=-2,adjustmentOfItemId=original.id)))}.isFailure)
         assertEquals(2,dao.batches(s.id).first().size);assertEquals(35000L,dao.sessionTotalSnapshot(s.id))
     }
+    @Test fun deliveredItemCorrectionIsAuditedAndReadyForCheckout()=runBlocking {
+        val s=repo.openSession("t","e");val delivered=batch(s,mapOf("c" to 3));val source=dao.batchItems(delivered.id).first().single()
+        val correction=repo.correctDeliveredItem(s.id,source.id,1,"staff","Khách trả lại 1 ly")
+        assertEquals("DELIVERED",dao.orderBatchById(correction.id)!!.status)
+        assertEquals(-1,dao.batchItems(correction.id).first().single().qty)
+        assertEquals(70000L,dao.sessionTotalSnapshot(s.id))
+        assertTrue(dao.audits().first().any{it.entityId==correction.id&&it.action=="ITEM_CORRECTED"&&it.detail.contains("beforeQty=3")&&it.detail.contains("afterQty=2")})
+        val bill=pay(s)
+        assertEquals(70000L,bill.total)
+        assertEquals(2,dao.paidItemSales().first().sumOf{it.qty})
+    }
 
 }

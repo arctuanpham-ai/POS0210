@@ -472,6 +472,9 @@ fun Sent(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
     var deleteDraftTarget by remember { mutableStateOf<OrderBatchEntity?>(null) }
     var cancelTarget by remember { mutableStateOf<OrderBatchEntity?>(null) }
     var cancelReason by remember { mutableStateOf("") }
+    var adjustmentTarget by remember { mutableStateOf<Pair<OrderBatchEntity,OrderItemEntity>?>(null) }
+    var adjustmentQty by remember { mutableStateOf("1") }
+    var adjustmentReason by remember { mutableStateOf("") }
 
     Column {
         Header(t.name) { vm.screen.value = "TABLES" }
@@ -543,6 +546,14 @@ fun Sent(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                     its.forEach { item ->
                         Text("${item.qty} × ${item.itemNameSnapshot}")
                         if(item.note.isNotBlank()) Text("↳ ${item.note}", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        if(b.status=="DELIVERED"&&item.qty>0&&item.adjustmentOfItemId==null&&(current?.role=="ADMIN"||current?.role=="MANAGER"||current?.role=="STAFF")){
+                            val correctedQty by vm.correctedQty(item.id).collectAsState(initial=0)
+                            val remaining=item.qty+correctedQty
+                            if(remaining>0) OutlinedButton(
+                                onClick={ adjustmentTarget=b to item;adjustmentQty="1";adjustmentReason="" },
+                                modifier=Modifier.fillMaxWidth().padding(top=6.dp)
+                            ){Text("GIẢM / HỦY MÓN CÒN $remaining")}
+                        }
                     }
                     if (b.status == "WAITING") {
                         Button(
@@ -607,6 +618,24 @@ fun Sent(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                 ) { Text("XÁC NHẬN HỦY") }
             },
             dismissButton = { TextButton(onClick = { cancelTarget = null }) { Text("KHÔNG HỦY") } }
+        )
+    }
+
+    adjustmentTarget?.let { (batch,item) ->
+        val correctedQty by vm.correctedQty(item.id).collectAsState(initial=0)
+        val remaining=item.qty+correctedQty
+        val quantity=adjustmentQty.toIntOrNull()?:0
+        AlertDialog(
+            onDismissRequest={adjustmentTarget=null},
+            title={Text("Giảm / hủy ${item.itemNameSnapshot}")},
+            text={Column{
+                Text("Đã gọi: ${item.qty} · còn có thể giảm/hủy: $remaining")
+                Text("Hệ thống tạo một dòng điều chỉnh riêng; món gốc và lịch sử giao không bị sửa.",fontSize=12.sp,modifier=Modifier.padding(top=6.dp))
+                OutlinedTextField(adjustmentQty,{adjustmentQty=it.filter(Char::isDigit).take(2)},modifier=Modifier.fillMaxWidth().padding(top=10.dp),label={Text("Số lượng giảm/hủy")})
+                OutlinedTextField(adjustmentReason,{adjustmentReason=it.take(120)},modifier=Modifier.fillMaxWidth().padding(top=8.dp),label={Text("Lý do bắt buộc")},minLines=2)
+            }},
+            confirmButton={Button(onClick={vm.correctDeliveredItem(batch,item,quantity,adjustmentReason);adjustmentTarget=null},enabled=quantity in 1..remaining&&adjustmentReason.isNotBlank()){Text("XÁC NHẬN ĐIỀU CHỈNH")}},
+            dismissButton={TextButton(onClick={adjustmentTarget=null}){Text("KHÔNG ĐỔI")}}
         )
     }
 }
@@ -907,12 +936,12 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
             }
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)){
                 OutlinedButton(
-                    onClick={vm.close("CASH",preview,customerPhone,customerName,if(applyReward)billReward?.id else null)},
+                    onClick={vm.close("CASH",preview,qrInfo,customerPhone,customerName,if(applyReward)billReward?.id else null)},
                     modifier=Modifier.weight(1f),
                     enabled=!checkoutPrinting&&preview.total>0&&pendingDelivery.isEmpty()&&validPaymentSession!=null
                 ){Text("XÁC NHẬN\\nTIỀN MẶT".replace("\\n","\n"),textAlign=TextAlign.Center)}
                 Button(
-                    onClick={vm.close("TRANSFER",preview,customerPhone,customerName,if(applyReward)billReward?.id else null)},
+                    onClick={vm.close("TRANSFER",preview,qrInfo,customerPhone,customerName,if(applyReward)billReward?.id else null)},
                     modifier=Modifier.weight(1f),
                     enabled=!checkoutPrinting&&preview.total>0&&pendingDelivery.isEmpty()&&validPaymentSession!=null
                 ){Text("XÁC NHẬN\\nCHUYỂN KHOẢN".replace("\\n","\n"),textAlign=TextAlign.Center)}

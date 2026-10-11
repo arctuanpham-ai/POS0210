@@ -113,6 +113,31 @@ class PosRepository(private val db:PosDatabase){
         return b
     }
 
+    /**
+     * Keeps the delivered source line immutable.  A correction is its own delivered batch with
+     * a signed line, so the live table total and later sales report both use the net quantity.
+     */
+    suspend fun correctDeliveredItem(sessionId:String,sourceItemId:String,removeQty:Int,actorId:String,reason:String):OrderBatchEntity = db.withTransaction {
+        require(removeQty>0){"INVALID_CORRECTION_QUANTITY"}
+        require(reason.isNotBlank()){"CORRECTION_REASON_REQUIRED"}
+        val now=System.currentTimeMillis()
+        val session=dao.sessionSnapshotById(sessionId) ?: error("SESSION_MISSING")
+        check(session.status=="OPEN"){"SESSION_ALREADY_CLOSED_OR_CHANGED"}
+        val source=dao.orderItemById(sourceItemId) ?: error("ADJUSTMENT_SOURCE_MISSING")
+        val sourceBatch=dao.orderBatchById(source.batchId) ?: error("ADJUSTMENT_SOURCE_MISSING")
+        check(sourceBatch.sessionId==sessionId&&sourceBatch.status=="DELIVERED"&&source.qty>0&&source.adjustmentOfItemId==null){"ITEM_NOT_DELIVERED_OR_ADJUSTABLE"}
+        val prior=dao.sourceCorrectionQty(source.id)
+        val correction=OrderSnapshots.correction(source,source.copy(id=UUID.randomUUID().toString(),batchId="",qty=-removeQty,note="ĐIỀU CHỈNH: ${reason.trim()}",adjustmentOfItemId=source.id),prior)
+        val dayStart=java.util.Calendar.getInstance().apply{timeInMillis=now;set(java.util.Calendar.HOUR_OF_DAY,0);set(java.util.Calendar.MINUTE,0);set(java.util.Calendar.SECOND,0);set(java.util.Calendar.MILLISECOND,0)}.timeInMillis
+        val batch=OrderBatchEntity(UUID.randomUUID().toString(),sessionId,dao.maxBatchSequence(sessionId)+1,actorId,now,sentAt=now,status="DELIVERED",serviceNo=dao.maxServiceNoSince(dayStart)+1,deliveredAt=now,deliveredBy=actorId)
+        dao.insertBatch(batch)
+        dao.insertItems(listOf(correction.copy(batchId=batch.id)))
+        val remaining=source.qty+prior-removeQty
+        dao.audit(AuditEventEntity(UUID.randomUUID().toString(),"BATCH",batch.id,"ITEM_CORRECTED",actorId,null,now,
+            "sourceItem=${source.id},sourceBatch=${sourceBatch.id},beforeQty=${source.qty+prior},afterQty=$remaining,removed=$removeQty,reason=${reason.trim()}"))
+        batch
+    }
+
     suspend fun queueKitchenPrint(batch:OrderBatchEntity):PrintJobEntity =
         db.withTransaction {
             dao.kitchenPrintJob(batch.id) ?: PrintJobEntity(

@@ -55,7 +55,7 @@ class PosViewModel(app:Application):AndroidViewModel(app){
     payrollPeriodLabel.value="%02d/%04d".format(selected.month,selected.year)
    }
   }
- }val healthIssues=MutableStateFlow<List<String>>(emptyList());val healthMessage=MutableStateFlow("Chưa kiểm tra");val customerUpdateMessage=MutableStateFlow("");val cartNotes=MutableStateFlow<Map<String,String>>(emptyMap());val cart=MutableStateFlow<Map<String,Int>>(emptyMap());val currentTable=MutableStateFlow<DiningTableEntity?>(null);val currentSession=MutableStateFlow<TableSessionEntity?>(null);val currentEmployee=MutableStateFlow<EmployeeEntity?>(null);val authError=MutableStateFlow("");val screen=MutableStateFlow("LOGIN");val printerPreview=MutableStateFlow("");val printerMessage=MutableStateFlow("");val printedCheckoutKey=MutableStateFlow<String?>(null);val checkoutPrinting=MutableStateFlow(false);val checkoutPrintTestMode=MutableStateFlow(false);val businessTestMode=MutableStateFlow(false)
+ }val healthIssues=MutableStateFlow<List<String>>(emptyList());val healthMessage=MutableStateFlow("Chưa kiểm tra");val customerUpdateMessage=MutableStateFlow("");val cartNotes=MutableStateFlow<Map<String,String>>(emptyMap());val cart=MutableStateFlow<Map<String,Int>>(emptyMap());val currentTable=MutableStateFlow<DiningTableEntity?>(null);val currentSession=MutableStateFlow<TableSessionEntity?>(null);val currentEmployee=MutableStateFlow<EmployeeEntity?>(null);val authError=MutableStateFlow("");val screen=MutableStateFlow("LOGIN");val printerPreview=MutableStateFlow("");val printerMessage=MutableStateFlow("");val printedCheckoutKey=MutableStateFlow<String?>(null);val checkoutPrintAttemptedKey=MutableStateFlow<String?>(null);val checkoutPrinting=MutableStateFlow(false);val checkoutPrintTestMode=MutableStateFlow(false);val businessTestMode=MutableStateFlow(false)
  val selectedVoucher=MutableStateFlow<CustomerRewardEntity?>(null);val selectedVoucherItemId=MutableStateFlow<String?>(null);val voucherMessage=MutableStateFlow("");val verifiedVoucher=MutableStateFlow<CustomerRewardEntity?>(null)
  val recentBankNotifications=dao.recentBankNotifications().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
  val assetCategories=dao.assetCategories().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
@@ -1208,10 +1208,11 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
   val table=currentTable.value?:return
   val printKey="${session.id}:${preview.total}:$qrInfo"
   printedCheckoutKey.value=null
+  checkoutPrintAttemptedKey.value=printKey
   checkoutPrinting.value=true
   viewModelScope.launch(Dispatchers.IO){
    try {
-   if(printerMode()!="BLUETOOTH"||receiptPrinterMac().isBlank()){printerMessage.value="CHƯA CẤU HÌNH MÁY IN · Không thể xác nhận trước khi in bill";return@launch}
+   if(printerMode()!="BLUETOOTH"||receiptPrinterMac().isBlank()){printerMessage.value="IN BILL LỖI · Chưa cấu hình máy in. Kiểm tra tiền đã nhận trước khi xác nhận thanh toán";return@launch}
    val batches=dao.batches(session.id).first().filter{it.status!="CANCELLED"}
    val lines=mutableListOf<Triple<String,Int,Long>>()
    batches.forEach{batch->dao.batchItems(batch.id).first().forEach{item->lines.add(Triple(item.itemNameSnapshot,item.qty,item.unitPriceSnapshot))}}
@@ -1296,7 +1297,8 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
   val employee=currentEmployee.value?:return
   val table=currentTable.value
   if(!employee.canCheckout&&employee.role!="ADMIN")return
-  if(printedCheckoutKey.value?.startsWith("${session.id}:${preview.total}:")!=true){printerMessage.value="PHẢI IN BILL TRƯỚC KHI XÁC NHẬN THANH TOÁN";return}
+  if(checkoutPrinting.value){printerMessage.value="ĐANG IN BILL · Vui lòng chờ in hoàn tất";return}
+  if(checkoutPrintAttemptedKey.value?.startsWith("${session.id}:${preview.total}:")!=true && printedCheckoutKey.value?.startsWith("${session.id}:${preview.total}:")!=true){printerMessage.value="VUI LÒNG BẤM IN BILL TRƯỚC · Nếu in lỗi vẫn có thể xác nhận sau khi kiểm tra tiền";return}
   viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO){
    val pendingPaymentSession=dao.activePaymentSessionSnapshot(session.id)
    val commit=runCatching {

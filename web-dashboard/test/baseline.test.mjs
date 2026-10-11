@@ -7,5 +7,5 @@ test("recovered dashboard keeps its login and dashboard roots", async () => {
   await readFile(new URL("../app.js", import.meta.url), "utf8");
   assert.match(page, /id="login-view"/);
   assert.match(page, /id="dashboard-view"/);
-  assert.match(page, /src="app\.js"/);
+  assert.match(page, /src="app\.js(?:\?[^"]*)?"/);
 });

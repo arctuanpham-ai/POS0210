@@ -291,15 +291,53 @@ function recalcEntryTotal() {
   const price = Number($("#entry-unit-price").value || 0);
   $("#entry-total").textContent = money(Math.round(qty * price));
 }
+const MATERIAL_GROUPS = [["THIT","Thịt, gia cầm"],["RAU","Rau, củ, quả"],["BUN","Bún, bánh đa, tinh bột"],["BANH","Bánh mì, nguyên liệu bánh"],["SUA","Trứng, sữa, bơ"],["GIAVI","Gia vị, nước dùng"],["CAPHE","Cà phê"],["TRA","Trà, nguyên liệu pha trà"],["MUT","Siro, mứt, nguyên liệu bổ sung"],["NUOC","Đồ uống đóng chai"],["DA","Đá, nước tinh khiết"],["BAOBI","Bao bì, vật tư phục vụ"],["VESINH","Vệ sinh, vật tư tiêu hao"],["KHAC","Vật tư khác"]];
+const MATERIAL_UNITS = ["kg","gam","lít","ml","con","quả","bó","túi","hộp","chai","lon","gói","cái","thùng","bình","ổ","suất"];
+const normalizeMaterial = (value) => String(value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/\s+/g, " ").trim();
+function materialMatches(value, search) {
+  const text = normalizeMaterial(value), q = normalizeMaterial(search);
+  if (!q) return true;
+  const counts = new Map();
+  for (const char of text.replace(/\s/g, "")) counts.set(char, (counts.get(char) || 0) + 1);
+  for (const char of q.replace(/\s/g, "")) { if (!counts.get(char)) return false; counts.set(char, counts.get(char) - 1); }
+  return true;
+}
+function materialRank(value, search) {
+  const text = normalizeMaterial(value), q = normalizeMaterial(search);
+  return text === q ? 0 : text.startsWith(q) ? 1 : text.includes(q) ? 2 : 3;
+}
+function materialOptions(field, search) {
+  const values = field === "expenseGroup" ? MATERIAL_GROUPS.map(([, name]) => name) : field === "unit" ? MATERIAL_UNITS : [...new Set((expenseDraft?.items || []).map((x) => x.materialName).filter(Boolean))];
+  return values.filter((value) => materialMatches(value, search)).sort((a,b) => materialRank(a, search) - materialRank(b, search) || a.localeCompare(b, "vi")).slice(0, 30);
+}
+function updateMaterialSuggestions(input) {
+  const list = document.getElementById(input.getAttribute("list"));
+  if (!list) return;
+  list.replaceChildren(...materialOptions(input.dataset.field, input.value).map((value) => new Option(value, value)));
+}
+function setupMaterialSuggestions() {
+  document.querySelectorAll("#expense-lines input[list]").forEach(updateMaterialSuggestions);
+}
+function groupCode(value) { return MATERIAL_GROUPS.find(([code, label]) => label === value)?.[0] || "KHAC"; }
+function nextMaterialCode(group) {
+  const prefix = groupCode(group) + "-";
+  const used = new Set((expenseDraft?.items || []).map((x) => x.materialCode));
+  let index = 1;
+  while (used.has(prefix + String(index).padStart(3, "0"))) index++;
+  return prefix + String(index).padStart(3, "0");
+}
 function expenseLineMarkup(item) {
-  const safe = (value) => escapeHtml(value || "");
-  return `<article class="expense-line" data-line-id="${safe(item.id)}"><label>Tên vật tư<input data-field="materialName" maxlength="120" value="${safe(item.materialName)}" required /></label><div class="two-col"><label>Mã vật tư<input data-field="materialCode" maxlength="40" value="${safe(item.materialCode)}" /></label><label>Nhóm<input data-field="expenseGroup" value="${safe(item.expenseGroup || "FOOD")}" /></label></div><div class="two-col"><label>Số lượng<input data-field="qty" type="number" min="0.001" step="0.001" value="${Number(item.qty || 0)}" /></label><label>Đơn vị<input data-field="unit" maxlength="20" value="${safe(item.unit || "kg")}" /></label></div><label>Đơn giá<input data-field="unitPrice" type="number" min="0" step="1" value="${Number(item.unitPrice || 0)}" /></label><button type="button" class="text-button" data-remove-line="${safe(item.id)}">Bỏ dòng</button></article>`;
+  const safe = (value) => escapeHtml(String(value ?? "")).replace(/"/g, "&quot;");
+  const id = safe(item.id);
+  const group = MATERIAL_GROUPS.find(([code, label]) => code === item.expenseGroup)?.[1] || item.expenseGroup || "Vật tư khác";
+  return `<article class="expense-line" data-line-id="${id}"><label>Tên vật tư<input data-field="materialName" list="materials-${id}" maxlength="120" value="${safe(item.materialName)}" required autocomplete="off" /><datalist id="materials-${id}"></datalist></label><div class="two-col"><label>Mã vật tư<input data-field="materialCode" maxlength="40" value="${safe(item.materialCode)}" readonly /></label><label>Nhóm vật tư<input data-field="expenseGroup" list="groups-${id}" value="${safe(group)}" required autocomplete="off" /><datalist id="groups-${id}"></datalist></label></div><div class="two-col"><label>Số lượng<input data-field="qty" type="number" min="0.001" step="0.001" value="${Number(item.qty || 0)}" /></label><label>Đơn vị tính<input data-field="unit" list="units-${id}" maxlength="20" value="${safe(item.unit || "kg")}" required autocomplete="off" /><datalist id="units-${id}"></datalist></label></div><label>Đơn giá<input data-field="unitPrice" type="number" min="0" step="1" value="${Number(item.unitPrice || 0)}" /></label><button type="button" class="text-button" data-remove-line="${id}">Bỏ dòng</button></article>`;
 }
 function renderExpenseDraft() {
   if (!expenseDraft) return;
   $("#expense-date").value = localDateTimeInput(new Date(expenseDraft.purchaseDate));
   $("#expense-note").value = expenseDraft.note || "";
   $("#expense-lines").innerHTML = expenseDraft.items.map(expenseLineMarkup).join("");
+  setupMaterialSuggestions();
   $("#expense-total").textContent = money(calculateReceiptTotal(expenseDraft.items));
   localStorage.setItem(`pos0210.expense-draft.${state.user.uid}`, JSON.stringify(expenseDraft));
 }
@@ -310,7 +348,7 @@ function applyExpenseInputs() {
   expenseDraft.items = [...$("#expense-lines").querySelectorAll(".expense-line")].map((node) => {
     const existing = expenseDraft.items.find((x) => x.id === node.dataset.lineId) || { id: node.dataset.lineId };
     const read = (field) => node.querySelector(`[data-field="${field}"]`).value;
-    return { ...existing, materialName: read("materialName"), materialCode: read("materialCode"), expenseGroup: read("expenseGroup"), qty: Number(read("qty")), unit: read("unit"), unitPrice: Number(read("unitPrice")) };
+    return { ...existing, materialName: read("materialName"), materialCode: read("materialCode") || nextMaterialCode(read("expenseGroup")), expenseGroup: read("expenseGroup"), qty: Number(read("qty")), unit: read("unit"), unitPrice: Number(read("unitPrice")) };
   });
 }
 async function saveExpenseReceipt(event) {
@@ -473,9 +511,10 @@ $("#open-expense").addEventListener("click", () => {
   $("#expense-dialog").showModal();
 });
 $("#close-expense").addEventListener("click", () => { applyExpenseInputs(); renderExpenseDraft(); $("#expense-dialog").close(); });
-$("#add-expense-line").addEventListener("click", () => { applyExpenseInputs(); expenseDraft.items.push({ id: uuid(), materialName: "", materialCode: "", expenseGroup: "FOOD", qty: 1, unit: "kg", unitPrice: 0 }); renderExpenseDraft(); });
+$("#add-expense-line").addEventListener("click", () => { applyExpenseInputs(); expenseDraft.items.push({ id: uuid(), materialName: "", materialCode: "", expenseGroup: "Thịt, gia cầm", qty: 1, unit: "kg", unitPrice: 0 }); renderExpenseDraft(); });
 $("#expense-lines").addEventListener("click", (event) => { const id = event.target.dataset.removeLine; if (!id || expenseDraft.items.length < 2) return; applyExpenseInputs(); expenseDraft.items = expenseDraft.items.filter((item) => item.id !== id); renderExpenseDraft(); });
-$("#expense-lines").addEventListener("input", () => { applyExpenseInputs(); $("#expense-total").textContent = money(calculateReceiptTotal(expenseDraft.items)); });
+$("#expense-lines").addEventListener("input", (event) => { applyExpenseInputs(); if (event.target.matches("input[list]")) updateMaterialSuggestions(event.target); $("#expense-total").textContent = money(calculateReceiptTotal(expenseDraft.items)); });
+$("#expense-lines").addEventListener("change", (event) => { const input = event.target; if (!input.matches("[data-field=expenseGroup]")) return; const line = input.closest(".expense-line"); if (!MATERIAL_GROUPS.some(([, name]) => name === input.value)) { input.setCustomValidity("Chọn nhóm vật tư trong danh sách"); return; } input.setCustomValidity(""); const code = line.querySelector("[data-field=materialCode]"); if (!code.value || /^([A-Z_]+)-\\d+$/.test(code.value)) code.value = nextMaterialCode(input.value); applyExpenseInputs(); });
 $("#expense-form").addEventListener("submit", saveExpenseReceipt);
 $("#entry-type").addEventListener("change", renderEntryType);
 $("#entry-category").addEventListener("change", renderEntryType);

@@ -1,0 +1,8 @@
+{
+  "hosting": {
+    "site": "pos0210-17ce4",
+    "public": "web-dashboard",
+    "ignore": ["firebase.json", ".firebaserc", "node_modules", "test"],
+    "cleanUrls": true
+  }
+}

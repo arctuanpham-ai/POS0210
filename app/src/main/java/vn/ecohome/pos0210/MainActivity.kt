@@ -3627,7 +3627,7 @@ fun Report(vm: PosViewModel) {
             }
         }
         when (section) {
-            "ITEMS" -> SalesItemsReport(reportData) { selectedBill = it }
+            "ITEMS" -> { val reportMenu by vm.menu.collectAsState(); val reportCategories by vm.categories.collectAsState(); SalesItemsReport(reportData, reportMenu, reportCategories) { selectedBill = it } }
             "EXPORT" -> {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal=12.dp,vertical=10.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
                     Text("XUẤT BÁO CÁO",fontWeight=FontWeight.Bold)

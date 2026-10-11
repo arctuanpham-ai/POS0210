@@ -18,10 +18,10 @@ import {
   setDoc,
   writeBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { matchesPayer, normalizePayer } from "./payer-filter.js";
-import { calculateReceiptTotal, createStableDraft, validateReceipt } from "./expense-domain.js";
-import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js";
-import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js";
+import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261012-2";
+import { calculateReceiptTotal, createStableDraft, validateReceipt } from "./expense-domain.js?v=20261012-2";
+import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261012-2";
+import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261012-2";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",

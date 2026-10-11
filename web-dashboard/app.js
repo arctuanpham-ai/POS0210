@@ -308,7 +308,8 @@ function updateMaterialSuggestions(input) {
 function setupMaterialSuggestions() {
   document.querySelectorAll("#expense-lines input[list]").forEach(updateMaterialSuggestions);
 }
-function groupCode(value) { return MATERIAL_GROUPS.find(([code, label]) => label === value)?.[0] || "KHAC"; }
+function groupLabel(value) { return MATERIAL_GROUPS.find(([code, label]) => code === value || label === value)?.[1] || ({ FOOD: "Thịt, gia cầm", DRINK: "Đồ uống đóng chai", SUPPLIES: "Bao bì, vật tư phục vụ", OTHER: "Vật tư khác" })[value] || value || "Vật tư khác"; }
+function groupCode(value) { return MATERIAL_GROUPS.find(([code, label]) => code === value || label === value)?.[0] || "KHAC"; }
 function nextMaterialCode(group) {
   const prefix = groupCode(group) + "-";
   return prefix + uuid().replace(/[^a-zA-Z0-9]/g, "").slice(-12).toUpperCase();
@@ -316,7 +317,7 @@ function nextMaterialCode(group) {
 function expenseLineMarkup(item) {
   const safe = (value) => escapeHtml(String(value ?? "")).replace(/"/g, "&quot;");
   const id = safe(item.id);
-  const group = MATERIAL_GROUPS.find(([code, label]) => code === item.expenseGroup)?.[1] || item.expenseGroup || "Vật tư khác";
+  const group = groupLabel(item.expenseGroup);
   return `<article class="expense-line" data-line-id="${id}"><label>Tên vật tư<input data-field="materialName" list="materials-${id}" maxlength="120" value="${safe(item.materialName)}" required autocomplete="off" /><datalist id="materials-${id}"></datalist></label><div class="two-col"><label>Mã vật tư<input data-field="materialCode" maxlength="40" value="${safe(item.materialCode)}" readonly /></label><label>Nhóm vật tư<input data-field="expenseGroup" list="groups-${id}" value="${safe(group)}" required autocomplete="off" /><datalist id="groups-${id}"></datalist></label></div><div class="two-col"><label>Số lượng<input data-field="qty" type="number" min="0.001" step="0.001" value="${Number(item.qty || 0)}" /></label><label>Đơn vị tính<input data-field="unit" list="units-${id}" maxlength="20" value="${safe(item.unit || "kg")}" required autocomplete="off" /><datalist id="units-${id}"></datalist></label></div><label>Đơn giá<input data-field="unitPrice" type="number" min="0" step="1" value="${Number(item.unitPrice || 0)}" /></label><button type="button" class="text-button" data-remove-line="${id}">Bỏ dòng</button></article>`;
 }
 function renderExpenseDraft() {
@@ -336,9 +337,10 @@ function applyExpenseInputs() {
   expenseDraft.items = [...$("#expense-lines").querySelectorAll(".expense-line")].map((node) => {
     const existing = expenseDraft.items.find((x) => x.id === node.dataset.lineId) || { id: node.dataset.lineId };
     const read = (field) => node.querySelector(`[data-field="${field}"]`).value;
-    const group = read("expenseGroup");
+    const group = groupLabel(read("expenseGroup"));
     let code = read("materialCode");
     if (!read("materialName").trim()) code = "";
+    else if (existing.materialName && normalizeMaterial(existing.materialName) !== normalizeMaterial(read("materialName"))) code = "";
     else if (!code) {
       const known = savedMaterials().find((item) => normalizeMaterial(item.materialName) === normalizeMaterial(read("materialName")));
       code = known?.materialCode || nextMaterialCode(group);
@@ -505,6 +507,7 @@ $("#close-entry").addEventListener("click", () => $("#entry-dialog").close());
 $("#open-expense").addEventListener("click", () => {
   if (!state.user) return;
   expenseDraft = createStableDraft(localStorage, state.user, uuid);
+  expenseDraft.items = expenseDraft.items.map(item => ({ ...item, expenseGroup: groupLabel(item.expenseGroup) }));
   $("#expense-error").textContent = "";
   renderExpenseDraft();
   $("#expense-dialog").showModal();

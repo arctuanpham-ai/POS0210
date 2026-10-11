@@ -23,7 +23,7 @@ export function createStableDraft(storage, user, createId = () => crypto.randomU
     try { return JSON.parse(saved); } catch { storage.removeItem?.(key); }
   }
   const now = Date.now();
-  const draft = { id: createId(), purchaseDate: now, enteredByUid: user.uid, enteredByName: user.displayName || user.email || "Nhân viên", createdAt: now, items: [{ id: createId(), materialName: "", materialCode: "", expenseGroup: "FOOD", subcategoryId: "", qty: 1, unit: "kg", unitPrice: 0 }], note: "" };
+  const draft = { id: createId(), purchaseDate: now, enteredByUid: user.uid, enteredByName: user.displayName || user.email || "Nhân viên", createdAt: now, items: [{ id: createId(), materialName: "", materialCode: "", expenseGroup: "Thịt, gia cầm", subcategoryId: "", qty: 1, unit: "kg", unitPrice: 0 }], note: "" };
   storage.setItem(key, JSON.stringify(draft));
   return draft;
 }

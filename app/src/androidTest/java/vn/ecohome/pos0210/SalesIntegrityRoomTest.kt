@@ -129,7 +129,7 @@ class SalesIntegrityRoomTest {
         assertEquals("DELIVERED",dao.orderBatchById(correction.id)!!.status)
         assertEquals(-1,dao.batchItems(correction.id).first().single().qty)
         assertEquals(70000L,dao.sessionTotalSnapshot(s.id))
-        assertTrue(dao.audits().first().any{it.entityId==correction.id&&it.action=="ITEM_CORRECTED"&&it.detail.contains("beforeQty=3")&&it.detail.contains("afterQty=2")})
+        assertTrue(dao.audits().first().any{it.entityId==correction.id&&it.action=="ITEM_CORRECTED"&&it.payload.contains("beforeQty=3")&&it.payload.contains("afterQty=2")})
         val bill=pay(s)
         assertEquals(70000L,bill.total)
         assertEquals(2,dao.paidItemSales().first().sumOf{it.qty})

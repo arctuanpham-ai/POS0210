@@ -19,7 +19,7 @@ class SalesReportUiTest {
             listOf(PaymentEntity("p","b","CASH",120000,"e",now)),emptyList(),listOf(TableSessionEntity("s","t",now,"e",status="CLOSED")))
     }
     private fun show(data:SalesReportData){
-        compose.setContent{MaterialTheme(colorScheme=lightColorScheme(background=Color(0xFFF6F0E6),surface=Color(0xFFF6F0E6),primary=Color(0xFF6D4934))){SalesItemsReport(data){}}}
+        compose.setContent{MaterialTheme(colorScheme=lightColorScheme(background=Color(0xFFF6F0E6),surface=Color(0xFFF6F0E6),primary=Color(0xFF6D4934))){SalesItemsReport(data, emptyList(), emptyList()){}}}
     }
     @Test fun twelfthItemAppearsWithNoTopEightLimit(){
         show(data())

@@ -345,10 +345,14 @@ function applyExpenseInputs() {
   if (!expenseDraft) return;
   expenseDraft.purchaseDate = new Date($("#expense-date").value).getTime();
   expenseDraft.note = $("#expense-note").value.trim();
+  const allocated = new Set(expenseDraft.items.map((item) => item.materialCode).filter(Boolean));
   expenseDraft.items = [...$("#expense-lines").querySelectorAll(".expense-line")].map((node) => {
     const existing = expenseDraft.items.find((x) => x.id === node.dataset.lineId) || { id: node.dataset.lineId };
     const read = (field) => node.querySelector(`[data-field="${field}"]`).value;
-    return { ...existing, materialName: read("materialName"), materialCode: read("materialCode") || nextMaterialCode(read("expenseGroup")), expenseGroup: read("expenseGroup"), qty: Number(read("qty")), unit: read("unit"), unitPrice: Number(read("unitPrice")) };
+    const group = read("expenseGroup");
+    let code = read("materialCode");
+    if (!code) { const prefix = groupCode(group) + "-"; let n = 1; while (allocated.has(prefix + String(n).padStart(3, "0"))) n++; code = prefix + String(n).padStart(3, "0"); allocated.add(code); node.querySelector("[data-field=materialCode]").value = code; }
+    return { ...existing, materialName: read("materialName"), materialCode: code, expenseGroup: group, qty: Number(read("qty")), unit: read("unit"), unitPrice: Number(read("unitPrice")) };
   });
 }
 async function saveExpenseReceipt(event) {
@@ -514,7 +518,7 @@ $("#close-expense").addEventListener("click", () => { applyExpenseInputs(); rend
 $("#add-expense-line").addEventListener("click", () => { applyExpenseInputs(); expenseDraft.items.push({ id: uuid(), materialName: "", materialCode: "", expenseGroup: "Thịt, gia cầm", qty: 1, unit: "kg", unitPrice: 0 }); renderExpenseDraft(); });
 $("#expense-lines").addEventListener("click", (event) => { const id = event.target.dataset.removeLine; if (!id || expenseDraft.items.length < 2) return; applyExpenseInputs(); expenseDraft.items = expenseDraft.items.filter((item) => item.id !== id); renderExpenseDraft(); });
 $("#expense-lines").addEventListener("input", (event) => { applyExpenseInputs(); if (event.target.matches("input[list]")) updateMaterialSuggestions(event.target); $("#expense-total").textContent = money(calculateReceiptTotal(expenseDraft.items)); });
-$("#expense-lines").addEventListener("change", (event) => { const input = event.target; if (!input.matches("[data-field=expenseGroup]")) return; const line = input.closest(".expense-line"); if (!MATERIAL_GROUPS.some(([, name]) => name === input.value)) { input.setCustomValidity("Chọn nhóm vật tư trong danh sách"); return; } input.setCustomValidity(""); const code = line.querySelector("[data-field=materialCode]"); if (!code.value || /^([A-Z_]+)-\\d+$/.test(code.value)) code.value = nextMaterialCode(input.value); applyExpenseInputs(); });
+$("#expense-lines").addEventListener("change", (event) => { const input = event.target; if (!input.matches("[data-field=expenseGroup]")) return; const line = input.closest(".expense-line"); if (!MATERIAL_GROUPS.some(([, name]) => name === input.value)) { input.setCustomValidity("Chọn nhóm vật tư trong danh sách"); return; } input.setCustomValidity(""); const code = line.querySelector("[data-field=materialCode]"); if (!code.value || /^([A-Z_]+)-\d+$/.test(code.value)) code.value = nextMaterialCode(input.value); applyExpenseInputs(); });
 $("#expense-form").addEventListener("submit", saveExpenseReceipt);
 $("#entry-type").addEventListener("change", renderEntryType);
 $("#entry-category").addEventListener("change", renderEntryType);

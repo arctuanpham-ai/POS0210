@@ -891,8 +891,8 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
             }
         }
         Column(Modifier.fillMaxWidth().padding(18.dp)) {
+            if(checkoutPrinting) Text("ĐANG IN BILL… · Hóa đơn và QR vẫn hiển thị để khách xem", fontWeight=FontWeight.Bold)
             if(!billPrinted){
-                if(checkoutPrinting) Text("ĐANG IN BILL… · Hóa đơn và QR vẫn hiển thị để khách xem", fontWeight=FontWeight.Bold)
                 Button(
                     onClick={
                         if(checkoutPrintTestMode) vm.confirmCheckoutBillTest(preview,qrInfo)
@@ -901,24 +901,21 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                     modifier=Modifier.fillMaxWidth(),
                     enabled=!checkoutPrinting&&preview.total>0&&pendingDelivery.isEmpty()&&validPaymentSession!=null
                 ){
-                    Text(
-                        if(pendingDelivery.isNotEmpty())"CHƯA GIAO ĐỦ · CHƯA THỂ IN BILL"
-                        else if(checkoutPrintTestMode)"QA · XÁC NHẬN BILL TEST (KHÔNG IN)"
-                        else "IN BILL TRƯỚC"
-                    )
+                    Text(if(pendingDelivery.isNotEmpty()) "CHƯA GIAO ĐỦ · CHƯA THỂ IN BILL" else "IN BILL")
                 }
-                Text(
-                    if(checkoutPrintTestMode)"Chế độ QA: chỉ giả lập bước đã in bill để kiểm thử thanh toán; không gửi lệnh tới máy in."
-                    else "Phải in bill để khách kiểm tra trước khi xác nhận thanh toán.",
-                    Modifier.padding(top=6.dp),fontSize=11.sp,
-                    color=if(checkoutPrintTestMode)Color(0xFF9A4B3D) else Color.Unspecified,
-                    fontWeight=if(checkoutPrintTestMode)FontWeight.Bold else FontWeight.Normal
-                )
-            }else{
-                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)){
-                    OutlinedButton(onClick={vm.close("CASH",preview,customerPhone,customerName,if(applyReward)billReward?.id else null)},modifier=Modifier.weight(1f)){Text("XÁC NHẬN\nTIỀN MẶT",textAlign=TextAlign.Center)}
-                    Button(onClick={vm.close("TRANSFER",preview,customerPhone,customerName,if(applyReward)billReward?.id else null)},modifier=Modifier.weight(1f)){Text("XÁC NHẬN\nCHUYỂN KHOẢN",textAlign=TextAlign.Center)}
-                }
+                Text("Bill trên màn hình và mã QR luôn khả dụng. Nếu máy in lỗi, vẫn có thể xác nhận sau khi nhận đủ tiền.", Modifier.padding(top=6.dp),fontSize=11.sp)
+            }
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)){
+                OutlinedButton(
+                    onClick={vm.close("CASH",preview,customerPhone,customerName,if(applyReward)billReward?.id else null)},
+                    modifier=Modifier.weight(1f),
+                    enabled=!checkoutPrinting&&preview.total>0&&pendingDelivery.isEmpty()&&validPaymentSession!=null
+                ){Text("XÁC NHẬN\\nTIỀN MẶT".replace("\\n","\n"),textAlign=TextAlign.Center)}
+                Button(
+                    onClick={vm.close("TRANSFER",preview,customerPhone,customerName,if(applyReward)billReward?.id else null)},
+                    modifier=Modifier.weight(1f),
+                    enabled=!checkoutPrinting&&preview.total>0&&pendingDelivery.isEmpty()&&validPaymentSession!=null
+                ){Text("XÁC NHẬN\\nCHUYỂN KHOẢN".replace("\\n","\n"),textAlign=TextAlign.Center)}
             }
         }
     }

@@ -21,6 +21,7 @@ import {
 import { matchesPayer, normalizePayer } from "./payer-filter.js";
 import { calculateReceiptTotal, createStableDraft, validateReceipt } from "./expense-domain.js";
 import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js";
+import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",
@@ -293,24 +294,11 @@ function recalcEntryTotal() {
 }
 const MATERIAL_GROUPS = [["THIT","Thịt, gia cầm"],["RAU","Rau, củ, quả"],["BUN","Bún, bánh đa, tinh bột"],["BANH","Bánh mì, nguyên liệu bánh"],["SUA","Trứng, sữa, bơ"],["GIAVI","Gia vị, nước dùng"],["CAPHE","Cà phê"],["TRA","Trà, nguyên liệu pha trà"],["MUT","Siro, mứt, nguyên liệu bổ sung"],["NUOC","Đồ uống đóng chai"],["DA","Đá, nước tinh khiết"],["BAOBI","Bao bì, vật tư phục vụ"],["VESINH","Vệ sinh, vật tư tiêu hao"],["KHAC","Vật tư khác"]];
 const MATERIAL_UNITS = ["kg","gam","lít","ml","con","quả","bó","túi","hộp","chai","lon","gói","cái","thùng","bình","ổ","suất"];
-const normalizeMaterial = (value) => String(value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/\s+/g, " ").trim();
-function materialMatches(value, search) {
-  const text = normalizeMaterial(value), q = normalizeMaterial(search);
-  if (!q) return true;
-  const counts = new Map();
-  for (const char of text.replace(/\s/g, "")) counts.set(char, (counts.get(char) || 0) + 1);
-  for (const char of q.replace(/\s/g, "")) { if (!counts.get(char)) return false; counts.set(char, counts.get(char) - 1); }
-  return true;
-}
-function materialRank(value, search) {
-  const text = normalizeMaterial(value), q = normalizeMaterial(search);
-  return text === q ? 0 : text.startsWith(q) ? 1 : text.includes(q) ? 2 : 3;
-}
 function savedMaterials() { try { return JSON.parse(localStorage.getItem(`pos0210.materials.${state.user?.uid}`) || "[]"); } catch { return []; } }
 function rememberMaterials(items) { const records = savedMaterials(); for (const item of items) { const name = String(item.materialName || "").trim(); if (!name) continue; const index = records.findIndex((r) => normalizeMaterial(r.materialName) === normalizeMaterial(name)); const record = { materialName: name, materialCode: item.materialCode, expenseGroup: item.expenseGroup, unit: item.unit }; if (index >= 0) records[index] = record; else records.push(record); } localStorage.setItem(`pos0210.materials.${state.user?.uid}`, JSON.stringify(records.slice(-500))); }
 function materialOptions(field, search) {
   const values = field === "expenseGroup" ? MATERIAL_GROUPS.map(([, name]) => name) : field === "unit" ? MATERIAL_UNITS : [...new Set([...savedMaterials().map((x) => x.materialName), ...(expenseDraft?.items || []).map((x) => x.materialName)].filter(Boolean))];
-  return values.filter((value) => materialMatches(value, search)).sort((a,b) => materialRank(a, search) - materialRank(b, search) || a.localeCompare(b, "vi")).slice(0, 30);
+  return filterMaterialOptions(values, search);
 }
 function updateMaterialSuggestions(input) {
   const list = document.getElementById(input.getAttribute("list"));

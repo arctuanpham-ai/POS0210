@@ -735,6 +735,7 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
         buyGetLabel=if(applyReward)"Ưu đãi tích điểm" else manualLabel)
     val paymentSession by vm.paymentSession(s.id).collectAsState(initial = null)
     val printedCheckoutKey by vm.printedCheckoutKey.collectAsState()
+    val checkoutPrinting by vm.checkoutPrinting.collectAsState()
     val bankEvents by vm.recentBankNotifications.collectAsState()
     LaunchedEffect(preview.total, s.id) { vm.openPaymentSession(s,t,preview.total) }
     val validPaymentSession=paymentSession?.takeIf{it.expectedAmount==preview.total}
@@ -891,13 +892,14 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
         }
         Column(Modifier.fillMaxWidth().padding(18.dp)) {
             if(!billPrinted){
+                if(checkoutPrinting) Text("ĐANG IN BILL… · Hóa đơn và QR vẫn hiển thị để khách xem", fontWeight=FontWeight.Bold)
                 Button(
                     onClick={
                         if(checkoutPrintTestMode) vm.confirmCheckoutBillTest(preview,qrInfo)
                         else vm.printCheckoutBill(preview,qrInfo,matchedCustomer?.name?:customerName)
                     },
                     modifier=Modifier.fillMaxWidth(),
-                    enabled=preview.total>0&&pendingDelivery.isEmpty()&&validPaymentSession!=null
+                    enabled=!checkoutPrinting&&preview.total>0&&pendingDelivery.isEmpty()&&validPaymentSession!=null
                 ){
                     Text(
                         if(pendingDelivery.isNotEmpty())"CHƯA GIAO ĐỦ · CHƯA THỂ IN BILL"

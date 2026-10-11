@@ -81,4 +81,10 @@ dialog article { padding: 6px; }
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .entry-total { margin: 8px 0 2px; padding: 11px 12px; border-radius: 12px; background: #f3e6d6; }
 .entry-total strong { font-size: 18px; }
+.heading-actions { display: flex; gap: 12px; align-items: center; }
+.expense-lines { display: grid; gap: 10px; margin: 12px 0; }
+.expense-line { padding: 12px; border: 1px solid #dfcfb8; border-radius: 14px; background: #fff9f0; }
+.expense-line label { margin: 0 0 8px; }
+.expense-line .two-col { margin-top: 8px; }
+.expense-line .text-button { color: #9f4430; }
 #purchase-fields[hidden], #movement-fields[hidden], #asset-fields[hidden], #movement-partner-wrap[hidden], #expense-category-wrap[hidden], #purchase-category-wrap[hidden] { display: none !important; }

@@ -45,7 +45,7 @@
 
         <section class="section-heading report-heading">
           <div><p class="eyebrow">TÀI CHÍNH</p><h2>Tình hình quán</h2></div>
-          <button id="open-entry" class="secondary">+ NHẬP PHIẾU</button>
+          <div class="heading-actions"><button id="open-expense" class="secondary">+ CHI PHÍ MUA HÀNG</button><button id="open-entry" class="text-button">Giao dịch khác</button></div>
         </section>
 
         <div class="filter-row" id="period-filters">
@@ -92,6 +92,21 @@
         <p id="detail-meta" class="muted"></p>
         <ul id="detail-items" class="order-list"></ul>
         <footer id="detail-total" class="detail-total"></footer>
+      </article>
+    </dialog>
+
+    <dialog id="expense-dialog">
+      <article>
+        <div class="dialog-header"><div><p class="eyebrow">CHI PHÍ MUA HÀNG</p><h2>Phiếu nhiều vật tư</h2></div><button id="close-expense" class="text-button">Đóng</button></div>
+        <form id="expense-form" class="entry-form">
+          <label>Ngày mua<input id="expense-date" type="datetime-local" required /></label>
+          <label>Ghi chú<input id="expense-note" type="text" maxlength="240" /></label>
+          <section id="expense-lines" class="expense-lines"></section>
+          <button id="add-expense-line" type="button" class="secondary">+ Thêm vật tư</button>
+          <p class="entry-total">Tổng phiếu: <strong id="expense-total">0đ</strong></p>
+          <p id="expense-error" class="error"></p>
+          <button type="submit" class="primary">LƯU VÀ ĐỒNG BỘ</button>
+        </form>
       </article>
     </dialog>
 

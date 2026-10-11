@@ -14,6 +14,7 @@ import {
   writeBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { matchesPayer, normalizePayer } from "./payer-filter.js";
+import { calculateReceiptTotal, createStableDraft, validateReceipt } from "./expense-domain.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",
@@ -37,6 +38,7 @@ const state = {
   unsubs: [], period: "today", customFrom: null, customTo: null,
   transactionKind: "ALL", payerFilter: "ALL", user: null,
 };
+let expenseDraft = null;
 
 const $ = (selector) => document.querySelector(selector);
 const money = (value) => `${new Intl.NumberFormat("vi-VN").format(Number(value || 0))}đ`;
@@ -283,6 +285,35 @@ function recalcEntryTotal() {
   const price = Number($("#entry-unit-price").value || 0);
   $("#entry-total").textContent = money(Math.round(qty * price));
 }
+function expenseLineMarkup(item) {
+  const safe = (value) => escapeHtml(value || "");
+  return `<article class="expense-line" data-line-id="${safe(item.id)}"><label>Tên vật tư<input data-field="materialName" maxlength="120" value="${safe(item.materialName)}" required /></label><div class="two-col"><label>Mã vật tư<input data-field="materialCode" maxlength="40" value="${safe(item.materialCode)}" /></label><label>Nhóm<input data-field="expenseGroup" value="${safe(item.expenseGroup || "FOOD")}" /></label></div><div class="two-col"><label>Số lượng<input data-field="qty" type="number" min="0.001" step="0.001" value="${Number(item.qty || 0)}" /></label><label>Đơn vị<input data-field="unit" maxlength="20" value="${safe(item.unit || "kg")}" /></label></div><label>Đơn giá<input data-field="unitPrice" type="number" min="0" step="1" value="${Number(item.unitPrice || 0)}" /></label><button type="button" class="text-button" data-remove-line="${safe(item.id)}">Bỏ dòng</button></article>`;
+}
+function renderExpenseDraft() {
+  if (!expenseDraft) return;
+  $("#expense-date").value = localDateTimeInput(new Date(expenseDraft.purchaseDate));
+  $("#expense-note").value = expenseDraft.note || "";
+  $("#expense-lines").innerHTML = expenseDraft.items.map(expenseLineMarkup).join("");
+  $("#expense-total").textContent = money(calculateReceiptTotal(expenseDraft.items));
+  localStorage.setItem(`pos0210.expense-draft.${state.user.uid}`, JSON.stringify(expenseDraft));
+}
+function applyExpenseInputs() {
+  if (!expenseDraft) return;
+  expenseDraft.purchaseDate = new Date($("#expense-date").value).getTime();
+  expenseDraft.note = $("#expense-note").value.trim();
+  expenseDraft.items = [...$("#expense-lines").querySelectorAll(".expense-line")].map((node) => {
+    const existing = expenseDraft.items.find((x) => x.id === node.dataset.lineId) || { id: node.dataset.lineId };
+    const read = (field) => node.querySelector(`[data-field="${field}"]`).value;
+    return { ...existing, materialName: read("materialName"), materialCode: read("materialCode"), expenseGroup: read("expenseGroup"), qty: Number(read("qty")), unit: read("unit"), unitPrice: Number(read("unitPrice")) };
+  });
+}
+async function saveExpenseReceipt(event) {
+  event.preventDefault(); applyExpenseInputs(); const error = $("#expense-error"); error.textContent = "";
+  const check = validateReceipt(expenseDraft); if (!check.ok) { error.textContent = check.error; return; }
+  const now = Date.now(); const payload = { ...expenseDraft, total: check.total, status: "ACTIVE", updatedAt: now, updatedByUid: state.user.uid, source: "WEB_MANAGER", items: expenseDraft.items.map((item) => ({ ...item, amount: Math.round(item.qty * item.unitPrice) })) };
+  try { await setDoc(doc(db, ...root, "expenseReceipts", expenseDraft.id), payload); localStorage.removeItem(`pos0210.expense-draft.${state.user.uid}`); expenseDraft = null; $("#expense-dialog").close(); }
+  catch (e) { error.textContent = `Chưa đồng bộ được; bản nháp đã giữ lại: ${e.message || e}`; }
+}
 
 function render() {
   renderCumulativeSummary();
@@ -427,6 +458,18 @@ $("#open-entry").addEventListener("click", () => {
   $("#entry-dialog").showModal();
 });
 $("#close-entry").addEventListener("click", () => $("#entry-dialog").close());
+$("#open-expense").addEventListener("click", () => {
+  if (!state.user) return;
+  expenseDraft = createStableDraft(localStorage, state.user, uuid);
+  $("#expense-error").textContent = "";
+  renderExpenseDraft();
+  $("#expense-dialog").showModal();
+});
+$("#close-expense").addEventListener("click", () => { applyExpenseInputs(); renderExpenseDraft(); $("#expense-dialog").close(); });
+$("#add-expense-line").addEventListener("click", () => { applyExpenseInputs(); expenseDraft.items.push({ id: uuid(), materialName: "", materialCode: "", expenseGroup: "FOOD", qty: 1, unit: "kg", unitPrice: 0 }); renderExpenseDraft(); });
+$("#expense-lines").addEventListener("click", (event) => { const id = event.target.dataset.removeLine; if (!id || expenseDraft.items.length < 2) return; applyExpenseInputs(); expenseDraft.items = expenseDraft.items.filter((item) => item.id !== id); renderExpenseDraft(); });
+$("#expense-lines").addEventListener("input", () => { applyExpenseInputs(); $("#expense-total").textContent = money(calculateReceiptTotal(expenseDraft.items)); });
+$("#expense-form").addEventListener("submit", saveExpenseReceipt);
 $("#entry-type").addEventListener("change", renderEntryType);
 $("#entry-category").addEventListener("change", renderEntryType);
 $("#entry-qty").addEventListener("input", recalcEntryTotal);

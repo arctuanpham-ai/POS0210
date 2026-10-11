@@ -557,12 +557,12 @@ fun Sent(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("XÓA ĐƠN NHÁP") }
                     }
-                    if (b.status == "WAITING" && (current?.role == "ADMIN" || current?.role == "MANAGER")) {
+                    if ((b.status == "WAITING" || b.status == "DELIVERED") && (current?.role == "ADMIN" || current?.role == "MANAGER" || current?.role == "STAFF")) {
                         Spacer(Modifier.height(14.dp))
                         OutlinedButton(
                             onClick = { cancelTarget = b; cancelReason = ""; pv = null },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("HỦY ĐƠN · MANAGER") }
+                        ) { Text("HỦY ĐƠN · TRƯỚC THANH TOÁN") }
                     }
                 }
             }
@@ -587,7 +587,7 @@ fun Sent(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
             title = { Text("Hủy Đơn #${b.sequence}") },
             text = {
                 Column {
-                    Text("Chỉ hủy khi bếp chưa làm. Đơn vẫn được lưu trong lịch sử.")
+                    Text("Chỉ hủy khi bàn chưa thanh toán. Toàn bộ đơn sẽ bị hủy; lịch sử và lý do được lưu lại. Muốn đổi một món, hãy kiểm tra kỹ trước khi xác nhận.")
                     OutlinedTextField(
                         cancelReason,
                         { cancelReason = it },

@@ -306,8 +306,10 @@ function materialRank(value, search) {
   const text = normalizeMaterial(value), q = normalizeMaterial(search);
   return text === q ? 0 : text.startsWith(q) ? 1 : text.includes(q) ? 2 : 3;
 }
+function savedMaterials() { try { return JSON.parse(localStorage.getItem(`pos0210.materials.${state.user?.uid}`) || "[]"); } catch { return []; } }
+function rememberMaterials(items) { const records = savedMaterials(); for (const item of items) { const name = String(item.materialName || "").trim(); if (!name) continue; const index = records.findIndex((r) => normalizeMaterial(r.materialName) === normalizeMaterial(name)); const record = { materialName: name, materialCode: item.materialCode, expenseGroup: item.expenseGroup, unit: item.unit }; if (index >= 0) records[index] = record; else records.push(record); } localStorage.setItem(`pos0210.materials.${state.user?.uid}`, JSON.stringify(records.slice(-500))); }
 function materialOptions(field, search) {
-  const values = field === "expenseGroup" ? MATERIAL_GROUPS.map(([, name]) => name) : field === "unit" ? MATERIAL_UNITS : [...new Set((expenseDraft?.items || []).map((x) => x.materialName).filter(Boolean))];
+  const values = field === "expenseGroup" ? MATERIAL_GROUPS.map(([, name]) => name) : field === "unit" ? MATERIAL_UNITS : [...new Set([...savedMaterials().map((x) => x.materialName), ...(expenseDraft?.items || []).map((x) => x.materialName)].filter(Boolean))];
   return values.filter((value) => materialMatches(value, search)).sort((a,b) => materialRank(a, search) - materialRank(b, search) || a.localeCompare(b, "vi")).slice(0, 30);
 }
 function updateMaterialSuggestions(input) {
@@ -321,10 +323,7 @@ function setupMaterialSuggestions() {
 function groupCode(value) { return MATERIAL_GROUPS.find(([code, label]) => label === value)?.[0] || "KHAC"; }
 function nextMaterialCode(group) {
   const prefix = groupCode(group) + "-";
-  const used = new Set((expenseDraft?.items || []).map((x) => x.materialCode));
-  let index = 1;
-  while (used.has(prefix + String(index).padStart(3, "0"))) index++;
-  return prefix + String(index).padStart(3, "0");
+  return prefix + uuid().replace(/[^a-zA-Z0-9]/g, "").slice(-12).toUpperCase();
 }
 function expenseLineMarkup(item) {
   const safe = (value) => escapeHtml(String(value ?? "")).replace(/"/g, "&quot;");
@@ -351,7 +350,7 @@ function applyExpenseInputs() {
     const read = (field) => node.querySelector(`[data-field="${field}"]`).value;
     const group = read("expenseGroup");
     let code = read("materialCode");
-    if (!code) { const prefix = groupCode(group) + "-"; let n = 1; while (allocated.has(prefix + String(n).padStart(3, "0"))) n++; code = prefix + String(n).padStart(3, "0"); allocated.add(code); node.querySelector("[data-field=materialCode]").value = code; }
+    if (!code) { const known = savedMaterials().find((item) => normalizeMaterial(item.materialName) === normalizeMaterial(read("materialName"))); code = known?.materialCode || nextMaterialCode(group); while (allocated.has(code) && !known) code = nextMaterialCode(group); allocated.add(code); node.querySelector("[data-field=materialCode]").value = code; }
     return { ...existing, materialName: read("materialName"), materialCode: code, expenseGroup: group, qty: Number(read("qty")), unit: read("unit"), unitPrice: Number(read("unitPrice")) };
   });
 }
@@ -359,7 +358,7 @@ async function saveExpenseReceipt(event) {
   event.preventDefault(); applyExpenseInputs(); const error = $("#expense-error"); error.textContent = "";
   const check = validateReceipt(expenseDraft); if (!check.ok) { error.textContent = check.error; return; }
   const now = Date.now(); const payload = { ...expenseDraft, total: check.total, status: "ACTIVE", updatedAt: now, updatedByUid: state.user.uid, source: "WEB_MANAGER", items: expenseDraft.items.map((item) => ({ ...item, amount: Math.round(item.qty * item.unitPrice) })) };
-  try { await setDoc(doc(db, ...root, "expenseReceipts", expenseDraft.id), payload); localStorage.removeItem(`pos0210.expense-draft.${state.user.uid}`); expenseDraft = null; $("#expense-dialog").close(); }
+  try { await setDoc(doc(db, ...root, "expenseReceipts", expenseDraft.id), payload); rememberMaterials(expenseDraft.items); localStorage.removeItem(`pos0210.expense-draft.${state.user.uid}`); expenseDraft = null; $("#expense-dialog").close(); }
   catch (e) { error.textContent = `Chưa đồng bộ được; bản nháp đã giữ lại: ${e.message || e}`; }
 }
 
@@ -518,7 +517,7 @@ $("#close-expense").addEventListener("click", () => { applyExpenseInputs(); rend
 $("#add-expense-line").addEventListener("click", () => { applyExpenseInputs(); expenseDraft.items.push({ id: uuid(), materialName: "", materialCode: "", expenseGroup: "Thịt, gia cầm", qty: 1, unit: "kg", unitPrice: 0 }); renderExpenseDraft(); });
 $("#expense-lines").addEventListener("click", (event) => { const id = event.target.dataset.removeLine; if (!id || expenseDraft.items.length < 2) return; applyExpenseInputs(); expenseDraft.items = expenseDraft.items.filter((item) => item.id !== id); renderExpenseDraft(); });
 $("#expense-lines").addEventListener("input", (event) => { applyExpenseInputs(); if (event.target.matches("input[list]")) updateMaterialSuggestions(event.target); $("#expense-total").textContent = money(calculateReceiptTotal(expenseDraft.items)); });
-$("#expense-lines").addEventListener("change", (event) => { const input = event.target; if (!input.matches("[data-field=expenseGroup]")) return; const line = input.closest(".expense-line"); if (!MATERIAL_GROUPS.some(([, name]) => name === input.value)) { input.setCustomValidity("Chọn nhóm vật tư trong danh sách"); return; } input.setCustomValidity(""); const code = line.querySelector("[data-field=materialCode]"); if (!code.value || /^([A-Z_]+)-\d+$/.test(code.value)) code.value = nextMaterialCode(input.value); applyExpenseInputs(); });
+$("#expense-lines").addEventListener("change", (event) => { const input = event.target; if (input.matches("[data-field=materialName]")) { const found = savedMaterials().find((item) => normalizeMaterial(item.materialName) === normalizeMaterial(input.value)); if (found) { const line = input.closest(".expense-line"); for (const [field, value] of [["materialCode", found.materialCode], ["expenseGroup", found.expenseGroup], ["unit", found.unit]]) line.querySelector(`[data-field="${field}"]`).value = value; applyExpenseInputs(); } return; } if (!input.matches("[data-field=expenseGroup]")) return; const line = input.closest(".expense-line"); if (!MATERIAL_GROUPS.some(([, name]) => name === input.value)) { input.setCustomValidity("Chọn nhóm vật tư trong danh sách"); return; } input.setCustomValidity(""); const code = line.querySelector("[data-field=materialCode]"); if (!code.value) code.value = nextMaterialCode(input.value); applyExpenseInputs(); });
 $("#expense-form").addEventListener("submit", saveExpenseReceipt);
 $("#entry-type").addEventListener("change", renderEntryType);
 $("#entry-category").addEventListener("change", renderEntryType);

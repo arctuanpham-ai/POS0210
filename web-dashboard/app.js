@@ -338,7 +338,14 @@ function applyExpenseInputs() {
     const read = (field) => node.querySelector(`[data-field="${field}"]`).value;
     const group = read("expenseGroup");
     let code = read("materialCode");
-    if (!code) { const known = savedMaterials().find((item) => normalizeMaterial(item.materialName) === normalizeMaterial(read("materialName"))); code = known?.materialCode || nextMaterialCode(group); while (allocated.has(code) && !known) code = nextMaterialCode(group); allocated.add(code); node.querySelector("[data-field=materialCode]").value = code; }
+    if (!read("materialName").trim()) code = "";
+    else if (!code) {
+      const known = savedMaterials().find((item) => normalizeMaterial(item.materialName) === normalizeMaterial(read("materialName")));
+      code = known?.materialCode || nextMaterialCode(group);
+      while (allocated.has(code) && !known) code = nextMaterialCode(group);
+      allocated.add(code);
+    }
+    node.querySelector("[data-field=materialCode]").value = code;
     return { ...existing, materialName: read("materialName"), materialCode: code, expenseGroup: group, qty: Number(read("qty")), unit: read("unit"), unitPrice: Number(read("unitPrice")) };
   });
 }
@@ -505,7 +512,7 @@ $("#close-expense").addEventListener("click", () => { applyExpenseInputs(); rend
 $("#add-expense-line").addEventListener("click", () => { applyExpenseInputs(); expenseDraft.items.push({ id: uuid(), materialName: "", materialCode: "", expenseGroup: "Thịt, gia cầm", qty: 1, unit: "kg", unitPrice: 0 }); renderExpenseDraft(); });
 $("#expense-lines").addEventListener("click", (event) => { const id = event.target.dataset.removeLine; if (!id || expenseDraft.items.length < 2) return; applyExpenseInputs(); expenseDraft.items = expenseDraft.items.filter((item) => item.id !== id); renderExpenseDraft(); });
 $("#expense-lines").addEventListener("input", (event) => { applyExpenseInputs(); if (event.target.matches("input[list]")) updateMaterialSuggestions(event.target); $("#expense-total").textContent = money(calculateReceiptTotal(expenseDraft.items)); });
-$("#expense-lines").addEventListener("change", (event) => { const input = event.target; if (input.matches("[data-field=materialName]")) { const found = savedMaterials().find((item) => normalizeMaterial(item.materialName) === normalizeMaterial(input.value)); if (found) { const line = input.closest(".expense-line"); for (const [field, value] of [["materialCode", found.materialCode], ["expenseGroup", found.expenseGroup], ["unit", found.unit]]) line.querySelector(`[data-field="${field}"]`).value = value; applyExpenseInputs(); } return; } if (!input.matches("[data-field=expenseGroup]")) return; const line = input.closest(".expense-line"); if (!MATERIAL_GROUPS.some(([, name]) => name === input.value)) { input.setCustomValidity("Chọn nhóm vật tư trong danh sách"); return; } input.setCustomValidity(""); const code = line.querySelector("[data-field=materialCode]"); if (!code.value) code.value = nextMaterialCode(input.value); applyExpenseInputs(); });
+$("#expense-lines").addEventListener("change", (event) => { const input = event.target; if (input.matches("[data-field=materialName]")) { const found = savedMaterials().find((item) => normalizeMaterial(item.materialName) === normalizeMaterial(input.value)); if (found) { const line = input.closest(".expense-line"); for (const [field, value] of [["materialCode", found.materialCode], ["expenseGroup", found.expenseGroup], ["unit", found.unit]]) line.querySelector(`[data-field="${field}"]`).value = value; applyExpenseInputs(); } return; } if (!input.matches("[data-field=expenseGroup]")) return; const line = input.closest(".expense-line"); if (!MATERIAL_GROUPS.some(([, name]) => name === input.value)) { input.setCustomValidity("Chọn nhóm vật tư trong danh sách"); return; } input.setCustomValidity(""); const code = line.querySelector("[data-field=materialCode]"); if (line.querySelector("[data-field=materialName]").value.trim()) { const known = savedMaterials().find((item) => normalizeMaterial(item.materialName) === normalizeMaterial(line.querySelector("[data-field=materialName]").value)); if (!known) code.value = nextMaterialCode(input.value); } applyExpenseInputs(); });
 $("#expense-form").addEventListener("submit", saveExpenseReceipt);
 $("#entry-type").addEventListener("change", renderEntryType);
 $("#entry-category").addEventListener("change", renderEntryType);

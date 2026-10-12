@@ -137,8 +137,11 @@ WHERE s.status='OPEN' GROUP BY s.id""") fun tableServiceTimings():Flow<List<Tabl
 @Insert(onConflict=OnConflictStrategy.ABORT) suspend fun insertBillAdjustments(v:List<BillAdjustmentEntity>)
 @Insert(onConflict=OnConflictStrategy.ABORT) suspend fun insertPurchase(v:PurchaseEntity)
 @Insert(onConflict=OnConflictStrategy.IGNORE) suspend fun insertCloudPurchase(v:PurchaseEntity):Long
+@Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun saveWebExpensePurchase(v:PurchaseEntity)
 @Insert(onConflict=OnConflictStrategy.ABORT) suspend fun insertPurchaseItems(v:List<PurchaseItemEntity>)
 @Insert(onConflict=OnConflictStrategy.IGNORE) suspend fun insertCloudPurchaseItems(v:List<PurchaseItemEntity>):List<Long>
+@Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun saveWebExpenseItems(v:List<PurchaseItemEntity>)
+@Query("DELETE FROM PurchaseItemEntity WHERE purchaseId=:purchaseId") suspend fun deletePurchaseItemsForWebExpense(purchaseId:String):Int
 @Update suspend fun updatePurchase(v:PurchaseEntity):Int
 @Update suspend fun updatePurchaseItem(v:PurchaseItemEntity):Int
 @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun saveMonthlyAccounting(v:MonthlyAccountingEntity)

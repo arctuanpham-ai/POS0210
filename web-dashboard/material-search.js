@@ -20,3 +20,14 @@ export function materialRank(value, search) {
 export function filterMaterialOptions(values, search, max = 30) {
   return values.filter((value) => materialMatches(value, search)).sort((a,b) => materialRank(a,search) - materialRank(b,search) || a.localeCompare(b,"vi")).slice(0,max);
 }
+// Trả về bản ghi vật tư thay vì chuỗi đơn lẻ để giao diện có thể giữ đúng mã đã cấp.
+export function filterMaterialRecords(records, search, max = 30) {
+  return records
+    .filter((record) => materialMatches(record.materialName, search) || materialMatches(record.materialCode, search))
+    .sort((a, b) => {
+      const rankA = Math.min(materialRank(a.materialName, search), materialRank(a.materialCode, search));
+      const rankB = Math.min(materialRank(b.materialName, search), materialRank(b.materialCode, search));
+      return rankA - rankB || a.materialName.localeCompare(b.materialName, "vi") || a.materialCode.localeCompare(b.materialCode, "vi");
+    })
+    .slice(0, max);
+}

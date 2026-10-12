@@ -273,4 +273,15 @@ class PosRepository(private val db:PosDatabase){
     suspend fun savePurchase(p:PurchaseEntity,items:List<PurchaseItemEntity>,asset:AssetEntity?=null){
         db.withTransaction{dao.insertPurchase(p);dao.insertPurchaseItems(items);asset?.let{dao.saveAsset(it)}}
     }
+
+    /** Only web-namespaced purchases may be replaced by the independent expense sync. */
+    suspend fun replaceWebExpenseReceipt(p:PurchaseEntity,items:List<PurchaseItemEntity>){
+        require(p.id.startsWith("web:")) { "WEB_EXPENSE_NAMESPACE_REQUIRED" }
+        require(items.all { it.purchaseId==p.id && it.id.startsWith("${p.id}:") }) { "WEB_EXPENSE_ITEM_SCOPE_REQUIRED" }
+        db.withTransaction {
+            dao.saveWebExpensePurchase(p)
+            dao.deletePurchaseItemsForWebExpense(p.id)
+            if(items.isNotEmpty()) dao.saveWebExpenseItems(items)
+        }
+    }
 }

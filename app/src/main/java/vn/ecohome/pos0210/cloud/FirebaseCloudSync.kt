@@ -13,6 +13,7 @@ import androidx.work.WorkerParameters
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -23,6 +24,7 @@ import kotlinx.coroutines.sync.withLock
 import vn.ecohome.pos0210.data.CloudSyncStateEntity
 import vn.ecohome.pos0210.data.PosDao
 import vn.ecohome.pos0210.data.PosDatabase
+import vn.ecohome.pos0210.data.PosRepository
 import vn.ecohome.pos0210.ExpenseCategories
 import vn.ecohome.pos0210.calculateAssetValue
 import java.util.Calendar
@@ -43,6 +45,7 @@ object FirebaseCloudSync {
     private const val APP_NAME="pos0210-cloud"
     private const val WORK_NAME="pos0210-firebase-periodic"
     private const val BACKUP_WORK_NAME="pos0210-firebase-hourly-backup"
+    private const val EXPENSE_CURSOR_SETTING="expense_receipts_cursor_v1"
 
     suspend fun config(context:Context):FirebaseConfig{
         val settings=PosDatabase.get(context).dao().allSettingsSnapshot().associate{it.key to it.value}
@@ -76,6 +79,7 @@ object FirebaseCloudSync {
         dao.saveCloudSyncState(old.copy(lastAttemptAt=System.currentTimeMillis(),lastError=null))
         val c=config(context);require(c.valid){"Chưa cấu hình Firebase"};val firebaseApp=firebaseApp(context,c);val uid=FirebaseAuth.getInstance(firebaseApp).currentUser?.uid?:error("Chưa đăng nhập Firebase")
         val fs=FirebaseFirestore.getInstance(firebaseApp);val root=fs.collection("users").document(uid).collection("stores").document("0210")
+        stage("PULL_WEB_EXPENSES"){pullWebExpenseReceipts(root,db,dao)}
         stage("PULL_FINANCE"){pullCloudFinance(root,dao)}
         stage("WRITE_FINANCE"){writeFinanceMirror(fs,root,dao)}
         val tables=dao.cloudTablesSnapshot();val sessions=dao.cloudSessionsSnapshot();val bills=dao.cloudBillsSnapshot();val payments=dao.cloudPaymentsSnapshot()
@@ -205,6 +209,37 @@ object FirebaseCloudSync {
                 )
             )
         }
+    }
+
+    /** Pulls only the dedicated web receipt collection; it never reads or writes order/bill/payment records. */
+    private suspend fun pullWebExpenseReceipts(root:com.google.firebase.firestore.DocumentReference,db:PosDatabase,dao:PosDao){
+        var cursor=expenseCursor(dao)
+        val repository=PosRepository(db)
+        while(true){
+            var query=root.collection("expenseReceipts")
+                .orderBy("updatedAt")
+                .orderBy(FieldPath.documentId())
+                .limit(200)
+            if(cursor.updatedAt>0L || cursor.receiptId.isNotEmpty()) query=query.startAfter(cursor.updatedAt,cursor.receiptId)
+            val page=query.get().await().documents
+            if(page.isEmpty()) return
+            page.forEach { doc ->
+                val updatedAt=doc.getLong("updatedAt") ?: cursor.updatedAt
+                ExpenseReceiptParser.parse(doc.id,doc.data.orEmpty())?.let { receipt ->
+                    val translated=ExpenseReceiptTranslator.translate(receipt)
+                    repository.replaceWebExpenseReceipt(translated.purchase,translated.items)
+                }
+                cursor=cursor.advance(doc.id,updatedAt)
+                dao.saveSetting(vn.ecohome.pos0210.data.AppSettingEntity(EXPENSE_CURSOR_SETTING,"${cursor.updatedAt}|${cursor.receiptId}"))
+            }
+            if(page.size<200) return
+        }
+    }
+
+    private suspend fun expenseCursor(dao:PosDao):ExpenseReceiptCursor{
+        val raw=dao.allSettingsSnapshot().firstOrNull { it.key==EXPENSE_CURSOR_SETTING }?.value ?: return ExpenseReceiptCursor()
+        val parts=raw.split("|",limit=2)
+        return ExpenseReceiptCursor(parts.firstOrNull()?.toLongOrNull() ?: 0L,parts.getOrElse(1){""})
     }
 
     private suspend fun writeFinanceMirror(fs:FirebaseFirestore,root:com.google.firebase.firestore.DocumentReference,dao:PosDao){

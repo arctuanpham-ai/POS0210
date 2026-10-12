@@ -18,10 +18,11 @@ import {
   setDoc,
   writeBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261012-3";
-import { calculateReceiptTotal, createStableDraft, validateReceipt } from "./expense-domain.js?v=20261012-3";
-import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261012-3";
-import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261012-3";
+import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261012-5";
+import { calculateReceiptTotal, createStableDraft, validateReceipt } from "./expense-domain.js?v=20261012-5";
+import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261012-5";
+import { normalizeMaterial, filterMaterialRecords } from "./material-search.js?v=20261012-5";
+import { filterExpenseReceipts, summarizeExpenseReceipts, vietnamDateRange } from "./expense-report.js?v=20261012-5";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",
@@ -43,7 +44,7 @@ const state = {
   bills: [], purchases: [], purchaseItems: [], movements: [], costCodes: [],
   purchaseCategories: [], profitPartners: [], assetCategories: [], suppliers: [],
   unsubs: [], period: "today", customFrom: null, customTo: null,
-  transactionKind: "ALL", payerFilter: "ALL", user: null,
+  transactionKind: "ALL", payerFilter: "ALL", expensePeriod: "3d", expenseReceipts: [], user: null,
 };
 let expenseDraft = null;
 
@@ -253,6 +254,34 @@ function renderTransactions() {
   }));
 }
 
+function expenseRange() {
+  const days = state.expensePeriod === "7d" ? 7 : 3;
+  return { ...vietnamDateRange(days), label: `${days} ngày` };
+}
+
+function renderExpenseReport() {
+  const range = expenseRange();
+  const employee = $("#expense-employee-filter").value;
+  const group = $("#expense-group-filter").value;
+  const material = $("#expense-material-filter").value;
+  const receiptId = $("#expense-id-filter").value;
+  const employees = [...new Set(state.expenseReceipts.map((receipt) => receipt.enteredByName).filter(Boolean))].sort((a, b) => a.localeCompare(b, "vi"));
+  const groups = [...new Set(state.expenseReceipts.flatMap((receipt) => receipt.items || []).map((line) => line.expenseGroup).filter(Boolean))].sort((a, b) => a.localeCompare(b, "vi"));
+  const keep = (select, values, selected, empty) => { select.replaceChildren(new Option(empty, ""), ...values.map((value) => new Option(value, value))); select.value = values.includes(selected) ? selected : ""; };
+  keep($("#expense-employee-filter"), employees, employee, "Tất cả nhân viên");
+  keep($("#expense-group-filter"), groups, group, "Tất cả nhóm chi phí");
+  const receipts = filterExpenseReceipts(state.expenseReceipts, { from: range.from, to: range.to, employee: $("#expense-employee-filter").value, group: $("#expense-group-filter").value, material, receiptId });
+  const report = summarizeExpenseReceipts(receipts);
+  const cards = [["Tổng chi phí", money(report.total)], ["Số phiếu", report.receiptCount], ["Dòng vật tư", report.lineCount]];
+  $("#expense-summary").replaceChildren(...cards.map(([label, value]) => { const node = $("#metric-template").content.firstElementChild.cloneNode(true); node.querySelector("p").textContent = `${label} · ${range.label}`; node.querySelector("strong").textContent = value; return node; }));
+  const bars = (rows, format = (row) => money(row.total)) => rows.slice(0, 8).map((row) => `<article class="expense-breakdown-row"><span>${escapeHtml(row.key)}</span><b>${format(row)}</b><i style="width:${report.total ? Math.max(3, Math.round(row.total / report.total * 100)) : 0}%"></i></article>`).join("") || '<p class="muted empty-state">Chưa có dữ liệu trong bộ lọc này.</p>';
+  $("#expense-by-group").innerHTML = bars(report.byGroup);
+  $("#expense-by-material").innerHTML = bars(report.byMaterial, (row) => `${money(row.total)} · TB ${money(row.averageUnitPrice)}/${escapeHtml(row.unit)}`);
+  const host = $("#expense-receipts");
+  if (!receipts.length) { host.innerHTML = '<p class="muted empty-state">Chưa có phiếu chi trong phạm vi đã chọn.</p>'; return; }
+  host.innerHTML = receipts.sort((a, b) => Number(b.purchaseDate) - Number(a.purchaseDate)).map((receipt) => `<article class="transaction-card"><div><strong>${escapeHtml(receipt.id)} · ${escapeHtml(receipt.enteredByName || "Chưa xác định")}</strong><small>${dateTime(receipt.purchaseDate)} · ${(receipt.items || []).length} vật tư</small><p>${escapeHtml(receipt.note || "")}</p></div><b>${money(receipt.total)}</b></article>`).join("");
+}
+
 function showDetail(record) {
   $("#detail-title").textContent = record.table.name || "Bàn";
   $("#detail-meta").textContent = `Mở bàn: ${dateTime(record.session?.openedAt || record.table.openedAt)} · ${statusText(record.batches.map((batch) => batch.status))}`;
@@ -296,17 +325,25 @@ const MATERIAL_GROUPS = [["THIT","Thịt, gia cầm"],["RAU","Rau, củ, quả"]
 const MATERIAL_UNITS = ["kg","gam","lít","ml","con","quả","bó","túi","hộp","chai","lon","gói","cái","thùng","bình","ổ","suất"];
 function savedMaterials() { try { return JSON.parse(localStorage.getItem(`pos0210.materials.${state.user?.uid}`) || "[]"); } catch { return []; } }
 function rememberMaterials(items) { const records = savedMaterials(); for (const item of items) { const name = String(item.materialName || "").trim(); if (!name) continue; const index = records.findIndex((r) => normalizeMaterial(r.materialName) === normalizeMaterial(name)); const record = { materialName: name, materialCode: item.materialCode, expenseGroup: item.expenseGroup, unit: item.unit }; if (index >= 0) records[index] = record; else records.push(record); } localStorage.setItem(`pos0210.materials.${state.user?.uid}`, JSON.stringify(records.slice(-500))); }
-function materialOptions(field, search) {
-  const values = field === "expenseGroup" ? MATERIAL_GROUPS.map(([, name]) => name) : field === "unit" ? MATERIAL_UNITS : [...new Set([...savedMaterials().map((x) => x.materialName), ...(expenseDraft?.items || []).map((x) => x.materialName)].filter(Boolean))];
-  return filterMaterialOptions(values, search);
+function materialRecords() {
+  const records = [...savedMaterials(), ...(expenseDraft?.items || [])]
+    .filter((item) => item.materialName && item.materialCode)
+    .map((item) => ({ materialName: item.materialName.trim(), materialCode: item.materialCode, expenseGroup: groupLabel(item.expenseGroup), unit: item.unit || "kg" }));
+  return [...new Map(records.map((item) => [item.materialCode, item])).values()];
 }
-function updateMaterialSuggestions(input) {
-  const list = document.getElementById(input.getAttribute("list"));
+function renderMaterialSuggestions(input) {
+  const box = input.closest(".material-combobox");
+  const list = box?.querySelector(".material-suggestions");
   if (!list) return;
-  list.replaceChildren(...materialOptions(input.dataset.field, input.value).map((value) => new Option(value, value)));
+  const records = filterMaterialRecords(materialRecords(), input.value);
+  list.innerHTML = records.map((item) => `<button type="button" class="material-suggestion" data-material-code="${escapeHtml(item.materialCode)}"><strong>${escapeHtml(item.materialName)}</strong><small>${escapeHtml(item.materialCode)} · ${escapeHtml(item.expenseGroup)} · ${escapeHtml(item.unit)}</small></button>`).join("");
+  list.hidden = records.length === 0;
 }
-function setupMaterialSuggestions() {
-  document.querySelectorAll("#expense-lines input[list]").forEach(updateMaterialSuggestions);
+function selectKnownMaterial(line, record) {
+  line.querySelector("[data-field=materialName]").value = record.materialName;
+  line.querySelector("[data-field=materialCode]").value = record.materialCode;
+  line.querySelector("[data-field=expenseGroup]").value = groupLabel(record.expenseGroup);
+  line.querySelector("[data-field=unit]").value = record.unit || "kg";
 }
 function groupLabel(value) { return MATERIAL_GROUPS.find(([code, label]) => code === value || label === value)?.[1] || ({ FOOD: "Thịt, gia cầm", DRINK: "Đồ uống đóng chai", SUPPLIES: "Bao bì, vật tư phục vụ", OTHER: "Vật tư khác" })[value] || value || "Vật tư khác"; }
 function groupCode(value) { return MATERIAL_GROUPS.find(([code, label]) => code === value || label === value)?.[0] || "KHAC"; }
@@ -318,14 +355,13 @@ function expenseLineMarkup(item) {
   const safe = (value) => escapeHtml(String(value ?? "")).replace(/"/g, "&quot;");
   const id = safe(item.id);
   const group = groupLabel(item.expenseGroup);
-  return `<article class="expense-line" data-line-id="${id}"><label>Tên vật tư<input data-field="materialName" list="materials-${id}" maxlength="120" value="${safe(item.materialName)}" required autocomplete="off" /><datalist id="materials-${id}"></datalist></label><div class="two-col"><label>Mã vật tư<input data-field="materialCode" maxlength="40" value="${safe(item.materialCode)}" readonly /></label><label>Nhóm vật tư<input data-field="expenseGroup" list="groups-${id}" value="${safe(group)}" required autocomplete="off" /><datalist id="groups-${id}"></datalist></label></div><div class="two-col"><label>Số lượng<input data-field="qty" type="number" min="0.001" step="0.001" value="${Number(item.qty || 0)}" /></label><label>Đơn vị tính<input data-field="unit" list="units-${id}" maxlength="20" value="${safe(item.unit || "kg")}" required autocomplete="off" /><datalist id="units-${id}"></datalist></label></div><label>Đơn giá<input data-field="unitPrice" type="number" min="0" step="1" value="${Number(item.unitPrice || 0)}" /></label><button type="button" class="text-button" data-remove-line="${id}">Bỏ dòng</button></article>`;
+  return `<article class="expense-line" data-line-id="${id}"><label>Tên vật tư<div class="material-combobox"><input data-field="materialName" maxlength="120" value="${safe(item.materialName)}" required autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" /><div class="material-suggestions" role="listbox" hidden></div></div></label><div class="two-col"><label>Mã vật tư<input data-field="materialCode" maxlength="40" value="${safe(item.materialCode)}" readonly /></label><label>Nhóm vật tư<select data-field="expenseGroup" required>${MATERIAL_GROUPS.map(([, name]) => `<option value="${safe(name)}"${name === group ? " selected" : ""}>${safe(name)}</option>`).join("")}</select></label></div><div class="two-col"><label>Số lượng<input data-field="qty" type="number" min="0.001" step="0.001" value="${Number(item.qty || 0)}" /></label><label>Đơn vị tính<select data-field="unit" required>${MATERIAL_UNITS.map((unit) => `<option value="${safe(unit)}"${unit === (item.unit || "kg") ? " selected" : ""}>${safe(unit)}</option>`).join("")}</select></label></div><label>Đơn giá<input data-field="unitPrice" type="number" min="0" step="1" value="${Number(item.unitPrice || 0)}" /></label><button type="button" class="text-button" data-remove-line="${id}">Bỏ dòng</button></article>`;
 }
 function renderExpenseDraft() {
   if (!expenseDraft) return;
   $("#expense-date").value = localDateTimeInput(new Date(expenseDraft.purchaseDate));
   $("#expense-note").value = expenseDraft.note || "";
   $("#expense-lines").innerHTML = expenseDraft.items.map(expenseLineMarkup).join("");
-  setupMaterialSuggestions();
   $("#expense-total").textContent = money(calculateReceiptTotal(expenseDraft.items));
   localStorage.setItem(`pos0210.expense-draft.${state.user.uid}`, JSON.stringify(expenseDraft));
 }
@@ -368,6 +404,7 @@ function render() {
   renderTables();
   renderFinanceMetadata();
   renderTransactions();
+  renderExpenseReport();
 }
 async function refreshDashboard() {
   if (!state.user) return;
@@ -375,11 +412,12 @@ async function refreshDashboard() {
   try {
     const dashboardDoc = await getDoc(doc(db, ...root, "dashboard", "current"));
     state.dashboard = dashboardDoc.exists() ? dashboardDoc.data() : {};
-    const sevenDays = startOfDay(new Date(Date.now() - 6 * 86400000));
+    const sevenDays = vietnamDateRange(7).from;
     const read = async (name, key, q = null) => { const snapshot = await getDocs(q || collection(db, ...root, name)); state[key] = rows(snapshot); };
     await Promise.all([
       read("tableStatus", "tables"),
       read("purchases", "purchases", query(collection(db, ...root, "purchases"), where("purchasedAt", ">=", sevenDays), orderBy("purchasedAt", "desc"), limit(300))),
+      read("expenseReceipts", "expenseReceipts", query(collection(db, ...root, "expenseReceipts"), where("purchaseDate", ">=", sevenDays), orderBy("purchaseDate", "desc"), limit(300))),
       read("financialMovements", "movements", query(collection(db, ...root, "financialMovements"), where("occurredAt", ">=", sevenDays), orderBy("occurredAt", "desc"), limit(300))),
       read("costCodes", "costCodes"), read("purchaseCategories", "purchaseCategories"), read("profitPartners", "profitPartners"), read("assetCategories", "assetCategories"), read("suppliers", "suppliers"),
     ]);
@@ -516,9 +554,11 @@ $("#open-expense").addEventListener("click", () => {
 });
 $("#close-expense").addEventListener("click", () => { applyExpenseInputs(); renderExpenseDraft(); $("#expense-dialog").close(); });
 $("#add-expense-line").addEventListener("click", () => { applyExpenseInputs(); expenseDraft.items.push({ id: uuid(), materialName: "", materialCode: "", expenseGroup: "Thịt, gia cầm", qty: 1, unit: "kg", unitPrice: 0 }); renderExpenseDraft(); });
-$("#expense-lines").addEventListener("click", (event) => { const id = event.target.dataset.removeLine; if (!id || expenseDraft.items.length < 2) return; applyExpenseInputs(); expenseDraft.items = expenseDraft.items.filter((item) => item.id !== id); renderExpenseDraft(); });
-$("#expense-lines").addEventListener("input", (event) => { applyExpenseInputs(); if (event.target.matches("input[list]")) updateMaterialSuggestions(event.target); $("#expense-total").textContent = money(calculateReceiptTotal(expenseDraft.items)); });
-$("#expense-lines").addEventListener("change", (event) => { const input = event.target; if (input.matches("[data-field=materialName]")) { const found = savedMaterials().find((item) => normalizeMaterial(item.materialName) === normalizeMaterial(input.value)); if (found) { const line = input.closest(".expense-line"); for (const [field, value] of [["materialCode", found.materialCode], ["expenseGroup", found.expenseGroup], ["unit", found.unit]]) line.querySelector(`[data-field="${field}"]`).value = value; applyExpenseInputs(); } return; } if (!input.matches("[data-field=expenseGroup]")) return; const line = input.closest(".expense-line"); if (!MATERIAL_GROUPS.some(([, name]) => name === input.value)) { input.setCustomValidity("Chọn nhóm vật tư trong danh sách"); return; } input.setCustomValidity(""); const code = line.querySelector("[data-field=materialCode]"); if (line.querySelector("[data-field=materialName]").value.trim()) { const known = savedMaterials().find((item) => normalizeMaterial(item.materialName) === normalizeMaterial(line.querySelector("[data-field=materialName]").value)); if (!known) code.value = nextMaterialCode(input.value); } applyExpenseInputs(); });
+$("#expense-lines").addEventListener("click", (event) => { const suggestion = event.target.closest(".material-suggestion"); if (suggestion) { const line = suggestion.closest(".expense-line"); const record = materialRecords().find((item) => item.materialCode === suggestion.dataset.materialCode); if (record) { selectKnownMaterial(line, record); applyExpenseInputs(); $("#expense-total").textContent = money(calculateReceiptTotal(expenseDraft.items)); } suggestion.closest(".material-suggestions").hidden = true; return; } const id = event.target.dataset.removeLine; if (!id || expenseDraft.items.length < 2) return; applyExpenseInputs(); expenseDraft.items = expenseDraft.items.filter((item) => item.id !== id); renderExpenseDraft(); });
+$("#expense-lines").addEventListener("input", (event) => { applyExpenseInputs(); if (event.target.matches("[data-field=materialName]")) renderMaterialSuggestions(event.target); $("#expense-total").textContent = money(calculateReceiptTotal(expenseDraft.items)); });
+$("#expense-lines").addEventListener("focusin", (event) => { if (event.target.matches("[data-field=materialName]")) renderMaterialSuggestions(event.target); });
+$("#expense-lines").addEventListener("focusout", (event) => { if (event.target.matches("[data-field=materialName]")) setTimeout(() => { const list = event.target.closest(".material-combobox")?.querySelector(".material-suggestions"); if (list) list.hidden = true; }, 150); });
+$("#expense-lines").addEventListener("change", (event) => { const input = event.target; const line = input.closest(".expense-line"); if (input.matches("[data-field=materialName]")) { const found = materialRecords().find((item) => normalizeMaterial(item.materialName) === normalizeMaterial(input.value)); if (found) selectKnownMaterial(line, found); applyExpenseInputs(); return; } if (input.matches("[data-field=expenseGroup]")) { const name = line.querySelector("[data-field=materialName]").value.trim(); const known = materialRecords().find((item) => normalizeMaterial(item.materialName) === normalizeMaterial(name)); const code = line.querySelector("[data-field=materialCode]"); if (name && (!known || groupLabel(known.expenseGroup) !== input.value)) code.value = nextMaterialCode(input.value); } applyExpenseInputs(); });
 $("#expense-date").addEventListener("change", applyExpenseInputs);
 $("#expense-note").addEventListener("input", applyExpenseInputs);
 $("#expense-form").addEventListener("submit", saveExpenseReceipt);
@@ -573,6 +613,11 @@ $("#transaction-filters").addEventListener("click", (event) => {
   $("#transaction-filters").querySelectorAll(".filter").forEach((b) => b.classList.toggle("active", b === button));
   renderTransactions();
 });
+$("#expense-period-filters").addEventListener("click", (event) => { const button = event.target.closest("[data-expense-period]"); if (!button) return; state.expensePeriod = button.dataset.expensePeriod; $("#expense-period-filters").querySelectorAll(".filter").forEach((item) => item.classList.toggle("active", item === button)); renderExpenseReport(); });
+$("#expense-employee-filter").addEventListener("change", renderExpenseReport);
+$("#expense-group-filter").addEventListener("change", renderExpenseReport);
+$("#expense-material-filter").addEventListener("input", renderExpenseReport);
+$("#expense-id-filter").addEventListener("input", renderExpenseReport);
 
 const todayInput = localDateInput(new Date());
 $("#from-date").value = todayInput;

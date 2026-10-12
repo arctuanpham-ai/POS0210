@@ -13,6 +13,7 @@ import androidx.work.WorkerParameters
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Source
 import kotlinx.coroutines.CancellationException
@@ -26,6 +27,7 @@ import kotlinx.coroutines.withTimeout
 import vn.ecohome.pos0210.data.CloudSyncStateEntity
 import vn.ecohome.pos0210.data.PosDao
 import vn.ecohome.pos0210.data.PosDatabase
+import vn.ecohome.pos0210.data.PosRepository
 import vn.ecohome.pos0210.ExpenseCategories
 import vn.ecohome.pos0210.calculateAssetValue
 import java.util.Calendar
@@ -46,6 +48,7 @@ object FirebaseCloudSync {
     private const val APP_NAME="pos0210-cloud"
     private const val WORK_NAME="pos0210-firebase-periodic"
     private const val BACKUP_WORK_NAME="pos0210-firebase-hourly-backup"
+    private const val EXPENSE_CURSOR_SETTING="expense_receipts_cursor_v1"
     // Public Firebase client identifiers bundled so a fresh install can reach the production cloud.
     // Local settings remain an explicit override for recovery/migration.
     private const val DEFAULT_PROJECT_ID="pos0210-17ce4"
@@ -151,6 +154,7 @@ object FirebaseCloudSync {
         // Otherwise a remote snapshot can overwrite an offline edit before upload.
         pushPendingCatalog(root,dao)
         pullCloudMenu(root,dao)
+        stage("PULL_WEB_EXPENSES"){pullWebExpenseReceipts(root,db,dao)}
         pullCloudFinance(root,dao)
         writeFinanceMirror(fs,root,dao)
         val tables=dao.cloudTablesSnapshot();val sessions=dao.cloudSessionsSnapshot();val bills=dao.cloudBillsSnapshot();val payments=dao.cloudPaymentsSnapshot();val paymentMirror=dao.cloudPaymentMirrorSnapshot()
@@ -286,6 +290,41 @@ object FirebaseCloudSync {
                 productCode=doc.getString("productCode")?:old?.productCode.orEmpty(),
                 description=doc.getString("description")?:""))
         }
+    }
+
+    /** Pulls only browser-entered expense receipts. It never touches sales collections. */
+    private suspend fun pullWebExpenseReceipts(root:com.google.firebase.firestore.DocumentReference,db:PosDatabase,dao:PosDao){
+        var cursor=expenseCursor(dao)
+        val repository=PosRepository(db)
+        while(true){
+            val page=stage("PULL_WEB_EXPENSE_PAGE"){root.collection("expenseReceipts")
+                .whereGreaterThanOrEqualTo("updatedAt",cursor.updatedAt)
+                .orderBy("updatedAt")
+                .orderBy(FieldPath.documentId())
+                .limit(200)
+                .get(Source.SERVER).await().documents
+            }.filter { doc ->
+                val updatedAt=doc.getLong("updatedAt")?:Long.MIN_VALUE
+                updatedAt>cursor.updatedAt||(updatedAt==cursor.updatedAt&&doc.id>cursor.receiptId)
+            }
+            if(page.isEmpty()) return
+            page.forEach { doc ->
+                val updatedAt=doc.getLong("updatedAt")?:cursor.updatedAt
+                ExpenseReceiptParser.parse(doc.id,doc.data.orEmpty())?.let { receipt ->
+                    val translated=ExpenseReceiptTranslator.translate(receipt)
+                    repository.replaceWebExpenseReceipt(translated.purchase,translated.items)
+                }
+                cursor=cursor.advance(doc.id,updatedAt)
+                dao.saveSetting(vn.ecohome.pos0210.data.AppSettingEntity(EXPENSE_CURSOR_SETTING,"${cursor.updatedAt}|${cursor.receiptId}"))
+            }
+            if(page.size<200) return
+        }
+    }
+
+    private suspend fun expenseCursor(dao:PosDao):ExpenseReceiptCursor{
+        val raw=dao.settingValue(EXPENSE_CURSOR_SETTING)?:return ExpenseReceiptCursor()
+        val parts=raw.split("|",limit=2)
+        return ExpenseReceiptCursor(parts.firstOrNull()?.toLongOrNull()?:0L,parts.getOrElse(1){""})
     }
 
     private suspend fun pullCloudFinance(root:com.google.firebase.firestore.DocumentReference,dao:PosDao){

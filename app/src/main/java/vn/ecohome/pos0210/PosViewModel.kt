@@ -27,7 +27,6 @@ import java.security.SecureRandom
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-
 data class PurchaseReceiptLine(
  val name:String,
  val categoryId:String,
@@ -740,10 +739,11 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    val items=valid.map{line->PurchaseItemEntity(UUID.randomUUID().toString(),id,line.categoryId.ifBlank{"pc_production"},line.name.trim(),line.qty,line.unit.ifBlank{"lần"},line.unitPrice,line.amount)}
    val total=items.sumOf{it.amount}
    repo.savePurchase(PurchaseEntity(id,supplierId,e.id,at,total,note.trim(),expenseCategory=expenseCategory,paidByName=paidByName.trim(),costCodeId=costCodeId),items)
-   audit("PURCHASE",id,"CREATE_RECEIPT","lines=${items.size},total=$total,payer=${paidByName.trim()}")
+   audit("PURCHASE",id,"CREATE_RECEIPT","lines=${items.size},total=${total},payer=${paidByName.trim()}")
    autoBackup()
   }
  }
+
  fun addCostCode(code:String,name:String,parent:String,unit:String,supplier:String=""){
   val e=currentEmployee.value?:return;if(e.role!="ADMIN"||code.isBlank()||name.isBlank()||parent !in ExpenseCategories.all)return
   viewModelScope.launch(Dispatchers.IO){dao.saveCostCode(CostCodeEntity(UUID.randomUUID().toString(),code.trim().uppercase(),name.trim(),parent,unit.ifBlank{"lần"},supplier.trim(),sortOrder=costCodes.value.size));audit("COST_CODE",code.trim().uppercase(),"SAVE","name=${name.trim()}");autoBackup()}

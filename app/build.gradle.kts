@@ -12,16 +12,16 @@ android {
         applicationId = "vn.ecohome.pos0210"
         minSdk = 26
         targetSdk = 35
-        versionCode = 92
-        versionName = "1.0.0-alpha61-candidate31"
+        versionCode = 106
+        versionName = "1.0.0-alpha75-build106"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {
         getByName("debug") {
             storeFile = file("pos0210-debug.keystore")
-            storePassword = "0210debug"
-            keyAlias = "pos0210debug"
-            keyPassword = "0210debug"
+            storePassword = System.getenv("POS0210_KEYSTORE_PASSWORD") ?: "0210debug"
+            keyAlias = System.getenv("POS0210_KEY_ALIAS") ?: "pos0210debug"
+            keyPassword = System.getenv("POS0210_KEY_PASSWORD") ?: "0210debug"
         }
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }

@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20261012-3" />
+    <link rel="stylesheet" href="styles.css?v=20261012-5" />
     <title>0210 · Manager</title>
   </head>
   <body>
@@ -17,7 +17,7 @@
         <p class="eyebrow">0210 · BREAKFAST · COFFEE · DRINKS</p>
         <h1 id="login-title">Manager realtime</h1>
         <p class="muted">Theo dõi quán và nhập phiếu tài chính từ xa.</p>
-        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.12.3 · Quản lý vật tư</p>
+        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.12.5 · Quản lý vật tư</p>
         <label>Email Firebase<input id="email" type="email" autocomplete="username" inputmode="email" /></label>
         <label>Mật khẩu<input id="password" type="password" autocomplete="current-password" /></label>
         <button id="login-button" class="primary">Đăng nhập</button>
@@ -33,7 +33,7 @@
           <div class="heading-actions"><button id="refresh-dashboard" class="secondary">Làm mới</button><button id="logout-button" class="text-button">Đăng xuất</button></div>
         </header>
 
-        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.12.3 · Quản lý vật tư</p>
+        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.12.5 · Quản lý vật tư</p>
 
         <section class="section-heading first-section">
           <div><p class="eyebrow">SƠ ĐỒ BÀN</p><h2>Trạng thái phục vụ realtime</h2></div>
@@ -69,6 +69,27 @@
         </div>
 
         <section id="period-summary" class="summary-grid" aria-label="Tổng quan theo kỳ"></section>
+
+        <section class="section-heading compact">
+          <div><p class="eyebrow">CHI PHÍ MUA HÀNG</p><h2>Tra cứu và thống kê</h2></div>
+        </section>
+        <div class="filter-row" id="expense-period-filters">
+          <button data-expense-period="3d" class="filter active">3 ngày</button>
+          <button data-expense-period="7d" class="filter">7 ngày</button>
+        </div>
+        <div class="expense-filter-grid">
+          <label>Nhân viên<select id="expense-employee-filter"><option value="">Tất cả nhân viên</option></select></label>
+          <label>Nhóm chi phí<select id="expense-group-filter"><option value="">Tất cả nhóm</option></select></label>
+          <label>Tên hoặc mã vật tư<input id="expense-material-filter" placeholder="Ví dụ: gà hoặc THIT" /></label>
+          <label>Mã phiếu<input id="expense-id-filter" placeholder="Ví dụ: PC-..." /></label>
+        </div>
+        <section id="expense-summary" class="summary-grid" aria-label="Tổng quan chi phí"></section>
+        <div class="expense-report-grid">
+          <section><p class="eyebrow">THEO NHÓM</p><div id="expense-by-group" class="expense-breakdown"></div></section>
+          <section><p class="eyebrow">THEO VẬT TƯ</p><div id="expense-by-material" class="expense-breakdown"></div></section>
+        </div>
+        <section class="section-heading compact"><div><p class="eyebrow">PHIẾU CHI</p><h2>Chi tiết theo bộ lọc</h2></div></section>
+        <section id="expense-receipts" class="transaction-list"></section>
 
         <section class="section-heading compact">
           <div><p class="eyebrow">TÍCH LŨY</p><h2>Chỉ số toàn thời gian</h2></div>
@@ -203,6 +224,6 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261012-3"></script>
+    <script type="module" src="app.js?v=20261012-5"></script>
   </body>
 </html>

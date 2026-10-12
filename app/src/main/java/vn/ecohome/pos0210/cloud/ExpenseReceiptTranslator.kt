@@ -30,7 +30,48 @@ data class TranslatedExpenseReceipt(val purchase: PurchaseEntity, val items: Lis
 
 data class ReceiptValidation(val valid: Boolean, val error: String? = null)
 
+data class CanonicalExpenseLine(
+    val lineId: String,
+    val materialName: String,
+    val materialCode: String,
+    val expenseGroup: String,
+    val qty: Double,
+    val unit: String,
+    val unitPrice: Long,
+    val amount: Long
+)
+
+data class CanonicalExpenseReceipt(
+    val receiptId: String,
+    val purchaseDate: Long,
+    val enteredByUid: String,
+    val enteredByName: String,
+    val note: String,
+    val status: String,
+    val updatedAt: Long,
+    val total: Long,
+    val lines: List<CanonicalExpenseLine>
+)
+
+
 object ExpenseReceiptContract {
+    fun canonicalize(receipt: RemoteExpenseReceipt): CanonicalExpenseReceipt {
+        val lines = receipt.items.map { line ->
+            CanonicalExpenseLine(line.id, line.materialName, line.materialCode, line.expenseGroup, line.qty, line.unit, line.unitPrice, line.amount)
+        }
+        return CanonicalExpenseReceipt(
+            receiptId = receipt.id,
+            purchaseDate = receipt.purchaseDate,
+            enteredByUid = receipt.enteredByUid,
+            enteredByName = receipt.enteredByName,
+            note = receipt.note,
+            status = receipt.status.ifBlank { "ACTIVE" },
+            updatedAt = receipt.updatedAt,
+            total = lines.sumOf { it.amount },
+            lines = lines
+        )
+    }
+
     fun validate(receipt: RemoteExpenseReceipt): ReceiptValidation {
         if (receipt.id.isBlank()) return ReceiptValidation(false, "Thiếu mã phiếu")
         if (receipt.purchaseDate <= 0L || receipt.updatedAt <= 0L) return ReceiptValidation(false, "Ngày phiếu không hợp lệ")

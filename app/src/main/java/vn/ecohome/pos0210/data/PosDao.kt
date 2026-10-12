@@ -106,6 +106,7 @@ WHERE s.dataScope='LIVE' AND ob.status!='CANCELLED' AND EXISTS(SELECT 1 FROM Bil
 @Query("SELECT COUNT(*) FROM OrderItemEntity oi LEFT JOIN OrderBatchEntity ob ON ob.id=oi.batchId LEFT JOIN TableSessionEntity s ON s.id=ob.sessionId WHERE ob.id IS NULL OR s.id IS NULL") suspend fun reportOrphanLineCount():Int
 @Query("SELECT * FROM PurchaseEntity WHERE status='ACTIVE' ORDER BY purchasedAt DESC") fun purchases():Flow<List<PurchaseEntity>>
 @Query("SELECT * FROM PurchaseEntity ORDER BY purchasedAt DESC") suspend fun allPurchasesSnapshot():List<PurchaseEntity>
+@Query("SELECT * FROM PurchaseEntity WHERE id=:id LIMIT 1") suspend fun purchaseById(id:String):PurchaseEntity?
 @Query("SELECT pi.purchaseId AS purchaseId, pi.categoryId AS categoryId, pi.amount AS amount, p.purchasedAt AS purchasedAt FROM PurchaseItemEntity pi INNER JOIN PurchaseEntity p ON p.id=pi.purchaseId WHERE p.status='ACTIVE'") fun purchaseCosts():Flow<List<PurchaseCostRow>>
 @Query("SELECT * FROM PurchaseCategoryEntity WHERE active=1 ORDER BY sortOrder,name") fun purchaseCategories():Flow<List<PurchaseCategoryEntity>>
 @Query("SELECT * FROM CostCodeEntity WHERE active=1 ORDER BY sortOrder,code") fun costCodes():Flow<List<CostCodeEntity>>

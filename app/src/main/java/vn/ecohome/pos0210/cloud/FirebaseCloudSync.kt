@@ -339,9 +339,12 @@ object FirebaseCloudSync {
             if(page.isEmpty()) return
             page.forEach { doc ->
                 val updatedAt=doc.getLong("updatedAt")?:cursor.updatedAt
-                ExpenseReceiptParser.parse(doc.id,doc.data.orEmpty())?.let { receipt ->
-                    val translated=ExpenseReceiptTranslator.translate(receipt)
-                    repository.replaceWebExpenseReceipt(translated.purchase,translated.items)
+                val uploadedByThisApp = doc.getString("source") == "ANDROID_POS" && dao.purchaseById(doc.id) != null
+                if (!uploadedByThisApp) {
+                    ExpenseReceiptParser.parse(doc.id,doc.data.orEmpty())?.let { receipt ->
+                        val translated=ExpenseReceiptTranslator.translate(receipt)
+                        repository.replaceWebExpenseReceipt(translated.purchase,translated.items)
+                    }
                 }
                 cursor=cursor.advance(doc.id,updatedAt)
                 dao.saveSetting(vn.ecohome.pos0210.data.AppSettingEntity(EXPENSE_CURSOR_SETTING,"${cursor.updatedAt}|${cursor.receiptId}"))

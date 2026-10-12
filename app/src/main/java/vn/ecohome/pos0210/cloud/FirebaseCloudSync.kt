@@ -159,12 +159,19 @@ object FirebaseCloudSync {
         pullCloudFinance(root,dao)
         writeFinanceMirror(fs,root,dao)
         val tables=dao.cloudTablesSnapshot();val sessions=dao.cloudSessionsSnapshot();val bills=dao.cloudBillsSnapshot();val payments=dao.cloudPaymentsSnapshot();val paymentMirror=dao.cloudPaymentMirrorSnapshot()
+        val batches=dao.cloudOrderBatchesSnapshot();val orderItems=dao.cloudOrderItemsSnapshot()
         val today=Calendar.getInstance().apply{set(Calendar.HOUR_OF_DAY,0);set(Calendar.MINUTE,0);set(Calendar.SECOND,0);set(Calendar.MILLISECOND,0)}.timeInMillis
         val paidToday=bills.filter{it.status=="PAID"&&(it.closedAt?:0)>=today};val open=sessions.filter{it.status=="OPEN"};val now=System.currentTimeMillis()
         stage("STORE_ROOT",60_000L){FirestoreServerWriter.set(root,mapOf("name" to "0210","updatedAt" to now,"schemaVersion" to 1))}
         val openByTable=open.associateBy{it.tableId}
         stage("DASHBOARD",60_000L){writeDashboard(root.collection("dashboard").document("current"),financialDashboard(dao,bills,payments,now)+mapOf("openTables" to open.size,"openTableNames" to tables.filter{openByTable.containsKey(it.id)}.map{it.name},"revenueToday" to paidToday.sumOf{it.total},"paidBillsToday" to paidToday.size,"lastUpdatedAt" to now))}
-        writeMaps(fs,root.collection("tableStatus"),tables.map{t->t.id to mapOf("id" to t.id,"name" to t.name,"areaId" to t.areaId,"active" to t.active,"occupied" to openByTable.containsKey(t.id),"openedAt" to openByTable[t.id]?.openedAt,"updatedAt" to now)})
+        writeMaps(fs,root.collection("tableStatus"),tables.map{t->
+            val session=openByTable[t.id]
+            val activeBatches=if(session==null) emptyList() else batches.filter{it.sessionId==session.id&&it.status!="CANCELLED"}
+            val batchIds=activeBatches.map{it.id}.toSet()
+            val currentTotal=orderItems.filter{it.batchId in batchIds}.sumOf{it.unitPriceSnapshot*it.qty}
+            t.id to mapOf("id" to t.id,"name" to t.name,"areaId" to t.areaId,"active" to t.active,"occupied" to (session!=null),"openedAt" to session?.openedAt,"currentTotal" to currentTotal,"serviceStatus" to activeBatches.map{it.status}.firstOrNull().orEmpty(),"updatedAt" to now)
+        })
         // A full menu mirror is only seeded when no cloud menu exists. Edits must
         // publish through an explicit versioned menu mutation, not generic sync.
         val cloudMenuExists=stage("MENU_SEED_CHECK"){root.collection("menu").limit(1).get().await().isEmpty.not()}

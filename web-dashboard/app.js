@@ -116,7 +116,8 @@ function currentTable(table) {
   const batches = session ? state.batches.filter((row) => row.sessionId === session.id && row.status !== "CANCELLED") : [];
   const batchIds = new Set(batches.map((row) => row.id));
   const items = state.items.filter((row) => batchIds.has(row.batchId));
-  return { table, occupied, session, batches, items, total: items.reduce((sum, item) => sum + Number(item.unitPrice || 0) * Number(item.qty || 0), 0) };
+  const itemTotal = items.reduce((sum, item) => sum + Number(item.unitPrice || 0) * Number(item.qty || 0), 0);
+  return { table, occupied, session, batches, items, total: itemTotal || Number(table.currentTotal || 0) };
 }
 
 function rangeForPeriod() {
@@ -162,7 +163,10 @@ function renderPeriodSummary() {
   const allPurchases = expenseRows().filter((p) => p.status !== "DELETED" && inRange(p.purchasedAt, range));
   const purchases = allPurchases.filter((p) => matchesPayer(state.payerFilter, p.paidByName));
   const movements = state.movements.filter((m) => inRange(m.occurredAt, range) && matchesPayer(state.payerFilter, m.counterpartyName));
-  const revenue = bills.reduce((s, b) => s + Number(b.total || 0), 0);
+  const snapshotRevenue = range.label === "Hôm nay" ? Number(state.dashboard.revenueToday || 0) : range.label === "Tháng này" ? Number(state.dashboard.monthRevenue || 0) : 0;
+  const snapshotBillCount = range.label === "Hôm nay" ? Number(state.dashboard.paidBillsToday || 0) : 0;
+  const revenue = bills.length ? bills.reduce((s, b) => s + Number(b.total || 0), 0) : snapshotRevenue;
+  const billCount = bills.length || !snapshotBillCount ? bills.length : snapshotBillCount;
   const expense = allPurchases.reduce((s, p) => s + Number(p.total || 0), 0);
   const selectedPayerExpense = purchases.reduce((s, p) => s + Number(p.total || 0), 0);
   const additionalInvestment = allPurchases.filter((p) => INVESTMENT_CATEGORIES.has(p.expenseCategory)).reduce((s, p) => s + Number(p.total || 0), 0);
@@ -170,8 +174,8 @@ function renderPeriodSummary() {
   const movementNet = movements.reduce((s, m) => s + (MOVEMENT_OUT_TYPES.has(m.type) ? -Number(m.amount || 0) : Number(m.amount || 0)), 0);
   const cards = [
     ["Doanh thu", money(revenue)],
-    ["Số bill", bills.length],
-    ["Bill trung bình", money(bills.length ? Math.round(revenue / bills.length) : 0)],
+    ["Số bill", billCount || (range.label === "Tháng này" ? "Snapshot tháng" : 0)],
+    ["Bill trung bình", money(billCount ? Math.round(revenue / billCount) : 0)],
     ["Chi vận hành", money(operatingExpense)],
     ["Đầu tư trong kỳ", money(additionalInvestment)],
     ["Chênh lệch DT - chi vận hành", money(revenue - operatingExpense)],

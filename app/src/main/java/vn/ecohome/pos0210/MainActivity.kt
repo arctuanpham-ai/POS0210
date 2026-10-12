@@ -2524,6 +2524,7 @@ fun MenuManager(vm: PosViewModel) {
     val context = LocalContext.current
     var showAdd by remember { mutableStateOf(false) }
     var showCategoryManager by remember { mutableStateOf(false) }
+    var receiptLines by remember { mutableStateOf<List<PurchaseReceiptLine>>(emptyList()) }
     var editTarget by remember { mutableStateOf<MenuItemEntity?>(null) }
     var deleteTarget by remember { mutableStateOf<MenuItemEntity?>(null) }
     var imageTarget by remember { mutableStateOf<MenuItemEntity?>(null) }
@@ -2810,6 +2811,8 @@ fun Purchases(vm: PosViewModel) {
     val qty = qtyText.replace(',', '.').toDoubleOrNull()
     val unitPrice = unitPriceText.toLongOrNull()
     val total = if (qty != null && unitPrice != null) (qty * unitPrice).toLong() else 0L
+    val currentLine = if (itemName.isNotBlank() && (unitPrice ?: 0L) > 0L) PurchaseReceiptLine(name = itemName.trim(), categoryId = selectedCategoryId, qty = qty ?: 1.0, unit = unit.ifBlank { selectedCategory?.defaultUnit ?: "lần" }, unitPrice = unitPrice ?: 0L) else null
+    val receiptTotal = receiptLines.sumOf { it.amount } + (currentLine?.amount ?: 0L)
 
     Column {
         Header("Nhập đầu vào") { vm.screen.value = "MANAGE" }
@@ -2929,6 +2932,20 @@ fun Purchases(vm: PosViewModel) {
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text(if(FinancialTransactionTypes.usesPurchaseDocument(transactionType)) if (isPayrollExpense(expenseCategory)) "Đơn giá / ngày công" else "Đơn giá" else "Số tiền") }
                 )
+                if (transactionType == FinancialTransactionTypes.OPERATING_EXPENSE) {
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(onClick = { currentLine?.let { line -> receiptLines = receiptLines + line; itemName = ""; qtyText = "1"; unit = ""; unitPriceText = ""; selectedCategoryId = ""; selectedCostCodeId = null } }, enabled = currentLine != null, modifier = Modifier.fillMaxWidth()) { Text("＋ THÊM DÒNG VẬT TƯ VÀO PHIẾU") }
+                    if (receiptLines.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text("Các dòng đã thêm (" + receiptLines.size + ")", fontWeight = FontWeight.Bold)
+                        receiptLines.forEachIndexed { index, line ->
+                            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text((index + 1).toString() + ". " + line.name + " · " + line.qty + " " + line.unit + " × " + money(line.unitPrice), modifier = Modifier.weight(1f), fontSize = 13.sp)
+                                TextButton(onClick = { receiptLines = receiptLines.filterIndexed { i, _ -> i != index } }) { Text("XÓA") }
+                            }
+                        }
+                    }
+                }
                 if(!FinancialTransactionTypes.usesPurchaseDocument(transactionType)){
                     Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){FilterChip(movementMethod=="CASH",{movementMethod="CASH"},{Text("Tiền mặt")});FilterChip(movementMethod=="TRANSFER",{movementMethod="TRANSFER"},{Text("Chuyển khoản")})}
                     if(transactionType in setOf(FinancialTransactionTypes.PROFIT_WITHDRAWAL,FinancialTransactionTypes.OWNER_WITHDRAWAL)){
@@ -2945,7 +2962,7 @@ fun Purchases(vm: PosViewModel) {
                 if(FinancialTransactionTypes.usesPurchaseDocument(transactionType)) Card(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                     Column(Modifier.padding(16.dp)) {
                         Text(selectedCategory?.name ?: ExpenseCategories.label(expenseCategory), fontWeight = FontWeight.Bold)
-                        Text("Thành tiền: ${money(total)}", fontWeight = FontWeight.Black, fontSize = 18.sp)
+                        Text("Thành tiền: ${money(if (transactionType == FinancialTransactionTypes.OPERATING_EXPENSE) receiptTotal else total)}", fontWeight = FontWeight.Black, fontSize = 18.sp)
                     }
                 }
                 if(FinancialTransactionTypes.usesPurchaseDocument(transactionType)) OutlinedButton(
@@ -2960,7 +2977,9 @@ fun Purchases(vm: PosViewModel) {
                         val parsedAt = runCatching { parser.parse(dateText)?.time }.getOrNull()
                             ?: System.currentTimeMillis()
                         val asset=if(transactionType in setOf(FinancialTransactionTypes.ASSET_PURCHASE,FinancialTransactionTypes.ADDITIONAL_INVESTMENT))selectedAssetCategory?.let{c->AssetEntity(UUID.randomUUID().toString(),itemName.trim(),c.id,parsedAt,unitPrice?:0,qty?.toInt()?.coerceAtLeast(1)?:1,total,supplier=supplier.trim(),usefulLifeMonths=usefulLifeText.toIntOrNull()?:c.defaultUsefulLifeMonths,residualValue=(residualText.toLongOrNull()?:0).coerceAtMost(total),estimatedLiquidationValue=liquidationText.toLongOrNull()?:0,note=note,investmentClass=if(transactionType==FinancialTransactionTypes.ADDITIONAL_INVESTMENT)"ADDITIONAL" else "INITIAL")} else null
-                        if(FinancialTransactionTypes.usesPurchaseDocument(transactionType)) vm.addPurchaseDetailed(
+                        if (transactionType == FinancialTransactionTypes.OPERATING_EXPENSE && receiptLines.isNotEmpty()) {
+                            vm.addPurchaseReceipt(lines = receiptLines + listOfNotNull(currentLine), note = note, at = parsedAt, supplierName = supplier, expenseCategory = FinancialTransactionTypes.legacyExpenseCode(transactionType,expenseCategory), paidByName = paidByName, costCodeId = selectedCostCodeId)
+                        } else if(FinancialTransactionTypes.usesPurchaseDocument(transactionType)) vm.addPurchaseDetailed(
                             name = itemName,
                             qty = qty ?: 0.0,
                             unit = unit.ifBlank { selectedCategory?.defaultUnit ?: "lần" },
@@ -2976,17 +2995,18 @@ fun Purchases(vm: PosViewModel) {
                             costCodeId = selectedCostCodeId
                         )
                         FinancialTransactionTypes.movementCode(transactionType)?.let{vm.addFinancialMovement(it,unitPrice?:0,movementPartnerId,movementMethod,listOf(itemName.trim(),note.trim()).filter(String::isNotBlank).joinToString(" · "),parsedAt)}
-                        message = "Đã ghi giao dịch · ${FinancialTransactionTypes.label(transactionType)} · ${money(if(FinancialTransactionTypes.usesPurchaseDocument(transactionType))total else unitPrice?:0)}"
+                        message = "Đã ghi giao dịch · ${FinancialTransactionTypes.label(transactionType)} · ${money(if (transactionType == FinancialTransactionTypes.OPERATING_EXPENSE) receiptTotal else if(FinancialTransactionTypes.usesPurchaseDocument(transactionType))total else unitPrice?:0)}"
                         itemName = ""
                         qtyText = ""
                         unitPriceText = ""
                         note = ""
                         paidByName = ""
                         selectedCostCodeId = null
+                        receiptLines = emptyList()
                         invoiceImage = null
                     },
                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                    enabled = itemName.isNotBlank() && (unitPrice ?: 0L) > 0 &&
+                    enabled = ((itemName.isNotBlank() && (unitPrice ?: 0L) > 0) || (transactionType == FinancialTransactionTypes.OPERATING_EXPENSE && receiptLines.isNotEmpty())) &&
                         (!FinancialTransactionTypes.usesPurchaseDocument(transactionType)||(qty?:0.0)>0) &&
                         (transactionType!=FinancialTransactionTypes.OPERATING_EXPENSE||expenseCategory!=ExpenseCategories.UNCLASSIFIED) &&
                         (transactionType !in setOf(FinancialTransactionTypes.ASSET_PURCHASE,FinancialTransactionTypes.ADDITIONAL_INVESTMENT)||(selectedAssetCategory!=null&&(usefulLifeText.toIntOrNull()?:0)>0&&(residualText.toLongOrNull()?:0)<=total)) &&

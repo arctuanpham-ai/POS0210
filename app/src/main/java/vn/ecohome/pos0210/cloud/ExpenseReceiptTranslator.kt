@@ -28,6 +28,25 @@ data class RemoteExpenseLine(
 
 data class TranslatedExpenseReceipt(val purchase: PurchaseEntity, val items: List<PurchaseItemEntity>)
 
+data class ReceiptValidation(val valid: Boolean, val error: String? = null)
+
+object ExpenseReceiptContract {
+    fun validate(receipt: RemoteExpenseReceipt): ReceiptValidation {
+        if (receipt.id.isBlank()) return ReceiptValidation(false, "Thiếu mã phiếu")
+        if (receipt.purchaseDate <= 0L || receipt.updatedAt <= 0L) return ReceiptValidation(false, "Ngày phiếu không hợp lệ")
+        if (receipt.items.isEmpty()) return ReceiptValidation(false, "Phiếu chưa có vật tư")
+        if (receipt.items.map { it.id }.toSet().size != receipt.items.size) return ReceiptValidation(false, "Trùng mã dòng vật tư")
+        receipt.items.forEach { line ->
+            if (line.id.isBlank() || line.materialName.isBlank() || line.qty <= 0.0 || line.unit.isBlank() || line.unitPrice <= 0L) {
+                return ReceiptValidation(false, "Dòng vật tư không hợp lệ")
+            }
+            if (line.amount != (line.qty * line.unitPrice).toLong()) return ReceiptValidation(false, "Thành tiền dòng không khớp")
+        }
+        return ReceiptValidation(true)
+    }
+}
+
+
 data class ExpenseReceiptCursor(val updatedAt: Long = 0L, val receiptId: String = "") {
     fun advance(candidateId: String, candidateUpdatedAt: Long) =
         if (candidateUpdatedAt > updatedAt || (candidateUpdatedAt == updatedAt && candidateId > receiptId)) {

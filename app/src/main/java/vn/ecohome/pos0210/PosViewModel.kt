@@ -739,6 +739,8 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    val items=valid.map{line->PurchaseItemEntity(UUID.randomUUID().toString(),id,line.categoryId.ifBlank{"pc_production"},line.name.trim(),line.qty,line.unit.ifBlank{"lần"},line.unitPrice,line.amount)}
    val total=items.sumOf{it.amount}
    repo.savePurchase(PurchaseEntity(id,supplierId,e.id,at,total,note.trim(),expenseCategory=expenseCategory,paidByName=paidByName.trim(),costCodeId=costCodeId),items)
+   dao.enqueueSync(SyncQueueEntity(UUID.randomUUID().toString(),"EXPENSE_RECEIPT",id,"UPSERT","",System.currentTimeMillis(),System.currentTimeMillis()))
+   dao.markCloudDirty()
    audit("PURCHASE",id,"CREATE_RECEIPT","lines=${items.size},total=${total},payer=${paidByName.trim()}")
    autoBackup()
   }

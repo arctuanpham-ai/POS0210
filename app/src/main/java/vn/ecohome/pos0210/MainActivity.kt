@@ -2524,7 +2524,6 @@ fun MenuManager(vm: PosViewModel) {
     val context = LocalContext.current
     var showAdd by remember { mutableStateOf(false) }
     var showCategoryManager by remember { mutableStateOf(false) }
-    var receiptLines by remember { mutableStateOf<List<PurchaseReceiptLine>>(emptyList()) }
     var editTarget by remember { mutableStateOf<MenuItemEntity?>(null) }
     var deleteTarget by remember { mutableStateOf<MenuItemEntity?>(null) }
     var imageTarget by remember { mutableStateOf<MenuItemEntity?>(null) }
@@ -2790,6 +2789,7 @@ fun Purchases(vm: PosViewModel) {
     var movementMethod by remember{mutableStateOf("CASH")};var movementPartnerId by remember{mutableStateOf<String?>(null)}
     var selectedCategoryId by remember { mutableStateOf("") }
     var showCategoryManager by remember { mutableStateOf(false) }
+    var receiptLines by remember { mutableStateOf<List<PurchaseReceiptLine>>(emptyList()) }
     var dateText by remember {
         mutableStateOf(SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date()))
     }

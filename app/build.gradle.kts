@@ -12,8 +12,8 @@ android {
         applicationId = "vn.ecohome.pos0210"
         minSdk = 26
         targetSdk = 35
-        versionCode = 105
-        versionName = "1.0.0-alpha74-report-qa"
+        versionCode = 106
+        versionName = "1.0.0-alpha75-report-qa"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {
@@ -26,7 +26,7 @@ android {
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true}
 }
 dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
@@ -45,7 +45,7 @@ dependencies {
     implementation("com.google.zxing:core:3.5.3")
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     implementation("com.google.firebase:firebase-auth-ktx")
-    implementation("com.google.firebase:firebase-firestore-ktx")
+    implementation("com.google.firebase:firestore-ktx")
     implementation("com.google.firebase:firebase-storage-ktx")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
     testImplementation("junit:junit:4.13.2")
@@ -56,4 +56,9 @@ dependencies {
     androidTestImplementation("androidx.test:core-ktx:1.6.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+}
+
+// Prevent the legacy IntelliJ annotations jar from colliding with JetBrains annotations in CI.
+configurations.configureEach {
+    exclude(group = "com.intellij", module = "annotations")
 }

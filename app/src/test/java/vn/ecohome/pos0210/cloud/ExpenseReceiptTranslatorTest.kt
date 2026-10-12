@@ -30,4 +30,20 @@ class ExpenseReceiptTranslatorTest {
         assertEquals("NL-GA", translated.items[0].categoryId)
         assertTrue(translated.items.all { it.purchaseId == "web:receipt-42" })
     }
+
+
+    @Test fun canonicalReceiptRejectsWrongLineTotal() {
+        val receipt = RemoteExpenseReceipt(
+            id = "receipt-invalid",
+            purchaseDate = 1_728_000_000_000L,
+            enteredByUid = "staff-a",
+            enteredByName = "Hương",
+            note = "",
+            status = "ACTIVE",
+            updatedAt = 1_728_000_100_000L,
+            items = listOf(RemoteExpenseLine("line-a", "Gà", "NL-GA", "Nguyên liệu", 2.0, "kg", 95_000L, 100_000L))
+        )
+
+        assertTrue(!ExpenseReceiptContract.validate(receipt).valid)
+    }
 }

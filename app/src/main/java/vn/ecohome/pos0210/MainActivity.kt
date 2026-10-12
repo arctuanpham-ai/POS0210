@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 70849)
-Total output lines: 4565
-
 package vn.ecohome.pos0210
 import vn.ecohome.pos0210.report.SalesReport
 import vn.ecohome.pos0210.report.SalesItemsReport
@@ -1643,7 +1640,1375 @@ fun CloudSyncSettings(vm:PosViewModel){
     val realtimeBusy=cloudActive.keys.any{it in setOf("REALTIME","DASHBOARD","PUBLISH_MENU","BACKUP_SNAPSHOT","RESTORE_DB")}
     val settings by vm.settings.collectAsState();val state by vm.cloudSyncState.collectAsState();val message by vm.cloudMessage.collectAsState();val dashboard by vm.cloudDashboard.collectAsState()
     fun current(key:String)=settings.firstOrNull{it.key==key}?.value.orEmpty()
-    val firebaseDefaults=vn.ecohome.pos0210.cloud.FirebaseCloudSync.defaultConfig();var projectId by remember(settings){mutableStateOf(current("firebase_project_id").ifBlank{firebaseDefaults.projectId})};var applicationId by remember(settings){mutableStateOf(current("firebase_application_id").ifBlank{firebaseDefaults.applicationId})};var apiKey by remember(settings){mutableStateOf(current("firebase_…20849 tokens truncated….note}", fontSize = 12.sp)
+    val firebaseDefaults=vn.ecohome.pos0210.cloud.FirebaseCloudSync.defaultConfig();var projectId by remember(settings){mutableStateOf(current("firebase_project_id").ifBlank{firebaseDefaults.projectId})};var applicationId by remember(settings){mutableStateOf(current("firebase_application_id").ifBlank{firebaseDefaults.applicationId})};var apiKey by remember(settings){mutableStateOf(current("firebase_api_key").ifBlank{firebaseDefaults.apiKey})}
+    var email by remember(settings){mutableStateOf(current("firebase_email"))};var password by remember{mutableStateOf("")};var confirmRestore by remember{mutableStateOf(false)}
+    LaunchedEffect(Unit){vm.reconcileFirebaseSession()}
+    LaunchedEffect(state?.syncedUid){if(state?.syncedUid!=null)vm.observeCloudDashboard()}
+    Column{
+        Header("Cloud & Manager") { vm.screen.value="MANAGE" }
+        Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(10.dp)){
+            Text("FIREBASE FREE · LOCAL-FIRST",fontWeight=FontWeight.Black,fontSize=18.sp)
+            Text("POS vẫn dùng Room khi mất mạng. Cloud là bản sao dự phòng và nguồn xem realtime; Manager không sửa order từ xa ở phiên bản này.",fontSize=12.sp)
+            OutlinedTextField(projectId,{projectId=it.trim()},Modifier.fillMaxWidth(),label={Text("Firebase Project ID")},singleLine=true)
+            OutlinedTextField(applicationId,{applicationId=it.trim()},Modifier.fillMaxWidth(),label={Text("Firebase Android App ID")},singleLine=true)
+            OutlinedTextField(apiKey,{apiKey=it.trim()},Modifier.fillMaxWidth(),label={Text("Firebase Web API Key")},singleLine=true)
+            Button({vm.configureFirebase(projectId,applicationId,apiKey)},Modifier.fillMaxWidth(),enabled=projectId.isNotBlank()&&applicationId.isNotBlank()&&apiKey.isNotBlank()){Text("LƯU CẤU HÌNH FIREBASE")}
+            HorizontalDivider()
+            Text("TÀI KHOẢN CHỦ QUÁN",fontWeight=FontWeight.Black)
+            OutlinedTextField(email,{email=it.trim()},Modifier.fillMaxWidth(),label={Text("Email Firebase")},singleLine=true)
+            OutlinedTextField(password,{password=it},Modifier.fillMaxWidth(),label={Text("Mật khẩu")},visualTransformation=PasswordVisualTransformation(),singleLine=true)
+            if(state?.syncedUid==null)Button({vm.firebaseSignIn(email,password);password=""},Modifier.fillMaxWidth(),enabled=email.isNotBlank()&&password.length>=6){Text("ĐĂNG NHẬP & BẬT ĐỒNG BỘ")}
+            else OutlinedButton({vm.firebaseSignOut()},Modifier.fillMaxWidth()){Text("ĐĂNG XUẤT FIREBASE")}
+            Button({vm.syncFirebase()},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null&&!realtimeBusy){Text(if(realtimeBusy)"TÁC VỤ CLOUD ĐANG CHẠY…" else "ĐỒNG BỘ REALTIME NGAY")}
+            Button({vm.transferCloudMedia(true)},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null){Text("ĐẨY TOÀN BỘ ẢNH LÊN CLOUD (MÁY GỐC)")}
+            OutlinedButton({vm.transferCloudMedia(false)},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null){Text("TẢI ẢNH TỪ CLOUD (MÁY ORDER)")}
+            Text("Chỉ bấm ĐẨY trên máy còn ảnh gốc. Màn hình sẽ báo số file và lỗi đầu tiên nếu Storage/URI không đọc được.",fontSize=11.sp)
+            OutlinedButton({vm.createFirebaseBackup()},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null){Text("TẠO CLOUD BACKUP NGAY")}
+            OutlinedButton({confirmRestore=true},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null){Text("KHÔI PHỤC CLOUD BACKUP")}
+            Text("Backup khi dữ liệu thay đổi, tối thiểu 1 giờ/lần có mạng · giữ 2 bản A/B luân phiên. Restore ưu tiên bản mới nhất hợp lệ và tự fallback sang bản còn lại nếu checksum lỗi.",fontSize=11.sp)
+            if(message.isNotBlank())Text(message,fontWeight=FontWeight.Bold)
+            val backupOnlyError=state?.lastError?.takeIf{it.startsWith("PRIVATE_BACKUP_ONLY:")}
+            Text("Realtime sync: "+when{state?.syncedUid==null->"Chưa đăng nhập";realtimeBusy->"Đang chạy";state?.lastError!=null&&backupOnlyError==null->"Lần gần nhất chưa hoàn tất";state?.lastSuccessAt!=null->"Đã có lần thành công (xem thời gian bên dưới)";else->"Chưa có lần thành công"},fontWeight=FontWeight.Bold)
+            state?.lastSuccessAt?.let{Text("Lần realtime thành công: ${time(it)}",fontSize=12.sp)}
+            val backupConfirmed=current("cloud_backup_confirmed_at").toLongOrNull()
+            Text("Cloud backup: "+if(backupOnlyError!=null)"Có lỗi" else if(backupConfirmed!=null)"Đã được server xác nhận" else "Chưa có xác nhận trên máy này",fontWeight=FontWeight.Bold)
+            backupConfirmed?.let{Text("Backup server xác nhận: "+java.text.SimpleDateFormat("dd/MM/yyyy HH:mm:ss",java.util.Locale.getDefault()).format(java.util.Date(it)),fontSize=12.sp)}
+            Text(quotaStatus,fontSize=12.sp,fontWeight=FontWeight.Bold)
+            Text("Dashboard tối đa 1 phút/lần; gần trần 5 phút. Backup khi dữ liệu thay đổi: 1 giờ/lần; gần trần 3 giờ. Cloud bị chặn vẫn giữ dữ liệu local.",fontSize=11.sp)
+            cloudTrace.takeLast(6).forEach{entry->val parts=entry.split(" ",limit=2);val stamp=parts.firstOrNull()?.toLongOrNull();Text(if(stamp!=null)java.text.SimpleDateFormat("HH:mm:ss",java.util.Locale.getDefault()).format(java.util.Date(stamp))+" "+parts.getOrElse(1){""} else entry,fontSize=11.sp)}
+            backupOnlyError?.let{Text(it.removePrefix("PRIVATE_BACKUP_ONLY:").trim(),color=Color(0xFF9A4B3D),fontSize=12.sp)}
+            HorizontalDivider()
+            Text("MANAGER REALTIME",fontWeight=FontWeight.Black,fontSize=18.sp)
+            MetricCard("Bàn đang có khách","${dashboard.openTables}");MetricCard("Doanh thu hôm nay",money(dashboard.revenueToday));MetricCard("Bill hôm nay","${dashboard.paidBillsToday}")
+            if(dashboard.openTableNames.isNotEmpty())Text("Đang phục vụ: ${dashboard.openTableNames.joinToString(" · ")}",fontWeight=FontWeight.Bold)
+            Text("BÁO CÁO & TÀI CHÍNH REALTIME",fontWeight=FontWeight.Black,fontSize=18.sp)
+            MetricCard("Doanh thu tháng",money(dashboard.monthRevenue));MetricCard("Lợi nhuận vận hành",dashboard.operatingProfit?.let(::money)?:"Chưa có giá vốn");MetricCard("Tiền cuối kỳ tạm tính",money(dashboard.closingCash));MetricCard("Tổng vốn đầu tư",money(dashboard.initialInvestment));MetricCard("Đã xác định thu hồi",money(dashboard.recoveredCapital));MetricCard("Tiến độ hoàn vốn","${dashboard.paybackBasisPoints/100.0}%")
+            Text("Dashboard chỉ đọc số liệu Firestore; không có quyền sửa order, đóng bill hoặc xác nhận thanh toán.",fontSize=11.sp,fontWeight=FontWeight.Bold)
+            if(dashboard.online)Text("● Đang nhận dữ liệu Firestore realtime",color=Color(0xFF41633A),fontWeight=FontWeight.Bold) else Text(dashboard.error?:"Chưa kết nối realtime",color=Color(0xFF9A4B3D))
+            Text("Backup DB riêng tư lưu dữ liệu kinh doanh, cấu hình và nhân viên/PIN. Ảnh món/combo được đồng bộ và khôi phục riêng qua Cloud Storage. URI thiết bị/máy in, log ngân hàng và lịch sử in không được sao chép sang máy mới.",fontSize=11.sp)
+        }
+        if(confirmRestore)AlertDialog(
+            onDismissRequest={confirmRestore=false},
+            title={Text("Khôi phục cloud backup?")},
+            text={Text("Dữ liệu POS hiện tại sẽ được lưu một bản an toàn trên máy rồi thay bằng bản cloud mới nhất. Sau khi DB phục hồi, ảnh món/combo sẽ được khôi phục riêng từ Cloud Storage nếu có. Cấu hình máy in/thiết bị vẫn giữ riêng theo từng máy.")},
+            confirmButton={Button({confirmRestore=false;vm.restoreFirebaseBackup()}){Text("KHÔI PHỤC")}},
+            dismissButton={OutlinedButton({confirmRestore=false}){Text("HỦY")}}
+        )
+    }
+}
+
+@Composable
+fun BackupCenter(vm: PosViewModel) {
+    val context = LocalContext.current
+    val appMenu by vm.menu.collectAsState()
+    val appBills by vm.bills.collectAsState()
+    var message by remember { mutableStateOf("") }
+    var refreshTick by remember { mutableStateOf(0) }
+    var rootUri by remember { mutableStateOf(vm.setting("storage_root_uri")) }
+    val savedRootUri = vm.setting("storage_root_uri")
+    val storageWritesEnabled = vm.setting("storage_write_enabled") != "false"
+    LaunchedEffect(savedRootUri) {
+        if (savedRootUri.isNotBlank()) rootUri = savedRootUri
+    }
+
+    val chooseRoot = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) {
+            val result = runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+                SafPosStorage.ensureSelectedRoot(context, uri.toString()).getOrThrow()
+            }
+            if (result.isSuccess) {
+                rootUri = uri.toString()
+                val existingMaster = ConfigBackup.findMaster(context, uri.toString()) != null
+                val existingData = DataBackup.findLatest(context, uri.toString()) != null
+                val existingMedia = DataBackup.findMediaLatest(context, uri.toString()) != null
+                val existingBackup = existingMaster || existingData || existingMedia
+                vm.attachStorageRoot(uri.toString(), allowWrites = !existingBackup)
+                refreshTick++
+                message = if (existingBackup) {
+                    "Đã gắn lại cây POS0210 có backup cũ. Tạm khóa ghi tự động để không ghi đè; hãy KHÔI PHỤC TOÀN BỘ trước."
+                } else {
+                    "Đã gắn cây POS0210 mới và tạo CONFIG / DATA / ARCHIVE. Có thể ghi backup từ dữ liệu hiện tại."
+                }
+            } else {
+                message = "Không gắn được thư mục: ${result.exceptionOrNull()?.message}"
+            }
+        }
+    }
+
+    val importMaster = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val result = ConfigBackup.importConfig(context, uri)
+            if (result.isSuccess) {
+                if (rootUri.isNotBlank()) {
+                    ConfigBackup.copyMaster(context, rootUri, uri)
+                }
+                Toast.makeText(context, "Đã LOAD MASTER. App sẽ mở lại.", Toast.LENGTH_LONG).show()
+                android.os.Process.killProcess(android.os.Process.myPid())
+            } else {
+                message = "LOAD MASTER lỗi: ${result.exceptionOrNull()?.message}"
+            }
+        }
+    }
+
+    val restoreBackup = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val result = if (rootUri.isNotBlank()) {
+                DataBackup.restoreDatabaseAndApplyMaster(context, uri, rootUri)
+            } else {
+                DataBackup.restoreDatabase(context, uri)
+            }
+            if (result.isSuccess) {
+                Toast.makeText(
+                    context,
+                    if (rootUri.isNotBlank()) "Đã RESTORE DATA + áp lại MASTER. App sẽ mở lại." else "Đã RESTORE DATA. Chưa có MASTER root để áp lại.",
+                    Toast.LENGTH_LONG
+                ).show()
+                android.os.Process.killProcess(android.os.Process.myPid())
+            } else {
+                message = "RESTORE DATA lỗi: ${result.exceptionOrNull()?.message}"
+            }
+        }
+    }
+
+    val masterFound = remember(refreshTick, rootUri) {
+        rootUri.isNotBlank() && ConfigBackup.findMaster(context, rootUri) != null
+    }
+    val dataFound = remember(refreshTick, rootUri) {
+        rootUri.isNotBlank() && DataBackup.findLatest(context, rootUri) != null
+    }
+    val mediaFound = remember(refreshTick, rootUri) {
+        rootUri.isNotBlank() && DataBackup.findMediaLatest(context, rootUri) != null
+    }
+    val rootAccess = remember(refreshTick, rootUri) {
+        rootUri.isNotBlank() && SafPosStorage.hasPersistedAccess(context, rootUri)
+    }
+
+    Column {
+        Header("Dữ liệu & Backup") { vm.screen.value = "MANAGE" }
+        Column(
+            Modifier.fillMaxSize().padding(horizontal = 16.dp).verticalScroll(rememberScrollState())
+        ) {
+            Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("NƠI LƯU POS0210", fontWeight = FontWeight.Black, fontSize = 20.sp)
+                    Text(
+                        when {
+                            rootUri.isBlank() -> "CHƯA GẮN THƯ MỤC"
+                            !rootAccess -> "ĐÃ MẤT QUYỀN · CẦN GẮN LẠI"
+                            storageWritesEnabled -> "ĐÃ GẮN · ĐƯỢC PHÉP GHI BACKUP"
+                            else -> "ĐÃ GẮN · ĐANG KHÓA GHI ĐỂ BẢO VỆ BACKUP CŨ"
+                        },
+                        Modifier.padding(vertical = 6.dp),
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "Trong cửa sổ hệ thống, mở Download rồi chọn hoặc tạo thư mục POS0210. " +
+                        "App sẽ tạo CONFIG / DATA / ARCHIVE bên trong bằng SAF. Không cần quyền truy cập toàn bộ bộ nhớ.",
+                        fontSize = 13.sp
+                    )
+                    Button(
+                        onClick = {
+                            chooseRoot.launch(null)
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                    ) { Text(if (rootUri.isBlank()) "TẠO & GẮN THƯ MỤC POS0210" else "ĐỔI / GẮN LẠI POS0210") }
+                }
+            }
+
+            Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("DỮ LIỆU ĐANG DÙNG TRONG APP", fontWeight = FontWeight.Black, fontSize = 18.sp)
+                    Text("Menu: ${appMenu.size} món · Bill đã thanh toán: ${appBills.size}", Modifier.padding(top = 6.dp), fontWeight = FontWeight.Bold)
+                    Text("Các con số này phản ánh database đang mở trong app, không phụ thuộc việc đã gắn cây backup hay chưa.", fontSize = 12.sp)
+                }
+            }
+
+            Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("MASTER CONFIG", fontWeight = FontWeight.Black, fontSize = 20.sp)
+                    Text("Menu · ảnh món · bàn · nhân viên/PIN · VietQR · máy in · phân mục", fontSize = 13.sp)
+                    Text(
+                        "POS0210/CONFIG/POS0210_MASTER.0210\nFILE BACKUP: ${if (masterFound) "ĐÃ TÌM THẤY" else if (rootAccess) "CHƯA GHI FILE MASTER TRONG CÂY" else "KHÔNG THỂ KIỂM TRA · CẦN GẮN THƯ MỤC"}",
+                        Modifier.padding(vertical = 8.dp),
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Button(
+                        onClick = {
+                            if (rootUri.isBlank()) {
+                                message = "Hãy chọn nơi lưu POS0210 trước."
+                            } else {
+                                val result = ConfigBackup.saveMaster(context, rootUri)
+                                refreshTick++
+                                message = if (result.isSuccess) "Đã ghi đè đúng MASTER chuẩn." else "GHI MASTER lỗi: ${result.exceptionOrNull()?.message}"
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = rootAccess && storageWritesEnabled
+                    ) { Text("GHI MASTER NGAY") }
+
+                    if (masterFound) {
+                        OutlinedButton(
+                            onClick = {
+                                val uri = ConfigBackup.findMaster(context, rootUri)
+                                if (uri != null) {
+                                    val result = ConfigBackup.importConfig(context, uri)
+                                    if (result.isSuccess) {
+                                        vm.saveSetting("storage_root_uri", rootUri)
+                                        Toast.makeText(context, "Đã LOAD MASTER chuẩn. App sẽ mở lại.", Toast.LENGTH_LONG).show()
+                                        android.os.Process.killProcess(android.os.Process.myPid())
+                                    } else {
+                                        message = "LOAD MASTER lỗi: ${result.exceptionOrNull()?.message}"
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                        ) { Text("LOAD MASTER CHUẨN") }
+                    }
+
+                    OutlinedButton(
+                        onClick = { importMaster.launch(arrayOf("*/*")) },
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                    ) { Text("LOAD MASTER TỪ FILE KHÁC") }
+                }
+            }
+
+            Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("DATA VẬN HÀNH", fontWeight = FontWeight.Black, fontSize = 20.sp)
+                    Text("Bill · order · thanh toán · nhập hàng · lịch sử · audit", fontSize = 13.sp)
+                    Text(
+                        "POS0210/DATA/POS0210_DATA_LATEST.db\n" +
+                        "POS0210/DATA/POS0210_MEDIA_LATEST.0210\n" +
+                        "FILE BACKUP DATA: ${if (dataFound) "ĐÃ TÌM THẤY" else if (rootAccess) "CHƯA GHI TRONG CÂY" else "KHÔNG THỂ KIỂM TRA"}\n" +
+                        "FILE BACKUP MEDIA: ${if (mediaFound) "ĐÃ TÌM THẤY" else if (rootAccess) "CHƯA GHI TRONG CÂY" else "KHÔNG THỂ KIỂM TRA"}",
+                        Modifier.padding(vertical = 8.dp),
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Button(
+                        onClick = {
+                            if (rootUri.isBlank()) {
+                                message = "Hãy chọn nơi lưu POS0210 trước."
+                            } else {
+                                val result = DataBackup.backupLatest(context, rootUri)
+                                refreshTick++
+                                message = if (result.isSuccess) "BACKUP DATA + MEDIA thành công." else "BACKUP lỗi: ${result.exceptionOrNull()?.message}"
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = rootAccess && storageWritesEnabled
+                    ) { Text("BACKUP NGAY → DATA_LATEST") }
+
+                    OutlinedButton(
+                        onClick = {
+                            if (rootUri.isBlank()) {
+                                message = "Hãy chọn nơi lưu POS0210 trước."
+                            } else {
+                                val result = DataBackup.archiveSnapshot(context, rootUri)
+                                refreshTick++
+                                message = if (result.isSuccess) "Đã tạo snapshot trong ARCHIVE." else "ARCHIVE lỗi: ${result.exceptionOrNull()?.message}"
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        enabled = rootAccess && storageWritesEnabled
+                    ) { Text("TẠO SNAPSHOT ARCHIVE") }
+
+                    if (dataFound) {
+                        Button(
+                            onClick = {
+                                val result = DataBackup.restoreLatest(context, rootUri)
+                                if (result.isSuccess) {
+                                    Toast.makeText(context, "Đã RESTORE DATA + MEDIA + MASTER. App sẽ mở lại.", Toast.LENGTH_LONG).show()
+                                    android.os.Process.killProcess(android.os.Process.myPid())
+                                } else {
+                                    message = "RESTORE DATA_LATEST lỗi: ${result.exceptionOrNull()?.message}"
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                        ) { Text("KHÔI PHỤC TOÀN BỘ TỪ POS0210") }
+                    }
+
+                    OutlinedButton(
+                        onClick = { restoreBackup.launch(arrayOf("application/octet-stream", "*/*")) },
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                    ) { Text("RESTORE DATA TỪ FILE KHÁC") }
+                }
+            }
+
+            Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("HƯỚNG DẪN LƯU TRỮ & KHÔI PHỤC", fontWeight = FontWeight.Black, fontSize = 18.sp)
+                    Text(
+                        "CẤU TRÚC ĐÚNG:\n" +
+                        "Download/POS0210/CONFIG/POS0210_MASTER.0210\n" +
+                        "Download/POS0210/DATA/POS0210_DATA_LATEST.db\n" +
+                        "Download/POS0210/DATA/POS0210_MEDIA_LATEST.0210\n" +
+                        "Download/POS0210/ARCHIVE/...\n\n" +
+                        "LƯU TRỮ:\n" +
+                        "• MASTER: bấm GHI MASTER NGAY khi thay menu, bàn, nhân viên/PIN, phân quyền, VietQR, máy in.\n" +
+                        "• DATA_LATEST: app tự cập nhật sau các thao tác vận hành quan trọng.\n" +
+                        "• MEDIA_LATEST: giữ ảnh món/combo/hóa đơn; cập nhật khi có thay đổi ảnh hoặc BACKUP NGAY.\n" +
+                        "• ARCHIVE: tạo cả snapshot DB và media cùng mốc thời gian.\n\n" +
+                        "CHUYỂN SANG MÁY KHÁC:\n" +
+                        "1. Copy nguyên thư mục POS0210 vào Download của máy mới.\n" +
+                        "2. Cài POS0210 và vào Dữ liệu & Backup.\n" +
+                        "3. Gắn đúng thư mục Download/POS0210.\n" +
+                        "4. Bấm KHÔI PHỤC TOÀN BỘ TỪ POS0210.\n" +
+                        "5. App sẽ khôi phục DATA_LATEST + MEDIA_LATEST + MASTER, sau đó mở lại.\n\n" +
+                        "LƯU Ý:\n" +
+                        "• Sau khi cài lại app phải gắn lại thư mục vì Android có thể mất quyền SAF của app cũ.\n" +
+                        "• Nên copy cả thư mục POS0210, không copy riêng từng file.",
+                        Modifier.padding(top = 8.dp),
+                        fontSize = 13.sp
+                    )
+                }
+            }
+
+            Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("QUY TẮC AN TOÀN", fontWeight = FontWeight.Black)
+                    Text(
+                        "• App không tự tạo MASTER/DATA khi chưa gắn thư mục.\n" +
+                        "• Restore DATA luôn áp MASTER lại để PIN/quyền/menu không bị snapshot DB cũ ghi đè.\n" +
+                        "• Trước khi chuyển máy nên bấm GHI MASTER NGAY và BACKUP NGAY để chắc chắn lấy dữ liệu mới nhất.",
+                        Modifier.padding(top = 8.dp)
+                    )
+                }
+            }
+
+            if (message.isNotBlank()) {
+                Card(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                    Text(message, Modifier.padding(14.dp), fontWeight = FontWeight.Bold)
+                }
+            }
+            Spacer(Modifier.height(30.dp))
+        }
+    }
+}
+
+@Composable
+fun TableManager(vm: PosViewModel) {
+    val tables by vm.tables.collectAsState()
+    val areas by vm.areas.collectAsState()
+    val sessions by vm.sessions.collectAsState()
+    var editing by remember { mutableStateOf<DiningTableEntity?>(null) }
+    var adding by remember { mutableStateOf(false) }
+
+    Column {
+        Header("Bàn & khu vực") { vm.screen.value = "MANAGE" }
+        Button(
+            onClick = { adding = true },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
+        ) { Text("＋ THÊM BÀN") }
+
+        LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
+            items(tables) { t ->
+                val areaName = areas.firstOrNull { it.id == t.areaId }?.name ?: t.areaId
+                val occupied = sessions.any { it.tableId == t.id }
+                Card(
+                    Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { editing = t }
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(t.name, fontWeight = FontWeight.Bold)
+                            Text(areaName, fontSize = 12.sp)
+                        }
+                        if (occupied) Text("ĐANG CÓ KHÁCH", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        else Text("SỬA", fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+    }
+
+    if (adding) {
+        TableEditorDialog(
+            initial = null,
+            areas = areas,
+            onDismiss = { adding = false },
+            onSave = { name, areaId ->
+                vm.addTable(areaId, name)
+                adding = false
+            },
+            onHide = null
+        )
+    }
+
+    editing?.let { t ->
+        val occupied = sessions.any { it.tableId == t.id }
+        TableEditorDialog(
+            initial = t,
+            areas = areas,
+            onDismiss = { editing = null },
+            onSave = { name, areaId ->
+                vm.updateTable(t, name, areaId)
+                editing = null
+            },
+            onHide = if (occupied) null else {
+                {
+                    vm.hideTable(t)
+                    editing = null
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun TableEditorDialog(
+    initial: DiningTableEntity?,
+    areas: List<AreaEntity>,
+    onDismiss: () -> Unit,
+    onSave: (String, String) -> Unit,
+    onHide: (() -> Unit)?
+) {
+    var name by remember(initial?.id) { mutableStateOf(initial?.name ?: "") }
+    var areaId by remember(initial?.id, areas) {
+        mutableStateOf(initial?.areaId ?: areas.firstOrNull()?.id.orEmpty())
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (initial == null) "Thêm bàn" else "Sửa bàn") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Tên bàn") },
+                    placeholder = { Text("Để trống sẽ tự đặt Bàn xx") }
+                )
+                Spacer(Modifier.height(10.dp))
+                Text("Khu vực", fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    areas.forEach { a ->
+                        FilterChip(
+                            selected = areaId == a.id,
+                            onClick = { areaId = a.id },
+                            label = { Text(a.name) }
+                        )
+                    }
+                }
+                if (initial != null && onHide == null) {
+                    Text(
+                        "Bàn đang có khách nên chưa thể ẩn.",
+                        Modifier.padding(top = 10.dp),
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onSave(name, areaId) },
+                enabled = areaId.isNotBlank()
+            ) { Text("LƯU") }
+        },
+        dismissButton = {
+            Row {
+                if (onHide != null) {
+                    TextButton(onClick = onHide) { Text("ẨN BÀN") }
+                }
+                TextButton(onClick = onDismiss) { Text("HỦY") }
+            }
+        }
+    )
+}
+
+@Composable
+fun Rowx(t: String, s: String, go: () -> Unit) {
+    Card(Modifier.fillMaxWidth().padding(5.dp).clickable { go() }) {
+        Column(Modifier.padding(16.dp)) {
+            Text(t, fontWeight = FontWeight.Bold)
+            Text(s, fontSize = 12.sp)
+        }
+    }
+}
+
+@Composable
+fun Employees(vm: PosViewModel) {
+    val es by vm.employees.collectAsState()
+    val current by vm.currentEmployee.collectAsState()
+    var editing by remember { mutableStateOf<EmployeeEntity?>(null) }
+    var adding by remember { mutableStateOf(false) }
+    Column {
+        Header("Nhân viên") { vm.screen.value = "MANAGE" }
+        if (current?.role == "ADMIN") {
+            Button(
+                onClick = { adding = true },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
+            ) { Text("＋ THÊM NHÂN VIÊN") }
+        }
+        LazyColumn {
+            items(es) { e ->
+                Card(Modifier.fillMaxWidth().padding(6.dp).clickable { if (current?.role == "ADMIN") editing = e }) {
+                    Column(Modifier.padding(14.dp)) {
+                        Text("${e.name} · ${e.role}", fontWeight = FontWeight.Bold)
+                        Text("Order ${e.canOrder} · Bếp ${e.canSendKitchen} · Thu ${e.canCheckout} · Nhập ${e.canPurchase}")
+                        Text("Chạm để sửa quyền", fontSize = 12.sp)
+                    }
+                }
+            }
+        }
+    }
+    if (adding) {
+        EmployeeEditor(null, onDismiss = { adding = false }) { name, pin, role, order, kitchen, checkout, purchase, report, menu, system ->
+            vm.saveEmployee(name, pin, role, checkout, purchase, order, kitchen, report, menu, system)
+            adding = false
+        }
+    }
+    editing?.let { e ->
+        EmployeeEditor(e, onDismiss = { editing = null }) { name, pin, role, order, kitchen, checkout, purchase, report, menu, system ->
+            vm.updateEmployee(
+                e.copy(
+                    name = name,
+                    pin = pin,
+                    role = role,
+                    canOrder = order,
+                    canSendKitchen = kitchen,
+                    canCheckout = checkout,
+                    canPurchase = purchase,
+                    canViewReport = report,
+                    canManageMenu = menu,
+                    canManageSystem = system
+                )
+            )
+            editing = null
+        }
+    }
+}
+
+@Composable
+fun EmployeeEditor(
+    initial: EmployeeEntity?,
+    onDismiss: () -> Unit,
+    onSave: (String, String, String, Boolean, Boolean, Boolean, Boolean, Boolean, Boolean, Boolean) -> Unit
+) {
+    var name by remember(initial?.id) { mutableStateOf(initial?.name ?: "") }
+    var pin by remember(initial?.id) { mutableStateOf(initial?.pin ?: "") }
+    var role by remember(initial?.id) { mutableStateOf(initial?.role ?: "STAFF") }
+    var order by remember(initial?.id) { mutableStateOf(initial?.canOrder ?: true) }
+    var kitchen by remember(initial?.id) { mutableStateOf(initial?.canSendKitchen ?: true) }
+    var checkout by remember(initial?.id) { mutableStateOf(initial?.canCheckout ?: false) }
+    var purchase by remember(initial?.id) { mutableStateOf(initial?.canPurchase ?: false) }
+    var report by remember(initial?.id) { mutableStateOf(initial?.canViewReport ?: false) }
+    var menu by remember(initial?.id) { mutableStateOf(initial?.canManageMenu ?: false) }
+    var system by remember(initial?.id) { mutableStateOf(initial?.canManageSystem ?: false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (initial == null) "Thêm nhân viên" else "Sửa nhân viên") },
+        confirmButton = {
+            Button(
+                onClick = { onSave(name, pin, role, order, kitchen, checkout, purchase, report, menu, system) },
+                enabled = name.isNotBlank() && pin.length == 4
+            ) { Text("LƯU") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("HỦY") } },
+        text = {
+            LazyColumn {
+                item {
+                    OutlinedTextField(name, { name = it }, label = { Text("Tên nhân viên") })
+                    OutlinedTextField(
+                        pin,
+                        { pin = it.filter(Char::isDigit).take(4) },
+                        label = { Text("PIN 4 số") },
+                        visualTransformation = PasswordVisualTransformation()
+                    )
+                    Row {
+                        FilterChip(role == "STAFF", { role = "STAFF" }, { Text("STAFF") })
+                        Spacer(Modifier.width(8.dp))
+                        FilterChip(role == "MANAGER", { role = "MANAGER" }, { Text("MANAGER") })
+                    }
+                    PermissionSwitch("Order món", order) { order = it }
+                    PermissionSwitch("Gửi bếp", kitchen) { kitchen = it }
+                    PermissionSwitch("Thanh toán", checkout) { checkout = it }
+                    PermissionSwitch("Nhập đầu vào", purchase) { purchase = it }
+                    PermissionSwitch("Xem báo cáo", report) { report = it }
+                    PermissionSwitch("Quản lý menu", menu) { menu = it }
+                    PermissionSwitch("Cấu hình hệ thống", system) { system = it }
+                }
+            }
+        }
+    )
+}
+
+@Composable
+fun PermissionSwitch(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.weight(1f))
+        Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
+@Composable
+fun ComboManager(vm: PosViewModel) {
+    val combos by vm.combos.collectAsState()
+    val menu by vm.menu.collectAsState()
+    var showAdd by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<Pair<ComboEntity, Map<String, Int>>?>(null) }
+    Column {
+        Header("Combo") { vm.screen.value = "MANAGE" }
+        Button(onClick = { showAdd = true }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+            Text("＋ TẠO COMBO")
+        }
+        if (combos.isEmpty()) {
+            Text("Chưa có combo.", Modifier.padding(20.dp))
+        } else {
+            LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
+                items(combos) { combo ->
+                    val parts by vm.comboItems(combo.id).collectAsState(initial = emptyList())
+                    Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            ComboArtwork(combo, parts, menu, Modifier.size(width = 104.dp, height = 68.dp))
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(combo.name, fontWeight = FontWeight.Bold)
+                                Text(money(combo.price))
+                                if (combo.description.isNotBlank()) Text(combo.description, fontSize = 11.sp, maxLines = 2)
+                                ComboComponentNames(vm, combo.id, menu)
+                                TextButton(onClick = { editing = combo to parts.associate { it.menuItemId to it.qty } }) { Text("SỬA") }
+                            }
+                            Switch(checked = combo.active, onCheckedChange = { vm.toggleCombo(combo) })
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (showAdd) {
+        ComboEditDialog(menu.filter { it.active }, null, emptyMap(), onDismiss = { showAdd = false }) { name, price, description, imageUri, selected ->
+            vm.saveCombo(name, price, description, imageUri, selected)
+            showAdd = false
+        }
+    }
+    editing?.let { (combo, selected) ->
+        ComboEditDialog(menu.filter { it.active || it.id in selected }, combo, selected, onDismiss = { editing = null }) { name, price, description, imageUri, items ->
+            vm.saveCombo(name, price, description, imageUri, items, combo)
+            editing = null
+        }
+    }
+}
+
+@Composable
+fun ComboArtwork(combo: ComboEntity, parts: List<ComboItemEntity>, menu: List<MenuItemEntity>, modifier: Modifier) {
+    if (!combo.imageUri.isNullOrBlank()) {
+        AsyncImage(model = combo.imageUri, contentDescription = combo.name, modifier = modifier)
+        return
+    }
+    val componentImages = parts.flatMap { part -> List(part.qty.coerceIn(1, 2)) { menu.firstOrNull { it.id == part.menuItemId } } }.filterNotNull().take(2)
+    Surface(modifier, color = Tint, shape = RoundedCornerShape(8.dp)) {
+        if (componentImages.isEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("COMBO", fontWeight = FontWeight.Black, fontSize = 11.sp) }
+        } else {
+            Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                componentImages.forEachIndexed { index, item ->
+                    if (index > 0) Text("+", Modifier.padding(horizontal = 3.dp), fontWeight = FontWeight.Black, color = Coffee)
+                    Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                        if (!item.imageUri.isNullOrBlank()) AsyncImage(model = item.imageUri, contentDescription = item.name, modifier = Modifier.fillMaxSize())
+                        else Text(item.name.take(2).uppercase(), fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ComboComponentNames(vm: PosViewModel, comboId: String, menu: List<MenuItemEntity>) {
+    val parts by vm.comboItems(comboId).collectAsState(initial = emptyList())
+    val text = parts.mapNotNull { ci -> menu.firstOrNull { it.id == ci.menuItemId }?.let { "${ci.qty}×${it.name}" } }.joinToString(" + ")
+    if (text.isNotBlank()) Text(text, fontSize = 11.sp)
+}
+
+@Composable
+fun ComboEditDialog(
+    menu: List<MenuItemEntity>,
+    initial: ComboEntity?,
+    initialItems: Map<String, Int>,
+    onDismiss: () -> Unit,
+    onSave: (String, Long, String, String?, Map<String, Int>) -> Unit
+) {
+    val context = LocalContext.current
+    var name by remember(initial?.id) { mutableStateOf(initial?.name.orEmpty()) }
+    var priceText by remember(initial?.id) { mutableStateOf(initial?.price?.toString().orEmpty()) }
+    var description by remember(initial?.id) { mutableStateOf(initial?.description.orEmpty()) }
+    var imageUri by remember(initial?.id) { mutableStateOf(initial?.imageUri) }
+    val selected = remember(initial?.id) { mutableStateMapOf<String, Int>().apply { putAll(initialItems) } }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            imageUri = uri.toString()
+        }
+    }
+    val normalTotal = selected.entries.sumOf { (id, q) -> (menu.firstOrNull { it.id == id }?.price ?: 0L) * q }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (initial == null) "Tạo combo" else "Sửa combo") },
+        confirmButton = {
+            Button(
+                onClick = { onSave(name, priceText.toLongOrNull() ?: 0L, description, imageUri, selected.toMap()) },
+                enabled = name.isNotBlank() && (priceText.toLongOrNull() ?: 0L) > 0 && selected.isNotEmpty()
+            ) { Text("LƯU COMBO") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("HỦY") } },
+        text = {
+            LazyColumn {
+                item {
+                    OutlinedTextField(name, { name = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Tên combo") })
+                    OutlinedTextField(priceText, { priceText = it.filter(Char::isDigit) }, modifier = Modifier.fillMaxWidth(), label = { Text("Giá combo") })
+                    OutlinedTextField(description, { description = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Mô tả / ghi chú combo") }, minLines = 2)
+                    OutlinedButton(onClick = { picker.launch(arrayOf("image/*")) }, modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                        Text(if (imageUri == null) "＋ ẢNH COMBO" else "✓ ĐÃ CHỌN ẢNH")
+                    }
+                    if (imageUri != null) TextButton(onClick = { imageUri = null }, modifier = Modifier.fillMaxWidth()) { Text("DÙNG ẢNH GHÉP TỪ CÁC MÓN") }
+                    Text("Giá lẻ các món đã chọn: ${money(normalTotal)}", fontWeight = FontWeight.Bold)
+                    val comboPrice = priceText.toLongOrNull() ?: 0L
+                    if (comboPrice > 0 && normalTotal > comboPrice) Text("Tiết kiệm: ${money(normalTotal - comboPrice)}", fontSize = 12.sp)
+                    Text("Chọn món trong combo", Modifier.padding(top = 10.dp), fontWeight = FontWeight.Bold)
+                }
+                items(menu) { item ->
+                    val q = selected[item.id] ?: 0
+                    Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(item.name, fontWeight = FontWeight.Bold)
+                            Text(money(item.price), fontSize = 11.sp)
+                        }
+                        if (q > 0) {
+                            TextButton(onClick = { if (q <= 1) selected.remove(item.id) else selected[item.id] = q - 1 }) { Text("−") }
+                            Text(q.toString(), fontWeight = FontWeight.Bold)
+                        }
+                        TextButton(onClick = { selected[item.id] = q + 1 }) { Text("+") }
+                    }
+                }
+            }
+        }
+    )
+}
+
+@Composable
+fun PricingManager(vm: PosViewModel) {
+    val rules by vm.pricingRules.collectAsState()
+    var showAdd by remember { mutableStateOf(false) }
+    var deleteTarget by remember { mutableStateOf<PricingRuleEntity?>(null) }
+    var editTarget by remember { mutableStateOf<PricingRuleEntity?>(null) }
+    Column {
+        Header("Ưu đãi & điều chỉnh giá") { vm.screen.value = "MANAGE" }
+        Button(onClick = { showAdd = true }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+            Text("＋ TẠO CHƯƠNG TRÌNH")
+        }
+        OutlinedButton(onClick = { vm.screen.value = "BUY_GET" }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp)) {
+            Text("MUA X TẶNG Y")
+        }
+        Text("Giảm giá không cộng dồn: hệ thống chỉ áp dụng 1 mức giảm có giá trị lớn nhất.", Modifier.padding(horizontal = 16.dp), fontSize = 12.sp)
+        LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
+            items(rules) { rule ->
+                Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(rule.name, fontWeight = FontWeight.Bold)
+                            Text("${if (rule.kind == "DISCOUNT") "Giảm" else "Phụ thu"} ${rule.percent}%${if (rule.code.isNotBlank()) " · Mã ${rule.code}" else ""}")
+                            val mode = if (rule.autoApply) "Tự động" else "Theo mã"
+                            Text(mode, fontSize = 11.sp)
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Switch(checked = rule.active, onCheckedChange = { vm.togglePricingRule(rule) })
+                            TextButton(onClick = { editTarget = rule }) { Text("SỬA") }
+                            TextButton(onClick = { deleteTarget = rule }) { Text("XÓA") }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    deleteTarget?.let { rule ->
+        AlertDialog(
+            onDismissRequest = { deleteTarget = null },
+            title = { Text("Xóa chương trình giá?") },
+            text = { Text("Chương trình sẽ ngừng áp dụng cho bill mới. Bill lịch sử đã dùng chương trình này vẫn được giữ nguyên.") },
+            confirmButton = { Button(onClick = { vm.deletePricingRule(rule); deleteTarget = null }) { Text("XÓA") } },
+            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("HỦY") } }
+        )
+    }
+    editTarget?.let { rule -> PricingRuleDialog(initial=rule,onDismiss={editTarget=null}) { name,code,kind,percent,startAt,endAt,startMin,endMin,autoApply -> vm.updatePricingRule(rule,name,code,kind,percent,startAt,endAt,startMin,endMin,autoApply);editTarget=null } }
+    if (showAdd) {
+        PricingRuleDialog(onDismiss = { showAdd = false }) { name, code, kind, percent, startAt, endAt, startMin, endMin, autoApply ->
+            vm.savePricingRule(name, code, kind, percent, startAt, endAt, startMin, endMin, autoApply)
+            showAdd = false
+        }
+    }
+}
+
+@Composable
+fun PricingRuleDialog(
+    initial: PricingRuleEntity? = null,
+    onDismiss: () -> Unit,
+    onSave: (String, String, String, Int, Long?, Long?, Int?, Int?, Boolean) -> Unit
+) {
+    var name by remember { mutableStateOf(initial?.name.orEmpty()) }
+    var code by remember { mutableStateOf(initial?.code.orEmpty()) }
+    var kind by remember { mutableStateOf(initial?.kind ?: "DISCOUNT") }
+    var percentText by remember { mutableStateOf(initial?.percent?.toString().orEmpty()) }
+    var startText by remember { mutableStateOf(initial?.startAt?.let { SimpleDateFormat("dd/MM/yyyy HH:mm",Locale.getDefault()).format(java.util.Date(it)) }.orEmpty()) }
+    var endText by remember { mutableStateOf(initial?.endAt?.let { SimpleDateFormat("dd/MM/yyyy HH:mm",Locale.getDefault()).format(java.util.Date(it)) }.orEmpty()) }
+    var startHour by remember { mutableStateOf(initial?.startMinute?.let { "%02d:%02d".format(it/60,it%60) }.orEmpty()) }
+    var endHour by remember { mutableStateOf(initial?.endMinute?.let { "%02d:%02d".format(it/60,it%60) }.orEmpty()) }
+    var autoApply by remember { mutableStateOf(initial?.autoApply ?: true) }
+    fun parseDate(text: String): Long? = if (text.isBlank()) null else runCatching {
+        SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).apply { isLenient = false }.also { require(it.parse(text)?.let { d -> it.format(d) == text.trim() } == true) }.parse(text)?.time
+    }.getOrNull()
+    fun parseMinute(text: String): Int? {
+        if (text.isBlank()) return null
+        val parts = text.split(":")
+        if (parts.size != 2) return null
+        val h = parts[0].toIntOrNull() ?: return null
+        val m = parts[1].toIntOrNull() ?: return null
+        if (h !in 0..23 || m !in 0..59) return null
+        return h * 60 + m
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Chương trình giá") },
+        confirmButton = {
+            Button(
+                onClick = { onSave(name, code, kind, percentText.toIntOrNull() ?: 0, parseDate(startText), parseDate(endText), parseMinute(startHour), parseMinute(endHour), autoApply) },
+                enabled = name.isNotBlank() && (percentText.toIntOrNull() ?: 0) in 1..100 && (autoApply || code.isNotBlank()) && (startText.isBlank() || parseDate(startText)!=null) && (endText.isBlank() || parseDate(endText)!=null) && (startHour.isBlank() || parseMinute(startHour)!=null) && (endHour.isBlank() || parseMinute(endHour)!=null) && (startText.isBlank() || endText.isBlank() || parseDate(endText)!! >= parseDate(startText)!!) && (startHour.isBlank() == endHour.isBlank())
+            ) { Text("LƯU") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("HỦY") } },
+        text = {
+            LazyColumn {
+                item {
+                    OutlinedTextField(name, { name = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Tên chương trình") })
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(kind == "DISCOUNT", { kind = "DISCOUNT" }, { Text("GIẢM") })
+                        FilterChip(kind == "SURCHARGE", { kind = "SURCHARGE" }, { Text("TĂNG / PHỤ THU") })
+                    }
+                    OutlinedTextField(percentText, { percentText = it.filter(Char::isDigit).take(3) }, modifier = Modifier.fillMaxWidth(), label = { Text("% điều chỉnh") })
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Tự động áp dụng", Modifier.weight(1f))
+                        Switch(checked = autoApply, onCheckedChange = { autoApply = it })
+                    }
+                    if (!autoApply) {
+                        OutlinedTextField(code, { code = it.uppercase().filter { ch -> ch.isLetterOrDigit() || ch == '_' || ch == '-' }.take(30) }, modifier = Modifier.fillMaxWidth(), label = { Text("Mã ưu đãi") })
+                    } else {
+                        OutlinedTextField(code, { code = it.uppercase().take(30) }, modifier = Modifier.fillMaxWidth(), label = { Text("Mã tham chiếu (không bắt buộc)") })
+                    }
+                    Text("Thời hạn chung (để trống nếu không giới hạn)", Modifier.padding(top = 8.dp), fontWeight = FontWeight.Bold)
+                    OutlinedTextField(startText, { startText = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Từ dd/MM/yyyy HH:mm") })
+                    OutlinedTextField(endText, { endText = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Đến dd/MM/yyyy HH:mm") })
+                    Text("Khung giờ lặp hàng ngày (để trống nếu cả ngày)", Modifier.padding(top = 8.dp), fontWeight = FontWeight.Bold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(startHour, { startHour = it.take(5) }, modifier = Modifier.weight(1f), label = { Text("Từ HH:mm") })
+                        OutlinedTextField(endHour, { endHour = it.take(5) }, modifier = Modifier.weight(1f), label = { Text("Đến HH:mm") })
+                    }
+                }
+            }
+        }
+    )
+}
+
+@Composable
+fun MenuManager(vm: PosViewModel) {
+    val menu by vm.menu.collectAsState()
+    val categories by vm.categories.collectAsState()
+    val context = LocalContext.current
+    var showAdd by remember { mutableStateOf(false) }
+    var showCategoryManager by remember { mutableStateOf(false) }
+    var editTarget by remember { mutableStateOf<MenuItemEntity?>(null) }
+    var deleteTarget by remember { mutableStateOf<MenuItemEntity?>(null) }
+    var imageTarget by remember { mutableStateOf<MenuItemEntity?>(null) }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+            imageTarget?.let { vm.setMenuImage(it, uri.toString()) }
+        }
+        imageTarget = null
+    }
+    Column {
+        Header("Quản lý menu") { vm.screen.value = "MANAGE" }
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Button(onClick = { showAdd = true }, modifier = Modifier.weight(1f)) { Text("＋ THÊM MÓN") }
+            OutlinedButton(onClick = { showCategoryManager = true }, modifier = Modifier.weight(1f)) { Text("NHÓM MÓN") }
+        }
+        LazyColumn {
+            items(menu) { m ->
+                Card(Modifier.fillMaxWidth().padding(6.dp)) {
+                    Column(Modifier.padding(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (!m.imageUri.isNullOrBlank()) {
+                            AsyncImage(
+                                model = m.imageUri,
+                                contentDescription = m.name,
+                                modifier = Modifier.size(58.dp)
+                            )
+                            Spacer(Modifier.width(10.dp))
+                        } else {
+                            Surface(
+                                modifier = Modifier.size(58.dp),
+                                color = Tint,
+                                shape = MaterialTheme.shapes.medium
+                            ) {
+                                Box(contentAlignment = Alignment.Center) { Text("ẢNH", fontSize = 11.sp) }
+                            }
+                            Spacer(Modifier.width(10.dp))
+                        }
+                        Column(Modifier.weight(1f)) {
+                            Text(m.name, fontWeight = FontWeight.Bold)
+                            Text("${m.productCode} · ${categories.firstOrNull { it.id == m.categoryId }?.name ?: "Khác"}", fontSize = 12.sp)
+                            Text(money(m.price))
+                            if (m.description.isNotBlank()) Text(m.description, fontSize = 12.sp, maxLines = 2)
+                            if (!m.active) Text("TẠM NGƯNG BÁN", color = Color(0xFF9A3412), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { editTarget = m }) { Text("SỬA") }
+                        TextButton(onClick = {
+                            imageTarget = m
+                            picker.launch(arrayOf("image/*"))
+                        }) { Text(if (m.imageUri.isNullOrBlank()) "＋ ẢNH" else "ĐỔI ẢNH") }
+                        TextButton(onClick = { if (m.active) deleteTarget = m else vm.toggleMenu(m) }) { Text(if(m.active) "TẠM NGƯNG" else "BẬT BÁN") }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (showAdd) {
+        MenuAddDialog(categories, null, onDismiss = { showAdd = false }) { name, price, cat, description, imageUri, active ->
+            vm.saveMenu(name, price, cat, description, imageUri, active)
+            showAdd = false
+        }
+    }
+    editTarget?.let { original ->
+        MenuAddDialog(categories, original, onDismiss = { editTarget = null }) { name, price, cat, description, imageUri, active ->
+            vm.updateMenu(original, name, price, cat, description, imageUri, active)
+            editTarget = null
+        }
+    }
+    if (showCategoryManager) {
+        CategoryManagerDialog(
+            categories = categories,
+            menu = menu,
+            onDismiss = { showCategoryManager = false },
+            onAdd = { vm.addCategory(it) },
+            onDelete = { vm.deleteCategory(it) }
+        )
+    }
+    deleteTarget?.let { m ->
+        AlertDialog(
+            onDismissRequest = { deleteTarget = null },
+            title = { Text("Xoá món") },
+            text = { Text("Xoá ${m.name} khỏi menu bán? Lịch sử bill cũ vẫn được giữ.") },
+            confirmButton = {
+                Button(onClick = { vm.deleteMenu(m); deleteTarget = null }) { Text("XOÁ MÓN") }
+            },
+            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("HỦY") } }
+        )
+    }
+}
+
+@Composable
+fun CategoryManagerDialog(
+    categories: List<MenuCategoryEntity>,
+    menu: List<MenuItemEntity>,
+    onDismiss: () -> Unit,
+    onAdd: (String) -> Unit,
+    onDelete: (MenuCategoryEntity) -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Nhóm món") },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("ĐÓNG") } },
+        text = {
+            LazyColumn {
+                item {
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Tên nhóm mới") }
+                    )
+                    Button(
+                        onClick = { onAdd(name); name = "" },
+                        enabled = name.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                    ) { Text("＋ THÊM NHÓM") }
+                }
+                items(categories) { c ->
+                    val hasActiveItems = menu.any { it.active && it.categoryId == c.id }
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(c.name, Modifier.weight(1f), fontWeight = FontWeight.Bold)
+                        TextButton(
+                            onClick = { onDelete(c) },
+                            enabled = !hasActiveItems
+                        ) { Text("XOÁ") }
+                    }
+                    if (hasActiveItems) {
+                        Text("Còn món trong nhóm này", fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+    )
+}
+
+@Composable
+fun MenuAddDialog(
+    categories: List<MenuCategoryEntity>,
+    initial: MenuItemEntity? = null,
+    onDismiss: () -> Unit,
+    onSave: (String, Long, String, String, String?, Boolean) -> Unit
+) {
+    val context = LocalContext.current
+    var name by remember(initial?.id) { mutableStateOf(initial?.name ?: "") }
+    var priceText by remember(initial?.id) { mutableStateOf(initial?.price?.toString() ?: "") }
+    var cat by remember(categories, initial?.id) { mutableStateOf(initial?.categoryId ?: categories.firstOrNull()?.id ?: "") }
+    var description by remember(initial?.id) { mutableStateOf(initial?.description ?: "") }
+    var imageUri by remember(initial?.id) { mutableStateOf(initial?.imageUri) }
+    var active by remember(initial?.id) { mutableStateOf(initial?.active ?: true) }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+            imageUri = uri.toString()
+        }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (initial == null) "Thêm món" else "Sửa món · ${initial.productCode}") },
+        confirmButton = {
+            Button(
+                onClick = { onSave(name, priceText.toLongOrNull() ?: 0L, cat, description, imageUri, active) },
+                enabled = name.isNotBlank() && priceText.toLongOrNull() != null && cat.isNotBlank()
+            ) { Text("LƯU MÓN") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("HỦY") } },
+        text = {
+            LazyColumn {
+                item {
+                    OutlinedTextField(name, { name = it }, label = { Text("Tên món") })
+                    OutlinedTextField(
+                        priceText,
+                        { priceText = it.filter(Char::isDigit) },
+                        label = { Text("Giá bán") }
+                    )
+                    OutlinedTextField(
+                        description,
+                        { description = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Mô tả / ghi chú món") },
+                        minLines = 2,
+                        maxLines = 4
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(onClick = { picker.launch(arrayOf("image/*")) }) {
+                        Text(if (imageUri == null) "＋ THÊM ẢNH MINH HOẠ" else "✓ ĐÃ CHỌN ẢNH · ĐỔI ẢNH")
+                    }
+                    if (imageUri != null) {
+                        AsyncImage(
+                            model = imageUri,
+                            contentDescription = "Ảnh món mới",
+                            modifier = Modifier.fillMaxWidth().height(150.dp).padding(top = 8.dp)
+                        )
+                    }
+                    Text("Nhóm món", Modifier.padding(top = 10.dp))
+                    categories.forEach { c ->
+                        FilterChip(
+                            selected = cat == c.id,
+                            onClick = { cat = c.id },
+                            label = { Text(c.name) }
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Đang bán", Modifier.weight(1f), fontWeight = FontWeight.Bold)
+                        Switch(checked = active, onCheckedChange = { active = it })
+                    }
+                }
+            }
+        }
+    )
+}
+
+@Composable
+fun Purchases(vm: PosViewModel) {
+    val currentGuard by vm.currentEmployee.collectAsState()
+    if (currentGuard?.role != "ADMIN" && currentGuard?.canPurchase != true) {
+        Column {
+            Header("Nhập đầu vào") { vm.screen.value = "MANAGE" }
+            Text("Bạn không có quyền nhập đầu vào.", Modifier.padding(20.dp), fontWeight = FontWeight.Bold)
+        }
+        return
+    }
+    val purchases by vm.purchases.collectAsState()
+    val purchaseCategories by vm.purchaseCategories.collectAsState()
+    val costCodes by vm.costCodes.collectAsState()
+    val assetCategories by vm.assetCategories.collectAsState()
+    val profitPartners by vm.profitPartners.collectAsState()
+    val context = LocalContext.current
+    var itemName by remember { mutableStateOf("") }
+    var qtyText by remember { mutableStateOf("") }
+    var unit by remember { mutableStateOf("lần") }
+    var unitPriceText by remember { mutableStateOf("") }
+    var supplier by remember { mutableStateOf("") }
+    var paidByName by remember { mutableStateOf("") }
+    var selectedCostCodeId by remember { mutableStateOf<String?>(null) }
+    var showCostCodeManager by remember { mutableStateOf(false) }
+    var note by remember { mutableStateOf("") }
+    var invoiceImage by remember { mutableStateOf<String?>(null) }
+    var selectedPurchase by remember { mutableStateOf<PurchaseEntity?>(null) }
+    var transactionType by remember { mutableStateOf(FinancialTransactionTypes.OPERATING_EXPENSE) }
+    var expenseCategory by remember { mutableStateOf(ExpenseCategories.UNCLASSIFIED) }
+    var selectedAssetCategory by remember(assetCategories){mutableStateOf(assetCategories.firstOrNull())}
+    var usefulLifeText by remember{mutableStateOf("")};var residualText by remember{mutableStateOf("")};var liquidationText by remember{mutableStateOf("")}
+    var movementMethod by remember{mutableStateOf("CASH")};var movementPartnerId by remember{mutableStateOf<String?>(null)}
+    var selectedCategoryId by remember { mutableStateOf("") }
+    var showCategoryManager by remember { mutableStateOf(false) }
+    var dateText by remember {
+        mutableStateOf(SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date()))
+    }
+    var message by remember { mutableStateOf("") }
+
+    val invoicePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+            invoiceImage = uri.toString()
+        }
+    }
+
+    val selectedCategory = purchaseCategories.firstOrNull { it.id == selectedCategoryId }
+    val qty = qtyText.replace(',', '.').toDoubleOrNull()
+    val unitPrice = unitPriceText.toLongOrNull()
+    val total = if (qty != null && unitPrice != null) (qty * unitPrice).toLong() else 0L
+
+    Column {
+        Header("Nhập đầu vào") { vm.screen.value = "MANAGE" }
+
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text("Giao dịch tài chính", Modifier.weight(1f), fontWeight = FontWeight.Black, fontSize = 18.sp)
+            Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)){OutlinedButton(onClick = { showCategoryManager = true }) { Text("DANH MỤC") };OutlinedButton(onClick={showCostCodeManager=true}){Text("MÃ CHI PHÍ")}}
+        }
+
+        LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+            item {
+                Text("1. Loại giao dịch", fontWeight = FontWeight.Bold)
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                    FinancialTransactionTypes.all.forEach{value->FilterChip(transactionType==value,{transactionType=value;expenseCategory=FinancialTransactionTypes.legacyExpenseCode(value,ExpenseCategories.OTHER_EXPENSE)},{Text(FinancialTransactionTypes.label(value))})}
+                }
+                if(transactionType==FinancialTransactionTypes.OPERATING_EXPENSE){
+                    Text("Nhóm chi phí",Modifier.padding(top=8.dp),fontWeight=FontWeight.Bold)
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                        listOf(ExpenseCategories.INVENTORY_PURCHASE,ExpenseCategories.PAYROLL,ExpenseCategories.ELECTRICITY,ExpenseCategories.WATER,ExpenseCategories.RENT,ExpenseCategories.MARKETING,ExpenseCategories.CONSUMABLES,ExpenseCategories.MAINTENANCE,ExpenseCategories.SERVICES,ExpenseCategories.BANK_FEES,ExpenseCategories.OTHER_EXPENSE).forEach{value->FilterChip(expenseCategory==value,{expenseCategory=value},{Text(ExpenseCategories.label(value))})}
+                    }
+                }
+                if (purchaseCategories.isNotEmpty() && transactionType==FinancialTransactionTypes.OPERATING_EXPENSE) {
+                    Text("2. Phân mục chi tiết",Modifier.padding(top=8.dp),fontWeight=FontWeight.Bold)
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        FilterChip(
+                            selected = selectedCategoryId.isBlank(),
+                            onClick = { selectedCategoryId = "" },
+                            label = { Text("Không phân mục") }
+                        )
+                        purchaseCategories.forEach { c ->
+                            FilterChip(
+                                selected = selectedCategoryId == c.id,
+                                onClick = {
+                                    selectedCategoryId = c.id
+                                    unit = c.defaultUnit
+                                    expenseCategory = expenseCategoryForLegacyDetail(c.id, expenseCategory)
+                                },
+                                label = { Text(c.name) }
+                            )
+                        }
+                    }
+                }
+                if(FinancialTransactionTypes.usesPurchaseDocument(transactionType)){
+                    Text("Mã chi phí theo dõi",Modifier.padding(top=8.dp),fontWeight=FontWeight.Bold)
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                        FilterChip(selectedCostCodeId==null,{selectedCostCodeId=null},{Text("Không mã")})
+                        costCodes.forEach{cc->FilterChip(selectedCostCodeId==cc.id,{selectedCostCodeId=cc.id;unit=cc.defaultUnit;if(itemName.isBlank())itemName=cc.name;if(supplier.isBlank())supplier=cc.defaultSupplier;expenseCategory=cc.parentExpenseCategory},{Text(cc.code)})}
+                    }
+                    selectedCostCodeId?.let{id->costCodes.firstOrNull{it.id==id}?.let{cc->Text("${cc.name} · ${ExpenseCategories.label(cc.parentExpenseCategory)} · ĐVT ${cc.defaultUnit}",fontSize=11.sp)}}
+                }
+                if(transactionType in setOf(FinancialTransactionTypes.ASSET_PURCHASE,FinancialTransactionTypes.ADDITIONAL_INVESTMENT)){
+                    Text("2. Nhóm tài sản",Modifier.padding(top=8.dp),fontWeight=FontWeight.Bold)
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)){assetCategories.forEach{c->FilterChip(selectedAssetCategory?.id==c.id,{selectedAssetCategory=c;if(usefulLifeText.isBlank())usefulLifeText=c.defaultUsefulLifeMonths.toString()},{Text(c.name)})}}
+                    selectedAssetCategory?.let{Text("Thời gian khấu hao tham khảo: ${it.minUsefulLifeMonths}–${it.maxUsefulLifeMonths} tháng",fontSize=12.sp,fontWeight=FontWeight.Bold)}
+                    OutlinedTextField(usefulLifeText,{usefulLifeText=it.filter(Char::isDigit)},Modifier.fillMaxWidth(),label={Text("Thời gian khấu hao (tháng)")})
+                    OutlinedTextField(residualText,{residualText=it.filter(Char::isDigit)},Modifier.fillMaxWidth(),label={Text("Giá trị còn lại tối thiểu để tính khấu hao")})
+                    OutlinedTextField(liquidationText,{liquidationText=it.filter(Char::isDigit)},Modifier.fillMaxWidth(),label={Text("Giá trị thanh lý dự kiến")})
+                    Text("Giá trị sổ sách và giá thanh lý dự kiến là hai số độc lập.",fontSize=11.sp)
+                }
+                OutlinedTextField(
+                    dateText,
+                    { dateText = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Ngày giờ dd/MM/yyyy HH:mm") }
+                )
+                if(FinancialTransactionTypes.usesPurchaseDocument(transactionType)) OutlinedTextField(
+                    supplier,
+                    { supplier = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Nhà cung cấp (không bắt buộc)") }
+                )
+                if(FinancialTransactionTypes.usesPurchaseDocument(transactionType)) {
+                    Text("Người chi / ứng tiền", Modifier.padding(top=8.dp), fontWeight=FontWeight.Bold)
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                        FilterChip(paidByName.isBlank(), { paidByName = "" }, { Text("Chưa xác định") })
+                        profitPartners.forEach { person ->
+                            FilterChip(paidByName.equals(person.name,true), { paidByName = person.name }, { Text(person.name) })
+                        }
+                    }
+                    OutlinedTextField(
+                        paidByName,
+                        { paidByName = it.take(60) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Tên người chi khác / chỉnh tay") },
+                        supportingText = { Text("Người thực tế bỏ tiền. Có thể cấu hình tên chuẩn và tỷ lệ chia trong Báo cáo tháng.") }
+                    )
+                }
+                OutlinedTextField(
+                    itemName,
+                    { itemName = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text(if(FinancialTransactionTypes.usesPurchaseDocument(transactionType)) if (isPayrollExpense(expenseCategory)) "Người nhận lương / nhân sự" else "Mặt hàng / nội dung chi" else "Nội dung giao dịch") }
+                )
+                if(FinancialTransactionTypes.usesPurchaseDocument(transactionType)) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        qtyText,
+                        { qtyText = it.filter { ch -> ch.isDigit() || ch == ',' || ch == '.' } },
+                        modifier = Modifier.weight(1f),
+                        label = { Text(if (isPayrollExpense(expenseCategory)) "Số ngày công / SL" else "Khối lượng / SL") }
+                    )
+                    OutlinedTextField(
+                        unit,
+                        { unit = it },
+                        modifier = Modifier.weight(1f),
+                        label = { Text("Đơn vị") }
+                    )
+                }
+                OutlinedTextField(
+                    unitPriceText,
+                    { unitPriceText = it.filter(Char::isDigit) },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text(if(FinancialTransactionTypes.usesPurchaseDocument(transactionType)) if (isPayrollExpense(expenseCategory)) "Đơn giá / ngày công" else "Đơn giá" else "Số tiền") }
+                )
+                if(!FinancialTransactionTypes.usesPurchaseDocument(transactionType)){
+                    Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){FilterChip(movementMethod=="CASH",{movementMethod="CASH"},{Text("Tiền mặt")});FilterChip(movementMethod=="TRANSFER",{movementMethod="TRANSFER"},{Text("Chuyển khoản")})}
+                    if(transactionType in setOf(FinancialTransactionTypes.PROFIT_WITHDRAWAL,FinancialTransactionTypes.OWNER_WITHDRAWAL)){
+                        Text("Người rút",fontWeight=FontWeight.Bold)
+                        Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(5.dp)){profitPartners.forEach{p->FilterChip(movementPartnerId==p.id,{movementPartnerId=p.id},{Text(p.name)})}}
+                    }
+                }
+                OutlinedTextField(
+                    note,
+                    { note = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Ghi chú") }
+                )
+                if(FinancialTransactionTypes.usesPurchaseDocument(transactionType)) Card(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text(selectedCategory?.name ?: ExpenseCategories.label(expenseCategory), fontWeight = FontWeight.Bold)
+                        Text("Thành tiền: ${money(total)}", fontWeight = FontWeight.Black, fontSize = 18.sp)
+                    }
+                }
+                if(FinancialTransactionTypes.usesPurchaseDocument(transactionType)) OutlinedButton(
+                    onClick = { invoicePicker.launch(arrayOf("image/*")) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (invoiceImage == null) "＋ ẢNH HÓA ĐƠN (TÙY CHỌN)" else "✓ ĐÃ CHỌN ẢNH HÓA ĐƠN")
+                }
+                Button(
+                    onClick = {
+                        val parser = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
+                        val parsedAt = runCatching { parser.parse(dateText)?.time }.getOrNull()
+                            ?: System.currentTimeMillis()
+                        val asset=if(transactionType in setOf(FinancialTransactionTypes.ASSET_PURCHASE,FinancialTransactionTypes.ADDITIONAL_INVESTMENT))selectedAssetCategory?.let{c->AssetEntity(UUID.randomUUID().toString(),itemName.trim(),c.id,parsedAt,unitPrice?:0,qty?.toInt()?.coerceAtLeast(1)?:1,total,supplier=supplier.trim(),usefulLifeMonths=usefulLifeText.toIntOrNull()?:c.defaultUsefulLifeMonths,residualValue=(residualText.toLongOrNull()?:0).coerceAtMost(total),estimatedLiquidationValue=liquidationText.toLongOrNull()?:0,note=note,investmentClass=if(transactionType==FinancialTransactionTypes.ADDITIONAL_INVESTMENT)"ADDITIONAL" else "INITIAL")} else null
+                        if(FinancialTransactionTypes.usesPurchaseDocument(transactionType)) vm.addPurchaseDetailed(
+                            name = itemName,
+                            qty = qty ?: 0.0,
+                            unit = unit.ifBlank { selectedCategory?.defaultUnit ?: "lần" },
+                            unitPrice = unitPrice ?: 0L,
+                            note = note,
+                            at = parsedAt,
+                            supplierName = supplier,
+                            imageUri = invoiceImage,
+                            categoryId = selectedCategoryId,
+                            expenseCategory = FinancialTransactionTypes.legacyExpenseCode(transactionType,expenseCategory),
+                            asset = asset,
+                            paidByName = paidByName,
+                            costCodeId = selectedCostCodeId
+                        )
+                        FinancialTransactionTypes.movementCode(transactionType)?.let{vm.addFinancialMovement(it,unitPrice?:0,movementPartnerId,movementMethod,listOf(itemName.trim(),note.trim()).filter(String::isNotBlank).joinToString(" · "),parsedAt)}
+                        message = "Đã ghi giao dịch · ${FinancialTransactionTypes.label(transactionType)} · ${money(if(FinancialTransactionTypes.usesPurchaseDocument(transactionType))total else unitPrice?:0)}"
+                        itemName = ""
+                        qtyText = ""
+                        unitPriceText = ""
+                        note = ""
+                        paidByName = ""
+                        selectedCostCodeId = null
+                        invoiceImage = null
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    enabled = itemName.isNotBlank() && (unitPrice ?: 0L) > 0 &&
+                        (!FinancialTransactionTypes.usesPurchaseDocument(transactionType)||(qty?:0.0)>0) &&
+                        (transactionType!=FinancialTransactionTypes.OPERATING_EXPENSE||expenseCategory!=ExpenseCategories.UNCLASSIFIED) &&
+                        (transactionType !in setOf(FinancialTransactionTypes.ASSET_PURCHASE,FinancialTransactionTypes.ADDITIONAL_INVESTMENT)||(selectedAssetCategory!=null&&(usefulLifeText.toIntOrNull()?:0)>0&&(residualText.toLongOrNull()?:0)<=total)) &&
+                        (transactionType !in setOf(FinancialTransactionTypes.PROFIT_WITHDRAWAL,FinancialTransactionTypes.OWNER_WITHDRAWAL)||movementPartnerId!=null)
+                ) { Text("LƯU GIAO DỊCH") }
+
+                if (message.isNotBlank()) {
+                    Text(message, Modifier.padding(vertical = 6.dp), fontWeight = FontWeight.Bold)
+                }
+                Text("Phiếu nhập gần đây", Modifier.padding(top = 14.dp, bottom = 6.dp), fontWeight = FontWeight.Bold)
+            }
+
+            items(purchases.take(20)) { p ->
+                val purchaseLines by vm.purchaseItems(p.id).collectAsState(initial = emptyList())
+                val card = purchaseCardPresentation(purchaseLines.firstOrNull()?.name.orEmpty(), p.note)
+                Card(
+                    Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { selectedPurchase = p }
+                ) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text(time(p.purchasedAt), fontWeight = FontWeight.Bold)
+                        Text("${money(p.total)} · ${card.itemName.ifBlank { "Chưa có nội dung" }}")
+                        if (card.note.isNotBlank()) Text("Ghi chú: ${card.note}", fontSize = 12.sp)
                         if(p.paidByName.isNotBlank()) Text("Người chi: ${p.paidByName}", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         Text(if (!p.invoiceImageUri.isNullOrBlank()) "📷 Có ảnh hóa đơn · Chạm để xem" else "Chạm để xem chi tiết", fontSize = 12.sp)
                     }

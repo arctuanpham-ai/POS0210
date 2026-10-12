@@ -40,12 +40,21 @@ const root = ["users", STORE_OWNER_UID, "stores", STORE_ID];
 
 const state = {
   dashboard: {}, tables: [], sessions: [], batches: [], items: [],
-  bills: [], purchases: [], purchaseItems: [], movements: [], costCodes: [],
+  bills: [], purchases: [], expenseReceipts: [], purchaseItems: [], movements: [], costCodes: [],
   purchaseCategories: [], profitPartners: [], assetCategories: [], suppliers: [],
   unsubs: [], period: "today", customFrom: null, customTo: null,
   transactionKind: "ALL", payerFilter: "ALL", user: null,
 };
 let expenseDraft = null;
+const expenseRows = () => state.expenseReceipts.map((receipt) => ({
+  id: receipt.id,
+  status: receipt.status || "ACTIVE",
+  purchasedAt: Number(receipt.purchaseDate || 0),
+  total: Number(receipt.total || 0),
+  expenseCategory: receipt.items?.[0]?.expenseGroup || "OTHER_EXPENSE",
+  paidByName: receipt.enteredByName || "",
+  note: receipt.note || "",
+}));
 
 const $ = (selector) => document.querySelector(selector);
 const money = (value) => `${new Intl.NumberFormat("vi-VN").format(Number(value || 0))}đ`;
@@ -150,7 +159,7 @@ function renderCumulativeSummary() {
 function renderPeriodSummary() {
   const range = rangeForPeriod();
   const bills = state.bills.filter((b) => b.status === "PAID" && inRange(b.closedAt, range));
-  const allPurchases = state.purchases.filter((p) => p.status !== "DELETED" && inRange(p.purchasedAt, range));
+  const allPurchases = expenseRows().filter((p) => p.status !== "DELETED" && inRange(p.purchasedAt, range));
   const purchases = allPurchases.filter((p) => matchesPayer(state.payerFilter, p.paidByName));
   const movements = state.movements.filter((m) => inRange(m.occurredAt, range) && matchesPayer(state.payerFilter, m.counterpartyName));
   const revenue = bills.reduce((s, b) => s + Number(b.total || 0), 0);
@@ -216,20 +225,20 @@ function renderFinanceMetadata() {
 
   const payerNames = [...new Set([
     ...people.map((p) => normalizePayer(p.name)).filter(Boolean),
-    ...state.purchases.map((p) => normalizePayer(p.paidByName)).filter(Boolean),
+    ...expenseRows().map((p) => normalizePayer(p.paidByName)).filter(Boolean),
     ...state.movements.map((m) => normalizePayer(m.counterpartyName)).filter(Boolean),
   ])].sort((a,b)=>a.localeCompare(b,"vi"));
   const payerSelect = $("#payer-filter");
   const currentFilter = state.payerFilter;
   payerSelect.replaceChildren(new Option("Tất cả người chi", "ALL"), ...payerNames.map((name)=>new Option(name,name)));
-  if ([...state.purchases.map((p)=>p.paidByName), ...state.movements.map((m)=>m.counterpartyName)].some((name)=>!normalizePayer(name))) payerSelect.append(new Option("Chưa xác định","UNKNOWN"));
+  if ([...expenseRows().map((p)=>p.paidByName), ...state.movements.map((m)=>m.counterpartyName)].some((name)=>!normalizePayer(name))) payerSelect.append(new Option("Chưa xác định","UNKNOWN"));
   payerSelect.value = [...payerSelect.options].some((o)=>o.value===currentFilter) ? currentFilter : "ALL";
   state.payerFilter = payerSelect.value;
 }
 
 function renderTransactions() {
   const range = rangeForPeriod();
-  const purchases = state.purchases
+  const purchases = expenseRows()
     .filter((p) => p.status !== "DELETED" && inRange(p.purchasedAt, range))
     .filter((p) => matchesPayer(state.payerFilter, p.paidByName))
     .map((p) => ({ kind: "EXPENSE", at: Number(p.purchasedAt || 0), id: p.id, amount: Number(p.total || 0), title: EXPENSE_LABELS[p.expenseCategory] || "Phiếu chi", person: p.paidByName || "", note: p.note || "" }));
@@ -379,7 +388,7 @@ async function refreshDashboard() {
     const read = async (name, key, q = null) => { const snapshot = await getDocs(q || collection(db, ...root, name)); state[key] = rows(snapshot); };
     await Promise.all([
       read("tableStatus", "tables"),
-      read("purchases", "purchases", query(collection(db, ...root, "purchases"), where("purchasedAt", ">=", sevenDays), orderBy("purchasedAt", "desc"), limit(300))),
+      read("expenseReceipts", "expenseReceipts", query(collection(db, ...root, "expenseReceipts"), where("purchaseDate", ">=", sevenDays), orderBy("purchaseDate", "desc"), limit(300))),
       read("financialMovements", "movements", query(collection(db, ...root, "financialMovements"), where("occurredAt", ">=", sevenDays), orderBy("occurredAt", "desc"), limit(300))),
       read("costCodes", "costCodes"), read("purchaseCategories", "purchaseCategories"), read("profitPartners", "profitPartners"), read("assetCategories", "assetCategories"), read("suppliers", "suppliers"),
     ]);

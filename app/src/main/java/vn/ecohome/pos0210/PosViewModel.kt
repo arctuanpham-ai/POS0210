@@ -27,6 +27,18 @@ import java.security.SecureRandom
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+data class PurchaseReceiptLine(
+ val name:String,
+ val categoryId:String,
+ val qty:Double,
+ val unit:String,
+ val unitPrice:Long
+){
+ val amount:Long get()=(qty*unitPrice).toLong()
+ val isValid:Boolean get()=name.isNotBlank()&&qty>0&&unitPrice>0
+}
+
 class PosViewModel(app:Application):AndroidViewModel(app){
  private val db=PosDatabase.get(app);private val repo=PosRepository(db);private val dao=db.dao();private val masterMutex=Mutex();private val attendanceMutex=Mutex()
  val orderMessage=MutableStateFlow("")
@@ -716,6 +728,20 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
     listOf(PurchaseItemEntity(UUID.randomUUID().toString(),id,categoryId,name.trim(),qty,unit.ifBlank{"lần"},unitPrice,amount)),asset?.copy(id=assetIdForPurchase(id))
    )
    audit("PURCHASE",id,"CREATE","${name.trim()}:$qty:$unit:$unitPrice:$amount:payer=${paidByName.trim()}");autoBackup();autoBackupMedia()
+  }
+ }
+ fun addPurchaseReceipt(lines:List<PurchaseReceiptLine>,note:String,at:Long=System.currentTimeMillis(),supplierName:String="",expenseCategory:String=ExpenseCategories.INVENTORY_PURCHASE,paidByName:String="",costCodeId:String?=null){
+  val e=currentEmployee.value?:return
+  val valid=lines.filter{it.isValid}
+  if(!e.canPurchase&&e.role!="ADMIN"||valid.isEmpty()||valid.size!=lines.size||expenseCategory !in ExpenseCategories.all)return
+  viewModelScope.launch(Dispatchers.IO){
+   val id=UUID.randomUUID().toString()
+   val supplierId=if(supplierName.isBlank())null else UUID.randomUUID().toString().also{repo.saveSupplier(SupplierEntity(it,supplierName.trim()))}
+   val items=valid.map{line->PurchaseItemEntity(UUID.randomUUID().toString(),id,line.categoryId.ifBlank{"pc_production"},line.name.trim(),line.qty,line.unit.ifBlank{"lần"},line.unitPrice,line.amount)}
+   val total=items.sumOf{it.amount}
+   repo.savePurchase(PurchaseEntity(id,supplierId,e.id,at,total,note.trim(),expenseCategory=expenseCategory,paidByName=paidByName.trim(),costCodeId=costCodeId),items)
+   audit("PURCHASE",id,"CREATE_RECEIPT","lines=${items.size},total=$total,payer=${paidByName.trim()}")
+   autoBackup()
   }
  }
  fun addCostCode(code:String,name:String,parent:String,unit:String,supplier:String=""){

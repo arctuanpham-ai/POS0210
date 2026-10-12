@@ -153,6 +153,7 @@ object FirebaseCloudSync {
         // Flush locally edited menu entities BEFORE pulling remote state.
         // Otherwise a remote snapshot can overwrite an offline edit before upload.
         pushPendingCatalog(root,dao)
+        pushPendingExpenseReceipts(root,dao)
         pullCloudMenu(root,dao)
         stage("PULL_WEB_EXPENSES"){pullWebExpenseReceipts(root,db,dao)}
         pullCloudFinance(root,dao)
@@ -293,6 +294,34 @@ object FirebaseCloudSync {
     }
 
     /** Pulls only browser-entered expense receipts. It never touches sales collections. */
+    private suspend fun pushPendingExpenseReceipts(root:com.google.firebase.firestore.DocumentReference,dao:PosDao){
+        dao.recoverInflightSync()
+        val pending=dao.pendingSync(System.currentTimeMillis(),500).filter{it.entityType=="EXPENSE_RECEIPT"}
+        pending.forEach { queued ->
+            if(dao.claimSync(queued.id,System.currentTimeMillis())!=1)return@forEach
+            try {
+                val purchase=dao.purchaseById(queued.entityId)?:run{dao.completeSync(queued.id);return@forEach}
+                val lines=dao.purchaseItemsSnapshot(purchase.id)
+                val now=System.currentTimeMillis()
+                val payload=mapOf(
+                    "id" to purchase.id,
+                    "purchaseDate" to purchase.purchasedAt,
+                    "enteredByUid" to purchase.enteredBy,
+                    "enteredByName" to purchase.paidByName,
+                    "note" to purchase.note,
+                    "status" to purchase.status,
+                    "updatedAt" to now,
+                    "source" to "ANDROID_POS",
+                    "items" to lines.map { line -> mapOf("id" to line.id,"materialName" to line.name,"materialCode" to line.categoryId,"expenseGroup" to purchase.expenseCategory,"qty" to line.qty,"unit" to line.unit,"unitPrice" to line.unitPrice,"amount" to line.amount) },
+                    "total" to lines.sumOf { it.amount }
+                )
+                stage("PUSH_EXPENSE_RECEIPT"){root.collection("expenseReceipts").document(purchase.id).set(payload).await()}
+                dao.completeSync(queued.id)
+            } catch(e:CancellationException){throw e
+            } catch(e:Exception){dao.retrySync(queued.id,System.currentTimeMillis()+30_000L,System.currentTimeMillis(),e.message)}
+        }
+    }
+
     private suspend fun pullWebExpenseReceipts(root:com.google.firebase.firestore.DocumentReference,db:PosDatabase,dao:PosDao){
         var cursor=expenseCursor(dao)
         val repository=PosRepository(db)

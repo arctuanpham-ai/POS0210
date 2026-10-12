@@ -18,12 +18,18 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Temporary CI signing key when legacy key is not imported yet
+      - name: Restore stable POS0210 signing key
+        env:
+          POS0210_KEYSTORE_BASE64: ${{ secrets.POS0210_KEYSTORE_BASE64 }}
         run: |
-          if [ ! -f app/pos0210-debug.keystore ]; then
-            keytool -genkeypair -v -keystore app/pos0210-debug.keystore -storepass 0210debug -alias pos0210debug -keypass 0210debug -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=POS0210 CI"
-          fi
+          test -n "$POS0210_KEYSTORE_BASE64"
+          printf '%s' "$POS0210_KEYSTORE_BASE64" | base64 --decode > app/pos0210-debug.keystore
+          test -s app/pos0210-debug.keystore
       - name: Unit tests and APK
+        env:
+          POS0210_KEYSTORE_PASSWORD: ${{ secrets.POS0210_KEYSTORE_PASSWORD }}
+          POS0210_KEY_ALIAS: ${{ secrets.POS0210_KEY_ALIAS }}
+          POS0210_KEY_PASSWORD: ${{ secrets.POS0210_KEY_PASSWORD }}
         run: gradle --no-daemon testDebugUnitTest :app:assembleDebug --stacktrace
       - name: Verify APK
         run: |

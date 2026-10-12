@@ -19,9 +19,9 @@ android {
     signingConfigs {
         getByName("debug") {
             storeFile = file("pos0210-debug.keystore")
-            storePassword = "0210debug"
-            keyAlias = "pos0210debug"
-            keyPassword = "0210debug"
+            storePassword = System.getenv("POS0210_KEYSTORE_PASSWORD") ?: "0210debug"
+            keyAlias = System.getenv("POS0210_KEY_ALIAS") ?: "pos0210debug"
+            keyPassword = System.getenv("POS0210_KEY_PASSWORD") ?: "0210debug"
         }
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }

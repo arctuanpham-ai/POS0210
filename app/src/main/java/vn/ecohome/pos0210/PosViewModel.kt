@@ -250,7 +250,7 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
  fun previewBitmap(kind:String):android.graphics.Bitmap?{
   val profile=printerProfile()
   return when(kind){
-   "KITCHEN"->ReceiptRenderer.kitchen("BÀN 02",1,27,"Tuấn",listOf(Triple("Bún gà",2,"không hành"),Triple("Bạc xỉu",1,""),Triple("Trà đào",1,"ít đá")),profile,"ĐÃ THU TIỀN · LÀM NGAY")
+   "KITCHEN"->ReceiptRenderer.stack(listOf(ReceiptRenderer.kitchenItem("BÀN 02",27,1,2,"Bún gà",3,"không hành","Tuấn","ĐÃ THU TIỀN · LÀM NGAY",System.currentTimeMillis(),profile),ReceiptRenderer.kitchenItem("BÀN 02",27,2,2,"Cà phê sữa",1,"","Tuấn","ĐÃ THU TIỀN · LÀM NGAY",System.currentTimeMillis(),profile)))
    "BILL"->{
     val qr=if(isQrConfigured())runCatching{qrBitmap(121500L,"0210 BAN 02")}.getOrNull() else null
     ReceiptRenderer.bill("BÀN 02","08:32–09:25",listOf(Triple("Bún gà",2,40000L),Triple("Bạc xỉu",1,30000L),Triple("Đen đá",1,25000L)),135000L,0L,13500L,121500L,listOf("ƯU ĐÃI HẠNG VIP  -10%"),"ANH NAM","VIP",188,12,200,"CHUYỂN KHOẢN",qr,profile,"ĐƠN #027")
@@ -286,7 +286,7 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
    printerMessage.value="Đang in thử..."
    val qr=qrBitmap(135000,"0210 TEST")
    val profile=printerProfile()
-   val bitmap=if(jobType==vn.ecohome.pos0210.printing.PrintJobType.KITCHEN) ReceiptRenderer.kitchen("Bàn test",1,1,"Admin",listOf(Triple("Món test",1,"")),profile) else ReceiptRenderer.sampleBill(qr,profile)
+   val bitmap=if(jobType==vn.ecohome.pos0210.printing.PrintJobType.KITCHEN) ReceiptRenderer.kitchenItem("Bàn test",1,1,1,"Món test",1,"","Admin","",System.currentTimeMillis(),profile) else ReceiptRenderer.sampleBill(qr,profile)
    val result=BluetoothPrinter.printBitmap(getApplication(),mac,bitmap,profile,if(jobType==vn.ecohome.pos0210.printing.PrintJobType.KITCHEN) vn.ecohome.pos0210.printing.PrintJobType.KITCHEN else vn.ecohome.pos0210.printing.PrintJobType.TEST)
    printerMessage.value=if(result.isSuccess)"IN THỬ THÀNH CÔNG · $name" else "IN THỬ LỖI: ${result.exceptionOrNull()?.message}"
   }
@@ -1301,6 +1301,23 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
  val checkoutBillImage=MutableStateFlow<Pair<String,android.graphics.Bitmap>?>(null)
  val waitingOrders=dao.waitingOrders().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
  fun sessionItems(sessionId:String)=dao.sessionItems(sessionId)
+ /** Phiếu bếp tách món: mỗi dòng món một phiếu, cùng bàn, cùng số thứ tự đơn. */
+ private fun kitchenTicketBitmaps(tableName:String,b:OrderBatchEntity,orderer:String,flowTag:String,items:List<OrderItemEntity>,profile:vn.ecohome.pos0210.printing.PrinterProfile):List<android.graphics.Bitmap>{
+  val lines=items.filter{it.qty>0}
+  val at=b.sentAt?:b.createdAt
+  return lines.mapIndexed{i,it->ReceiptRenderer.kitchenItem(tableName,b.serviceNo,i+1,lines.size,it.itemNameSnapshot.removePrefix("🎁").trim(),it.qty,if(it.itemNameSnapshot.startsWith("🎁")&&it.note.isBlank())"QUÀ TẶNG" else it.note,orderer,flowTag,at,profile)}
+ }
+ /** In lần lượt từng phiếu (mỗi phiếu một lệnh để xé từng tờ ngay). Lỗi giữa chừng báo đã in được bao nhiêu phiếu. */
+ private suspend fun printKitchenTickets(mac:String,tableName:String,b:OrderBatchEntity,orderer:String,flowTag:String,profile:vn.ecohome.pos0210.printing.PrinterProfile):Result<Unit>{
+  val items=dao.batchItems(b.id).first()
+  val tickets=kitchenTicketBitmaps(tableName,b,orderer,flowTag,items,profile)
+  if(tickets.isEmpty())return Result.failure(IllegalStateException("Đơn không có món để in"))
+  tickets.forEachIndexed{i,bmp->
+   val r=BluetoothPrinter.printBitmap(getApplication(),mac,bmp,profile,vn.ecohome.pos0210.printing.PrintJobType.KITCHEN)
+   if(r.isFailure)return Result.failure(IllegalStateException("mới in ${i}/${tickets.size} phiếu · ${r.exceptionOrNull()?.message?:"lỗi"}"))
+  }
+  return Result.success(Unit)
+ }
  /** Số lần đã nhắc bếp + lần nhắc cuối, theo từng đơn (trong phiên chạy app). */
  val reminders=MutableStateFlow<Map<String,Pair<Int,Long>>>(emptyMap())
  /** In phiếu làm hàng của đơn trả trước sau khi đã thu tiền. Lỗi in không chặn bán: đơn vẫn nằm trong hàng chờ để in lại. */
@@ -1308,12 +1325,11 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
   if(printerMode()!="BLUETOOTH"){printerMessage.value="TEST · Không in phiếu bếp";return}
   val mac=kitchenPrinterMac()
   if(mac.isBlank()){printerMessage.value="CHƯA CHỌN MÁY IN BẾP · đơn đã nằm trong hàng chờ";return}
-  val items=dao.batchItems(b.id).first().map{Triple(it.itemNameSnapshot,it.qty,it.note)}
   val profile=printerProfile()
   val job=PrintJobEntity(UUID.randomUUID().toString(),b.id,null,"KITCHEN_PREPAID",createdAt=System.currentTimeMillis())
   dao.insertPrintJob(job)
   if(!repo.claimPrint(job.id,"ANDROID"))return
-  val result=BluetoothPrinter.printBitmap(getApplication(),mac,ReceiptRenderer.kitchen(tableName,b.sequence,b.serviceNo,orderer,items,profile,"ĐÃ THU TIỀN · LÀM NGAY",b.sentAt?:b.createdAt),profile,vn.ecohome.pos0210.printing.PrintJobType.KITCHEN)
+  val result=printKitchenTickets(mac,tableName,b,orderer,"ĐÃ THU TIỀN · LÀM NGAY",profile)
   if(result.isSuccess){dao.markPrintSuccess(job.id,System.currentTimeMillis());audit("PRINT",b.id,"KITCHEN_PRINTED","prepaid,printer=${kitchenPrinterName()},job=${job.id}");printerMessage.value="ĐÃ IN PHIẾU BẾP #${b.serviceNo.toString().padStart(3,'0')}"}
   else{dao.markPrintFailed(job.id,result.exceptionOrNull()?.message?:"UNKNOWN");audit("PRINT",b.id,"KITCHEN_PRINT_FAILED","prepaid,job=${job.id}");printerMessage.value="IN PHIẾU BẾP LỖI · bấm IN LẠI PHIẾU trong Đơn chờ giao"}
  }
@@ -1519,10 +1535,9 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
     return@launch
    }
    val table=currentTable.value?.name ?: "Bàn"
-   val items=dao.batchItems(b.id).first().map{Triple(it.itemNameSnapshot,it.qty,it.note)}
    printerMessage.value="Đang in #${b.serviceNo.toString().padStart(3,'0')} · Đơn #${b.sequence}..."
    val profile=printerProfile()
-   val result=BluetoothPrinter.printBitmap(getApplication(),mac,ReceiptRenderer.kitchen(table,b.sequence,b.serviceNo,e.name,items,profile),profile,vn.ecohome.pos0210.printing.PrintJobType.KITCHEN)
+   val result=printKitchenTickets(mac,table,b,e.name,"",profile)
    if(result.isSuccess){
     val now=System.currentTimeMillis()
     if(repo.finalizeKitchenPrint(job.id,b.id,now)){
@@ -1547,12 +1562,11 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    val mac=kitchenPrinterMac();if(mac.isBlank()){printerMessage.value="CHƯA CHỌN MÁY IN BẾP";return@launch}
    val session=dao.sessionSnapshotById(b.sessionId)
    val tableName=session?.let{s->dao.allTablesSnapshot().firstOrNull{it.id==s.tableId}?.name}?:"Bàn"
-   val items=dao.batchItems(b.id).first().map{Triple(it.itemNameSnapshot,it.qty,it.note)}
    val profile=printerProfile()
    val job=PrintJobEntity(UUID.randomUUID().toString(),b.id,null,"KITCHEN_REPRINT",createdAt=System.currentTimeMillis())
    dao.insertPrintJob(job)
    if(!repo.claimPrint(job.id,"ANDROID")){printerMessage.value="KHÔNG NHẬN ĐƯỢC LỆNH IN LẠI";return@launch}
-   val result=BluetoothPrinter.printBitmap(getApplication(),mac,ReceiptRenderer.kitchen(tableName,b.sequence,b.serviceNo,"${e.name} · IN LẠI",items,profile),profile,vn.ecohome.pos0210.printing.PrintJobType.KITCHEN)
+   val result=printKitchenTickets(mac,tableName,b,"${e.name} · IN LẠI","IN LẠI",profile)
    if(result.isSuccess){dao.markPrintSuccess(job.id,System.currentTimeMillis());audit("PRINT",b.id,"KITCHEN_REPRINTED","printer=${kitchenPrinterName()},operator=${e.name},job=${job.id}");printerMessage.value="ĐÃ IN LẠI PHIẾU BẾP #${b.serviceNo}"}
    else{dao.markPrintFailed(job.id,result.exceptionOrNull()?.message?:"UNKNOWN");audit("PRINT",b.id,"KITCHEN_REPRINT_FAILED","job=${job.id}");printerMessage.value="IN LẠI PHIẾU BẾP LỖI · ${result.exceptionOrNull()?.message?:"Thử lại"}"}
   }

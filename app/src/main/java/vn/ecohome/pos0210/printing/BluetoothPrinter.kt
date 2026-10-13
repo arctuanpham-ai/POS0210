@@ -324,6 +324,49 @@ object ReceiptRenderer {
         return crop(b,(y+30).toInt())
     }
 
+    /** Một phiếu cho MỘT dòng món: tên món rất to, số lượng to, cùng bàn và cùng số thứ tự đơn với các phiếu còn lại ("1/3"). */
+    @Synchronized
+    fun kitchenItem(table:String,serviceNo:Int,index:Int,total:Int,name:String,qty:Int,note:String,orderer:String,flowTag:String="",at:Long=System.currentTimeMillis(),profile:PrinterProfile=PrinterProfile.MM58):Bitmap{
+        dimensions(profile)
+        val (b,c)=canvas(1500)
+        invertedBar(c,0f,112f,table.uppercase(),if(table.length>7)50f else 66f)
+        var y=176f
+        c.drawText("ĐƠN #${serviceNo.toString().padStart(3,'0')}",PAD,y,paint(42f,true))
+        c.drawText("$index/$total",W-PAD,y,paint(42f,true,Paint.Align.RIGHT));y+=14f
+        if(flowTag.isNotBlank()){y=wrap(c,flowTag,PAD,y+26f,W-PAD*2,paint(24f,true),30f)}
+        y+=8f
+        thickLine(c,y);y+=84f
+        val nameSize=when{name.length<=9->72f;name.length<=16->58f;name.length<=26->48f;else->40f}
+        y=wrap(c,name,PAD,y,W-PAD*2,paint(nameSize,true),nameSize+8f)
+        y+=18f
+        c.drawText("× $qty",PAD,y+60f,paint(112f,true));y+=96f
+        if(note.isNotBlank()){
+            y+=26f
+            val box=Paint().apply{color=Color.BLACK;style=Paint.Style.STROKE;strokeWidth=3f}
+            val top=y
+            val end=wrap(c,"GHI CHÚ: ${note.trim()}",PAD+8f,y+30f,W-PAD*2-16f,paint(32f,true),38f)
+            c.drawRect(PAD,top,W-PAD,end-6f,box);y=end+10f
+        }
+        y+=14f
+        line(c,y);y+=34f
+        c.drawText("${hhmm(at)} · $orderer",PAD,y,paint(22f,true))
+        return crop(b,(y+26).toInt())
+    }
+
+    /** Xếp dọc nhiều phiếu để xem trước, ngăn cách bằng đường đứt. */
+    fun stack(parts:List<Bitmap>,gap:Int=48):Bitmap?{
+        if(parts.isEmpty())return null
+        val w=parts.maxOf{it.width};val h=parts.sumOf{it.height}+gap*(parts.size-1)
+        val out=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);val c=Canvas(out);c.drawColor(Color.WHITE)
+        var y=0
+        val dash=Paint().apply{color=Color.BLACK;strokeWidth=2f;pathEffect=DashPathEffect(floatArrayOf(10f,8f),0f)}
+        parts.forEachIndexed{i,bm->
+            c.drawBitmap(bm,0f,y.toFloat(),null);y+=bm.height
+            if(i<parts.lastIndex){c.drawLine(0f,y+gap/2f,w.toFloat(),y+gap/2f,dash);y+=gap}
+        }
+        return out
+    }
+
     /** Phiếu nhắc bếp: in lại đơn đang chờ, nói rõ đã chờ bao lâu và nhắc lần thứ mấy. */
     @Synchronized
     fun kitchenReminder(table:String,serviceNo:Int,items:List<Triple<String,Int,String>>,waitedMinutes:Long,remindCount:Int,profile:PrinterProfile=PrinterProfile.MM58):Bitmap{

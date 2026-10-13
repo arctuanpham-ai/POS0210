@@ -134,6 +134,7 @@ fun App(vm: PosViewModel = viewModel()) {
         while (true) {
             vm.lockIfIdle()
             vm.checkReminder()
+            vm.checkDayClose()
             tick++
             if (tick % 30 == 0) vm.autoCloseIfStale()
             kotlinx.coroutines.delay(1000)
@@ -153,6 +154,7 @@ fun App(vm: PosViewModel = viewModel()) {
         "SHIFT_END" -> ShiftEnd(vm)
         "HR" -> HrHub(vm)
         "SHIFT_SETTINGS" -> ShiftSettings(vm)
+        "CLOSE_DAY" -> CloseDay(vm)
         "SHIFTS" -> ShiftList(vm)
         "ATT_EDIT" -> AttendanceEdit(vm)
         "TABLES" -> Tables(vm)
@@ -193,6 +195,8 @@ fun App(vm: PosViewModel = viewModel()) {
     }
     val reminder by vm.reminderDue.collectAsState()
     if (reminder && !locked) ShiftReminderDialog(vm)
+    val dayDue by vm.dayCloseDate.collectAsState()
+    if (dayDue != null && !reminder && !locked && sc != "CLOSE_DAY") DayCloseReminderDialog(vm, dayDue!!)
     if (locked) LockScreen(vm)
     }
 }

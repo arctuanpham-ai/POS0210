@@ -660,6 +660,7 @@ fun reconcileFirebaseSession(){
    actualUid!=null&&saved.syncedUid!=null&&saved.syncedUid!=actualUid->dao.saveCloudSyncState(saved.copy(lastError="AUTH_UID_MISMATCH · giữ nguyên UID đã lưu, không đồng bộ"))
   }
   if(actualUid!=null)FirebaseCloudSync.schedule(getApplication())
+  if(actualUid!=null)runCatching{vn.ecohome.pos0210.cloud.ShiftAlerts.start(getApplication())}
   recoverMediaOnce(actualUid)
  }
 }
@@ -1208,6 +1209,73 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
     refreshPayroll()
     withContext(Dispatchers.Main){onResult(null)}
    }
+  }
+ }
+
+ // ===== GIAI ĐOẠN 3: đóng ngày, sửa giờ ra của ca =====
+ val dayCloseDate=MutableStateFlow<String?>(null)
+ @Volatile private var dayCloseSnoozeUntil=0L
+ fun closedDays():Set<String> = settings.value.filter{it.key.startsWith("day_closed_")&&it.value.isNotBlank()}.map{it.key.removePrefix("day_closed_")}.toSet()
+ fun openDay():String?=ShiftRules.earliestOpenDay(shifts.value.filter{it.dataScope=="LIVE"}.map{it.date},closedDays())
+ fun checkDayClose(){
+  val me=currentEmployee.value
+  val d=if(me?.role=="ADMIN"&&!locked.value&&activeShift.value?.staffId.let{it==null||it==me.id}){
+   val od=openDay()
+   if(ShiftRules.dayCloseDue(System.currentTimeMillis(),setting("shift_close_time").ifBlank{ShiftRules.DEFAULT_CLOSE_TIME},od,dayCloseSnoozeUntil))od else null
+  } else null
+  if(dayCloseDate.value!=d)dayCloseDate.value=d
+ }
+ fun snoozeDayClose(){
+  val min=setting("reminder_snooze_min").toIntOrNull()?:ShiftRules.DEFAULT_SNOOZE_MIN
+  dayCloseSnoozeUntil=System.currentTimeMillis()+min*60_000L
+  dayCloseDate.value=null
+ }
+ /** Đóng ngày: không còn bàn chưa thanh toán, không còn ca của người khác/ca cần xem lại; ADMIN chốt ca của mình (nếu có) và ghi ngày đã đóng. */
+ fun closeDay(date:String,counted:Long?,note:String,pin:String,onDone:(String?)->Unit){
+  viewModelScope.launch(Dispatchers.IO){
+   fun fail(m:String){viewModelScope.launch(Dispatchers.Main){onDone(m)}}
+   attendanceMutex.withLock {
+    val who=dao.employeeByPin(pin)
+    if(who==null||who.role!="ADMIN"){fail("PIN ADMIN không đúng");return@withLock}
+    val unpaid=dao.openSessions().first().filter{it.dataScope=="LIVE"}
+    if(unpaid.isNotEmpty()){fail("Còn ${unpaid.size} bàn chưa thanh toán · không đóng ngày được");return@withLock}
+    val review=dao.shiftsSnapshot().count{it.date==date&&it.dataScope=="LIVE"&&it.status=="pending_review"}
+    if(review>0){fail("Còn $review ca cần xem lại · xác nhận trong Ca làm & nhận tiền trước");return@withLock}
+    val sh=dao.activeShift()
+    val now=System.currentTimeMillis()
+    if(sh!=null){
+     if(sh.staffId!=who.id){fail("Còn ca của ${sh.staffName} đang mở · ra ca hoặc tiếp quản trước");return@withLock}
+     val expected=dao.shiftPaymentTotalUntil(sh.id,"CASH",now)
+     if(counted==null){fail("Nhập tiền mặt thực tế của ca bạn");return@withLock}
+     if(!ShiftRules.canConfirm(ShiftRules.diff(counted,expected),note)){fail("Chênh lệch lớn · cần ghi chú");return@withLock}
+     settleShift(sh,now,"self","received",counted,note,who,now)
+    }
+    dao.saveSetting(AppSettingEntity(ShiftRules.dayClosedKey(date),"${who.id}|$now|${note.trim().replace('|','/')}"))
+    audit("DAY",date,"CLOSE","by=${who.name},counted=$counted")
+    dao.markCloudDirty()
+    dayCloseDate.value=null
+    withContext(Dispatchers.Main){onDone(null);logout()}
+   }
+  }
+ }
+ /** Sửa giờ ra của một ca đã đóng: cần PIN ADMIN và lý do, ghi vào editLog, đồng bộ giờ công. Không tính lại tiền. */
+ fun editShiftCheckout(shiftId:String,newOutText:String,reason:String,pin:String,onDone:(String?)->Unit){
+  viewModelScope.launch(Dispatchers.IO){
+   fun fail(m:String){viewModelScope.launch(Dispatchers.Main){onDone(m)}}
+   val who=dao.employeeByPin(pin);val sh=dao.shiftById(shiftId)
+   if(who==null||who.role!="ADMIN"){fail("PIN ADMIN không đúng");return@launch}
+   if(sh==null||sh.status=="open"){fail("Chỉ sửa được ca đã ra");return@launch}
+   val now=System.currentTimeMillis()
+   val out=ShiftRules.parseLocalTime(newOutText)
+   ShiftRules.takeoverCutoffError(out,sh.checkInClient,now)?.let{fail(it);return@launch}
+   if(reason.isBlank()){fail("Bắt buộc ghi lý do");return@launch}
+   val line=ShiftRules.editLogLine(now,who.name,"checkOut",ShiftRules.formatLocalTime(sh.checkOutClient),newOutText.trim(),reason.trim())
+   dao.saveShift(sh.copy(checkOutClient=out,editLog=ShiftRules.appendEditLog(sh.editLog,line),updatedAt=now))
+   sh.attendanceId?.let{id->dao.attendanceById(id)?.let{a->dao.correctAttendance(id,a.checkInAt,out,"CLOSED",(a.note+" | sửa giờ ra theo ca: "+reason.trim()).trim(' ','|'),now)}}
+   refreshPayroll()
+   audit("SHIFT",sh.id,"EDIT_CHECKOUT","by=${who.name},new=$newOutText,reason=${reason.trim()}")
+   dao.markCloudDirty()
+   withContext(Dispatchers.Main){onDone(null)}
   }
  }
  fun customerRewards(customerId:String)=dao.availableRewards(customerId)

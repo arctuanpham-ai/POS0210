@@ -151,3 +151,41 @@ class ShiftPhase2RulesTest {
         assertEquals(now, ShiftRules.defaultCutoff(t("2026-10-13 12:00"), checkIn, now))
     }
 }
+
+class ShiftPhase3RulesTest {
+    private fun t(s: String) = ShiftRules.parseLocalTime(s)!!
+
+    @Test fun shiftMinutesUseRoundedPunches() {
+        assertEquals(540L, ShiftRules.shiftMinutes(t("2026-10-13 05:55"), t("2026-10-13 14:45")))
+        assertEquals(null, ShiftRules.shiftMinutes(t("2026-10-13 06:00"), null))
+        assertEquals(0L, ShiftRules.shiftMinutes(t("2026-10-13 06:00"), t("2026-10-13 06:05")))
+    }
+
+    @Test fun alertsOnReviewOrLargeDiff() {
+        assertTrue(ShiftRules.needsAlert("pending_review", null))
+        assertTrue(ShiftRules.needsAlert("received", -30_000))
+        assertFalse(ShiftRules.needsAlert("received", 20_000))
+        assertFalse(ShiftRules.needsAlert("closed", null))
+    }
+
+    @Test fun editLogKeepsHistoryAndEscapesSeparators() {
+        val l1 = ShiftRules.editLogLine(1, "Tuấn", "checkOut", "a", "b", "máy|lỗi")
+        assertEquals(6, l1.split("|").size)
+        val log = ShiftRules.appendEditLog(ShiftRules.appendEditLog("", l1), l1)
+        assertEquals(2, log.lines().size)
+    }
+
+    @Test fun earliestUnclosedDayIsPickedFirst() {
+        assertEquals("2026-10-12", ShiftRules.earliestOpenDay(listOf("2026-10-13", "2026-10-12", "2026-10-12"), emptySet()))
+        assertEquals("2026-10-13", ShiftRules.earliestOpenDay(listOf("2026-10-13", "2026-10-12"), setOf("2026-10-12")))
+        assertEquals(null, ShiftRules.earliestOpenDay(listOf("2026-10-12"), setOf("2026-10-12")))
+    }
+
+    @Test fun dayCloseReminder() {
+        assertFalse(ShiftRules.dayCloseDue(t("2026-10-13 21:59"), "22:00", "2026-10-13", 0))
+        assertTrue(ShiftRules.dayCloseDue(t("2026-10-13 22:00"), "22:00", "2026-10-13", 0))
+        assertFalse(ShiftRules.dayCloseDue(t("2026-10-13 22:10"), "22:00", "2026-10-13", t("2026-10-13 22:15")))
+        assertTrue(ShiftRules.dayCloseDue(t("2026-10-14 07:00"), "22:00", "2026-10-13", 0))
+        assertFalse(ShiftRules.dayCloseDue(t("2026-10-13 23:00"), "22:00", null, 0))
+    }
+}

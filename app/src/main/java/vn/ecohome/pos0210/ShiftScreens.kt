@@ -132,31 +132,101 @@ fun ShiftEnd(vm: PosViewModel) {
 @Composable
 fun ShiftList(vm: PosViewModel) {
     val shifts by vm.shifts.collectAsState()
+    val settings by vm.settings.collectAsState()
     val message by vm.shiftMessage.collectAsState()
+    val today = remember { java.time.LocalDate.now(java.time.ZoneId.of("Asia/Ho_Chi_Minh")) }
+    var month by remember { mutableStateOf(java.time.YearMonth.from(today)) }
+    var filter by remember { mutableStateOf("all") }
     var receiving by remember { mutableStateOf<ShiftEntity?>(null) }
     var reviewing by remember { mutableStateOf<ShiftEntity?>(null) }
+    var editing by remember { mutableStateOf<ShiftEntity?>(null) }
     var pin by remember { mutableStateOf("") }
+    val prefix = "%04d-%02d".format(month.year, month.monthValue)
+    val monthShifts = shifts.filter { it.dataScope == "LIVE" && it.date.startsWith(prefix) }
+    val visible = monthShifts.filter {
+        when (filter) {
+            "review" -> it.status == "pending_review"
+            "diff" -> (it.diff ?: 0L) != 0L
+            else -> true
+        }
+    }
+    val closedDays = settings.filter { it.key.startsWith("day_closed_") && it.value.isNotBlank() }.map { it.key.removePrefix("day_closed_") }.toSet()
+    val totals = monthShifts.groupBy { it.staffName }.mapValues { (_, l) -> l.sumOf { ShiftRules.shiftMinutes(it.checkInClient, it.checkOutClient) ?: 0L } }
     Column(Modifier.fillMaxSize()) {
         Header("Ca làm") { vm.screen.value = "HR" }
         if (message.isNotBlank()) Text(message, Modifier.padding(horizontal = 16.dp))
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            OutlinedButton(onClick = { month = month.minusMonths(1) }) { Text("‹") }
+            Text("THÁNG %02d/%04d".format(month.monthValue, month.year), fontWeight = FontWeight.Black)
+            OutlinedButton(onClick = { month = month.plusMonths(1) }) { Text("›") }
+        }
+        Row(Modifier.padding(horizontal = 12.dp).horizontalScroll(rememberScrollState())) {
+            listOf("all" to "Tất cả", "review" to "Cần xem lại", "diff" to "Lệch tiền").forEach { (k, label) ->
+                FilterChip(selected = filter == k, onClick = { filter = k }, label = { Text(label) }, modifier = Modifier.padding(end = 6.dp))
+            }
+            AssistChip(onClick = { vm.screen.value = "CLOSE_DAY" }, label = { Text("ĐÓNG NGÀY") })
+        }
         LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-            items(shifts, key = { it.id }) { s ->
+            if (totals.isNotEmpty()) item {
                 Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                     Column(Modifier.padding(12.dp)) {
-                        Text("${s.date} · ${s.staffName}", fontWeight = FontWeight.Bold)
-                        Text("${hhmm(s.checkInClient)} → ${hhmm(s.checkOutClient)} · ${statusLabel(s.status)}")
+                        Text("Giờ công trong tháng (đã làm tròn ±15 phút)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        totals.forEach { (n, m) -> Text("$n: ${ShiftRules.formatHours(m)}") }
+                    }
+                }
+            }
+            items(visible, key = { it.id }) { s ->
+                Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text("${s.date} · ${s.staffName}${if (s.date in closedDays) " · ĐÃ ĐÓNG NGÀY" else ""}", fontWeight = FontWeight.Bold)
+                        Text("${hhmm(s.checkInClient)} → ${hhmm(s.checkOutClient)} · ${ShiftRules.shiftMinutes(s.checkInClient, s.checkOutClient)?.let { ShiftRules.formatHours(it) } ?: "đang mở"} · ${statusLabel(s.status)}")
                         if (s.status != "open") {
                             Text("Tiền mặt: dự kiến ${vnd(s.cashExpected)} · đếm ${vnd(s.cashCounted)} · lệch ${vnd(s.diff)}")
-                            Text("Chuyển khoản ${vnd(s.transferTotal)} · ${s.orderCount} order", fontSize = 12.sp)
+                            Text("Chuyển khoản ${vnd(s.transferTotal)} · ${s.orderCount} bill", fontSize = 12.sp)
                             if (s.diffNote.isNotBlank()) Text("Ghi chú: ${s.diffNote}", fontSize = 12.sp)
                         }
                         if (s.checkOutSource != null && s.checkOutSource != "self") Text("Nguồn giờ ra: ${if (s.checkOutSource == "manager_takeover") "quản lý tiếp quản" else "tự đóng theo hoạt động cuối"}", fontSize = 12.sp)
-                        if (s.status == "closed") Button(onClick = { receiving = s; pin = "" }) { Text("ĐÃ NHẬN TIỀN") }
-                        if (s.status == "pending_review") Button(onClick = { reviewing = s }) { Text("NHẬP TIỀN & XÁC NHẬN") }
+                        if (s.editLog.isNotBlank()) {
+                            Text("Lịch sử sửa:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            s.editLog.lines().forEach { l ->
+                                val p = l.split("|")
+                                if (p.size >= 6) Text("• ${hhmm(p[0].toLongOrNull())} ${p[1]} sửa ${p[2]}: ${p[3].takeLast(5)} → ${p[4].takeLast(5)} (${p[5]})", fontSize = 11.sp)
+                            }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (s.status == "closed") Button(onClick = { receiving = s; pin = "" }) { Text("ĐÃ NHẬN TIỀN") }
+                            if (s.status == "pending_review") Button(onClick = { reviewing = s }) { Text("NHẬP TIỀN & XÁC NHẬN") }
+                            if (s.status != "open") OutlinedButton(onClick = { editing = s }) { Text("Sửa giờ ra") }
+                        }
                     }
                 }
             }
         }
+    }
+    editing?.let { s ->
+        var outText by remember(s.id) { mutableStateOf(ShiftRules.formatLocalTime(s.checkOutClient)) }
+        var reason by remember(s.id) { mutableStateOf("") }
+        var epin by remember(s.id) { mutableStateOf("") }
+        var err by remember(s.id) { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { editing = null },
+            title = { Text("Sửa giờ ra · ${s.staffName} ${s.date}") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    OutlinedTextField(outText, { outText = it }, label = { Text("Giờ ra (yyyy-MM-dd HH:mm)") }, singleLine = true)
+                    OutlinedTextField(reason, { reason = it }, label = { Text("Lý do (bắt buộc)") })
+                    OutlinedTextField(epin, { epin = it.filter(Char::isDigit).take(4) }, label = { Text("PIN ADMIN") }, visualTransformation = PasswordVisualTransformation(), singleLine = true)
+                    Text("Chỉ sửa giờ ra và giờ công; tiền mặt không tính lại.", fontSize = 11.sp)
+                    if (err.isNotBlank()) Text(err, color = MaterialTheme.colorScheme.error)
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = epin.length == 4, onClick = {
+                    vm.editShiftCheckout(s.id, outText, reason, epin) { e -> if (e == null) editing = null else err = e }
+                }) { Text("LƯU") }
+            },
+            dismissButton = { TextButton(onClick = { editing = null }) { Text("Huỷ") } }
+        )
     }
     reviewing?.let { s ->
         var countedText by remember(s.id) { mutableStateOf("") }
@@ -199,6 +269,77 @@ fun ShiftList(vm: PosViewModel) {
     }
 }
 
+/** Đóng ngày (ADMIN): tổng hợp các ca của ngày, chặn nếu còn bàn chưa thanh toán, chốt tiền mặt ca của mình. */
+@Composable
+fun CloseDay(vm: PosViewModel) {
+    val shifts by vm.shifts.collectAsState()
+    val settings by vm.settings.collectAsState()
+    val sessions by vm.sessions.collectAsState()
+    val active by vm.activeShift.collectAsState()
+    val me by vm.currentEmployee.collectAsState()
+    val closed = settings.filter { it.key.startsWith("day_closed_") && it.value.isNotBlank() }.map { it.key.removePrefix("day_closed_") }.toSet()
+    val date = ShiftRules.earliestOpenDay(shifts.filter { it.dataScope == "LIVE" }.map { it.date }, closed)
+    var countedText by remember { mutableStateOf("") }
+    var note by remember { mutableStateOf("") }
+    var pin by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf("") }
+    val dayShifts = shifts.filter { it.date == date && it.dataScope == "LIVE" }.sortedBy { it.checkInClient }
+    val unpaid = sessions.count { it.dataScope == "LIVE" && it.status == "OPEN" }
+    var expectedOwn by remember { mutableStateOf(0L) }
+    val own = active?.takeIf { it.staffId == me?.id }
+    LaunchedEffect(own?.id) { if (own != null) vm.loadShiftCheckout() }
+    val totals by vm.shiftTotals.collectAsState()
+    expectedOwn = if (own != null) (totals?.first ?: 0L) else 0L
+    Column(Modifier.fillMaxSize()) {
+        Header("Đóng ngày") { vm.screen.value = "HR" }
+        if (me?.role != "ADMIN") { Text("Chỉ ADMIN được đóng ngày.", Modifier.padding(16.dp)); return@Column }
+        if (date == null) { Text("Không có ngày nào cần đóng.", Modifier.padding(16.dp)); return@Column }
+        Column(Modifier.fillMaxSize().padding(horizontal = 16.dp).verticalScroll(rememberScrollState())) {
+            Text("Ngày $date", fontSize = 20.sp, fontWeight = FontWeight.Black)
+            dayShifts.forEach { s ->
+                Text("• ${s.staffName} ${hhmm(s.checkInClient)}→${hhmm(s.checkOutClient)} · ${statusLabel(s.status)}" +
+                    if (s.status != "open") " · tiền mặt ${vnd(s.cashCounted ?: s.cashExpected)} · CK ${vnd(s.transferTotal)}" else "", fontSize = 13.sp)
+            }
+            Spacer(Modifier.height(8.dp))
+            if (unpaid > 0) Text("⛔ Còn $unpaid bàn chưa thanh toán · thanh toán hoặc huỷ trước khi đóng ngày.", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+            val review = dayShifts.count { it.status == "pending_review" }
+            if (review > 0) Text("⛔ Còn $review ca cần xem lại · xác nhận trong Ca làm & nhận tiền.", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+            if (active != null && own == null) {
+                Text("⛔ Còn ca của ${active?.staffName} đang mở · ra ca hoặc tiếp quản trước.", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                Button(onClick = { vm.screen.value = "SHIFT_END" }) { Text("RA CA CỦA ${active?.staffName?.uppercase()}") }
+            }
+            if (own != null) {
+                Spacer(Modifier.height(8.dp))
+                Text("Tiền mặt ca của bạn phải có: ${vnd(expectedOwn)}", fontWeight = FontWeight.Bold)
+                OutlinedTextField(countedText, { countedText = it.filter(Char::isDigit).take(10) }, label = { Text("Tiền mặt thực tế (đ)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedButton(onClick = { countedText = expectedOwn.toString() }) { Text("Đúng bằng doanh thu tiền mặt") }
+                val diff = countedText.toLongOrNull()?.let { ShiftRules.diff(it, expectedOwn) }
+                if (diff != null) Text(if (diff == 0L) "✔ KHỚP" else "✖ LỆCH ${vnd(diff)}", fontWeight = FontWeight.Bold, color = if (diff == 0L) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error)
+            }
+            OutlinedTextField(note, { note = it }, label = { Text("Ghi chú ngày") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(pin, { pin = it.filter(Char::isDigit).take(4) }, label = { Text("PIN ADMIN xác nhận") }, visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth())
+            if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
+            Button(
+                onClick = { vm.closeDay(date, countedText.toLongOrNull(), note, pin) { e -> if (e != null) error = e } },
+                enabled = pin.length == 4 && unpaid == 0 && (own == null || countedText.isNotBlank()),
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+            ) { Text("ĐÓNG NGÀY $date") }
+            Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+fun DayCloseReminderDialog(vm: PosViewModel, date: String) {
+    AlertDialog(
+        onDismissRequest = { },
+        title = { Text("Chưa đóng ngày $date", fontWeight = FontWeight.Black) },
+        text = { Text("Đóng ngày để chốt tiền mặt và khoá sổ ngày làm việc.") },
+        confirmButton = { Button(onClick = { vm.snoozeDayClose(); vm.screen.value = "CLOSE_DAY" }) { Text("ĐÓNG NGÀY") } },
+        dismissButton = { OutlinedButton(onClick = { vm.snoozeDayClose() }) { Text("Nhắc sau") } }
+    )
+}
+
 @Composable
 fun HrHub(vm: PosViewModel) {
     Column(Modifier.fillMaxSize()) {
@@ -206,6 +347,7 @@ fun HrHub(vm: PosViewModel) {
         Column(Modifier.fillMaxSize().padding(horizontal = 16.dp).verticalScroll(rememberScrollState())) {
             Rowx("Nhân viên", "Thêm · khóa · phân quyền · ai phải chấm công") { vm.screen.value = "EMP" }
             Rowx("Ca làm & nhận tiền", "Danh sách ca · tiền bàn giao · xác nhận đã nhận") { vm.screen.value = "SHIFTS" }
+            Rowx("Đóng ngày", "Chốt tiền mặt cuối ngày · tổng hợp các ca") { vm.screen.value = "CLOSE_DAY" }
             Rowx("Chấm công & Bảng lương", "Giờ vào/ra · tổng giờ · lương theo tháng") { vm.screen.value = "PAYROLL" }
             Rowx("Cài đặt ca & nhắc giờ", "Giờ nhân viên về · giờ đóng cửa · nhắc lại sau") { vm.screen.value = "SHIFT_SETTINGS" }
             Rowx("Sửa công thủ công", "Lịch tháng · thêm/sửa/bớt công khi máy lỗi · cần PIN nhân viên") { vm.screen.value = "ATT_EDIT" }
@@ -471,6 +613,18 @@ fun ShiftSettings(vm: PosViewModel) {
             OutlinedTextField(closeTime, { closeTime = it }, label = { Text("Giờ đóng cửa (HH:mm)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             Text("Qua giờ này mà ca nhân viên vẫn mở và không còn hoạt động thì app tự đóng ca.", fontSize = 12.sp)
             OutlinedTextField(snooze, { snooze = it.filter(Char::isDigit).take(3) }, label = { Text("Nhắc lại sau (phút)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            var alerts by remember { mutableStateOf(vn.ecohome.pos0210.cloud.ShiftAlerts.enabled(ctx)) }
+            val permission = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                Switch(checked = alerts, onCheckedChange = {
+                    alerts = it
+                    vn.ecohome.pos0210.cloud.ShiftAlerts.setEnabled(ctx, it)
+                    if (it && android.os.Build.VERSION.SDK_INT >= 33) permission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                })
+                Text(" Máy này nhận thông báo ca cần xem lại / lệch tiền")
+            }
+            Text("Chỉ bật trên máy của chủ. Thông báo chỉ tới khi app đang chạy và có mạng.", fontSize = 11.sp)
             if (saved.isNotBlank()) Text(saved, color = MaterialTheme.colorScheme.error)
             Button(
                 onClick = {

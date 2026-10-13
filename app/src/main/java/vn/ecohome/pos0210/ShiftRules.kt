@@ -127,4 +127,35 @@ object ShiftRules {
 
     /** Giờ ra mặc định của ca bị tiếp quản/tự đóng: hoạt động cuối, kẹp trong [vào ca, hiện tại]. */
     fun defaultCutoff(lastActivityAt: Long, checkIn: Long, now: Long): Long = lastActivityAt.coerceIn(checkIn, maxOf(checkIn, now))
+
+    /** Số phút công của ca: giờ vào và giờ ra mỗi mốc làm tròn về giờ chẵn nếu lệch ≤15 phút. Chưa ra ca thì null. */
+    fun shiftMinutes(checkIn: Long, checkOut: Long?): Long? {
+        if (checkOut == null) return null
+        val a = TimeRounding.snapToHour(checkIn, VN_ZONE)
+        val b = TimeRounding.snapToHour(checkOut, VN_ZONE)
+        return if (b > a) (b - a) / 60_000L else 0L
+    }
+
+    fun needsAlert(status: String?, diff: Long?, threshold: Long = DEFAULT_DIFF_THRESHOLD): Boolean =
+        status == "pending_review" || (diff != null && kotlin.math.abs(diff) > threshold)
+
+    fun editLogLine(at: Long, by: String, field: String, old: String, new: String, reason: String): String =
+        listOf(at.toString(), by, field, old, new, reason).joinToString("|") { it.replace('|', '/').replace('\n', ' ') }
+
+    fun appendEditLog(log: String, line: String): String = if (log.isBlank()) line else "$log\n$line"
+
+    fun dayClosedKey(date: String) = "day_closed_$date"
+
+    /** Ngày làm việc sớm nhất có ca mà chưa đóng. */
+    fun earliestOpenDay(shiftDates: Collection<String>, closedDates: Set<String>): String? =
+        shiftDates.distinct().sorted().firstOrNull { it !in closedDates }
+
+    /** Nhắc "Chưa đóng ngày": ngày cũ chưa đóng, hoặc hôm nay đã qua giờ đóng cửa; lặp lại theo thời gian nhắc sau. */
+    fun dayCloseDue(now: Long, closeTime: String, openDate: String?, snoozeUntil: Long): Boolean {
+        if (openDate == null || now < snoozeUntil) return false
+        if (openDate < workDate(now)) return true
+        val hm = parseHm(closeTime) ?: return false
+        val local = java.time.Instant.ofEpochMilli(now).atZone(VN_ZONE)
+        return local.hour * 60 + local.minute >= hm
+    }
 }

@@ -31,10 +31,17 @@ fun PrepaidOrders(vm: PosViewModel) {
     var refundTarget by remember { mutableStateOf<PrepaidOrderRow?>(null) }
     var reason by remember { mutableStateOf("") }
     var msg by remember { mutableStateOf("") }
+    var mgrPin by remember { mutableStateOf("") }
+    var settleTarget by remember { mutableStateOf<vn.ecohome.pos0210.data.RefundEntity?>(null) }
+    var settleNote by remember { mutableStateOf("") }
+    val refunds by vm.refunds.collectAsState()
+    val frozen = refunds.filter { it.status == "FROZEN" }
+    val frozenByBatch = frozen.associateBy { it.batchId }
     val fmt = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
     Column {
         Header("Đơn hôm nay") { vm.screen.value = "TABLES" }
         if (msg.isNotBlank()) Text(msg, Modifier.padding(horizontal = 16.dp), fontWeight = FontWeight.Bold, color = Color(0xFF9A2B1F))
+        FrozenRefundBanner(frozen)
         if (orders.isEmpty()) {
             Text("Chưa có đơn trả trước nào hôm nay.", Modifier.padding(20.dp))
         } else {
@@ -52,12 +59,21 @@ fun PrepaidOrders(vm: PosViewModel) {
                                 (o.paidAt?.let { " · ${fmt.format(Date(it))}" } ?: ""))
                             o.itemsText?.lines()?.forEach { Text(it, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 2.dp)) }
                             if (o.method == "CASH" && o.cashReceived != null) Text("Khách đưa ${vnd(o.cashReceived)} · thối ${vnd(o.change ?: 0L)}", fontSize = 12.sp)
+                            frozenByBatch[o.batchId]?.let { fr ->
+                                Surface(Modifier.fillMaxWidth().padding(top = 6.dp), color = Color(0xFFFFE0DC), shape = RoundedCornerShape(8.dp)) {
+                                    Column(Modifier.padding(10.dp)) {
+                                        Text("ĐÓNG BĂNG · ${vnd(fr.amount)} CK chờ hoàn cho khách", fontWeight = FontWeight.Black, color = Color(0xFF9A2B1F))
+                                        Text("Lý do: ${fr.reason}", fontSize = 12.sp)
+                                        OutlinedButton(onClick = { settleNote = ""; msg = ""; settleTarget = fr }, Modifier.padding(top = 4.dp)) { Text("ĐÃ HOÀN CK (quản lý)") }
+                                    }
+                                }
+                            }
                             if (!refunded && o.billId != null) {
                                 Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     if (o.batchStatus == "WAITING") Button(onClick = {
                                         vm.markDelivered(vn.ecohome.pos0210.data.OrderBatchEntity(o.batchId,o.sessionId,1,"",o.openedAt,null,o.batchStatus,o.serviceNo))
                                     }) { Text("ĐÃ GIAO") }
-                                    OutlinedButton(onClick = { reason = ""; msg = ""; refundTarget = o }) { Text("HUỶ & HOÀN TIỀN") }
+                                    OutlinedButton(onClick = { reason = ""; mgrPin = ""; msg = ""; refundTarget = o }) { Text("HUỶ & HOÀN TIỀN") }
                                 }
                             }
                         }
@@ -66,19 +82,35 @@ fun PrepaidOrders(vm: PosViewModel) {
             }
         }
     }
+    settleTarget?.let { fr ->
+        AlertDialog(
+            onDismissRequest = { settleTarget = null },
+            title = { Text("Đã hoàn CK ${vnd(fr.amount)}?") },
+            text = { Column {
+                Text("Ghi cách đã hoàn để đối soát.", fontSize = 12.sp)
+                OutlinedTextField(settleNote, { settleNote = it.take(120) }, label = { Text("VD: CK lại 14h20 qua VCB") }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+            } },
+            confirmButton = { TextButton(enabled = settleNote.isNotBlank(), onClick = { vm.settleFrozenRefund(fr.id, settleNote) { err -> msg = err ?: ""; if (err == null) settleTarget = null } }) { Text("XÁC NHẬN") } },
+            dismissButton = { TextButton(onClick = { settleTarget = null }) { Text("ĐÓNG") } }
+        )
+    }
     refundTarget?.let { o ->
         AlertDialog(
             onDismissRequest = { refundTarget = null },
             title = { Text("Huỷ ${PaymentFlowRules.orderNoLabel(o.serviceNo)} · hoàn ${vnd(o.total ?: 0L)}") },
             text = {
                 Column {
-                    Text("Đơn không bị xoá, chỉ ghi khoản hoàn. Bắt buộc nhập lý do.", fontSize = 12.sp)
+                    val late = o.paidAt != null && System.currentTimeMillis() - o.paidAt > 90_000L
+                    Text(if (o.method == "CASH") "Tiền mặt: trả lại khách, đơn không tính doanh thu." else "Chuyển khoản: đơn bị ĐÓNG BĂNG, không tính doanh thu, quản lý hoàn CK cho khách rồi xác nhận.", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(if (late) "Đã quá 90 giây từ lúc thanh toán: cần quản lý nhập PIN." else "Trong 90 giây đầu nhân viên tự hoàn được.", fontSize = 12.sp, color = if (late) Color(0xFF9A2B1F) else Color.Unspecified)
                     OutlinedTextField(reason, { reason = it.take(120) }, label = { Text("Lý do") }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                    if (late) OutlinedTextField(mgrPin, { mgrPin = it.filter(Char::isDigit).take(12) }, label = { Text("PIN quản lý") }, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                    if (msg.isNotBlank()) Text(msg, fontWeight = FontWeight.Bold, color = Color(0xFF9A2B1F), modifier = Modifier.padding(top = 6.dp))
                 }
             },
             confirmButton = {
                 TextButton(enabled = reason.isNotBlank(), onClick = {
-                    vm.refundPrepaidOrder(o.sessionId, o.batchId, reason) { err -> msg = err ?: ""; if (err == null) refundTarget = null }
+                    vm.refundPrepaidOrder(o.sessionId, o.batchId, reason, mgrPin) { err -> msg = err ?: ""; if (err == null) refundTarget = null }
                 }) { Text("XÁC NHẬN HOÀN") }
             },
             dismissButton = { TextButton(onClick = { refundTarget = null }) { Text("ĐÓNG") } }
@@ -283,5 +315,15 @@ fun PrepaidReview(vm: PosViewModel, t: vn.ecohome.pos0210.data.DiningTableEntity
                 Button(onClick = { vm.sendBatch() }, Modifier.weight(1.3f).height(56.dp), enabled = keys.isNotEmpty()) { Text("ĐÚNG RỒI\nTHANH TOÁN".replace("\\n", "\n"), fontWeight = FontWeight.Black, textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
             }
         }
+    }
+}
+
+/** Dải đỏ báo các khoản chuyển khoản đã đóng băng, chưa hoàn cho khách. */
+@Composable
+fun FrozenRefundBanner(frozen: List<vn.ecohome.pos0210.data.RefundEntity>) {
+    if (frozen.isEmpty()) return
+    Surface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), color = Color(0xFF9A2B1F), shape = RoundedCornerShape(8.dp)) {
+        Text("⚠ ${frozen.size} khoản CK ĐÓNG BĂNG · ${vnd(frozen.sumOf { it.amount })} chờ quản lý hoàn cho khách (không tính doanh thu)",
+            Modifier.padding(10.dp), color = Color.White, fontWeight = FontWeight.Black, fontSize = 13.sp)
     }
 }

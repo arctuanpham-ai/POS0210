@@ -192,7 +192,7 @@ object FirebaseCloudSync {
         writeMaps(fs,root.collection("payments"),paymentMirror.map{p->p.id to mapOf("id" to p.id,"billId" to p.billId,"method" to p.method,"amount" to p.amount,"cashierId" to p.cashierId,"paidAt" to p.paidAt,"reference" to p.reference,"dataScope" to p.dataScope,"cashReceived" to p.cashReceived,"change" to p.change)})
         // Refund/payment-flow mirrors are best effort: a rules or quota failure here must never block shifts/days/config below.
         runCatching{
-        writeMaps(fs,root.collection("refunds"),dao.refundsSnapshot().map{r->r.id to mapOf("id" to r.id,"billId" to r.billId,"sessionId" to r.sessionId,"batchId" to r.batchId,"amount" to r.amount,"method" to r.method,"reason" to r.reason,"actorId" to r.actorId,"shiftId" to r.shiftId,"createdAt" to r.createdAt,"dataScope" to r.dataScope)})
+        writeMaps(fs,root.collection("refunds"),dao.refundsSnapshot().map{r->r.id to mapOf("id" to r.id,"billId" to r.billId,"sessionId" to r.sessionId,"batchId" to r.batchId,"amount" to r.amount,"method" to r.method,"reason" to r.reason,"actorId" to r.actorId,"shiftId" to r.shiftId,"createdAt" to r.createdAt,"dataScope" to r.dataScope,"status" to r.status,"approvedBy" to r.approvedBy,"settledAt" to r.settledAt,"settleNote" to r.settleNote)})
         run{
             val st=dao.allSettingsSnapshot().associate{it.key to it.value}
             val hist=(st["payment_flow_history"]?:"").lines().filter{l->l.isNotBlank()}.mapNotNull{l->l.split("|").takeIf{x->x.size>=4}?.let{x->mapOf("at" to (x[0].toLongOrNull()?:0L),"by" to x[1],"from" to x[2],"to" to x[3])}}

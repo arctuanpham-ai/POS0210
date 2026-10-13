@@ -299,6 +299,8 @@ WHERE s.dataScope='LIVE' AND ob.status!='CANCELLED' AND EXISTS(SELECT 1 FROM Bil
 @Query("SELECT COUNT(*) FROM BillEntity b JOIN TableSessionEntity s ON s.id=b.sessionId JOIN PaymentEntity p ON p.billId=b.id WHERE s.shiftId=:shiftId AND b.status='PAID' AND b.dataScope='LIVE' AND p.paidAt<=:until") suspend fun shiftPaidBillCountUntil(shiftId:String,until:Long):Int
 @Query("SELECT DISTINCT s.id FROM TableSessionEntity s JOIN BillEntity b ON b.sessionId=s.id JOIN PaymentEntity p ON p.billId=b.id WHERE s.shiftId=:shiftId AND p.paidAt>:until") suspend fun sessionIdsPaidAfter(shiftId:String,until:Long):List<String>
 @Insert(onConflict=OnConflictStrategy.ABORT) suspend fun insertRefund(v:RefundEntity)
+@Query("SELECT * FROM RefundEntity ORDER BY createdAt DESC") fun refundsFlow():kotlinx.coroutines.flow.Flow<List<RefundEntity>>
+@Query("UPDATE RefundEntity SET status='DONE',settledAt=:at,settleNote=:note WHERE id=:id AND status='FROZEN'") suspend fun settleRefund(id:String,at:Long,note:String):Int
 @Query("SELECT * FROM RefundEntity ORDER BY createdAt") suspend fun refundsSnapshot():List<RefundEntity>
 @Query("SELECT * FROM BillEntity WHERE sessionId=:sessionId LIMIT 1") suspend fun billBySessionId(sessionId:String):BillEntity?
 @Query("UPDATE BillEntity SET status='REFUNDED' WHERE id=:id AND status='PAID'") suspend fun markBillRefunded(id:String):Int

@@ -5,7 +5,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
-@Database(entities=[EmployeeEntity::class,AreaEntity::class,DiningTableEntity::class,MenuCategoryEntity::class,ComboEntity::class,ComboItemEntity::class,MenuItemEntity::class,TableSessionEntity::class,OrderBatchEntity::class,OrderItemEntity::class,BillEntity::class,PaymentEntity::class,CustomerEntity::class,CustomerPointTransactionEntity::class,PricingRuleEntity::class,BillAdjustmentEntity::class,SupplierEntity::class,PurchaseEntity::class,PurchaseCategoryEntity::class,PurchaseItemEntity::class,MonthlyAccountingEntity::class,ProfitPartnerEntity::class,PrintJobEntity::class,AuditEventEntity::class,AppSettingEntity::class,PaymentSessionEntity::class,BankNotificationEventEntity::class,AssetCategoryEntity::class,AssetEntity::class,AssetValuationEntity::class,FinancialMovementEntity::class,OpeningCashAdjustmentEntity::class,CloudSyncStateEntity::class,CostCodeEntity::class,SyncQueueEntity::class,AttendanceSessionEntity::class,LoyaltyCampaignEntity::class,CustomerRewardEntity::class,BuyGetPromotionEntity::class,ShiftEntity::class,RefundEntity::class],version=31,exportSchema=false)
+@Database(entities=[EmployeeEntity::class,AreaEntity::class,DiningTableEntity::class,MenuCategoryEntity::class,ComboEntity::class,ComboItemEntity::class,MenuItemEntity::class,TableSessionEntity::class,OrderBatchEntity::class,OrderItemEntity::class,BillEntity::class,PaymentEntity::class,CustomerEntity::class,CustomerPointTransactionEntity::class,PricingRuleEntity::class,BillAdjustmentEntity::class,SupplierEntity::class,PurchaseEntity::class,PurchaseCategoryEntity::class,PurchaseItemEntity::class,MonthlyAccountingEntity::class,ProfitPartnerEntity::class,PrintJobEntity::class,AuditEventEntity::class,AppSettingEntity::class,PaymentSessionEntity::class,BankNotificationEventEntity::class,AssetCategoryEntity::class,AssetEntity::class,AssetValuationEntity::class,FinancialMovementEntity::class,OpeningCashAdjustmentEntity::class,CloudSyncStateEntity::class,CostCodeEntity::class,SyncQueueEntity::class,AttendanceSessionEntity::class,LoyaltyCampaignEntity::class,CustomerRewardEntity::class,BuyGetPromotionEntity::class,ShiftEntity::class,RefundEntity::class],version=32,exportSchema=false)
 abstract class PosDatabase:RoomDatabase(){
  abstract fun dao():PosDao
  companion object{
@@ -278,9 +278,18 @@ abstract class PosDatabase:RoomDatabase(){
     db.execSQL("CREATE INDEX IF NOT EXISTS index_RefundEntity_createdAt ON RefundEntity(createdAt)")
    }
   }
+  val MIGRATION_31_32=object:Migration(31,32){
+   override fun migrate(db:SupportSQLiteDatabase){
+    db.execSQL("ALTER TABLE RefundEntity ADD COLUMN status TEXT NOT NULL DEFAULT 'DONE'")
+    db.execSQL("ALTER TABLE RefundEntity ADD COLUMN approvedBy TEXT")
+    db.execSQL("ALTER TABLE RefundEntity ADD COLUMN settledAt INTEGER")
+    db.execSQL("ALTER TABLE RefundEntity ADD COLUMN settleNote TEXT NOT NULL DEFAULT ''")
+    db.execSQL("UPDATE RefundEntity SET status='FROZEN' WHERE method='TRANSFER'")
+   }
+  }
   fun get(context:Context):PosDatabase=instance?:synchronized(this){
    instance?:Room.databaseBuilder(context.applicationContext,PosDatabase::class.java,"pos0210.db")
-    .addMigrations(MIGRATION_3_4,MIGRATION_4_5,MIGRATION_5_6,MIGRATION_6_7,MIGRATION_7_8,MIGRATION_8_9,MIGRATION_9_10,MIGRATION_10_11,MIGRATION_11_12,MIGRATION_12_13,MIGRATION_13_14,MIGRATION_14_15,MIGRATION_15_16,MIGRATION_16_17,MIGRATION_17_18,MIGRATION_18_19,MIGRATION_19_20,MIGRATION_20_21,MIGRATION_21_22,MIGRATION_22_23,MIGRATION_23_24,MIGRATION_24_25,MIGRATION_25_26,MIGRATION_26_27,MIGRATION_27_28,MIGRATION_28_29,MIGRATION_29_30,MIGRATION_30_31)
+    .addMigrations(MIGRATION_3_4,MIGRATION_4_5,MIGRATION_5_6,MIGRATION_6_7,MIGRATION_7_8,MIGRATION_8_9,MIGRATION_9_10,MIGRATION_10_11,MIGRATION_11_12,MIGRATION_12_13,MIGRATION_13_14,MIGRATION_14_15,MIGRATION_15_16,MIGRATION_16_17,MIGRATION_17_18,MIGRATION_18_19,MIGRATION_19_20,MIGRATION_20_21,MIGRATION_21_22,MIGRATION_22_23,MIGRATION_23_24,MIGRATION_24_25,MIGRATION_25_26,MIGRATION_26_27,MIGRATION_27_28,MIGRATION_28_29,MIGRATION_29_30,MIGRATION_30_31,MIGRATION_31_32)
     .build().also{instance=it}
   }
   fun closeForRestore(){synchronized(this){instance?.close();instance=null}}

@@ -455,8 +455,10 @@ class PosRepository(private val db:PosDatabase){
         }
     }
 
+    companion object { const val REFUND_SELF_WINDOW_MS=90_000L }
+
     /** Huỷ đơn trả trước đã thu tiền: ghi khoản hoàn (không xoá đơn), bill chuyển REFUNDED, món chuyển CANCELLED. */
-    suspend fun refundPrepaidOrder(sessionId:String,batchId:String,reason:String,actorId:String):RefundEntity = db.withTransaction {
+    suspend fun refundPrepaidOrder(sessionId:String,batchId:String,reason:String,actorId:String,approverId:String?=null):RefundEntity = db.withTransaction {
         require(reason.isNotBlank()){"REFUND_REASON_REQUIRED"}
         val now=System.currentTimeMillis()
         val session=dao.sessionSnapshotById(sessionId) ?: error("SESSION_MISSING")
@@ -464,12 +466,14 @@ class PosRepository(private val db:PosDatabase){
         val bill=dao.billBySessionId(sessionId) ?: error("BILL_MISSING")
         check(bill.status=="PAID"){"ORDER_ALREADY_REFUNDED_OR_NOT_PAID"}
         val payment=dao.paymentByBillId(bill.id) ?: error("PAYMENT_MISSING")
-        val refund=RefundEntity(UUID.randomUUID().toString(),bill.id,sessionId,batchId,payment.amount,payment.method,reason.trim(),actorId,dao.activeShift()?.id,now,payment.dataScope)
+        check(now-payment.paidAt<=REFUND_SELF_WINDOW_MS||approverId!=null){"MANAGER_APPROVAL_REQUIRED"}
+        val frozen=payment.method!="CASH"
+        val refund=RefundEntity(UUID.randomUUID().toString(),bill.id,sessionId,batchId,payment.amount,payment.method,reason.trim(),actorId,dao.activeShift()?.id,now,payment.dataScope,if(frozen)"FROZEN" else "DONE",approverId)
         check(dao.markBillRefunded(bill.id)==1){"ORDER_ALREADY_REFUNDED_OR_NOT_PAID"}
         dao.insertRefund(refund)
         dao.cancelPaidBatch(batchId)
         dao.touchActiveShift(now)
-        dao.audit(AuditEventEntity(UUID.randomUUID().toString(),"BILL",bill.id,"REFUND",actorId,null,now,"amount=${payment.amount},method=${payment.method},reason=${reason.trim()}"))
+        dao.audit(AuditEventEntity(UUID.randomUUID().toString(),"BILL",bill.id,"REFUND",actorId,null,now,"amount=${payment.amount},method=${payment.method},reason=${reason.trim()},approver=${approverId?:"self"},frozen=$frozen"))
         refund
     }
 }

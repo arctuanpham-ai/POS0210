@@ -1471,14 +1471,27 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
   dao.openPrepaidSessions().forEach{ s-> if(dao.billBySessionId(s.id)==null&&s.id!=currentSession.value?.id)cancelPrepaidSession(s,actor) }
  }
  /** Huỷ đơn trả trước đã thu: bắt buộc lý do, ghi khoản hoàn, không xoá đơn. */
- fun refundPrepaidOrder(sessionId:String,batchId:String,reason:String,onDone:(String?)->Unit){
+ val refunds=dao.refundsFlow().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
+ fun settleFrozenRefund(id:String,note:String,onDone:(String?)->Unit){
+  val e=currentEmployee.value
+  viewModelScope.launch(Dispatchers.IO){
+   if(e==null||(e.role!="ADMIN"&&e.role!="MANAGER")){withContext(Dispatchers.Main){onDone("Chỉ quản lý được xác nhận đã hoàn CK")};return@launch}
+   if(note.isBlank()){withContext(Dispatchers.Main){onDone("Ghi cách hoàn (VD: CK lại 14h20)")};return@launch}
+   val n=dao.settleRefund(id,System.currentTimeMillis(),note.trim())
+   if(n==1){audit("REFUND",id,"SETTLE_TRANSFER",note.trim());dao.markCloudDirty();autoBackup()}
+   withContext(Dispatchers.Main){onDone(if(n==1)null else "Khoản này đã xử lý rồi")}
+  }
+ }
+ fun refundPrepaidOrder(sessionId:String,batchId:String,reason:String,managerPin:String,onDone:(String?)->Unit){
   val e=currentEmployee.value
   viewModelScope.launch(Dispatchers.IO){
    fun fail(m:String){viewModelScope.launch(Dispatchers.Main){onDone(m)}}
    if(e==null||!canCancelOrder()){fail("Không có quyền huỷ đơn");return@launch}
    if(reason.isBlank()){fail("Bắt buộc ghi lý do");return@launch}
-   val result=runCatching{repo.refundPrepaidOrder(sessionId,batchId,reason,e.id)}
-   result.onFailure{fail(when(it.message){"ORDER_ALREADY_REFUNDED_OR_NOT_PAID"->"Đơn đã hoàn tiền rồi";else->"Không hoàn tiền được: ${it.message}"});return@launch}
+   val approver:String?=if(e.role=="ADMIN"||e.role=="MANAGER")e.id else managerPin.takeIf{it.isNotBlank()}?.let{p->dao.employeeByPin(p)?.takeIf{it.role=="ADMIN"||it.role=="MANAGER"}?.id}
+   if(managerPin.isNotBlank()&&approver==null){fail("PIN quản lý không đúng");return@launch}
+   val result=runCatching{repo.refundPrepaidOrder(sessionId,batchId,reason,e.id,approver)}
+   result.onFailure{fail(when(it.message){"MANAGER_APPROVAL_REQUIRED"->"Quá 90 giây · cần quản lý nhập PIN để xác nhận hoàn tiền";"ORDER_ALREADY_REFUNDED_OR_NOT_PAID"->"Đơn đã hoàn tiền rồi";else->"Không hoàn tiền được: ${it.message}"});return@launch}
    dao.markCloudDirty();autoBackup()
    withContext(Dispatchers.Main){onDone(null)}
   }

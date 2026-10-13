@@ -289,6 +289,7 @@ fun Tables(vm: PosViewModel) {
     Column {
         Header()
         Operator(vm)
+        run { val fr by vm.refunds.collectAsState(); FrozenRefundBanner(fr.filter { it.status == "FROZEN" }) }
         if(testMode) Surface(Modifier.fillMaxWidth(),color=Color(0xFFFFD8D8)){Text("TEST MODE · KHÔNG TÍNH DOANH THU",Modifier.fillMaxWidth().padding(8.dp),textAlign=TextAlign.Center,fontWeight=FontWeight.Black,color=Color.Red)}
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp),
@@ -3823,6 +3824,24 @@ fun Report(vm: PosViewModel) {
                         }
                     }
                     item { MetricCard("Doanh thu", money(revenue)) }
+                    item {
+                        val allRefunds by vm.refunds.collectAsState()
+                        val periodRefunds = allRefunds.filter { it.dataScope == "LIVE" && it.createdAt >= (from ?: 0L) && (until == null || it.createdAt < until) }
+                        val cashBack = periodRefunds.filter { it.method == "CASH" }.sumOf { it.amount }
+                        val frozenAll = allRefunds.filter { it.dataScope == "LIVE" && it.status == "FROZEN" }.sumOf { it.amount }
+                        val ckSettled = periodRefunds.filter { it.method != "CASH" && it.status == "DONE" }.sumOf { it.amount }
+                        if (periodRefunds.isNotEmpty() || frozenAll > 0L) {
+                            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEDEA))) {
+                                Column(Modifier.padding(12.dp)) {
+                                    Text("HOÀN TIỀN (đã loại khỏi doanh thu)", fontWeight = FontWeight.Black)
+                                    Text("Hoàn tiền mặt trong kỳ: ${money(cashBack)}")
+                                    Text("CK đã hoàn xong trong kỳ: ${money(ckSettled)}")
+                                    Text("CK ĐÓNG BĂNG chờ hoàn (tính đến nay): ${money(frozenAll)}", fontWeight = FontWeight.Black, color = Color(0xFF9A2B1F))
+                                    Text("Tiền CK đóng băng nằm trong tài khoản nhưng thuộc về khách, trừ ra khi đối chiếu sao kê.", fontSize = 11.sp)
+                                }
+                            }
+                        }
+                    }
                     item { MetricCard("Số bill", filteredBills.size.toString()) }
                     item { MetricCard("Bill trung bình", money(avgBill)) }
                     item { MetricCard("Tiền mặt", money(cash)) }

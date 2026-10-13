@@ -72,4 +72,10 @@ object ShiftRules {
 
     /** Máy tự khoá khi không ai chạm đủ lâu (kể cả lúc tắt màn hình), để người khác cầm máy không vô tình dùng dưới tài khoản người trước. */
     fun shouldLock(now: Long, lastTouchAt: Long, timeoutMs: Long = LOCK_TIMEOUT_MS): Boolean = now - lastTouchAt >= timeoutMs
+
+    /** 270 phút -> "4h30"; 0 -> "0h". */
+    fun formatHours(minutes: Long): String {
+        val m = minutes.coerceAtLeast(0)
+        return if (m % 60 == 0L) "${m / 60}h" else "${m / 60}h${(m % 60).toString().padStart(2, '0')}"
+    }
 }

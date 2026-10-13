@@ -1101,6 +1101,26 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    touch();locked.value=false
   }
  }
+
+ fun deleteAttendance(sessionId:String,employeeId:String,reason:String,pin:String,onResult:(String?)->Unit){
+  val admin=currentEmployee.value
+  viewModelScope.launch(Dispatchers.IO){
+   fun fail(m:String){viewModelScope.launch(Dispatchers.Main){onResult(m)}}
+   if(admin?.role!="ADMIN"){fail("Chỉ ADMIN được sửa công");return@launch}
+   val target=dao.employeeById(employeeId)
+   if(target==null||target.pin!=pin){fail("PIN của nhân viên không đúng");return@launch}
+   if(reason.isBlank()){fail("Bắt buộc ghi lý do");return@launch}
+   attendanceMutex.withLock {
+    val old=dao.attendanceById(sessionId)
+    if(old==null||old.employeeId!=employeeId){fail("Không tìm thấy ca công");return@withLock}
+    dao.deleteAttendance(sessionId)
+    audit("ATTENDANCE",sessionId,"MANUAL_DELETE","by=${admin.name},employee=${target.name},old=${ShiftRules.formatLocalTime(old.checkInAt)}→${ShiftRules.formatLocalTime(old.checkOutAt)},reason=${reason.trim()}")
+    if(myAttendance.value?.id==sessionId)myAttendance.value=null
+    refreshPayroll()
+    withContext(Dispatchers.Main){onResult(null)}
+   }
+  }
+ }
  fun customerRewards(customerId:String)=dao.availableRewards(customerId)
  fun clearSelectedVoucher(){selectedVoucher.value=null;selectedVoucherItemId.value=null;verifiedVoucher.value=null;voucherMessage.value=""}
  fun sendBatch(){

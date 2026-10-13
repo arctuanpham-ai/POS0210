@@ -146,6 +146,7 @@ fun App(vm: PosViewModel = viewModel()) {
         "LOGIN" -> Login(vm)
         "SHIFT_START" -> StartShift(vm)
         "SHIFT_END" -> ShiftEnd(vm)
+        "HR" -> HrHub(vm)
         "SHIFTS" -> ShiftList(vm)
         "ATT_EDIT" -> AttendanceEdit(vm)
         "TABLES" -> Tables(vm)
@@ -1422,10 +1423,7 @@ fun Manage(vm: PosViewModel) {
             if (employee?.role == "ADMIN") {
                 Rowx("Cấu hình hạng thành viên", "Ngưỡng điểm · tự nâng hạng · % ưu đãi Member/VIP/VVIP") { vm.screen.value = "LOYALTY_CONFIG" }
                 Rowx("Chương trình tích điểm giảm bill", "Tùy chỉnh điểm → giảm tiền hoặc % một lần") { vm.screen.value = "LOYALTY_CAMPAIGNS" }
-                Rowx("Nhân viên", "Thêm · khóa · phân quyền") { vm.screen.value = "EMP" }
-                Rowx("Ca làm & nhận tiền", "Danh sách ca · tiền bàn giao · xác nhận đã nhận") { vm.screen.value = "SHIFTS" }
-                Rowx("Sửa công thủ công", "Thêm/sửa giờ vào-ra khi máy lỗi · cần PIN nhân viên") { vm.screen.value = "ATT_EDIT" }
-                Rowx("Chấm công & Bảng lương", "Giờ vào/ra · tổng giờ · lương theo tháng") { vm.screen.value = "PAYROLL" }
+                Rowx("Nhân sự & Lương", "Nhân viên · ca làm · chấm công · sửa công · bảng lương") { vm.screen.value = "HR" }
             }
             if (employee?.role != null && employee?.role != "ADMIN") {
                 Rowx("Bảng công & lương của tôi", "Xem giờ làm và tiền lương cá nhân · chỉ đọc") { vm.screen.value = "PAYROLL" }
@@ -1503,7 +1501,7 @@ fun PayrollManager(vm:PosViewModel){
     val visibleEmployees=if(isManager)employees else employees.filter{it.id==employee?.id}
     val grouped=visibleDays.groupBy{it.employeeId}
     Column{
-        Header(if(attendanceQaMode)"CHẤM CÔNG QA · BẢNG LƯƠNG" else "Chấm công & Bảng lương"){vm.screen.value="MANAGE"}
+        Header(if(attendanceQaMode)"CHẤM CÔNG QA · BẢNG LƯƠNG" else "Chấm công & Bảng lương"){vm.screen.value=if(isManager)"HR" else "MANAGE"}
         Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween){
             OutlinedButton({if(month==1){month=12;year--}else month--}){Text("‹")}
             Text("THÁNG $label",fontWeight=FontWeight.Black,fontSize=18.sp)
@@ -2173,7 +2171,7 @@ fun Employees(vm: PosViewModel) {
     var editing by remember { mutableStateOf<EmployeeEntity?>(null) }
     var adding by remember { mutableStateOf(false) }
     Column {
-        Header("Nhân viên") { vm.screen.value = "MANAGE" }
+        Header("Nhân viên") { vm.screen.value = "HR" }
         if (current?.role == "ADMIN") {
             Button(
                 onClick = { adding = true },

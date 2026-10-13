@@ -294,4 +294,5 @@ WHERE s.dataScope='LIVE' AND ob.status!='CANCELLED' AND EXISTS(SELECT 1 FROM Bil
 @Query("SELECT COALESCE(SUM(p.amount),0) FROM PaymentEntity p JOIN BillEntity b ON b.id=p.billId JOIN TableSessionEntity s ON s.id=b.sessionId WHERE s.shiftId=:shiftId AND p.method=:method AND p.dataScope='LIVE' AND b.status='PAID'") suspend fun shiftPaymentTotal(shiftId:String,method:String):Long
 @Query("SELECT COUNT(*) FROM BillEntity b JOIN TableSessionEntity s ON s.id=b.sessionId WHERE s.shiftId=:shiftId AND b.status='PAID' AND b.dataScope='LIVE'") suspend fun shiftPaidBillCount(shiftId:String):Int
 @Query("SELECT * FROM EmployeeEntity WHERE id=:id LIMIT 1") suspend fun employeeById(id:String):EmployeeEntity?
+@Query("DELETE FROM AttendanceSessionEntity WHERE id=:id AND dataScope='LIVE'") suspend fun deleteAttendance(id:String):Int
 }

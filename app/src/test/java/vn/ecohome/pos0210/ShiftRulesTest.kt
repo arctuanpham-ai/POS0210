@@ -89,3 +89,12 @@ class IdleLockTest {
         assertTrue(ShiftRules.shouldLock(now = 3_600_000, lastTouchAt = 0))
     }
 }
+
+class FormatHoursTest {
+    @Test fun formatsHoursAndMinutes() {
+        assertEquals("4h30", ShiftRules.formatHours(270))
+        assertEquals("9h", ShiftRules.formatHours(540))
+        assertEquals("0h05", ShiftRules.formatHours(5))
+        assertEquals("0h", ShiftRules.formatHours(-3))
+    }
+}

@@ -1,5 +1,6 @@
 package vn.ecohome.pos0210
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -330,5 +331,34 @@ fun LockScreen(vm: PosViewModel) {
             )
             if (err.isNotBlank()) Text(err, color = MaterialTheme.colorScheme.error)
         }
+    }
+}
+
+/** Cảnh báo to, nhấp nháy: máy đang trong ca của người khác nên không thanh toán được. Muốn thanh toán phải ra ca của họ. */
+@Composable
+fun ShiftPayBlockBanner(staffName: String, onEndShift: () -> Unit) {
+    val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "payBlock")
+    val k by transition.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            androidx.compose.animation.core.tween(550), androidx.compose.animation.core.RepeatMode.Reverse
+        ), label = "blink"
+    )
+    val bg = androidx.compose.ui.graphics.lerp(androidx.compose.ui.graphics.Color(0xFFB71C1C), androidx.compose.ui.graphics.Color(0xFFFF5252), k)
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)
+            .background(bg, androidx.compose.foundation.shape.RoundedCornerShape(14.dp)).padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("⛔ KHÔNG ĐƯỢC THANH TOÁN", color = androidx.compose.ui.graphics.Color.White, fontSize = 24.sp, fontWeight = FontWeight.Black)
+        Spacer(Modifier.height(6.dp))
+        Text("Máy đang trong ca của $staffName.", color = androidx.compose.ui.graphics.Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text("Chỉ tài khoản $staffName mới thanh toán được.", color = androidx.compose.ui.graphics.Color.White, fontSize = 16.sp)
+        Spacer(Modifier.height(10.dp))
+        Button(
+            onClick = onEndShift,
+            colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.ui.graphics.Color.White, contentColor = androidx.compose.ui.graphics.Color(0xFFB71C1C)),
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("RA CA CỦA ${staffName.uppercase()} ĐỂ THANH TOÁN", fontWeight = FontWeight.Black) }
     }
 }

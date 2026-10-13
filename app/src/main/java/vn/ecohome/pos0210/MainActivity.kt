@@ -152,7 +152,13 @@ fun App(vm: PosViewModel = viewModel()) {
         "TABLES" -> Tables(vm)
         "ORDER" -> t?.let { Order(vm, it) }
         "SENT" -> if (t != null && s != null) Sent(vm, t!!, s!!)
-        "PAY" -> if (t != null && s != null) Pay(vm, t!!, s!!)
+        "PAY" -> if (t != null && s != null) {
+            val payShift by vm.activeShift.collectAsState()
+            val payUser by vm.currentEmployee.collectAsState()
+            if (s!!.dataScope == "LIVE" && !ShiftRules.canPay(payShift?.staffId, payUser?.id ?: "")) {
+                LaunchedEffect(Unit) { vm.screen.value = "SENT" }
+            } else Pay(vm, t!!, s!!)
+        }
         "REPORT" -> Report(vm)
         "MANAGE" -> Manage(vm)
         "MENU" -> MenuManager(vm)
@@ -494,6 +500,8 @@ fun Sent(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
     val current by vm.currentEmployee.collectAsState()
     val printerMessage by vm.printerMessage.collectAsState()
     val printerMode = vm.setting("printer_mode").ifBlank { "TEST" }
+    val runningShift by vm.activeShift.collectAsState()
+    val payBlocked = s.dataScope == "LIVE" && !ShiftRules.canPay(runningShift?.staffId, current?.id ?: "")
     var pv by remember { mutableStateOf<OrderBatchEntity?>(null) }
     var deleteDraftTarget by remember { mutableStateOf<OrderBatchEntity?>(null) }
     var cancelTarget by remember { mutableStateOf<OrderBatchEntity?>(null) }
@@ -539,12 +547,13 @@ fun Sent(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                 modifier = Modifier.fillMaxWidth().padding(16.dp)
             ) { Text("TRẢ BÀN") }
         } else {
+            if (payBlocked) ShiftPayBlockBanner(runningShift?.staffName ?: "") { vm.screen.value = "SHIFT_END" }
             Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedButton(onClick = { vm.addMore() }, modifier = Modifier.weight(1f)) {
                     Text("＋ GỌI THÊM")
                 }
-                Button(onClick = { vm.screen.value = "PAY" }, modifier = Modifier.weight(1f), enabled = total > 0) {
-                    Text("THANH TOÁN")
+                Button(onClick = { vm.screen.value = "PAY" }, modifier = Modifier.weight(1f), enabled = total > 0 && !payBlocked) {
+                    Text(if (payBlocked) "ĐÃ KHOÁ" else "THANH TOÁN")
                 }
             }
         }

@@ -12,8 +12,8 @@ android {
         applicationId = "vn.ecohome.pos0210"
         minSdk = 26
         targetSdk = 35
-        versionCode = 117
-        versionName = "1.0.0-alpha86-hr-calendar"
+        versionCode = 118
+        versionName = "1.0.0-alpha87-pay-block-banner"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {

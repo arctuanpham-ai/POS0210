@@ -290,9 +290,12 @@ WHERE s.dataScope='LIVE' AND ob.status!='CANCELLED' AND EXISTS(SELECT 1 FROM Bil
 @Query("UPDATE ShiftEntity SET lastActivityAt=:at,updatedAt=:at WHERE status='open' AND dataScope='LIVE'") suspend fun touchActiveShift(at:Long):Int
 @Query("SELECT * FROM TableSessionEntity WHERE shiftId=:shiftId AND status='OPEN'") suspend fun openSessionsOfShift(shiftId:String):List<TableSessionEntity>
 @Query("UPDATE TableSessionEntity SET shiftId=:shiftId WHERE id=:id") suspend fun setSessionShift(id:String,shiftId:String?):Int
-@Query("UPDATE TableSessionEntity SET shiftId=:newShift WHERE shiftId='PENDING_NEXT' AND status='OPEN'") suspend fun adoptPendingSessions(newShift:String):Int
+@Query("UPDATE TableSessionEntity SET shiftId=:newShift WHERE shiftId='PENDING_NEXT'") suspend fun adoptPendingSessions(newShift:String):Int
 @Query("SELECT COALESCE(SUM(p.amount),0) FROM PaymentEntity p JOIN BillEntity b ON b.id=p.billId JOIN TableSessionEntity s ON s.id=b.sessionId WHERE s.shiftId=:shiftId AND p.method=:method AND p.dataScope='LIVE' AND b.status='PAID'") suspend fun shiftPaymentTotal(shiftId:String,method:String):Long
 @Query("SELECT COUNT(*) FROM BillEntity b JOIN TableSessionEntity s ON s.id=b.sessionId WHERE s.shiftId=:shiftId AND b.status='PAID' AND b.dataScope='LIVE'") suspend fun shiftPaidBillCount(shiftId:String):Int
 @Query("SELECT * FROM EmployeeEntity WHERE id=:id LIMIT 1") suspend fun employeeById(id:String):EmployeeEntity?
 @Query("DELETE FROM AttendanceSessionEntity WHERE id=:id AND dataScope='LIVE'") suspend fun deleteAttendance(id:String):Int
+@Query("SELECT COALESCE(SUM(p.amount),0) FROM PaymentEntity p JOIN BillEntity b ON b.id=p.billId JOIN TableSessionEntity s ON s.id=b.sessionId WHERE s.shiftId=:shiftId AND p.method=:method AND p.dataScope='LIVE' AND b.status='PAID' AND p.paidAt<=:until") suspend fun shiftPaymentTotalUntil(shiftId:String,method:String,until:Long):Long
+@Query("SELECT COUNT(*) FROM BillEntity b JOIN TableSessionEntity s ON s.id=b.sessionId JOIN PaymentEntity p ON p.billId=b.id WHERE s.shiftId=:shiftId AND b.status='PAID' AND b.dataScope='LIVE' AND p.paidAt<=:until") suspend fun shiftPaidBillCountUntil(shiftId:String,until:Long):Int
+@Query("SELECT DISTINCT s.id FROM TableSessionEntity s JOIN BillEntity b ON b.sessionId=s.id JOIN PaymentEntity p ON p.billId=b.id WHERE s.shiftId=:shiftId AND p.paidAt>:until") suspend fun sessionIdsPaidAfter(shiftId:String,until:Long):List<String>
 }

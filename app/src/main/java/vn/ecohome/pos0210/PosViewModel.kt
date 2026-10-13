@@ -960,39 +960,128 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
  val shiftMessage=MutableStateFlow("")
  val shiftBlockers=MutableStateFlow<List<TableSessionEntity>>(emptyList())
  val shiftTotals=MutableStateFlow<Triple<Long,Long,Int>?>(null)
+ /** Tạo ca mới cho [e] (gọi trong attendanceMutex). Nhận luôn các bàn đang chờ chuyển ca. */
+ private suspend fun beginShift(e:EmployeeEntity,now:Long):ShiftEntity{
+  var att:AttendanceSessionEntity?=null
+  if(ShiftRules.attendanceRequired(setting(ShiftRules.attendanceSettingKey(e.id)),e.role)){
+   att=dao.openAttendance(e.id)
+   if(att==null){
+    val defaultRate=PayrollSettings.hourlyRate(setting("hourly_rate_default"),0L)
+    val rate=PayrollSettings.hourlyRate(setting("hourly_rate_"+e.id),defaultRate)
+    val multiplier=HolidayMultiplier.basisPoints(setting(HolidayMultiplier.settingKey(ShiftRules.workDate(now))))
+    att=AttendanceSessionEntity(UUID.randomUUID().toString(),e.id,now,hourlyRate=rate,multiplierBasisPoints=multiplier)
+    dao.insertAttendanceSession(att)
+   }
+  }
+  val shift=ShiftEntity(UUID.randomUUID().toString(),ShiftRules.workDate(now),e.id,e.name,e.role,now,lastActivityAt=now,attendanceId=att?.id,updatedAt=now)
+  dao.saveShift(shift)
+  dao.adoptPendingSessions(shift.id)
+  if(att!=null){myAttendance.value=att;refreshPayroll()}
+  audit("SHIFT",shift.id,"START","staff=${e.name}")
+  dao.markCloudDirty()
+  return shift
+ }
  fun startShift(){
   val e=currentEmployee.value?:return
   viewModelScope.launch(Dispatchers.IO){
    attendanceMutex.withLock {
-    if(dao.activeShift()!=null){withContext(Dispatchers.Main){screen.value="TABLES"};return@withLock}
-    val now=System.currentTimeMillis()
-    var att:AttendanceSessionEntity?=null
-    if(ShiftRules.attendanceRequired(setting(ShiftRules.attendanceSettingKey(e.id)),e.role)){
-     att=dao.openAttendance(e.id)
-     if(att==null){
-      val defaultRate=PayrollSettings.hourlyRate(setting("hourly_rate_default"),0L)
-      val rate=PayrollSettings.hourlyRate(setting("hourly_rate_"+e.id),defaultRate)
-      val multiplier=HolidayMultiplier.basisPoints(setting(HolidayMultiplier.settingKey(ShiftRules.workDate(now))))
-      att=AttendanceSessionEntity(UUID.randomUUID().toString(),e.id,now,hourlyRate=rate,multiplierBasisPoints=multiplier)
-      dao.insertAttendanceSession(att)
-     }
-    }
-    val shift=ShiftEntity(UUID.randomUUID().toString(),ShiftRules.workDate(now),e.id,e.name,e.role,now,lastActivityAt=now,attendanceId=att?.id,updatedAt=now)
-    dao.saveShift(shift)
-    dao.adoptPendingSessions(shift.id)
-    if(att!=null){myAttendance.value=att;refreshPayroll()}
-    audit("SHIFT",shift.id,"START","staff=${e.name}")
-    dao.markCloudDirty()
+    if(dao.activeShift()==null)beginShift(e,System.currentTimeMillis())
     withContext(Dispatchers.Main){screen.value="TABLES"}
    }
   }
  }
- fun loadShiftCheckout(){
+ /** Đóng [sh] tại [cutoff]: tiền tính đến cutoff, bàn đang mở và bill sau cutoff chờ ca kế tiếp nhận. */
+ private suspend fun settleShift(sh:ShiftEntity,cutoff:Long,source:String,status:String,counted:Long?,note:String,receiver:EmployeeEntity?,now:Long):ShiftEntity{
+  val expected=dao.shiftPaymentTotalUntil(sh.id,"CASH",cutoff)
+  val closed=sh.copy(checkOutClient=cutoff,checkOutSource=source,cashExpected=expected,cashCounted=counted,diff=counted?.let{ShiftRules.diff(it,expected)},diffNote=note.trim(),
+   transferTotal=dao.shiftPaymentTotalUntil(sh.id,"TRANSFER",cutoff),orderCount=dao.shiftPaidBillCountUntil(sh.id,cutoff),
+   status=status,receivedBy=receiver?.id,receivedAt=receiver?.let{now},updatedAt=now)
+  dao.openSessionsOfShift(sh.id).forEach{dao.setSessionShift(it.id,ShiftRules.PENDING_NEXT)}
+  dao.sessionIdsPaidAfter(sh.id,cutoff).forEach{dao.setSessionShift(it,ShiftRules.PENDING_NEXT)}
+  dao.saveShift(closed)
+  sh.attendanceId?.let{dao.closeAttendance(it,cutoff)}
+  if(myAttendance.value?.id==sh.attendanceId)myAttendance.value=null
+  refreshPayroll()
+  dao.markCloudDirty()
+  return closed
+ }
+ /** ADMIN tiếp quản ca của nhân viên đã về: giờ ra do ADMIN chọn (gợi ý = hoạt động cuối), tiền chỉ tính đến giờ đó, phần sau chuyển sang ca của ADMIN. */
+ fun takeoverShift(cutoffText:String,counted:Long,note:String,pin:String,onDone:(Boolean)->Unit){
+  val admin=currentEmployee.value
+  viewModelScope.launch(Dispatchers.IO){
+   fun fail(m:String){shiftMessage.value=m;viewModelScope.launch(Dispatchers.Main){onDone(false)}}
+   attendanceMutex.withLock {
+    val sh=dao.activeShift()
+    if(admin==null||admin.role!="ADMIN"){fail("Chỉ ADMIN được tiếp quản ca");return@withLock}
+    if(sh==null||sh.staffId==admin.id){fail("Không có ca của người khác để tiếp quản");return@withLock}
+    val who=dao.employeeByPin(pin)
+    if(who==null||who.id!=admin.id){fail("PIN QUẢN LÝ KHÔNG ĐÚNG");return@withLock}
+    val now=System.currentTimeMillis()
+    val cutoff=ShiftRules.parseLocalTime(cutoffText)
+    ShiftRules.takeoverCutoffError(cutoff,sh.checkInClient,now)?.let{fail(it);return@withLock}
+    val expected=dao.shiftPaymentTotalUntil(sh.id,"CASH",cutoff!!)
+    if(!ShiftRules.canConfirm(ShiftRules.diff(counted,expected),note)){fail("CHÊNH LỆCH LỚN · CẦN GHI CHÚ");return@withLock}
+    settleShift(sh,cutoff,"manager_takeover","received",counted,note,admin,now)
+    audit("SHIFT",sh.id,"TAKEOVER","by=${admin.name},staff=${sh.staffName},cutoff=$cutoffText,expected=$expected,counted=$counted")
+    beginShift(admin,now)
+    shiftMessage.value="ĐÃ TIẾP QUẢN CA · BẠN ĐANG TRONG CA MỚI"
+    withContext(Dispatchers.Main){onDone(true);screen.value="TABLES"}
+   }
+  }
+ }
+ /** Tự đóng ca sót (hôm trước, hoặc nhân viên quá giờ đóng cửa mà không còn hoạt động): giờ ra = hoạt động cuối, cần xem lại. */
+ fun autoCloseIfStale(){
+  viewModelScope.launch(Dispatchers.IO){
+   attendanceMutex.withLock {
+    val sh=dao.activeShift()?:return@withLock
+    val now=System.currentTimeMillis()
+    val closeTime=setting("shift_close_time").ifBlank{ShiftRules.DEFAULT_CLOSE_TIME}
+    val snooze=setting("reminder_snooze_min").toIntOrNull()?:ShiftRules.DEFAULT_SNOOZE_MIN
+    if(!ShiftRules.shouldAutoClose(now,sh.date,sh.role,sh.lastActivityAt,closeTime,snooze))return@withLock
+    val cutoff=ShiftRules.defaultCutoff(sh.lastActivityAt,sh.checkInClient,now)
+    settleShift(sh,cutoff,"auto_last_activity","pending_review",null,"",null,now)
+    audit("SHIFT",sh.id,"AUTO_CLOSE","staff=${sh.staffName},cutoff=${ShiftRules.formatLocalTime(cutoff)}")
+    shiftMessage.value="CA CỦA ${sh.staffName} ĐÃ TỰ ĐÓNG · CẦN XEM LẠI"
+   }
+  }
+ }
+ /** ADMIN nhập tiền thực tế cho ca tự đóng (hoặc để trống kèm ghi chú) và xác nhận. */
+ fun reviewShift(shiftId:String,counted:Long?,note:String,pin:String,onDone:(String?)->Unit){
+  viewModelScope.launch(Dispatchers.IO){
+   fun fail(m:String){viewModelScope.launch(Dispatchers.Main){onDone(m)}}
+   val who=dao.employeeByPin(pin);val sh=dao.shiftById(shiftId)
+   if(who==null||who.role!="ADMIN"){fail("PIN ADMIN không đúng");return@launch}
+   if(sh==null||sh.status!="pending_review"){fail("Ca không ở trạng thái cần xem lại");return@launch}
+   val diff=counted?.let{ShiftRules.diff(it,sh.cashExpected?:0L)}
+   if(counted==null&&note.isBlank()){fail("Không đếm được thì phải ghi chú");return@launch}
+   if(diff!=null&&!ShiftRules.canConfirm(diff,note)){fail("Chênh lệch lớn · cần ghi chú");return@launch}
+   val now=System.currentTimeMillis()
+   dao.saveShift(sh.copy(cashCounted=counted,diff=diff,diffNote=note.trim(),status="received",receivedBy=who.id,receivedAt=now,updatedAt=now))
+   audit("SHIFT",sh.id,"REVIEWED","by=${who.name},counted=$counted,diff=$diff")
+   dao.markCloudDirty()
+   withContext(Dispatchers.Main){onDone(null)}
+  }
+ }
+ // ----- Nhắc ra ca -----
+ val reminderDue=MutableStateFlow(false)
+ @Volatile private var reminderSnoozeUntil=0L
+ fun checkReminder(){
+  val sh=activeShift.value
+  val due=currentEmployee.value!=null&&!locked.value&&sh!=null&&ShiftRules.reminderDue(System.currentTimeMillis(),sh.checkInClient,sh.role,
+   setting("staff_usual_end").ifBlank{ShiftRules.DEFAULT_STAFF_USUAL_END},reminderSnoozeUntil)
+  if(reminderDue.value!=due)reminderDue.value=due
+ }
+ fun snoozeReminder(){
+  val min=setting("reminder_snooze_min").toIntOrNull()?:ShiftRules.DEFAULT_SNOOZE_MIN
+  reminderSnoozeUntil=System.currentTimeMillis()+min*60_000L
+  reminderDue.value=false
+ }
+ fun loadShiftCheckout(until:Long=Long.MAX_VALUE){
   viewModelScope.launch(Dispatchers.IO){
    val sh=dao.activeShift()
    if(sh==null){shiftBlockers.value=emptyList();shiftTotals.value=null;return@launch}
    shiftBlockers.value=dao.openSessionsOfShift(sh.id)
-   shiftTotals.value=Triple(dao.shiftPaymentTotal(sh.id,"CASH"),dao.shiftPaymentTotal(sh.id,"TRANSFER"),dao.shiftPaidBillCount(sh.id))
+   shiftTotals.value=Triple(dao.shiftPaymentTotalUntil(sh.id,"CASH",until),dao.shiftPaymentTotalUntil(sh.id,"TRANSFER",until),dao.shiftPaidBillCountUntil(sh.id,until))
   }
  }
  fun deferSessionToNextShift(sessionId:String){

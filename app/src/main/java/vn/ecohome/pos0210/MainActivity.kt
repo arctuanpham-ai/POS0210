@@ -129,8 +129,13 @@ fun App(vm: PosViewModel = viewModel()) {
     val s by vm.currentSession.collectAsState()
     val locked by vm.locked.collectAsState()
     LaunchedEffect(Unit) {
+        var tick = 0
+        vm.autoCloseIfStale()
         while (true) {
             vm.lockIfIdle()
+            vm.checkReminder()
+            tick++
+            if (tick % 30 == 0) vm.autoCloseIfStale()
             kotlinx.coroutines.delay(1000)
         }
     }
@@ -147,6 +152,7 @@ fun App(vm: PosViewModel = viewModel()) {
         "SHIFT_START" -> StartShift(vm)
         "SHIFT_END" -> ShiftEnd(vm)
         "HR" -> HrHub(vm)
+        "SHIFT_SETTINGS" -> ShiftSettings(vm)
         "SHIFTS" -> ShiftList(vm)
         "ATT_EDIT" -> AttendanceEdit(vm)
         "TABLES" -> Tables(vm)
@@ -185,6 +191,8 @@ fun App(vm: PosViewModel = viewModel()) {
         "RESET_PREOPENING_SALES" -> ResetPreOpeningSales(vm)
         "TEST_MODE" -> TestModeManager(vm)
     }
+    val reminder by vm.reminderDue.collectAsState()
+    if (reminder && !locked) ShiftReminderDialog(vm)
     if (locked) LockScreen(vm)
     }
 }

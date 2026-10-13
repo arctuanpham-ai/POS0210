@@ -78,4 +78,53 @@ object ShiftRules {
         val m = minutes.coerceAtLeast(0)
         return if (m % 60 == 0L) "${m / 60}h" else "${m / 60}h${(m % 60).toString().padStart(2, '0')}"
     }
+
+    const val DEFAULT_STAFF_USUAL_END = "10:00"
+    const val DEFAULT_CLOSE_TIME = "22:00"
+    const val DEFAULT_SNOOZE_MIN = 15
+    private val VN_ZONE = java.time.ZoneId.of("Asia/Ho_Chi_Minh")
+
+    /** "10:00" -> 600 phút trong ngày; sai định dạng trả null. */
+    fun parseHm(text: String): Int? {
+        val parts = text.trim().split(":")
+        if (parts.size != 2) return null
+        val h = parts[0].toIntOrNull() ?: return null
+        val m = parts[1].toIntOrNull() ?: return null
+        return if (h in 0..23 && m in 0..59) h * 60 + m else null
+    }
+
+    /** Mốc "giờ về thường lệ" của ngày chứa lúc vào ca (epoch ms). */
+    fun usualEndOfShiftDay(checkIn: Long, usualEnd: String): Long? {
+        val hm = parseHm(usualEnd) ?: return null
+        val day = java.time.Instant.ofEpochMilli(checkIn).atZone(VN_ZONE).toLocalDate()
+        return day.atTime(hm / 60, hm % 60).atZone(VN_ZONE).toInstant().toEpochMilli()
+    }
+
+    /** Nhắc ra ca: ca của nhân viên (không phải ADMIN), vào ca trước giờ về thường lệ, nay đã tới giờ và hết thời gian nhắc sau. */
+    fun reminderDue(now: Long, checkIn: Long, role: String, usualEnd: String, snoozeUntil: Long): Boolean {
+        if (role == "ADMIN") return false
+        val end = usualEndOfShiftDay(checkIn, usualEnd) ?: return false
+        return checkIn < end && now >= end && now >= snoozeUntil
+    }
+
+    /** Ca sót cần tự đóng: ca của ngày trước, hoặc ca nhân viên đã qua giờ đóng cửa và không còn hoạt động. */
+    fun shouldAutoClose(now: Long, shiftDate: String, role: String, lastActivityAt: Long, closeTime: String, idleMinutes: Int): Boolean {
+        if (shiftDate < workDate(now)) return true
+        if (role == "ADMIN") return false
+        val hm = parseHm(closeTime) ?: return false
+        val local = java.time.Instant.ofEpochMilli(now).atZone(VN_ZONE)
+        val afterClose = local.hour * 60 + local.minute >= hm
+        return afterClose && now - lastActivityAt >= idleMinutes * 60_000L
+    }
+
+    /** Giờ ra khi quản lý tiếp quản: không trước giờ vào, không sau hiện tại. */
+    fun takeoverCutoffError(cutoff: Long?, checkIn: Long, now: Long): String? = when {
+        cutoff == null -> "Giờ ra sai định dạng (yyyy-MM-dd HH:mm)"
+        cutoff < checkIn -> "Giờ ra không được trước giờ vào ca"
+        cutoff > now -> "Giờ ra không được ở tương lai"
+        else -> null
+    }
+
+    /** Giờ ra mặc định của ca bị tiếp quản/tự đóng: hoạt động cuối, kẹp trong [vào ca, hiện tại]. */
+    fun defaultCutoff(lastActivityAt: Long, checkIn: Long, now: Long): Long = lastActivityAt.coerceIn(checkIn, maxOf(checkIn, now))
 }

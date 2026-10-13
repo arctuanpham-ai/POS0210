@@ -98,3 +98,56 @@ class FormatHoursTest {
         assertEquals("0h", ShiftRules.formatHours(-3))
     }
 }
+
+class ShiftPhase2RulesTest {
+    private fun t(s: String) = ShiftRules.parseLocalTime(s)!!
+
+    @Test fun parseHm() {
+        assertEquals(600, ShiftRules.parseHm("10:00"))
+        assertEquals(null, ShiftRules.parseHm("25:00"))
+        assertEquals(null, ShiftRules.parseHm("abc"))
+    }
+
+    @Test fun reminderFiresAfterUsualEndAndRespectsSnooze() {
+        val checkIn = t("2026-10-13 06:00")
+        assertFalse(ShiftRules.reminderDue(t("2026-10-13 09:59"), checkIn, "STAFF", "10:00", 0))
+        assertTrue(ShiftRules.reminderDue(t("2026-10-13 10:00"), checkIn, "STAFF", "10:00", 0))
+        assertFalse(ShiftRules.reminderDue(t("2026-10-13 10:10"), checkIn, "STAFF", "10:00", t("2026-10-13 10:15")))
+        assertTrue(ShiftRules.reminderDue(t("2026-10-13 10:15"), checkIn, "STAFF", "10:00", t("2026-10-13 10:15")))
+    }
+
+    @Test fun reminderSkipsAdminAndLateStarts() {
+        assertFalse(ShiftRules.reminderDue(t("2026-10-13 11:00"), t("2026-10-13 06:00"), "ADMIN", "10:00", 0))
+        // vào ca sau giờ về thường lệ thì không nhắc ngay
+        assertFalse(ShiftRules.reminderDue(t("2026-10-13 17:30"), t("2026-10-13 17:21"), "STAFF", "10:00", 0))
+    }
+
+    @Test fun staleShiftFromYesterdayAlwaysAutoCloses() {
+        val now = t("2026-10-14 06:00")
+        assertTrue(ShiftRules.shouldAutoClose(now, "2026-10-13", "STAFF", t("2026-10-13 09:30"), "22:00", 15))
+        assertTrue(ShiftRules.shouldAutoClose(now, "2026-10-13", "ADMIN", t("2026-10-13 21:00"), "22:00", 15))
+    }
+
+    @Test fun staffShiftAutoClosesAfterCloseTimeOnlyWhenIdle() {
+        val last = t("2026-10-13 09:30")
+        assertFalse(ShiftRules.shouldAutoClose(t("2026-10-13 21:59"), "2026-10-13", "STAFF", last, "22:00", 15))
+        assertTrue(ShiftRules.shouldAutoClose(t("2026-10-13 22:00"), "2026-10-13", "STAFF", last, "22:00", 15))
+        assertFalse(ShiftRules.shouldAutoClose(t("2026-10-13 22:05"), "2026-10-13", "STAFF", t("2026-10-13 21:58"), "22:00", 15))
+        assertFalse(ShiftRules.shouldAutoClose(t("2026-10-13 23:00"), "2026-10-13", "ADMIN", last, "22:00", 15))
+    }
+
+    @Test fun takeoverCutoffRules() {
+        val checkIn = t("2026-10-13 06:00"); val now = t("2026-10-13 11:00")
+        assertEquals(null, ShiftRules.takeoverCutoffError(t("2026-10-13 10:15"), checkIn, now))
+        assertTrue(ShiftRules.takeoverCutoffError(t("2026-10-13 05:00"), checkIn, now) != null)
+        assertTrue(ShiftRules.takeoverCutoffError(t("2026-10-13 12:00"), checkIn, now) != null)
+        assertTrue(ShiftRules.takeoverCutoffError(null, checkIn, now) != null)
+    }
+
+    @Test fun defaultCutoffIsLastActivityClamped() {
+        val checkIn = t("2026-10-13 06:00"); val now = t("2026-10-13 11:00")
+        assertEquals(t("2026-10-13 10:15"), ShiftRules.defaultCutoff(t("2026-10-13 10:15"), checkIn, now))
+        assertEquals(checkIn, ShiftRules.defaultCutoff(t("2026-10-13 05:00"), checkIn, now))
+        assertEquals(now, ShiftRules.defaultCutoff(t("2026-10-13 12:00"), checkIn, now))
+    }
+}

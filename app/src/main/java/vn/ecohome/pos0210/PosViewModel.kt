@@ -1967,7 +1967,7 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
    val issuedRewards=if(session.dataScope=="LIVE"&&bill.customerId!=null)repo.evaluateLoyalty(bill.customerId,bill.id) else emptyList()
    if(issuedRewards.isNotEmpty()){audit("LOYALTY",bill.id,"REWARD_ISSUED","count=${issuedRewards.size},customer=${bill.customerId}");issuedRewards.forEach{printLoyaltyVoucher(it,customer)};printerMessage.value="ĐÃ PHÁT HÀNH "+issuedRewards.size+" VOUCHER · "+issuedRewards.joinToString(", "){VoucherPolicy.code(it.id)}+" · KIỂM TRA PHIẾU IN"}
    autoBackup()
-   if(session.flow==PaymentFlowRules.PREPAID&&printerMode()=="BLUETOOTH"&&receiptPrinterMac().isNotBlank()){
+   if(false&&printerMode()=="BLUETOOTH"&&printerMac().isNotBlank()){
     val bs=dao.batches(session.id).first().filter{it.status!="CANCELLED"}
     val lines=mutableListOf<Triple<String,Int,Long>>()
     bs.forEach{b->dao.batchItems(b.id).first().forEach{it2->lines.add(Triple(it2.itemNameSnapshot,it2.qty,it2.unitPriceSnapshot))}}

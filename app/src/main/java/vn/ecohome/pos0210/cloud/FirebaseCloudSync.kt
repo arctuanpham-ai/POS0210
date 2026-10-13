@@ -53,6 +53,7 @@ object FirebaseCloudSync {
     // Local settings remain an explicit override for recovery/migration.
     private const val DEFAULT_PROJECT_ID="pos0210-17ce4"
     private const val DEFAULT_APPLICATION_ID="1:734292261602:android:c60646ce0c9ed4c3f67cbb"
+    private const val DASHBOARD_DAILY_MIN_INTERVAL_MS=600_000L
     private const val DEFAULT_API_KEY="AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk"
 
     fun defaultConfig()=FirebaseConfig(DEFAULT_PROJECT_ID,DEFAULT_APPLICATION_ID,DEFAULT_API_KEY)
@@ -164,7 +165,11 @@ object FirebaseCloudSync {
         val paidToday=bills.filter{it.status=="PAID"&&(it.closedAt?:0)>=today};val open=sessions.filter{it.status=="OPEN"};val now=System.currentTimeMillis()
         stage("STORE_ROOT",60_000L){FirestoreServerWriter.set(root,mapOf("name" to "0210","updatedAt" to now,"schemaVersion" to 1))}
         val openByTable=open.associateBy{it.tableId}
-        stage("DASHBOARD",60_000L){writeDashboard(root.collection("dashboard").document("current"),financialDashboard(dao,bills,payments,now)+mapOf("openTables" to open.size,"openTableNames" to tables.filter{openByTable.containsKey(it.id)}.map{it.name},"revenueToday" to paidToday.sumOf{it.total},"paidBillsToday" to paidToday.size,"lastUpdatedAt" to now))}
+        // Một operation chung cho dashboard/current và dashboardDaily: cùng một lượt xuất, không bị cổng quota chặn lẫn nhau.
+        val dashboardOperation=java.util.UUID.randomUUID().toString()
+        val liveSnapshot=DashboardSalesSnapshot.composeCurrent(tables,sessions,batches,orderItems)
+        stage("DASHBOARD",60_000L){writeDashboard(root.collection("dashboard").document("current"),financialDashboard(dao,bills,payments,now)+mapOf("openTables" to open.size,"openTableNames" to tables.filter{openByTable.containsKey(it.id)}.map{it.name},"revenueToday" to paidToday.sumOf{it.total},"paidBillsToday" to paidToday.size,"provisionalOpenTotal" to liveSnapshot.provisionalOpenTotal,"liveTables" to liveSnapshot.liveTables.map{it.toMap()},"lastUpdatedAt" to now),dashboardOperation)}
+        publishDailySnapshots(fs,root,bills,batches,orderItems,now,dashboardOperation)
         writeMaps(fs,root.collection("tableStatus"),tables.map{t->
             val session=openByTable[t.id]
             val activeBatches=if(session==null) emptyList() else batches.filter{it.sessionId==session.id&&it.status!="CANCELLED"}
@@ -222,8 +227,18 @@ object FirebaseCloudSync {
         // Immediate worker is lightweight: finance reconciliation belongs to full sync.
         val tables=dao.cloudTablesSnapshot();val sessions=dao.cloudSessionsSnapshot();val batches=dao.cloudOrderBatchesSnapshot();val items=dao.cloudOrderItemsSnapshot();val bills=dao.cloudBillsSnapshot();val open=sessions.filter{it.status=="OPEN"};val openByTable=open.associateBy{it.tableId}
         val today=Calendar.getInstance().apply{set(Calendar.HOUR_OF_DAY,0);set(Calendar.MINUTE,0);set(Calendar.SECOND,0);set(Calendar.MILLISECOND,0)}.timeInMillis;val paidToday=bills.filter{it.status=="PAID"&&(it.closedAt?:0)>=today};val now=System.currentTimeMillis()
-        stage("DASHBOARD_WRITE",60_000L){writeDashboard(root.collection("dashboard").document("current"),financialDashboard(dao,bills,dao.cloudPaymentsSnapshot(),now)+mapOf("openTables" to open.size,"openTableNames" to tables.filter{openByTable.containsKey(it.id)}.map{it.name},"revenueToday" to paidToday.sumOf{it.total},"paidBillsToday" to paidToday.size,"lastUpdatedAt" to now))}
-        writeMaps(fs,root.collection("tableStatus"),tables.map{t->t.id to mapOf("id" to t.id,"name" to t.name,"areaId" to t.areaId,"active" to t.active,"occupied" to openByTable.containsKey(t.id),"openedAt" to openByTable[t.id]?.openedAt,"updatedAt" to now)})
+        val dashboardOperation=java.util.UUID.randomUUID().toString()
+        val liveSnapshot=DashboardSalesSnapshot.composeCurrent(tables,sessions,batches,items)
+        stage("DASHBOARD_WRITE",60_000L){writeDashboard(root.collection("dashboard").document("current"),financialDashboard(dao,bills,dao.cloudPaymentsSnapshot(),now)+mapOf("openTables" to open.size,"openTableNames" to tables.filter{openByTable.containsKey(it.id)}.map{it.name},"revenueToday" to paidToday.sumOf{it.total},"paidBillsToday" to paidToday.size,"provisionalOpenTotal" to liveSnapshot.provisionalOpenTotal,"liveTables" to liveSnapshot.liveTables.map{it.toMap()},"lastUpdatedAt" to now),dashboardOperation)}
+        publishDailySnapshots(fs,root,bills,batches,items,now,dashboardOperation)
+        // Cùng nội dung với syncNow (có currentTotal, serviceStatus) để hai đường ghi không đè lẫn nhau.
+        writeMaps(fs,root.collection("tableStatus"),tables.map{t->
+            val session=openByTable[t.id]
+            val activeBatches=if(session==null) emptyList() else batches.filter{it.sessionId==session.id&&it.status!="CANCELLED"}
+            val batchIds=activeBatches.map{it.id}.toSet()
+            val currentTotal=items.filter{it.batchId in batchIds}.sumOf{it.unitPriceSnapshot*it.qty}
+            t.id to mapOf("id" to t.id,"name" to t.name,"areaId" to t.areaId,"active" to t.active,"occupied" to (session!=null),"openedAt" to session?.openedAt,"currentTotal" to currentTotal,"serviceStatus" to activeBatches.map{it.status}.firstOrNull().orEmpty(),"updatedAt" to now)
+        })
         // The browser manager is read-only, but it needs these live records to show
         // the current order and elapsed serving time without waiting for the backup job.
         writeMaps(fs,root.collection("sessions"),sessions.map{s->s.id to mapOf("id" to s.id,"tableId" to s.tableId,"openedAt" to s.openedAt,"openedBy" to s.openedBy,"status" to s.status,"version" to s.version)})
@@ -485,8 +500,40 @@ object FirebaseCloudSync {
         writeMaps(fs,root.collection("financialMovements"),dao.cloudMovementsSnapshot().map{m->m.id to mapOf("id" to m.id,"type" to m.type,"amount" to m.amount,"occurredAt" to m.occurredAt,"partnerId" to m.partnerId,"method" to m.method,"note" to m.note,"counterpartyName" to m.counterpartyName)})
     }
 
-    private suspend fun writeDashboard(doc:com.google.firebase.firestore.DocumentReference,data:Map<String,Any?>){
-        try {FirestoreServerWriter.set(doc,data)}
+    /**
+     * Snapshot doanh thu 7 ngày gần nhất vào dashboardDaily/{YYYY-MM-DD}. Chỉ đọc dữ liệu Local đã nạp sẵn.
+     * Chỉ ghi ngày có dữ liệu đổi (dấu vân tay bỏ updatedAt); ngày hôm nay tối đa 10 phút/lần,
+     * ngày đã chốt ghi ngay một lần khi khác. Lỗi ở đây không làm hỏng phần còn lại của lượt sync.
+     */
+    private suspend fun publishDailySnapshots(fs:FirebaseFirestore,root:com.google.firebase.firestore.DocumentReference,bills:List<vn.ecohome.pos0210.data.BillEntity>,batches:List<vn.ecohome.pos0210.data.OrderBatchEntity>,items:List<vn.ecohome.pos0210.data.OrderItemEntity>,now:Long,operation:String){
+        try{
+            val prefs=fs.app.applicationContext.getSharedPreferences("pos0210_cloud_ack_v1",Context.MODE_PRIVATE)
+            val project=fs.app.options.projectId.orEmpty()
+            val zone=java.time.ZoneId.systemDefault()
+            val todayKey=DashboardSalesSnapshot.dateKey(now,zone)
+            val gateKey="$project/${root.path}/dashboardDaily/lastWriteAt"
+            val gateOpen=now-prefs.getLong(gateKey,0L)>=DASHBOARD_DAILY_MIN_INTERVAL_MS
+            val changed=DashboardSalesSnapshot.lastDateKeys(todayKey).mapNotNull{key->
+                val snapshot=DashboardSalesSnapshot.composeDaily(key,todayKey,bills,batches,items,zone)
+                val fingerprint=DashboardSalesSnapshot.fingerprint(snapshot)
+                if(prefs.getString("$project/${root.path}/dashboardDaily/$key",null)==fingerprint)null else Triple(key,snapshot,fingerprint)
+            }
+            val due=changed.filter{it.second.finalized||gateOpen}
+            if(due.isEmpty())return
+            stage("DASHBOARD_DAILY",60_000L){
+                FirestoreServerWriter.commit(fs,due.map{(key,snapshot,_)->root.collection("dashboardDaily").document(DashboardSalesSnapshot.dailyDocumentId(key)).path to snapshot.toMap(now)},operation)
+            }
+            val editor=prefs.edit()
+            due.forEach{(key,_,fingerprint)->editor.putString("$project/${root.path}/dashboardDaily/$key",fingerprint)}
+            editor.putLong(gateKey,now).commit()
+            CloudExecution.trace("DASHBOARD_DAILY written=${due.size}")
+        }catch(e:CancellationException){throw e
+        }catch(e:CloudQuotaDeferred){CloudExecution.trace("DASHBOARD_DAILY DEFERRED ${e.message}")
+        }catch(e:Exception){CloudExecution.trace("DASHBOARD_DAILY FAILED ${e.message}")}
+    }
+
+    private suspend fun writeDashboard(doc:com.google.firebase.firestore.DocumentReference,data:Map<String,Any?>,operation:String=java.util.UUID.randomUUID().toString()){
+        try {FirestoreServerWriter.set(doc,data,operation)}
         catch(e:CloudQuotaDeferred){
             CloudExecution.trace("DASHBOARD DEFERRED ${e.message}")
             val context=doc.firestore.app.applicationContext

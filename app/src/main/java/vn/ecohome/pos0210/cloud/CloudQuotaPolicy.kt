@@ -19,7 +19,7 @@ internal object CloudQuotaPolicy {
         val collection=path.split('/').getOrNull(4)
         return when(collection){
             "tableStatus","sessions","orderBatches","orderItems","bills","payments" -> "sales"
-            "dashboard" -> "dashboard"
+            "dashboard","dashboardDaily" -> "dashboard"
             "menu","menuCategories","areas","config" -> "catalog"
             "purchases","purchaseItems","purchaseCategories","suppliers","costCodes","profitPartners","assetCategories","monthlyAccounting","assets","financialMovements" -> "finance"
             "attendance","customers","loyalty" -> "people"

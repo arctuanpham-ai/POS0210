@@ -1043,6 +1043,40 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    withContext(Dispatchers.Main){onDone(true)}
   }
  }
+
+ // ===== SỬA CÔNG THỦ CÔNG (ADMIN) – cần PIN của chính nhân viên =====
+ fun attendanceHistoryOf(employeeId:String)=dao.attendanceHistory(employeeId)
+ fun manualAttendance(sessionId:String?,employeeId:String,checkInText:String,checkOutText:String,reason:String,pin:String,onResult:(String?)->Unit){
+  val admin=currentEmployee.value
+  viewModelScope.launch(Dispatchers.IO){
+   fun fail(m:String){viewModelScope.launch(Dispatchers.Main){onResult(m)}}
+   if(admin?.role!="ADMIN"){fail("Chỉ ADMIN được sửa công");return@launch}
+   val target=dao.employeeById(employeeId)
+   if(target==null||target.pin!=pin){fail("PIN của nhân viên không đúng");return@launch}
+   val now=System.currentTimeMillis()
+   val inAt=ShiftRules.parseLocalTime(checkInText);val outAt=ShiftRules.parseLocalTime(checkOutText)
+   ShiftRules.manualAttendanceError(inAt,outAt,checkOutText,now,reason)?.let{fail(it);return@launch}
+   attendanceMutex.withLock {
+    val note="Sửa thủ công bởi ${admin.name}: ${reason.trim()}"
+    if(sessionId==null){
+     val defaultRate=PayrollSettings.hourlyRate(setting("hourly_rate_default"),0L)
+     val rate=PayrollSettings.hourlyRate(setting("hourly_rate_"+employeeId),defaultRate)
+     val multiplier=HolidayMultiplier.basisPoints(setting(HolidayMultiplier.settingKey(ShiftRules.workDate(inAt!!))))
+     val s=AttendanceSessionEntity(UUID.randomUUID().toString(),employeeId,inAt!!,outAt,if(outAt==null)"OPEN" else "CLOSED",rate,multiplier,note,now,now)
+     dao.insertAttendanceSession(s)
+     audit("ATTENDANCE",s.id,"MANUAL_ADD","employee=${target.name},in=$checkInText,out=$checkOutText,reason=${reason.trim()}")
+    }else{
+     val old=dao.attendanceById(sessionId)
+     if(old==null){fail("Không tìm thấy ca công");return@withLock}
+     dao.correctAttendance(sessionId,inAt!!,outAt,if(outAt==null)"OPEN" else "CLOSED",note,now)
+     audit("ATTENDANCE",sessionId,"MANUAL_EDIT","employee=${target.name},old=${ShiftRules.formatLocalTime(old.checkInAt)}→${ShiftRules.formatLocalTime(old.checkOutAt)},new=$checkInText→$checkOutText,reason=${reason.trim()}")
+    }
+    refreshPayroll()
+    dao.markCloudDirty()
+   }
+   withContext(Dispatchers.Main){onResult(null)}
+  }
+ }
  fun customerRewards(customerId:String)=dao.availableRewards(customerId)
  fun clearSelectedVoucher(){selectedVoucher.value=null;selectedVoucherItemId.value=null;verifiedVoucher.value=null;voucherMessage.value=""}
  fun sendBatch(){
@@ -1546,6 +1580,8 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
   val employee=currentEmployee.value?:return
   val table=currentTable.value
   if(!employee.canCheckout&&employee.role!="ADMIN")return
+  val runningShift=activeShift.value
+  if(session.dataScope=="LIVE"&&!ShiftRules.canPay(runningShift?.staffId,employee.id)){printerMessage.value="ĐANG TRONG CA CỦA ${runningShift?.staffName} · CHỈ ${runningShift?.staffName} ĐƯỢC THANH TOÁN (hoặc chờ ra ca)";return}
   if(checkoutPrinting.value){printerMessage.value="ĐANG IN BILL · Vui lòng chờ in hoàn tất";return}
   val checkoutKey=CheckoutPrintPolicy.key(session.id,preview.total,qrInfo)
   if(!CheckoutPrintPolicy.canConfirm(checkoutKey,printedCheckoutKey.value,checkoutPrintAttemptedKey.value)){printerMessage.value="BILL/QR ĐÃ THAY ĐỔI · VUI LÒNG IN LẠI TRƯỚC KHI XÁC NHẬN";return}

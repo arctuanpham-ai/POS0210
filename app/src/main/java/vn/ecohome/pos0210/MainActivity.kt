@@ -131,6 +131,7 @@ fun App(vm: PosViewModel = viewModel()) {
         "SHIFT_START" -> StartShift(vm)
         "SHIFT_END" -> ShiftEnd(vm)
         "SHIFTS" -> ShiftList(vm)
+        "ATT_EDIT" -> AttendanceEdit(vm)
         "TABLES" -> Tables(vm)
         "ORDER" -> t?.let { Order(vm, it) }
         "SENT" -> if (t != null && s != null) Sent(vm, t!!, s!!)
@@ -1405,6 +1406,7 @@ fun Manage(vm: PosViewModel) {
                 Rowx("Chương trình tích điểm giảm bill", "Tùy chỉnh điểm → giảm tiền hoặc % một lần") { vm.screen.value = "LOYALTY_CAMPAIGNS" }
                 Rowx("Nhân viên", "Thêm · khóa · phân quyền") { vm.screen.value = "EMP" }
                 Rowx("Ca làm & nhận tiền", "Danh sách ca · tiền bàn giao · xác nhận đã nhận") { vm.screen.value = "SHIFTS" }
+                Rowx("Sửa công thủ công", "Thêm/sửa giờ vào-ra khi máy lỗi · cần PIN nhân viên") { vm.screen.value = "ATT_EDIT" }
                 Rowx("Chấm công & Bảng lương", "Giờ vào/ra · tổng giờ · lương theo tháng") { vm.screen.value = "PAYROLL" }
             }
             if (employee?.role != null && employee?.role != "ADMIN") {

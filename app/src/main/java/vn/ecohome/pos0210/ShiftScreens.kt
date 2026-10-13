@@ -13,6 +13,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import vn.ecohome.pos0210.data.AttendanceSessionEntity
 import vn.ecohome.pos0210.data.ShiftEntity
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -160,4 +161,70 @@ fun ShiftList(vm: PosViewModel) {
             dismissButton = { TextButton(onClick = { receiving = null }) { Text("Huỷ") } }
         )
     }
+}
+
+@Composable
+fun AttendanceEdit(vm: PosViewModel) {
+    val employees by vm.employees.collectAsState()
+    var selected by remember { mutableStateOf<String?>(null) }
+    var editing by remember { mutableStateOf<AttendanceSessionEntity?>(null) }
+    var adding by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxSize()) {
+        Header("Sửa công thủ công") { vm.screen.value = "MANAGE" }
+        Text("Chọn nhân viên. Mọi lần sửa cần PIN của chính nhân viên đó và ghi lý do.", Modifier.padding(horizontal = 16.dp), fontSize = 12.sp)
+        Row(Modifier.padding(horizontal = 12.dp).fillMaxWidth()) {
+            employees.forEach { e ->
+                FilterChip(selected = selected == e.id, onClick = { selected = e.id }, label = { Text(e.name) }, modifier = Modifier.padding(end = 6.dp))
+            }
+        }
+        val id = selected
+        if (id != null) {
+            val history by remember(id) { vm.attendanceHistoryOf(id) }.collectAsState(initial = emptyList())
+            Button(onClick = { adding = true }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) { Text("＋ THÊM CA CÔNG") }
+            LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+                items(history, key = { it.id }) { a ->
+                    Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("${ShiftRules.formatLocalTime(a.checkInAt)} → ${if (a.checkOutAt == null) "đang mở" else ShiftRules.formatLocalTime(a.checkOutAt)}", fontWeight = FontWeight.Bold)
+                                if (a.note.isNotBlank()) Text(a.note, fontSize = 12.sp)
+                            }
+                            OutlinedButton(onClick = { editing = a }) { Text("Sửa") }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    val empId = selected
+    if (adding && empId != null) AttendanceEditDialog(vm, empId, null) { adding = false }
+    editing?.let { a -> AttendanceEditDialog(vm, a.employeeId, a) { editing = null } }
+}
+
+@Composable
+private fun AttendanceEditDialog(vm: PosViewModel, employeeId: String, session: AttendanceSessionEntity?, onDismiss: () -> Unit) {
+    var inText by remember { mutableStateOf(ShiftRules.formatLocalTime(session?.checkInAt ?: System.currentTimeMillis())) }
+    var outText by remember { mutableStateOf(ShiftRules.formatLocalTime(session?.checkOutAt)) }
+    var reason by remember { mutableStateOf("") }
+    var pin by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (session == null) "Thêm ca công" else "Sửa ca công") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                OutlinedTextField(inText, { inText = it }, label = { Text("Giờ vào (yyyy-MM-dd HH:mm)") }, singleLine = true)
+                OutlinedTextField(outText, { outText = it }, label = { Text("Giờ ra (để trống = đang trong ca)") }, singleLine = true)
+                OutlinedTextField(reason, { reason = it }, label = { Text("Lý do (bắt buộc)") })
+                OutlinedTextField(pin, { pin = it.filter(Char::isDigit).take(4) }, label = { Text("PIN của nhân viên") }, visualTransformation = PasswordVisualTransformation(), singleLine = true)
+                if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = pin.length == 4, onClick = {
+                vm.manualAttendance(session?.id, employeeId, inText, outText, reason, pin) { err -> if (err == null) onDismiss() else error = err }
+            }) { Text("LƯU") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Huỷ") } }
+    )
 }

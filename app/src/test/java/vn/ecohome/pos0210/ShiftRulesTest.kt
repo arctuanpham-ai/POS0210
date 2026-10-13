@@ -54,3 +54,30 @@ class ShiftAttendanceRuleTest {
         assertTrue(ShiftRules.attendanceRequired("1", "ADMIN"))
     }
 }
+
+class ShiftPayAndManualEditTest {
+    @Test fun onlyShiftOwnerCanPayWhileShiftOpen() {
+        assertTrue(ShiftRules.canPay("linh", "linh"))
+        assertFalse(ShiftRules.canPay("linh", "admin"))
+        assertTrue(ShiftRules.canPay(null, "admin"))
+    }
+
+    @Test fun parseAndFormatRoundTrip() {
+        val t = ShiftRules.parseLocalTime("2026-10-13 06:00")!!
+        assertEquals("2026-10-13 06:00", ShiftRules.formatLocalTime(t))
+        assertEquals(null, ShiftRules.parseLocalTime("13/10/2026"))
+    }
+
+    @Test fun manualEditValidation() {
+        val now = ShiftRules.parseLocalTime("2026-10-13 18:00")!!
+        val inAt = ShiftRules.parseLocalTime("2026-10-13 06:00")
+        val outAt = ShiftRules.parseLocalTime("2026-10-13 10:00")
+        assertEquals(null, ShiftRules.manualAttendanceError(inAt, outAt, "x", now, "Máy lỗi"))
+        assertEquals(null, ShiftRules.manualAttendanceError(inAt, null, "", now, "Máy lỗi"))
+        assertTrue(ShiftRules.manualAttendanceError(inAt, outAt, "x", now, " ") != null)
+        assertTrue(ShiftRules.manualAttendanceError(outAt, inAt, "x", now, "r") != null)
+        assertTrue(ShiftRules.manualAttendanceError(inAt, null, "abc", now, "r") != null)
+        assertTrue(ShiftRules.manualAttendanceError(null, null, "", now, "r") != null)
+        assertTrue(ShiftRules.manualAttendanceError(now + 60_000, null, "", now, "r") != null)
+    }
+}

@@ -43,4 +43,28 @@ object ShiftRules {
     }
 
     fun attendanceSettingKey(employeeId: String) = "attendance_required_$employeeId"
+
+    /** Đang có ca thì chỉ chủ ca được thanh toán (tránh thanh toán nhầm khi người khác đăng nhập). Hết ca thì ai có quyền cũng thanh toán được. */
+    fun canPay(activeShiftStaffId: String?, userId: String): Boolean = activeShiftStaffId == null || activeShiftStaffId == userId
+
+    const val TIME_PATTERN = "yyyy-MM-dd HH:mm"
+
+    /** "2026-10-13 06:00" theo giờ Việt Nam; sai định dạng trả null. */
+    fun parseLocalTime(text: String): Long? = runCatching {
+        SimpleDateFormat(TIME_PATTERN, Locale.US).apply { timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh"); isLenient = false }.parse(text.trim())?.time
+    }.getOrNull()
+
+    fun formatLocalTime(epochMillis: Long?): String =
+        if (epochMillis == null) "" else SimpleDateFormat(TIME_PATTERN, Locale.US).apply { timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh") }.format(Date(epochMillis))
+
+    /** Lỗi của một lần sửa công thủ công, null nếu hợp lệ. */
+    fun manualAttendanceError(checkIn: Long?, checkOut: Long?, checkOutText: String, now: Long, reason: String): String? = when {
+        checkIn == null -> "Giờ vào sai định dạng (yyyy-MM-dd HH:mm)"
+        checkOutText.isNotBlank() && checkOut == null -> "Giờ ra sai định dạng (yyyy-MM-dd HH:mm)"
+        checkIn > now -> "Giờ vào không được ở tương lai"
+        checkOut != null && checkOut <= checkIn -> "Giờ ra phải sau giờ vào"
+        checkOut != null && checkOut > now -> "Giờ ra không được ở tương lai"
+        reason.isBlank() -> "Bắt buộc ghi lý do sửa công"
+        else -> null
+    }
 }

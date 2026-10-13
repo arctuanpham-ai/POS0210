@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { currentFlow, flowLabel, historyRows, summarizeRefunds } from "../payment-flow-view.js";
+import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "../payment-flow-view.js";
 
 test("thiếu dữ liệu hoặc giá trị lạ coi là Trả sau", () => {
   assert.equal(currentFlow(undefined), "postpaid");
@@ -30,4 +30,16 @@ test("hoàn tiền: lọc theo mốc, bỏ TEST, tổng theo phương thức", (
   assert.equal(s.transfer, 30000);
   assert.equal(s.total, 80000);
   assert.equal(s.rows[0].id, "2");
+});
+
+test("frozenRefunds: chỉ khoản CK đóng băng LIVE, kèm tổng; khoản đã hoàn xong không tính", () => {
+  const f = frozenRefunds([
+    { id: "a", amount: 50000, method: "TRANSFER", status: "FROZEN", createdAt: 3, reason: "đổi ý" },
+    { id: "b", amount: 30000, method: "TRANSFER", status: "DONE", createdAt: 2, settledAt: 9, reason: "x" },
+    { id: "c", amount: 20000, method: "CASH", status: "DONE", createdAt: 1, reason: "y" },
+    { id: "d", amount: 99000, method: "TRANSFER", status: "FROZEN", createdAt: 4, dataScope: "TEST", reason: "t" },
+  ]);
+  assert.equal(f.count, 1);
+  assert.equal(f.total, 50000);
+  assert.equal(summarizeRefunds([{ id: "x", amount: 1, method: "TRANSFER", createdAt: 5 }], 0).rows[0].status, "DONE");
 });

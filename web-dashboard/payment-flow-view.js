@@ -23,8 +23,18 @@ export const summarizeRefunds = (refunds, since = 0) => {
       amount: Number(r.amount || 0),
       method: r.method === "CASH" ? "CASH" : "TRANSFER",
       reason: String(r.reason ?? ""),
+      status: r.status === "FROZEN" ? "FROZEN" : "DONE",
+      settledAt: Number(r.settledAt || 0),
+      settleNote: String(r.settleNote ?? ""),
     }))
     .sort((a, b) => b.createdAt - a.createdAt);
   const sum = (m) => list.filter((r) => r.method === m).reduce((s, r) => s + r.amount, 0);
-  return { rows: list, total: sum("CASH") + sum("TRANSFER"), cash: sum("CASH"), transfer: sum("TRANSFER"), count: list.length };
+  const frozen = list.filter((r) => r.status === "FROZEN");
+  return { frozen: frozen.length, frozenTotal: frozen.reduce((s, r) => s + r.amount, 0), rows: list, total: sum("CASH") + sum("TRANSFER"), cash: sum("CASH"), transfer: sum("TRANSFER"), count: list.length };
+};
+
+/** Khoản CK đóng băng (chưa hoàn xong), mọi thời điểm, mới nhất trước. Dùng dữ liệu LIVE. */
+export const frozenRefunds = (refunds) => {
+  const list = summarizeRefunds(refunds, 0).rows.filter((r) => r.status === "FROZEN");
+  return { rows: list, count: list.length, total: list.reduce((s, r) => s + r.amount, 0) };
 };

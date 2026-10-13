@@ -22,7 +22,7 @@ import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261012-3";
 import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261013-2";
 import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261012-3";
 import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261012-3";
-import { currentFlow, flowLabel, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261013-4";
+import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261014-1";
 import { aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261013-2";
 
 const firebaseConfig = {
@@ -44,7 +44,7 @@ const state = {
   dashboard: {}, tables: [], sessions: [], batches: [], items: [],
   bills: [], purchases: [], expenseReceipts: [], purchaseItems: [], movements: [], costCodes: [],
   purchaseCategories: [], profitPartners: [], assetCategories: [], suppliers: [],
-  unsubs: [], paymentFlowDoc: null, refunds: [], flowError: "", dailyDocs: {}, dailyError: "", salesLoaded: false, salesDays: 7, itemMode: "combined", period: "today", customFrom: null, customTo: null,
+  unsubs: [], paymentFlowDoc: null, refunds: [], frozenRefundDocs: [], flowError: "", dailyDocs: {}, dailyError: "", salesLoaded: false, salesDays: 7, itemMode: "combined", period: "today", customFrom: null, customTo: null,
   transactionKind: "ALL", payerFilter: "ALL", user: null,
 };
 let expenseDraft = null;
@@ -258,11 +258,19 @@ function renderPaymentFlow() {
     history.slice(0, 10).forEach((h) => list.append(make("li", `${dateTime(h.at)} · ${h.by} · ${flowLabel(h.from)} → ${flowLabel(h.to)}`)));
     nodes.push(make("p", "Lịch sử đổi chế độ", "eyebrow"), list);
   }
+  const frozenAll = frozenRefunds([...state.frozenRefundDocs, ...state.refunds.filter((r) => !state.frozenRefundDocs.some((f) => f.id === r.id))]);
+  if (frozenAll.count) {
+    const banner = make("p", `⚠ ${frozenAll.count} khoản CK ĐÓNG BĂNG · ${money(frozenAll.total)} chờ quản lý hoàn cho khách (không tính doanh thu). Trừ ra khi đối chiếu sao kê.`, "sales-notice");
+    banner.style.fontWeight = "700";
+    const frozenList = document.createElement("ul");
+    frozenAll.rows.slice(0, 30).forEach((r) => frozenList.append(make("li", `${dateTime(r.createdAt)} · ${money(r.amount)} · ${r.reason}`)));
+    nodes.push(banner, frozenList);
+  }
   const refunds = summarizeRefunds(state.refunds, startOfDay(new Date(Date.now() - 6 * 86400000)));
   nodes.push(make("p", `Hoàn tiền 7 ngày: ${refunds.count} khoản · ${money(refunds.total)} (tiền mặt ${money(refunds.cash)} · chuyển khoản ${money(refunds.transfer)})`, "muted"));
   if (refunds.rows.length) {
     const list = document.createElement("ul");
-    refunds.rows.slice(0, 20).forEach((r) => list.append(make("li", `${dateTime(r.createdAt)} · ${money(r.amount)} · ${r.method === "CASH" ? "Tiền mặt" : "Chuyển khoản"} · ${r.reason}`)));
+    refunds.rows.slice(0, 20).forEach((r) => list.append(make("li", `${dateTime(r.createdAt)} · ${money(r.amount)} · ${r.method === "CASH" ? "Tiền mặt" : "Chuyển khoản"} · ${r.reason}${r.status === "FROZEN" ? " · ĐÓNG BĂNG" : r.method === "TRANSFER" && r.settledAt ? ` · đã hoàn CK ${dateTime(r.settledAt)}${r.settleNote ? ` (${r.settleNote})` : ""}` : ""}`)));
     nodes.push(list);
   }
   holder.replaceChildren(...nodes);
@@ -575,6 +583,10 @@ async function refreshDashboard() {
       state.paymentFlowDoc = flowDoc.exists() ? flowDoc.data() : null;
       const refundSnap = await getDocs(query(collection(db, ...root, "refunds"), where("createdAt", ">=", sevenDays), orderBy("createdAt", "desc"), limit(200)));
       state.refunds = rows(refundSnap);
+      try {
+        const frozenSnap = await getDocs(query(collection(db, ...root, "refunds"), where("status", "==", "FROZEN"), limit(200)));
+        state.frozenRefundDocs = rows(frozenSnap);
+      } catch { state.frozenRefundDocs = []; }
     } catch (error) { state.flowError = error.message; state.paymentFlowDoc = null; state.refunds = []; }
     state.salesLoaded = true;
     const stale = shouldMarkSnapshotStale(state.dashboard.lastUpdatedAt);

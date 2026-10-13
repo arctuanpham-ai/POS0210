@@ -255,7 +255,7 @@ object ReceiptRenderer {
             c.drawText("HẠNG: $customerTier",PAD,y,paint(22f,true));y+=30
             c.drawText("ĐIỂM: $pointsBefore + $pointsEarned = $pointsAfter",PAD,y,paint(21f,true));y+=32
         }
-        y=wrap(c,"Thanh toán: $method",PAD,y,W-PAD*2,paint(22f,true),28f)
+        if(orderTag==null)y=wrap(c,"Thanh toán: $method",PAD,y,W-PAD*2,paint(22f,true),28f)
         y+=6
         line(c,y);y+=38
         if(qr!=null){

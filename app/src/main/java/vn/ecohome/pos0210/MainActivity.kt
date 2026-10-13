@@ -200,6 +200,8 @@ fun App(vm: PosViewModel = viewModel()) {
     val dayDue by vm.dayCloseDate.collectAsState()
     if (dayDue != null && !reminder && !locked && sc != "CLOSE_DAY") DayCloseReminderDialog(vm, dayDue!!)
     if (locked) LockScreen(vm)
+    val kitchenUi by vm.kitchenPrint.collectAsState()
+    kitchenUi?.let { KitchenPrintOverlay(vm, it) }
     }
 }
 
@@ -1062,12 +1064,12 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                     onClick={vm.close("CASH",preview,qrInfo,customerPhone,customerName,if(applyReward)billReward?.id else null,if(isPrepaid)cashValue else null)},
                     modifier=Modifier.weight(1f),
                     enabled=!checkoutPrinting&&preview.total>0&&pendingDelivery.isEmpty()&&validPaymentSession!=null&&cashOk
-                ){Text("XÁC NHẬN\\nTIỀN MẶT".replace("\\n","\n"),textAlign=TextAlign.Center)}
+                ){Text((if(isPrepaid)"XÁC NHẬN TIỀN MẶT\\n& IN PHIẾU BẾP" else "XÁC NHẬN\\nTIỀN MẶT").replace("\\n","\n"),textAlign=TextAlign.Center)}
                 Button(
                     onClick={vm.close("TRANSFER",preview,qrInfo,customerPhone,customerName,if(applyReward)billReward?.id else null)},
                     modifier=Modifier.weight(1f),
                     enabled=!checkoutPrinting&&preview.total>0&&pendingDelivery.isEmpty()&&validPaymentSession!=null
-                ){Text("XÁC NHẬN\\nCHUYỂN KHOẢN".replace("\\n","\n"),textAlign=TextAlign.Center)}
+                ){Text((if(isPrepaid)"XÁC NHẬN CK\\n& IN PHIẾU BẾP" else "XÁC NHẬN\\nCHUYỂN KHOẢN").replace("\\n","\n"),textAlign=TextAlign.Center)}
             }
         }
     }

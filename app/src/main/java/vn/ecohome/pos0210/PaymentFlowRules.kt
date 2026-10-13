@@ -52,3 +52,6 @@ object ShiftRulesTodayStart {
             set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
         }.timeInMillis
 }
+
+/** Trạng thái màn "đang in phiếu bếp" sau khi xác nhận thanh toán trả trước. phase: PRINTING | FAILED. */
+data class KitchenPrintUi(val phase: String, val done: Int, val total: Int, val message: String, val tableName: String)

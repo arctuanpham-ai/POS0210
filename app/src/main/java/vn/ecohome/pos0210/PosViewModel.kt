@@ -1308,30 +1308,58 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
   return lines.mapIndexed{i,it->ReceiptRenderer.kitchenItem(tableName,b.serviceNo,i+1,lines.size,it.itemNameSnapshot.removePrefix("🎁").trim(),it.qty,if(it.itemNameSnapshot.startsWith("🎁")&&it.note.isBlank())"QUÀ TẶNG" else it.note,orderer,flowTag,at,profile)}
  }
  /** In lần lượt từng phiếu (mỗi phiếu một lệnh để xé từng tờ ngay). Lỗi giữa chừng báo đã in được bao nhiêu phiếu. */
- private suspend fun printKitchenTickets(mac:String,tableName:String,b:OrderBatchEntity,orderer:String,flowTag:String,profile:vn.ecohome.pos0210.printing.PrinterProfile):Result<Unit>{
+ private suspend fun printKitchenTickets(mac:String,tableName:String,b:OrderBatchEntity,orderer:String,flowTag:String,profile:vn.ecohome.pos0210.printing.PrinterProfile,onProgress:(Int,Int)->Unit={_,_->}):Result<Unit>{
   val items=dao.batchItems(b.id).first()
   val tickets=kitchenTicketBitmaps(tableName,b,orderer,flowTag,items,profile)
   if(tickets.isEmpty())return Result.failure(IllegalStateException("Đơn không có món để in"))
+  onProgress(0,tickets.size)
   tickets.forEachIndexed{i,bmp->
    val r=BluetoothPrinter.printBitmap(getApplication(),mac,bmp,profile,vn.ecohome.pos0210.printing.PrintJobType.KITCHEN)
    if(r.isFailure)return Result.failure(IllegalStateException("mới in ${i}/${tickets.size} phiếu · ${r.exceptionOrNull()?.message?:"lỗi"}"))
+   onProgress(i+1,tickets.size)
   }
   return Result.success(Unit)
  }
  /** Số lần đã nhắc bếp + lần nhắc cuối, theo từng đơn (trong phiên chạy app). */
  val reminders=MutableStateFlow<Map<String,Pair<Int,Long>>>(emptyMap())
  /** In phiếu làm hàng của đơn trả trước sau khi đã thu tiền. Lỗi in không chặn bán: đơn vẫn nằm trong hàng chờ để in lại. */
- private suspend fun printPaidKitchenTicket(b:OrderBatchEntity,tableName:String,orderer:String){
-  if(printerMode()!="BLUETOOTH"){printerMessage.value="TEST · Không in phiếu bếp";return}
+ /** In phiếu bếp của đơn trả trước đã thu tiền. Trả về null nếu xong, hoặc nội dung lỗi (đơn vẫn đã ghi, nằm trong hàng chờ). */
+ private suspend fun printPaidKitchenTicket(b:OrderBatchEntity,tableName:String,orderer:String,onProgress:(Int,Int)->Unit={_,_->}):String?{
+  if(printerMode()!="BLUETOOTH"){printerMessage.value="TEST · Không in phiếu bếp";return null}
   val mac=kitchenPrinterMac()
-  if(mac.isBlank()){printerMessage.value="CHƯA CHỌN MÁY IN BẾP · đơn đã nằm trong hàng chờ";return}
+  if(mac.isBlank())return "Chưa chọn máy in bếp"
   val profile=printerProfile()
   val job=PrintJobEntity(UUID.randomUUID().toString(),b.id,null,"KITCHEN_PREPAID",createdAt=System.currentTimeMillis())
   dao.insertPrintJob(job)
-  if(!repo.claimPrint(job.id,"ANDROID"))return
-  val result=printKitchenTickets(mac,tableName,b,orderer,"ĐÃ THU TIỀN · LÀM NGAY",profile)
-  if(result.isSuccess){dao.markPrintSuccess(job.id,System.currentTimeMillis());audit("PRINT",b.id,"KITCHEN_PRINTED","prepaid,printer=${kitchenPrinterName()},job=${job.id}");printerMessage.value="ĐÃ IN PHIẾU BẾP #${b.serviceNo.toString().padStart(3,'0')}"}
-  else{dao.markPrintFailed(job.id,result.exceptionOrNull()?.message?:"UNKNOWN");audit("PRINT",b.id,"KITCHEN_PRINT_FAILED","prepaid,job=${job.id}");printerMessage.value="IN PHIẾU BẾP LỖI · bấm IN LẠI PHIẾU trong Đơn chờ giao"}
+  if(!repo.claimPrint(job.id,"ANDROID"))return null
+  val result=printKitchenTickets(mac,tableName,b,orderer,"ĐÃ THU TIỀN · LÀM NGAY",profile,onProgress)
+  return if(result.isSuccess){dao.markPrintSuccess(job.id,System.currentTimeMillis());audit("PRINT",b.id,"KITCHEN_PRINTED","prepaid,printer=${kitchenPrinterName()},job=${job.id}");printerMessage.value="ĐÃ IN PHIẾU BẾP #${b.serviceNo.toString().padStart(3,'0')}";null}
+  else{val msg=result.exceptionOrNull()?.message?:"UNKNOWN";dao.markPrintFailed(job.id,msg);audit("PRINT",b.id,"KITCHEN_PRINT_FAILED","prepaid,job=${job.id}");msg}
+ }
+ val kitchenPrint=MutableStateFlow<KitchenPrintUi?>(null)
+ /** In phiếu bếp cho các món đã thu tiền và cập nhật màn "đang in". Trả về true nếu in xong. */
+ private suspend fun runPaidKitchenPrint(sessionId:String,tableName:String,orderer:String):Boolean{
+  val batches=dao.batches(sessionId).first().filter{it.status=="WAITING"}
+  kitchenPrint.value=KitchenPrintUi("PRINTING",0,0,"",tableName)
+  for(b in batches){
+   val err=printPaidKitchenTicket(b,tableName,orderer){d,t->kitchenPrint.value=KitchenPrintUi("PRINTING",d,t,"",tableName)}
+   if(err!=null){kitchenPrint.value=KitchenPrintUi("FAILED",0,0,err,tableName);return false}
+  }
+  kitchenPrint.value=null
+  return true
+ }
+ private fun leavePaidOrder(){kitchenPrint.value=null;printedCheckoutKey.value=null;currentSession.value=null;currentTable.value=null;screen.value="TABLES"}
+ /** Bấm "IN LẠI" khi phiếu bếp lỗi: in lại các phiếu của đơn vừa thu tiền. */
+ fun retryPaidKitchenPrint(){
+  val s=currentSession.value?:return
+  val e=currentEmployee.value?:return
+  val tName=currentTable.value?.name?:"Trả trước"
+  viewModelScope.launch(Dispatchers.IO){ if(runPaidKitchenPrint(s.id,tName,e.name))withContext(Dispatchers.Main){leavePaidOrder()} }
+ }
+ /** Bỏ qua in phiếu: nhân viên tự báo bếp; đơn vẫn nằm trong hàng chờ để nhắc bếp / in lại. */
+ fun skipPaidKitchenPrint(){
+  printerMessage.value="ĐƠN CHƯA CÓ PHIẾU BẾP · vào Đơn chờ giao để IN LẠI hoặc NHẮC BẾP"
+  leavePaidOrder()
  }
  /** Nhắc bếp: in phiếu nhắc (số thẻ, số đơn, món, đã chờ bao lâu). Chống bấm dồn trong 20 giây. */
  fun remindKitchen(o:WaitingOrderRow){
@@ -2033,11 +2061,11 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
      }
     }
    }
-   if(session.flow==PaymentFlowRules.PREPAID)dao.batches(session.id).first().filter{it.status=="WAITING"}.forEach{printPaidKitchenTicket(it,table?.name?:"Trả trước",employee.name)}
-   printedCheckoutKey.value=null
-   currentSession.value=null
-   currentTable.value=null
-   screen.value="TABLES"
+   if(session.flow==PaymentFlowRules.PREPAID){
+    // Đơn đã ghi. Giữ màn hình ở lại cho tới khi in xong; lỗi thì để nhân viên chọn in lại hoặc tự báo bếp.
+    if(!runPaidKitchenPrint(session.id,table?.name?:"Trả trước",employee.name))return@launch
+   }
+   withContext(Dispatchers.Main){leavePaidOrder()}
   }
  }
 }

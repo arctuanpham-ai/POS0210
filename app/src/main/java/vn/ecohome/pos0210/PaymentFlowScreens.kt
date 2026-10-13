@@ -1,6 +1,7 @@
 package vn.ecohome.pos0210
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
@@ -191,6 +192,30 @@ fun DeliveryQueue(vm: PosViewModel) {
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/** Phủ toàn màn hình khi đang in phiếu bếp sau thanh toán trả trước: chặn thao tác cho tới khi in xong; lỗi thì chọn in lại / tự báo bếp. */
+@Composable
+fun KitchenPrintOverlay(vm: PosViewModel, ui: KitchenPrintUi) {
+    Surface(Modifier.fillMaxSize().clickable {}, color = Color(0xF2F7F0E8)) {
+        Column(Modifier.fillMaxSize().padding(28.dp), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            if (ui.phase == "PRINTING") {
+                CircularProgressIndicator(Modifier.size(72.dp), color = Brown)
+                Text("ĐANG IN PHIẾU BẾP…", Modifier.padding(top = 24.dp), fontSize = 26.sp, fontWeight = FontWeight.Black, color = Brown)
+                Text(ui.tableName.uppercase(), fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
+                if (ui.total > 0) Text("Phiếu ${ui.done}/${ui.total}", fontSize = 18.sp, modifier = Modifier.padding(top = 6.dp))
+                Text("Đã thu tiền. Chờ máy in xong, không thoát màn hình.", fontSize = 12.sp, modifier = Modifier.padding(top = 14.dp))
+            } else {
+                Text("⚠ PHIẾU BẾP CHƯA IN ĐƯỢC", fontSize = 26.sp, fontWeight = FontWeight.Black, color = Color(0xFFB3261E), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                Text(ui.tableName.uppercase(), fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                Text(ui.message, Modifier.padding(top = 10.dp), fontSize = 14.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                Text("Đơn ĐÃ thu tiền và đã ghi. Kiểm tra máy in/giấy rồi in lại.", Modifier.padding(top = 10.dp), fontSize = 12.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                Button(onClick = { vm.retryPaidKitchenPrint() }, Modifier.fillMaxWidth().padding(top = 22.dp).height(56.dp)) { Text("IN LẠI PHIẾU BẾP", fontWeight = FontWeight.Black) }
+                OutlinedButton(onClick = { vm.skipPaidKitchenPrint() }, Modifier.fillMaxWidth().padding(top = 10.dp).height(52.dp)) { Text("TÔI BÁO BẾP TRỰC TIẾP") }
+                Text("Đơn vẫn nằm trong Đơn chờ giao để in lại hoặc nhắc bếp.", Modifier.padding(top = 8.dp), fontSize = 11.sp)
             }
         }
     }

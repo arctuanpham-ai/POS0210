@@ -12,8 +12,8 @@ android {
         applicationId = "vn.ecohome.pos0210"
         minSdk = 26
         targetSdk = 35
-        versionCode = 108
-        versionName = "1.0.0-alpha77-unified-expense-sync"
+        versionCode = 109
+        versionName = "1.0.0-alpha78-dashboard-snapshots"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {

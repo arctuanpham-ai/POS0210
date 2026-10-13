@@ -103,3 +103,23 @@ export const liveSummary = (dashboard = {}) => {
 
 export const serviceStatusLabel = (status) =>
   status === "SERVED" || status === "DELIVERED" ? "Đã phục vụ" : status === "WAITING" || status === "SENT" ? "Đã gửi bếp" : "Đang gọi món";
+
+/**
+ * Doanh thu cho một khoảng ngày (Hôm qua, 7 ngày, tùy chọn) từ các dashboardDaily đã đọc.
+ * Trả về null nếu khoảng không phải các ngày nguyên nằm trong 7 ngày gần nhất (khi đó không có snapshot để tính).
+ */
+export const periodDailySummary = (range, docs, now = new Date()) => {
+  if (!Number.isFinite(range?.from) || !Number.isFinite(range?.to) || range.to <= range.from) return null;
+  const first = new Date(range.from);
+  let cursor = new Date(first.getFullYear(), first.getMonth(), first.getDate());
+  const last = new Date(range.to - 1);
+  const keys = [];
+  while (cursor <= last && keys.length < 8) {
+    keys.push(dateKeyOf(cursor));
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 1);
+  }
+  if (!keys.length || keys.length > 7) return null;
+  const window = new Set(dailyKeys(7, now));
+  if (!keys.every((key) => window.has(key))) return null;
+  return summarizeDaily(docs, keys, dateKeyOf(now));
+};

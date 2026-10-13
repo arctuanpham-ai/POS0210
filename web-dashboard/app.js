@@ -22,7 +22,7 @@ import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261012-3";
 import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261013-2";
 import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261012-3";
 import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261012-3";
-import { aggregateItems, dailyKeys, dateKeyOf, liveSummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261013-1";
+import { aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261013-2";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",
@@ -167,15 +167,18 @@ function renderPeriodSummary() {
   const movements = state.movements.filter((m) => inRange(m.occurredAt, range) && matchesPayer(state.payerFilter, m.counterpartyName));
   const snapshotRevenue = range.label === "Hôm nay" ? Number(state.dashboard.revenueToday || 0) : range.label === "Tháng này" ? Number(state.dashboard.monthRevenue || 0) : 0;
   const snapshotBillCount = range.label === "Hôm nay" ? Number(state.dashboard.paidBillsToday || 0) : 0;
-  const revenue = bills.length ? bills.reduce((s, b) => s + Number(b.total || 0), 0) : snapshotRevenue;
-  const billCount = bills.length || !snapshotBillCount ? bills.length : snapshotBillCount;
+  // Hôm qua / 7 ngày / tùy chọn: bill không còn được đọc về Web, doanh thu lấy từ snapshot dashboardDaily mà POS đã đẩy.
+  const daily = !bills.length && ["Hôm qua", "7 ngày", "Tùy chọn"].includes(range.label) ? periodDailySummary(range, state.dailyDocs) : null;
+  const revenue = bills.length ? bills.reduce((s, b) => s + Number(b.total || 0), 0) : daily ? daily.totalRevenue : snapshotRevenue;
+  const billCount = bills.length ? bills.length : daily ? daily.totalBills : snapshotBillCount;
+  const missingNote = daily && !daily.complete ? ` (thiếu ${daily.unavailableDays.length} ngày chưa có dữ liệu từ POS)` : "";
   const expense = allPurchases.reduce((s, p) => s + Number(p.total || 0), 0);
   const selectedPayerExpense = purchases.reduce((s, p) => s + Number(p.total || 0), 0);
   const additionalInvestment = allPurchases.filter((p) => INVESTMENT_CATEGORIES.has(p.expenseCategory)).reduce((s, p) => s + Number(p.total || 0), 0);
   const operatingExpense = expense - additionalInvestment;
   const movementNet = movements.reduce((s, m) => s + (MOVEMENT_OUT_TYPES.has(m.type) ? -Number(m.amount || 0) : Number(m.amount || 0)), 0);
   const cards = [
-    ["Doanh thu", money(revenue)],
+    [`Doanh thu${missingNote}`, money(revenue)],
     ["Số bill", billCount || (range.label === "Tháng này" ? "Snapshot tháng" : 0)],
     ["Bill trung bình", money(billCount ? Math.round(revenue / billCount) : 0)],
     ["Chi vận hành", money(operatingExpense)],
@@ -302,7 +305,7 @@ function renderSalesSnapshots() {
 
 async function loadDailyDocs() {
   // Chỉ đọc các ngày chưa có trong bộ nhớ: 3 hoặc 7 document, không đọc bill/order lịch sử.
-  const missing = dailyKeys(state.salesDays).filter((key) => !(key in state.dailyDocs));
+  const missing = dailyKeys(7).filter((key) => !(key in state.dailyDocs));
   state.dailyError = "";
   await Promise.all(missing.map(async (key) => {
     try {

@@ -105,3 +105,28 @@ test("nhãn trạng thái phục vụ bằng tiếng Việt", () => {
   assert.equal(serviceStatusLabel("WAITING"), "Đã gửi bếp");
   assert.equal(serviceStatusLabel(""), "Đang gọi món");
 });
+
+import { periodDailySummary } from "../sales-snapshot-view.js";
+const dayRange = (y, m, d1, d2) => ({ from: new Date(y, m, d1).getTime(), to: new Date(y, m, d2 + 1).getTime() });
+
+test("Hôm qua lấy doanh thu từ dashboardDaily của đúng ngày đó", () => {
+  const docs = { "2026-10-12": { revenue: 500000, paidBills: 5, finalized: true } };
+  const summary = periodDailySummary(dayRange(2026, 9, 12, 12), docs, NOW);
+  assert.equal(summary.totalRevenue, 500000);
+  assert.equal(summary.totalBills, 5);
+  assert.equal(summary.complete, true);
+});
+
+test("7 ngày cộng các ngày có snapshot và báo thiếu những ngày chưa có", () => {
+  const docs = { "2026-10-12": { revenue: 100, paidBills: 1 }, "2026-10-13": { revenue: 50, paidBills: 1 } };
+  const summary = periodDailySummary(dayRange(2026, 9, 7, 13), docs, NOW);
+  assert.equal(summary.totalRevenue, 150);
+  assert.equal(summary.complete, false);
+  assert.equal(summary.unavailableDays.length, 5);
+});
+
+test("khoảng ngoài 7 ngày gần nhất hoặc không giới hạn thì không dùng snapshot", () => {
+  assert.equal(periodDailySummary(dayRange(2026, 9, 1, 13), {}, NOW), null);
+  assert.equal(periodDailySummary({ from: -Infinity, to: Infinity }, {}, NOW), null);
+  assert.equal(periodDailySummary(dayRange(2026, 8, 1, 3), {}, NOW), null);
+});

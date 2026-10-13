@@ -246,6 +246,19 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
  fun previewBill(){printerPreview.value="BILL"}
  fun previewCancel(){printerPreview.value="CANCEL"}
  fun clearPrinterPreview(){printerPreview.value=""}
+ /** Ảnh xem trước đúng bằng ảnh sẽ in (cùng bộ vẽ, cùng khổ giấy). */
+ fun previewBitmap(kind:String):android.graphics.Bitmap?{
+  val profile=printerProfile()
+  return when(kind){
+   "KITCHEN"->ReceiptRenderer.kitchen("BÀN 02",1,27,"Tuấn",listOf(Triple("Bún gà",2,"không hành"),Triple("Bạc xỉu",1,""),Triple("Trà đào",1,"ít đá")),profile,"ĐÃ THU TIỀN · LÀM NGAY")
+   "BILL"->{
+    val qr=if(isQrConfigured())runCatching{qrBitmap(121500L,"0210 BAN 02")}.getOrNull() else null
+    ReceiptRenderer.bill("BÀN 02","08:32–09:25",listOf(Triple("Bún gà",2,40000L),Triple("Bạc xỉu",1,30000L),Triple("Đen đá",1,25000L)),135000L,0L,13500L,121500L,listOf("ƯU ĐÃI HẠNG VIP  -10%"),"ANH NAM","VIP",188,12,200,"CHUYỂN KHOẢN",qr,profile,"ĐƠN #027")
+   }
+   "CANCEL"->ReceiptRenderer.cancel("BÀN 02",2,"Quản lý","Khách đổi ý",profile)
+   else->null
+  }
+ }
  private fun printerMode()=setting("printer_mode").ifBlank{"TEST"}
  private fun printerMac()=setting("printer_mac")
  private fun printerName()=setting("printer_name").ifBlank{BluetoothPrinter.PROFILE_NAME}
@@ -1943,7 +1956,7 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
     return@launch
    }
    val bill=commit.bill
-   if(session.flow==PaymentFlowRules.PREPAID){val t0=System.currentTimeMillis();dao.batches(session.id).first().filter{it.status=="DRAFT"}.forEach{dao.transitionBatch(it.id,"DRAFT","WAITING",t0)};dao.batches(session.id).first().filter{it.status=="WAITING"}.forEach{printPaidKitchenTicket(it,table?.name?:"Trả trước",employee.name)}}
+   if(session.flow==PaymentFlowRules.PREPAID){val t0=System.currentTimeMillis();dao.batches(session.id).first().filter{it.status=="DRAFT"}.forEach{dao.transitionBatch(it.id,"DRAFT","WAITING",t0)}}
    if(method=="TRANSFER"&&pendingPaymentSession!=null)dao.confirmPaymentSession(pendingPaymentSession.id,bill.id)
    else dao.cancelPaymentSessions(session.id)
    val customer=commit.customer
@@ -1954,12 +1967,12 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
    val issuedRewards=if(session.dataScope=="LIVE"&&bill.customerId!=null)repo.evaluateLoyalty(bill.customerId,bill.id) else emptyList()
    if(issuedRewards.isNotEmpty()){audit("LOYALTY",bill.id,"REWARD_ISSUED","count=${issuedRewards.size},customer=${bill.customerId}");issuedRewards.forEach{printLoyaltyVoucher(it,customer)};printerMessage.value="ĐÃ PHÁT HÀNH "+issuedRewards.size+" VOUCHER · "+issuedRewards.joinToString(", "){VoucherPolicy.code(it.id)}+" · KIỂM TRA PHIẾU IN"}
    autoBackup()
-   if(false&&printerMode()=="BLUETOOTH"&&printerMac().isNotBlank()){
+   if(session.flow==PaymentFlowRules.PREPAID&&printerMode()=="BLUETOOTH"&&receiptPrinterMac().isNotBlank()){
     val bs=dao.batches(session.id).first().filter{it.status!="CANCELLED"}
     val lines=mutableListOf<Triple<String,Int,Long>>()
     bs.forEach{b->dao.batchItems(b.id).first().forEach{it2->lines.add(Triple(it2.itemNameSnapshot,it2.qty,it2.unitPriceSnapshot))}}
     val info="0210 ${table?.name ?: bill.billNo}"
-    val qr=qrBitmap(preview.total,info)
+    val qr:android.graphics.Bitmap?=null
     val period="${java.text.SimpleDateFormat("HH:mm",java.util.Locale.getDefault()).format(java.util.Date(session.openedAt))}–${java.text.SimpleDateFormat("HH:mm",java.util.Locale.getDefault()).format(java.util.Date(bill.closedAt ?: System.currentTimeMillis()))}"
     val receiptAdjustments=buildList {
      preview.surchargeRules.forEach{rule->add("PHỤ THU ${rule.name}  +${rule.percent}%")}
@@ -1983,9 +1996,10 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
      pointsBefore=pointsBefore,
      pointsEarned=pointsEarned,
      pointsAfter=pointsAfter,
-     method=if(method=="CASH")"TIỀN MẶT" else "CHUYỂN KHOẢN",
+     method=if(method=="CASH")"TIỀN MẶT"+(cashReceived?.let{" · đưa ${java.text.NumberFormat.getNumberInstance(java.util.Locale("vi","VN")).format(it)}đ · thối ${java.text.NumberFormat.getNumberInstance(java.util.Locale("vi","VN")).format(PaymentFlowRules.change(preview.total,it)?:0L)}đ"}?:"") else "CHUYỂN KHOẢN · ĐÃ NHẬN",
      qr=qr,
-     profile=profile
+     profile=profile,
+     orderTag=bs.firstOrNull()?.let{"ĐƠN "+PaymentFlowRules.orderNoLabel(it.serviceNo)}
     )
     val job=PrintJobEntity(java.util.UUID.randomUUID().toString(),null,bill.id,"BILL",createdAt=System.currentTimeMillis())
     dao.insertPrintJob(job)
@@ -2002,6 +2016,7 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
      }
     }
    }
+   if(session.flow==PaymentFlowRules.PREPAID)dao.batches(session.id).first().filter{it.status=="WAITING"}.forEach{printPaidKitchenTicket(it,table?.name?:"Trả trước",employee.name)}
    printedCheckoutKey.value=null
    currentSession.value=null
    currentTable.value=null

@@ -3388,15 +3388,18 @@ fun Printer(vm: PosViewModel) {
                         colors = CardDefaults.cardColors(containerColor = Color.White)
                     ) {
                         when (preview) {
-                            "BILL" -> BillPrintPreview(vm)
-                            "KITCHEN" -> SimplePrintPreview(
-                                title = "PHIẾU LÀM HÀNG",
-                                body = PrinterText.kitchenSample()
-                            )
-                            "CANCEL" -> SimplePrintPreview(
-                                title = "PHIẾU HỦY",
-                                body = PrinterText.cancelSample()
-                            )
+                            else -> {
+                                val previewBmp = remember(preview, settings) { vm.previewBitmap(preview) }
+                                previewBmp?.let {
+                                    androidx.compose.foundation.Image(
+                                        bitmap = it.asImageBitmap(),
+                                        contentDescription = null,
+                                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                        contentScale = androidx.compose.ui.layout.ContentScale.FillWidth,
+                                        filterQuality = androidx.compose.ui.graphics.FilterQuality.None
+                                    )
+                                }
+                            }
                         }
                     }
                 } else {

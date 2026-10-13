@@ -1297,6 +1297,8 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
  fun paymentFlow():String=PaymentFlowRules.normalize(setting(PaymentFlowRules.SETTING_KEY))
  val prepaidTable=DiningTableEntity(PaymentFlowRules.PREPAID_TABLE_ID,"prepaid","Trả trước")
  val paymentFlowMessage=MutableStateFlow("")
+ /** Ảnh bill vừa bấm IN (khoá theo đơn+tiền+nội dung CK) để hiện trên màn hình cho khách quét QR. */
+ val checkoutBillImage=MutableStateFlow<Pair<String,android.graphics.Bitmap>?>(null)
  val waitingOrders=dao.waitingOrders().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
  fun sessionItems(sessionId:String)=dao.sessionItems(sessionId)
  /** Số lần đã nhắc bếp + lần nhắc cuối, theo từng đơn (trong phiên chạy app). */
@@ -1834,7 +1836,6 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
   checkoutPrinting.value=true
   viewModelScope.launch(Dispatchers.IO){
    try {
-   if(printerMode()!="BLUETOOTH"||receiptPrinterMac().isBlank()){printerMessage.value="IN BILL LỖI · Chưa cấu hình máy in. Kiểm tra tiền đã nhận trước khi xác nhận thanh toán";return@launch}
    val batches=dao.batches(session.id).first().filter{it.status!="CANCELLED"}
    val lines=mutableListOf<Triple<String,Int,Long>>()
    batches.forEach{batch->dao.batchItems(batch.id).first().forEach{item->lines.add(Triple(item.itemNameSnapshot,item.qty,item.unitPriceSnapshot))}}
@@ -1851,6 +1852,8 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
    val profile=printerProfile()
    val orderTag=if(session.flow==PaymentFlowRules.PREPAID)batches.firstOrNull()?.let{"ĐƠN "+PaymentFlowRules.orderNoLabel(it.serviceNo)} else null
    val bitmap=ReceiptRenderer.bill(table.name,period,lines,preview.subtotal,preview.surcharge,preview.discount,preview.total,adjustments,customerName.ifBlank{"KHÁCH LẠ"},null,0,0,0,"CHƯA XÁC NHẬN",qr,profile,orderTag)
+   checkoutBillImage.value=printKey to bitmap
+   if(printerMode()!="BLUETOOTH"||receiptPrinterMac().isBlank()){printerMessage.value="IN BILL LỖI · Chưa cấu hình máy in. Bill vẫn hiện trên màn hình để khách quét QR";return@launch}
    val job=PrintJobEntity(UUID.randomUUID().toString(),null,null,"BILL_PREPAY",createdAt=now)
    dao.insertPrintJob(job)
    if(repo.claimPrint(job.id,"ANDROID")){

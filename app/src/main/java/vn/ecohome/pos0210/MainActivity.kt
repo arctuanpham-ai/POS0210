@@ -847,6 +847,8 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
     val soundboxStatic = PaymentQrMode.usesStaticSoundboxQr(qrMode)
     val qrConfigured = soundboxStatic || (setting("bank_name").isNotBlank() && setting("bank_account").isNotBlank())
     val ambiguousEvent=bankEvents.firstOrNull{it.matchStatus=="AMBIGUOUS"&&it.amount==preview.total&&it.receivedAt>=s.openedAt}
+    val billImage by vm.checkoutBillImage.collectAsState()
+    val shownBill = billImage?.takeIf { it.first == vn.ecohome.pos0210.payment.CheckoutPrintPolicy.key(s.id, preview.total, qrInfo) }?.second
 
     Column {
         Header(if (isPrepaid) "Thanh toán trước" else "Thanh toán") { if (isPrepaid) vm.abandonPrepaid() else vm.screen.value = "SENT" }
@@ -884,7 +886,23 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                     }
                 }
             }
-            if (isPrepaid) {
+            if (shownBill != null) {
+                Text("BILL · Khách quét QR trên màn hình hoặc trên bill", fontWeight = FontWeight.Black, color = Coffee, modifier = Modifier.padding(bottom = 6.dp))
+                Card(
+                    Modifier.fillMaxWidth(0.92f).align(Alignment.CenterHorizontally).padding(bottom = 12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    border = BorderStroke(1.dp, Color(0xFFE4DBD0))
+                ) {
+                    androidx.compose.foundation.Image(
+                        bitmap = remember(shownBill) { shownBill.asImageBitmap() },
+                        contentDescription = "Bill",
+                        modifier = Modifier.fillMaxWidth().padding(8.dp),
+                        contentScale = androidx.compose.ui.layout.ContentScale.FillWidth,
+                        filterQuality = androidx.compose.ui.graphics.FilterQuality.None
+                    )
+                }
+            }
+            if (isPrepaid && shownBill == null) {
                 val payItems by vm.sessionItems(s.id).collectAsState(initial = emptyList())
                 val orderNo = sessionBatches.firstOrNull { it.status != "CANCELLED" }?.serviceNo
                 Card(Modifier.fillMaxWidth().padding(bottom = 12.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFF1E4D3))) {
@@ -957,7 +975,8 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
             Text("Tích điểm: "+money(setting("loyalty_vnd_per_point").toLongOrNull()?:10000L)+" thực trả = 1 điểm", fontSize = 11.sp)
 
             Text("🔒 Thu tiền: ${e?.name}", Modifier.padding(vertical = 14.dp))
-            if (billPrinted) {
+            if (billPrinted && shownBill != null) Text("✓ BILL ĐÃ IN · Chờ khách thanh toán", fontWeight = FontWeight.Black, color = Color(0xFF41633A))
+            if (billPrinted && shownBill == null) {
                 Text("✓ BILL ĐÃ IN · Chờ khách kiểm tra và thanh toán",fontWeight=FontWeight.Black,color=Color(0xFF41633A))
                 Card(
                     modifier=Modifier.fillMaxWidth().padding(top=8.dp),

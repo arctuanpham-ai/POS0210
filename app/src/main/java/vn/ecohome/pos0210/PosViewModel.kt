@@ -1132,6 +1132,9 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
   if(selectedVoucher.value!=null){orderMessage.value="ĐỔI VOUCHER ĐÃ TẠM KHÓA";clearSelectedVoucher();return}
   if(lines.isEmpty()&&selectedVoucher.value==null)return
   viewModelScope.launch{
+   val runningShift=dao.activeShift()
+   val sessionScope=currentSession.value?.dataScope?:if(businessTestMode.value)"TEST" else "LIVE"
+   if(sessionScope=="LIVE"&&!ShiftRules.canPay(runningShift?.staffId,e.id)){orderMessage.value="ĐANG TRONG CA CỦA ${runningShift?.staffName} · CHỈ ${runningShift?.staffName} ĐƯỢC ORDER";return@launch}
    if(!ShiftRules.canCreateOrder(dao.activeShift()!=null,businessTestMode.value)){orderMessage.value="CHƯA VÀO CA · Bắt đầu ca trước khi gửi order";screen.value="SHIFT_START";return@launch}
    val s=currentSession.value ?: repo.openSession(t.id,e.id,if(businessTestMode.value)"TEST" else "LIVE").also{currentSession.value=it}
    val bs=dao.batches(s.id).first()

@@ -337,7 +337,7 @@ fun LockScreen(vm: PosViewModel) {
 
 /** Cảnh báo to, nhấp nháy: máy đang trong ca của người khác nên không thanh toán được. Muốn thanh toán phải ra ca của họ. */
 @Composable
-fun ShiftPayBlockBanner(staffName: String, onEndShift: () -> Unit) {
+fun ShiftPayBlockBanner(staffName: String, action: String, onEndShift: () -> Unit) {
     val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "payBlock")
     val k by transition.animateFloat(
         initialValue = 0f, targetValue = 1f,
@@ -351,15 +351,15 @@ fun ShiftPayBlockBanner(staffName: String, onEndShift: () -> Unit) {
             .background(bg, androidx.compose.foundation.shape.RoundedCornerShape(14.dp)).padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("⛔ KHÔNG ĐƯỢC THANH TOÁN", color = androidx.compose.ui.graphics.Color.White, fontSize = 24.sp, fontWeight = FontWeight.Black)
+        Text("⛔ KHÔNG ĐƯỢC ${action.uppercase()}", color = androidx.compose.ui.graphics.Color.White, fontSize = 24.sp, fontWeight = FontWeight.Black)
         Spacer(Modifier.height(6.dp))
         Text("Máy đang trong ca của $staffName.", color = androidx.compose.ui.graphics.Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        Text("Chỉ tài khoản $staffName mới thanh toán được.", color = androidx.compose.ui.graphics.Color.White, fontSize = 16.sp)
+        Text("Chỉ tài khoản $staffName mới $action được.", color = androidx.compose.ui.graphics.Color.White, fontSize = 16.sp)
         Spacer(Modifier.height(10.dp))
         Button(
             onClick = onEndShift,
             colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.ui.graphics.Color.White, contentColor = androidx.compose.ui.graphics.Color(0xFFB71C1C)),
             modifier = Modifier.fillMaxWidth()
-        ) { Text("RA CA CỦA ${staffName.uppercase()} ĐỂ THANH TOÁN", fontWeight = FontWeight.Black) }
+        ) { Text("RA CA CỦA ${staffName.uppercase()} ĐỂ ${action.uppercase()}", fontWeight = FontWeight.Black) }
     }
 }

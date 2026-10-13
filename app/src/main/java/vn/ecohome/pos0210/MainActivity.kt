@@ -314,6 +314,11 @@ fun Tables(vm: PosViewModel) {
 
 @Composable
 fun Order(vm: PosViewModel, t: DiningTableEntity) {
+    val orderShift by vm.activeShift.collectAsState()
+    val orderUser by vm.currentEmployee.collectAsState()
+    val orderTest by vm.businessTestMode.collectAsState()
+    val orderSession by vm.currentSession.collectAsState()
+    val orderBlocked = (orderSession?.dataScope ?: if (orderTest) "TEST" else "LIVE") == "LIVE" && !ShiftRules.canPay(orderShift?.staffId, orderUser?.id ?: "")
     val ms by vm.menu.collectAsState()
     val combos by vm.combos.collectAsState()
     val cats by vm.categories.collectAsState()
@@ -435,10 +440,11 @@ fun Order(vm: PosViewModel, t: DiningTableEntity) {
             Spacer(Modifier.weight(1f))
             Text(money(total), fontWeight = FontWeight.Black)
         }
+        if (orderBlocked) ShiftPayBlockBanner(orderShift?.staffName ?: "", "order") { vm.screen.value = "SHIFT_END" }
         Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { }, modifier = Modifier.weight(1f), enabled=false) { Text("VOUCHER TẠM KHÓA") }
             OutlinedButton(onClick = { showCart = true }, modifier = Modifier.weight(1f)) { Text("GIỎ HÀNG") }
-            Button(onClick = { vm.sendBatch() }, modifier = Modifier.weight(1f), enabled = cart.isNotEmpty()||selectedVoucher!=null) { Text("GỬI BẾP") }
+            Button(onClick = { vm.sendBatch() }, modifier = Modifier.weight(1f), enabled = (cart.isNotEmpty()||selectedVoucher!=null) && !orderBlocked) { Text(if (orderBlocked) "ĐÃ KHOÁ" else "GỬI BẾP") }
         }
     }
     if (showCart) OrderCartNotesDialog(vm) { showCart = false }
@@ -547,9 +553,9 @@ fun Sent(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                 modifier = Modifier.fillMaxWidth().padding(16.dp)
             ) { Text("TRẢ BÀN") }
         } else {
-            if (payBlocked) ShiftPayBlockBanner(runningShift?.staffName ?: "") { vm.screen.value = "SHIFT_END" }
+            if (payBlocked) ShiftPayBlockBanner(runningShift?.staffName ?: "", "thanh toán") { vm.screen.value = "SHIFT_END" }
             Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedButton(onClick = { vm.addMore() }, modifier = Modifier.weight(1f)) {
+                OutlinedButton(onClick = { vm.addMore() }, modifier = Modifier.weight(1f), enabled = !payBlocked) {
                     Text("＋ GỌI THÊM")
                 }
                 Button(onClick = { vm.screen.value = "PAY" }, modifier = Modifier.weight(1f), enabled = total > 0 && !payBlocked) {

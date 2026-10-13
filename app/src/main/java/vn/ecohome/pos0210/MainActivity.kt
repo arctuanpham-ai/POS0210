@@ -1936,6 +1936,11 @@ fun BackupCenter(vm: PosViewModel) {
                     }
 
                     OutlinedButton(
+                        onClick = { message = "Đang lấy lại ảnh món…"; vm.recoverMediaManually { message = it } },
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                    ) { Text("CHỈ KHÔI PHỤC ẢNH MÓN (KHÔNG ĐỤNG DỮ LIỆU)") }
+
+                    OutlinedButton(
                         onClick = { restoreBackup.launch(arrayOf("application/octet-stream", "*/*")) },
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                     ) { Text("RESTORE DATA TỪ FILE KHÁC") }

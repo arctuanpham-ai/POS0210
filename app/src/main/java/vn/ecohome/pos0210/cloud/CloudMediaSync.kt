@@ -74,10 +74,14 @@ object CloudMediaSync {
         var uploaded=0;var skipped=0;var errors=0;var firstError:String?=null
         for((type,id,uri) in items+combos){
             try {
-                val source=readLocal(context,uri)?:error("LOCAL_MEDIA_UNREADABLE")
+                // Máy chưa có file ảnh (đang chờ khôi phục) thì bỏ qua, không tính là lỗi và không dừng cả lượt.
+                val source=readLocal(context,uri)
+                if(source==null){skipped++;continue}
                 val sourceHash=sha256(source)
                 val doc=manifest.document("${type}_${id}")
                 val old=withTimeout(TIMEOUT_MS){doc.get().await()}
+                // File local chính là bản đã nén lấy từ Cloud (sha256 trùng): không nén và đẩy lại, tránh ghi đè qua lại giữa các máy.
+                if(old.getString("sha256")==sourceHash&&old.getString("encoding")=="jpeg-base64-v1"&&old.getString("payload")?.isNotBlank()==true){skipped++;continue}
                 if(old.getString("sourceSha256")==sourceHash&&old.getString("encoding")=="jpeg-base64-v1"&&old.getString("payload")?.isNotBlank()==true&&old.getString("sha256")?.isNotBlank()==true){skipped++;continue}
                 val compressed=compress(source)
                 val payload=Base64.encodeToString(compressed,Base64.NO_WRAP)

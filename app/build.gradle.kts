@@ -12,8 +12,8 @@ android {
         applicationId = "vn.ecohome.pos0210"
         minSdk = 26
         targetSdk = 35
-        versionCode = 111
-        versionName = "1.0.0-alpha80-receipt-form"
+        versionCode = 112
+        versionName = "1.0.0-alpha81-media-recovery"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {

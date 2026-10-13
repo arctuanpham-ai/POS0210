@@ -343,7 +343,7 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
    do{code="$prefix-${seq.toString().padStart(3,'0')}";seq++}while(code in used)
    val managed=runCatching{ManagedMedia.importImage(getApplication(),imageUri,"menu_"+id)}.getOrNull()
    repo.saveMenuItem(MenuItemEntity(id,cat,name.trim(),price,managed,menu.value.size+1,active,code,description.trim()))
-   audit("MENU",id,"CREATE","$code | ${name.trim()} | price=$price | category=$categoryName");autoBackup();autoBackupMedia();autoMasterConfig();publishCatalogChange()
+   audit("MENU",id,"CREATE","$code | ${name.trim()} | price=$price | category=$categoryName");autoBackup();autoBackupMedia();scheduleMediaUpload();autoMasterConfig();publishCatalogChange()
   }
  }
  fun updateMenu(original:MenuItemEntity,name:String,price:Long,cat:String,description:String,imageUri:String?,active:Boolean){
@@ -354,7 +354,7 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
    repo.saveMenuItem(updated)
    val oldCat=categories.value.firstOrNull{it.id==original.categoryId}?.name.orEmpty();val newCat=categories.value.firstOrNull{it.id==cat}?.name.orEmpty()
    audit("MENU",original.id,"UPDATE","${original.productCode} | name:${original.name}->${updated.name} | price:${original.price}->${updated.price} | category:$oldCat->$newCat | active:${original.active}->${updated.active} | actor:${currentEmployee.value?.id}")
-   autoBackup();autoBackupMedia();autoMasterConfig();publishCatalogChange()
+   autoBackup();autoBackupMedia();scheduleMediaUpload();autoMasterConfig();publishCatalogChange()
   }
  }
  fun setMenuImage(i:MenuItemEntity,uri:String?){
@@ -362,7 +362,7 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
   viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO){
    val managed=runCatching{ManagedMedia.importImage(getApplication(),uri,"menu_"+i.id)}.getOrNull()
    repo.saveMenuItem(i.copy(imageUri=managed))
-   audit("MENU",i.id,"IMAGE");autoBackup();autoBackupMedia();autoMasterConfig();publishCatalogChange()
+   audit("MENU",i.id,"IMAGE");autoBackup();autoBackupMedia();scheduleMediaUpload();autoMasterConfig();publishCatalogChange()
   }
  }
  fun toggleMenu(i:MenuItemEntity){if(!canManageMenu())return;viewModelScope.launch{dao.setMenuActive(i.id,!i.active);queueCatalogChange("MENU_ITEM",i.id);audit("MENU",i.id,"ACTIVE",(!i.active).toString());autoBackup();autoMasterConfig();publishCatalogChange()}}
@@ -423,7 +423,7 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
    val action=if(initial==null)"CREATE" else "UPDATE"
    val before=initial?.let{"name=${it.name},price=${it.price},description=${it.description}"}.orEmpty()
    audit("COMBO",id,action,"$before -> name=${name.trim()},price=$price,description=${description.trim()},items=${cleanItems.size}")
-   autoBackup();autoBackupMedia();autoMasterConfig()
+   autoBackup();autoBackupMedia();scheduleMediaUpload();autoMasterConfig()
   }
  }
  fun toggleCombo(combo:ComboEntity){
@@ -658,30 +658,93 @@ fun reconcileFirebaseSession(){
    actualUid==null&&saved.syncedUid!=null->dao.saveCloudSyncState(saved.copy(lastError="Phiên Firebase chưa sẵn sàng · kiểm tra đăng nhập, giữ nguyên UID đã lưu"))
    actualUid!=null&&saved.syncedUid!=null&&saved.syncedUid!=actualUid->dao.saveCloudSyncState(saved.copy(lastError="AUTH_UID_MISMATCH · giữ nguyên UID đã lưu, không đồng bộ"))
   }
-  if(actualUid!=null){FirebaseCloudSync.schedule(getApplication());restoreMissingMediaOnce(actualUid)}
+  if(actualUid!=null)FirebaseCloudSync.schedule(getApplication())
+  recoverMediaOnce(actualUid)
  }
 }
-private var mediaAutoRestoreTried=false
-/** Máy thiếu file ảnh món/combo (cài mới, khôi phục dữ liệu...) thì tự tải ảnh từ Cloud một lần mỗi lần mở app. Chỉ thêm file ảnh, không sửa menu/bill. */
-private suspend fun restoreMissingMediaOnce(uid:String){
- if(mediaAutoRestoreTried)return
- mediaAutoRestoreTried=true
+private var mediaRecoveryTried=false
+private var mediaUploadJob:Job?=null
+private fun mediaReadable(uri:String?):Boolean{
+ if(uri.isNullOrBlank())return false
+ val parsed=android.net.Uri.parse(uri)
+ return when(parsed.scheme){
+  "file"->parsed.path?.let{java.io.File(it).exists()}==true
+  "content"->runCatching{getApplication<Application>().contentResolver.openInputStream(parsed)?.use{true}?:false}.getOrDefault(false)
+  else->false
+ }
+}
+private suspend fun hasMissingMenuImages():Boolean=dao.allMenuSnapshot().any{it.active&&!mediaReadable(it.imageUri)}||dao.allCombosSnapshot().any{it.active&&!mediaReadable(it.imageUri)}
+/** DB trỏ tới đường dẫn ảnh không còn đọc được nhưng file cùng món vẫn nằm trong managed_media thì gắn lại. */
+private suspend fun relinkManagedImages(){
+ val dir=java.io.File(getApplication<Application>().filesDir,"managed_media")
+ val files=dir.listFiles()?.filter{it.isFile&&it.length()>0}.orEmpty()
+ if(files.isEmpty())return
+ fun find(prefix:String,id:String)=files.filter{it.name==prefix+"_"+id+".jpg"||it.name.startsWith(prefix+"_"+id+"_")}.maxByOrNull{it.lastModified()}
+ dao.allMenuSnapshot().forEach{m->if(!mediaReadable(m.imageUri))find("menu",m.id)?.let{dao.updateMenuImage(m.id,android.net.Uri.fromFile(it).toString())}}
+ dao.allCombosSnapshot().forEach{c->if(!mediaReadable(c.imageUri))find("combo",c.id)?.let{dao.updateComboImage(c.id,android.net.Uri.fromFile(it).toString())}}
+}
+/**
+ * Mỗi lần mở app: nếu thiếu file ảnh món/combo thì tự lấy lại, theo thứ tự (1) MEDIA_LATEST trong thư mục POS0210, (2) Cloud.
+ * Sau đó đẩy ảnh đã đổi lên Cloud. Chỉ thêm file ảnh và gắn lại đường dẫn, không sửa menu, bill hay dữ liệu bán hàng.
+ */
+private suspend fun recoverMediaOnce(uid:String?){
+ if(mediaRecoveryTried)return
+ mediaRecoveryTried=true
  runCatching{
-  fun readable(uri:String?):Boolean{
-   if(uri.isNullOrBlank())return false
-   val parsed=android.net.Uri.parse(uri)
-   return when(parsed.scheme){
-    "file"->parsed.path?.let{java.io.File(it).exists()}==true
-    "content"->runCatching{getApplication<Application>().contentResolver.openInputStream(parsed)?.use{true}?:false}.getOrDefault(false)
-    else->false
+  if(hasMissingMenuImages()){
+   val root=dao.allSettingsSnapshot().firstOrNull{it.key=="storage_root_uri"}?.value.orEmpty()
+   if(root.isNotBlank()){
+    val restored=DataBackup.restoreMediaMissingOnly(getApplication(),root).getOrDefault(0)
+    if(restored>0)audit("MEDIA","saf","AUTO_RESTORE_SAF","files=$restored")
+    relinkManagedImages()
    }
   }
-  val missing=dao.allMenuSnapshot().any{it.active&&!readable(it.imageUri)}||dao.allCombosSnapshot().any{it.active&&!readable(it.imageUri)}
-  if(!missing)return@runCatching
+  if(uid!=null&&hasMissingMenuImages()){
+   val cfg=FirebaseCloudSync.config(getApplication())
+   val fs=com.google.firebase.firestore.FirebaseFirestore.getInstance(FirebaseCloudSync.firebaseApp(getApplication(),cfg))
+   val r=CloudMediaSync.restoreMissing(getApplication(),fs,uid)
+   if(r.downloaded>0)audit("MEDIA",uid,"AUTO_RESTORE_CLOUD","downloaded=${r.downloaded},errors=${r.errors}")
+   relinkManagedImages()
+  }
+ }
+ if(uid!=null)uploadMediaToCloud(uid,0L)
+}
+private suspend fun uploadMediaToCloud(uid:String,delayMs:Long){
+ kotlinx.coroutines.delay(delayMs)
+ runCatching{
   val cfg=FirebaseCloudSync.config(getApplication())
   val fs=com.google.firebase.firestore.FirebaseFirestore.getInstance(FirebaseCloudSync.firebaseApp(getApplication(),cfg))
-  val r=CloudMediaSync.restoreMissing(getApplication(),fs,uid)
-  if(r.downloaded>0)audit("MEDIA",uid,"AUTO_RESTORE","downloaded=${r.downloaded},errors=${r.errors}")
+  val r=CloudMediaSync.uploadLocal(getApplication(),fs,uid)
+  if(r.uploaded>0)audit("MEDIA",uid,"AUTO_UPLOAD","uploaded=${r.uploaded},errors=${r.errors}")
+ }
+}
+/** Menu/combo đổi ảnh: gom 5 giây rồi ghi đè ảnh lên Cloud (ảnh không đổi thì bỏ qua). Mất mạng thì lần mở app sau sẽ đẩy bù. */
+/** Nút "Chỉ khôi phục ảnh món": lấy lại ảnh còn thiếu từ POS0210 rồi từ Cloud, gắn lại vào menu. Không đụng bill, order hay cài đặt. */
+fun recoverMediaManually(onDone:(String)->Unit){
+ viewModelScope.launch(Dispatchers.IO){
+  val text=runCatching{
+   val root=dao.allSettingsSnapshot().firstOrNull{it.key=="storage_root_uri"}?.value.orEmpty()
+   val saf=if(root.isNotBlank())DataBackup.restoreMediaMissingOnly(getApplication(),root).getOrDefault(0) else 0
+   relinkManagedImages()
+   var cloud=0
+   val uid=runCatching{FirebaseCloudSync.currentUid(getApplication())}.getOrNull()
+   if(uid!=null&&hasMissingMenuImages()){
+    val cfg=FirebaseCloudSync.config(getApplication())
+    val fs=com.google.firebase.firestore.FirebaseFirestore.getInstance(FirebaseCloudSync.firebaseApp(getApplication(),cfg))
+    cloud=CloudMediaSync.restoreMissing(getApplication(),fs,uid).downloaded
+    relinkManagedImages()
+   }
+   val missing=dao.allMenuSnapshot().count{it.active&&!mediaReadable(it.imageUri)}
+   "Đã lấy lại $saf ảnh từ POS0210 và $cloud ảnh từ Cloud · còn $missing món chưa có ảnh"
+  }.getOrElse{"Khôi phục ảnh lỗi: ${it.message}"}
+  kotlinx.coroutines.withContext(Dispatchers.Main){onDone(text)}
+ }
+}
+private fun scheduleMediaUpload(){
+ mediaUploadJob?.cancel()
+ mediaUploadJob=viewModelScope.launch(Dispatchers.IO){
+  val uid=runCatching{FirebaseCloudSync.currentUid(getApplication())}.getOrNull()?:return@launch
+  uploadMediaToCloud(uid,5_000L)
  }
 }
 fun createFirebaseBackup(){

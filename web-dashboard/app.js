@@ -19,7 +19,7 @@ import {
   writeBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261012-3";
-import { calculateReceiptTotal, createStableDraft, validateReceipt } from "./expense-domain.js?v=20261012-3";
+import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261013-2";
 import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261012-3";
 import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261012-3";
 import { aggregateItems, dailyKeys, dateKeyOf, liveSummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261013-1";
@@ -47,12 +47,13 @@ const state = {
   transactionKind: "ALL", payerFilter: "ALL", user: null,
 };
 let expenseDraft = null;
+let editingReceipt = null;
 const expenseRows = () => state.expenseReceipts.map((receipt) => ({
   id: receipt.id,
   status: receipt.status || "ACTIVE",
   purchasedAt: Number(receipt.purchaseDate || 0),
   total: Number(receipt.total || 0),
-  expenseCategory: receipt.items?.[0]?.expenseGroup || "OTHER_EXPENSE",
+  expenseCategory: receipt.expenseCategory || receipt.items?.[0]?.expenseGroup || "OTHER_EXPENSE",
   paidByName: receipt.enteredByName || "",
   note: receipt.note || "",
 }));
@@ -361,7 +362,8 @@ function renderTransactions() {
     const node = document.createElement("article");
     node.className = "transaction-card";
     const meta = [dateTime(r.at), r.person].filter(Boolean).join(" · ");
-    node.innerHTML = `<div><strong>${escapeHtml(r.title)}</strong><small>${escapeHtml(meta)}</small><p>${escapeHtml(r.note)}</p></div><b>${money(r.amount)}</b>`;
+    const actions = r.kind === "EXPENSE" ? `<div class="row-actions"><button type="button" class="text-button" data-edit-receipt="${escapeHtml(r.id)}">Sửa</button><button type="button" class="text-button danger" data-cancel-receipt="${escapeHtml(r.id)}">Huỷ phiếu</button></div>` : "";
+    node.innerHTML = `<div><strong>${escapeHtml(r.title)}</strong><small>${escapeHtml(meta)}</small><p>${escapeHtml(r.note)}</p>${actions}</div><b>${money(r.amount)}</b>`;
     return node;
   }));
 }
@@ -440,7 +442,7 @@ function renderExpenseDraft() {
   $("#expense-lines").innerHTML = expenseDraft.items.map(expenseLineMarkup).join("");
   setupMaterialSuggestions();
   $("#expense-total").textContent = money(calculateReceiptTotal(expenseDraft.items));
-  localStorage.setItem(`pos0210.expense-draft.${state.user.uid}`, JSON.stringify(expenseDraft));
+  if (!editingReceipt) localStorage.setItem(`pos0210.expense-draft.${state.user.uid}`, JSON.stringify(expenseDraft));
 }
 function applyExpenseInputs() {
   if (!expenseDraft) return;
@@ -465,14 +467,50 @@ function applyExpenseInputs() {
     node.querySelector("[data-field=materialCode]").value = code;
     return { ...existing, materialName: read("materialName"), materialCode: code, expenseGroup: group, qty: Number(read("qty")), unit: read("unit"), unitPrice: Number(read("unitPrice")) };
   });
-  if (state.user) localStorage.setItem(`pos0210.expense-draft.${state.user.uid}`, JSON.stringify(expenseDraft));
+  if (state.user && !editingReceipt) localStorage.setItem(`pos0210.expense-draft.${state.user.uid}`, JSON.stringify(expenseDraft));
 }
 async function saveExpenseReceipt(event) {
   event.preventDefault(); applyExpenseInputs(); const error = $("#expense-error"); error.textContent = "";
   const check = validateReceipt(expenseDraft); if (!check.ok) { error.textContent = check.error; return; }
-  const now = Date.now(); const payload = { ...expenseDraft, total: check.total, status: "ACTIVE", updatedAt: now, updatedByUid: state.user.uid, source: "WEB_MANAGER", items: expenseDraft.items.map((item) => ({ ...item, amount: Math.round(item.qty * item.unitPrice) })) };
-  try { await setDoc(doc(db, ...root, "expenseReceipts", expenseDraft.id), payload); rememberMaterials(expenseDraft.items); localStorage.removeItem(`pos0210.expense-draft.${state.user.uid}`); expenseDraft = null; $("#expense-dialog").close(); }
-  catch (e) { error.textContent = `Chưa đồng bộ được; bản nháp đã giữ lại: ${e.message || e}`; }
+  const now = Date.now();
+  const payload = editingReceipt
+    ? buildEditedReceipt(editingReceipt, expenseDraft, { now, uid: state.user.uid })
+    : { ...expenseDraft, total: check.total, status: "ACTIVE", updatedAt: now, updatedByUid: state.user.uid, source: "WEB_MANAGER", items: expenseDraft.items.map((item) => ({ ...item, materialGroup: item.expenseGroup, amount: Math.round(item.qty * item.unitPrice) })) };
+  try {
+    await setDoc(doc(db, ...root, "expenseReceipts", expenseDraft.id), payload);
+    rememberMaterials(expenseDraft.items);
+    if (editingReceipt) { replaceLocalReceipt(payload); editingReceipt = null; render(); }
+    else localStorage.removeItem(`pos0210.expense-draft.${state.user.uid}`);
+    expenseDraft = null; $("#expense-dialog").close();
+  }
+  catch (e) { error.textContent = editingReceipt ? `Chưa lưu được thay đổi: ${e.message || e}` : `Chưa đồng bộ được; bản nháp đã giữ lại: ${e.message || e}`; }
+}
+
+function replaceLocalReceipt(receipt) {
+  const index = state.expenseReceipts.findIndex((item) => item.id === receipt.id);
+  if (index >= 0) state.expenseReceipts[index] = receipt; else state.expenseReceipts.unshift(receipt);
+}
+
+function openReceiptEditor(id) {
+  const receipt = state.expenseReceipts.find((item) => item.id === id);
+  if (!receipt || !state.user) return;
+  editingReceipt = receipt;
+  expenseDraft = receiptToDraft(receipt, MATERIAL_GROUPS);
+  $("#expense-title").textContent = "Sửa phiếu";
+  $("#expense-submit").textContent = "LƯU THAY ĐỔI";
+  $("#expense-error").textContent = "";
+  renderExpenseDraft();
+  $("#expense-dialog").showModal();
+}
+
+async function cancelReceipt(id) {
+  const receipt = state.expenseReceipts.find((item) => item.id === id);
+  if (!receipt || !state.user) return;
+  const label = `${dateTime(receipt.purchaseDate)} · ${money(receipt.total)}`;
+  if (!window.confirm(`Huỷ phiếu chi ${label}? Phiếu sẽ không còn tính vào chi phí. Dữ liệu vẫn được giữ lại.`)) return;
+  const payload = buildCancelledReceipt(receipt, { now: Date.now(), uid: state.user.uid });
+  try { await setDoc(doc(db, ...root, "expenseReceipts", id), payload); replaceLocalReceipt(payload); render(); }
+  catch (e) { window.alert(`Chưa huỷ được phiếu: ${e.message || e}`); }
 }
 
 function render() {
@@ -640,13 +678,26 @@ $("#open-entry").addEventListener("click", () => {
 $("#close-entry").addEventListener("click", () => $("#entry-dialog").close());
 $("#open-expense").addEventListener("click", () => {
   if (!state.user) return;
+  editingReceipt = null;
+  $("#expense-title").textContent = "Phiếu nhiều vật tư";
+  $("#expense-submit").textContent = "LƯU VÀ ĐỒNG BỘ";
   expenseDraft = createStableDraft(localStorage, state.user, uuid);
   expenseDraft.items = expenseDraft.items.map(item => ({ ...item, expenseGroup: groupLabel(item.expenseGroup) }));
   $("#expense-error").textContent = "";
   renderExpenseDraft();
   $("#expense-dialog").showModal();
 });
-$("#close-expense").addEventListener("click", () => { applyExpenseInputs(); renderExpenseDraft(); $("#expense-dialog").close(); });
+$("#close-expense").addEventListener("click", () => {
+  if (editingReceipt) { editingReceipt = null; expenseDraft = null; $("#expense-dialog").close(); return; }
+  applyExpenseInputs(); renderExpenseDraft(); $("#expense-dialog").close();
+});
+$("#expense-dialog").addEventListener("close", () => { if (editingReceipt) { editingReceipt = null; expenseDraft = null; } });
+$("#transactions").addEventListener("click", (event) => {
+  const edit = event.target.closest?.("[data-edit-receipt]");
+  if (edit) { openReceiptEditor(edit.dataset.editReceipt); return; }
+  const cancel = event.target.closest?.("[data-cancel-receipt]");
+  if (cancel) cancelReceipt(cancel.dataset.cancelReceipt);
+});
 $("#add-expense-line").addEventListener("click", () => { applyExpenseInputs(); expenseDraft.items.push({ id: uuid(), materialName: "", materialCode: "", expenseGroup: "Thịt, gia cầm", qty: 1, unit: "kg", unitPrice: 0 }); renderExpenseDraft(); });
 $("#expense-lines").addEventListener("click", (event) => { const id = event.target.dataset.removeLine; if (!id || expenseDraft.items.length < 2) return; applyExpenseInputs(); expenseDraft.items = expenseDraft.items.filter((item) => item.id !== id); renderExpenseDraft(); });
 $("#expense-lines").addEventListener("input", (event) => { applyExpenseInputs(); if (event.target.matches("input[list]")) updateMaterialSuggestions(event.target); $("#expense-total").textContent = money(calculateReceiptTotal(expenseDraft.items)); });

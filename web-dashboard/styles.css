@@ -103,3 +103,6 @@ dialog article { padding: 6px; }
 .sales-table th:first-child, .sales-table td:first-child { text-align: left; }
 .sales-table th { color: #796758; font-size: 11px; letter-spacing: .06em; }
 .sales-day-title { margin: 16px 0 8px; font-size: 15px; }
+.row-actions { display: flex; gap: 16px; margin-top: 6px; }
+.row-actions .text-button { padding: 4px 0; font-size: 13px; }
+.text-button.danger { color: #9f4430; }

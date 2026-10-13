@@ -48,3 +48,55 @@ export function filterReceipts(receipts, filters = {}) {
     return !q || receipt.items?.some((item) => `${item.materialName || ""} ${item.materialCode || ""}`.toLocaleLowerCase("vi").includes(q));
   });
 }
+
+const groupLabelFor = (item, groups) => {
+  const byValue = (value) => groups.find(([code, label]) => code === value || label === value)?.[1];
+  const code = String(item.materialCode || "");
+  // Mã vật tư dạng NHOM-xxxx mang nhóm ở tiền tố; mã cũ (pc_production...) thì không có nhóm.
+  const prefixGroup = code.includes("-") ? byValue(code.split("-")[0]) : undefined;
+  return byValue(item.materialGroup) || byValue(item.expenseGroup) || prefixGroup || "Vật tư khác";
+};
+
+/** Mở một phiếu đã lưu để sửa: cùng id, các dòng giữ nguyên id. */
+export function receiptToDraft(receipt, groups) {
+  return {
+    id: receipt.id,
+    purchaseDate: Number(receipt.purchaseDate),
+    note: receipt.note || "",
+    enteredByUid: receipt.enteredByUid || "",
+    enteredByName: receipt.enteredByName || "",
+    items: (receipt.items || []).map((item) => ({
+      id: item.id,
+      materialName: item.materialName || "",
+      materialCode: item.materialCode || "",
+      expenseGroup: groupLabelFor(item, groups),
+      qty: Number(item.qty || 0),
+      unit: item.unit || "kg",
+      unitPrice: Number(item.unitPrice || 0),
+    })),
+  };
+}
+
+// Phiếu do Android tạo (source ANDROID_POS) được đánh dấu editedBy để máy POS biết đây là thay đổi từ Web.
+const androidMarker = (original) => (original.source === "ANDROID_POS" ? { editedBy: "WEB_MANAGER" } : {});
+// updatedAt phải tăng so với bản cũ dù đồng hồ trình duyệt chạy chậm hơn máy POS.
+const nextUpdatedAt = (original, now) => Math.max(now, Number(original.updatedAt || 0) + 1);
+
+export function buildEditedReceipt(original, draft, { now, uid }) {
+  const items = draft.items.map((item) => ({ ...item, materialGroup: item.expenseGroup, amount: Math.round(Number(item.qty) * Number(item.unitPrice)) }));
+  return {
+    ...original,
+    purchaseDate: draft.purchaseDate,
+    note: draft.note,
+    items,
+    total: items.reduce((sum, item) => sum + item.amount, 0),
+    status: "ACTIVE",
+    updatedAt: nextUpdatedAt(original, now),
+    updatedByUid: uid,
+    ...androidMarker(original),
+  };
+}
+
+export function buildCancelledReceipt(original, { now, uid }) {
+  return { ...original, status: "DELETED", updatedAt: nextUpdatedAt(original, now), updatedByUid: uid, cancelledAt: now, ...androidMarker(original) };
+}

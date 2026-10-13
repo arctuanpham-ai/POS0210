@@ -19,9 +19,11 @@ import {
   writeBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261012-3";
-import { calculateReceiptTotal, createStableDraft, validateReceipt } from "./expense-domain.js?v=20261012-3";
+import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261013-2";
 import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261012-3";
 import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261012-3";
+import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261014-1";
+import { aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261013-2";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",
@@ -42,16 +44,17 @@ const state = {
   dashboard: {}, tables: [], sessions: [], batches: [], items: [],
   bills: [], purchases: [], expenseReceipts: [], purchaseItems: [], movements: [], costCodes: [],
   purchaseCategories: [], profitPartners: [], assetCategories: [], suppliers: [],
-  unsubs: [], period: "today", customFrom: null, customTo: null,
+  unsubs: [], paymentFlowDoc: null, refunds: [], frozenRefundDocs: [], flowError: "", dailyDocs: {}, dailyError: "", salesLoaded: false, salesDays: 7, itemMode: "combined", period: "today", customFrom: null, customTo: null,
   transactionKind: "ALL", payerFilter: "ALL", user: null,
 };
 let expenseDraft = null;
+let editingReceipt = null;
 const expenseRows = () => state.expenseReceipts.map((receipt) => ({
   id: receipt.id,
   status: receipt.status || "ACTIVE",
   purchasedAt: Number(receipt.purchaseDate || 0),
   total: Number(receipt.total || 0),
-  expenseCategory: receipt.items?.[0]?.expenseGroup || "OTHER_EXPENSE",
+  expenseCategory: receipt.expenseCategory || receipt.items?.[0]?.expenseGroup || "OTHER_EXPENSE",
   paidByName: receipt.enteredByName || "",
   note: receipt.note || "",
 }));
@@ -165,15 +168,18 @@ function renderPeriodSummary() {
   const movements = state.movements.filter((m) => inRange(m.occurredAt, range) && matchesPayer(state.payerFilter, m.counterpartyName));
   const snapshotRevenue = range.label === "Hôm nay" ? Number(state.dashboard.revenueToday || 0) : range.label === "Tháng này" ? Number(state.dashboard.monthRevenue || 0) : 0;
   const snapshotBillCount = range.label === "Hôm nay" ? Number(state.dashboard.paidBillsToday || 0) : 0;
-  const revenue = bills.length ? bills.reduce((s, b) => s + Number(b.total || 0), 0) : snapshotRevenue;
-  const billCount = bills.length || !snapshotBillCount ? bills.length : snapshotBillCount;
+  // Hôm qua / 7 ngày / tùy chọn: bill không còn được đọc về Web, doanh thu lấy từ snapshot dashboardDaily mà POS đã đẩy.
+  const daily = !bills.length && ["Hôm qua", "7 ngày", "Tùy chọn"].includes(range.label) ? periodDailySummary(range, state.dailyDocs) : null;
+  const revenue = bills.length ? bills.reduce((s, b) => s + Number(b.total || 0), 0) : daily ? daily.totalRevenue : snapshotRevenue;
+  const billCount = bills.length ? bills.length : daily ? daily.totalBills : snapshotBillCount;
+  const missingNote = daily && !daily.complete ? ` (thiếu ${daily.unavailableDays.length} ngày chưa có dữ liệu từ POS)` : "";
   const expense = allPurchases.reduce((s, p) => s + Number(p.total || 0), 0);
   const selectedPayerExpense = purchases.reduce((s, p) => s + Number(p.total || 0), 0);
   const additionalInvestment = allPurchases.filter((p) => INVESTMENT_CATEGORIES.has(p.expenseCategory)).reduce((s, p) => s + Number(p.total || 0), 0);
   const operatingExpense = expense - additionalInvestment;
   const movementNet = movements.reduce((s, m) => s + (MOVEMENT_OUT_TYPES.has(m.type) ? -Number(m.amount || 0) : Number(m.amount || 0)), 0);
   const cards = [
-    ["Doanh thu", money(revenue)],
+    [`Doanh thu${missingNote}`, money(revenue)],
     ["Số bill", billCount || (range.label === "Tháng này" ? "Snapshot tháng" : 0)],
     ["Bill trung bình", money(billCount ? Math.round(revenue / billCount) : 0)],
     ["Chi vận hành", money(operatingExpense)],
@@ -195,6 +201,25 @@ function renderPeriodSummary() {
 
 function renderTables() {
   const host = $("#tables");
+  const live = liveSummary(state.dashboard);
+  if (live.available) {
+    // Snapshot mới: danh sách bàn mở nằm sẵn trong dashboard/current, không cần đọc tableStatus.
+    $("#live-open-tables").textContent = live.openTables;
+    $("#live-open-total").textContent = money(live.provisionalTotal);
+    if (!live.tables.length) { host.innerHTML = '<p class="muted empty-state">Hiện không có bàn nào đang phục vụ.</p>'; return; }
+    host.replaceChildren(...live.tables.map((row) => {
+      const node = $("#table-template").content.firstElementChild.cloneNode(true);
+      node.classList.add("occupied");
+      node.querySelector(".table-state").textContent = "ĐANG PHỤC VỤ · TẠM TÍNH";
+      node.querySelector("strong").textContent = row.name;
+      node.querySelector("small").textContent = `${elapsed(row.openedAt)} · ${serviceStatusLabel(row.serviceStatus)}`;
+      node.querySelector("b").textContent = money(row.currentTotal);
+      node.addEventListener("click", () => showDetail({ table: { name: row.name, openedAt: row.openedAt }, session: { openedAt: row.openedAt }, batches: [{ status: row.serviceStatus }], items: [], total: row.currentTotal }));
+      return node;
+    }));
+    return;
+  }
+  // POS bản cũ chưa gửi liveTables: dùng tableStatus như trước.
   const records = state.tables.filter((table) => table.active !== false).map(currentTable);
   records.sort((a, b) => String(a.table.name).localeCompare(String(b.table.name), "vi"));
   const activeRecords = records.filter((r) => r.occupied);
@@ -211,6 +236,119 @@ function renderTables() {
     node.disabled = !occupied;
     node.addEventListener("click", () => showDetail(record));
     return node;
+  }));
+}
+
+const shortDay = (key) => `${key.slice(8, 10)}/${key.slice(5, 7)}`;
+const compactMoney = (value) => value >= 1000000 ? `${(value / 1000000).toLocaleString("vi-VN", { maximumFractionDigits: 1 })}tr` : value >= 1000 ? `${Math.round(value / 1000).toLocaleString("vi-VN")}k` : String(value);
+const percent = (share) => `${(share * 100).toLocaleString("vi-VN", { maximumFractionDigits: 1 })}%`;
+
+function renderPaymentFlow() {
+  const holder = $("#payment-flow");
+  if (!holder) return;
+  if (!state.salesLoaded) { holder.replaceChildren(); return; }
+  const make = (tag, text, cls) => { const el = document.createElement(tag); el.textContent = text; if (cls) el.className = cls; return el; };
+  const nodes = [];
+  if (state.flowError) nodes.push(make("p", `Không đọc được quy trình thanh toán/hoàn tiền: ${state.flowError}. Kiểm tra quy tắc Firestore.`, "sales-notice"));
+  const flow = currentFlow(state.paymentFlowDoc);
+  nodes.push(make("p", state.paymentFlowDoc ? `Chế độ đang dùng: ${flowLabel(flow)}` : "POS chưa gửi chế độ thanh toán (mặc định Trả sau).", "muted"));
+  const history = historyRows(state.paymentFlowDoc);
+  if (history.length) {
+    const list = document.createElement("ul");
+    history.slice(0, 10).forEach((h) => list.append(make("li", `${dateTime(h.at)} · ${h.by} · ${flowLabel(h.from)} → ${flowLabel(h.to)}`)));
+    nodes.push(make("p", "Lịch sử đổi chế độ", "eyebrow"), list);
+  }
+  const frozenAll = frozenRefunds([...state.frozenRefundDocs, ...state.refunds.filter((r) => !state.frozenRefundDocs.some((f) => f.id === r.id))]);
+  if (frozenAll.count) {
+    const banner = make("p", `⚠ ${frozenAll.count} khoản CK ĐÓNG BĂNG · ${money(frozenAll.total)} chờ quản lý hoàn cho khách (không tính doanh thu). Trừ ra khi đối chiếu sao kê.`, "sales-notice");
+    banner.style.fontWeight = "700";
+    const frozenList = document.createElement("ul");
+    frozenAll.rows.slice(0, 30).forEach((r) => frozenList.append(make("li", `${dateTime(r.createdAt)} · ${money(r.amount)} · ${r.reason}`)));
+    nodes.push(banner, frozenList);
+  }
+  const refunds = summarizeRefunds(state.refunds, startOfDay(new Date(Date.now() - 6 * 86400000)));
+  nodes.push(make("p", `Hoàn tiền 7 ngày: ${refunds.count} khoản · ${money(refunds.total)} (tiền mặt ${money(refunds.cash)} · chuyển khoản ${money(refunds.transfer)})`, "muted"));
+  if (refunds.rows.length) {
+    const list = document.createElement("ul");
+    refunds.rows.slice(0, 20).forEach((r) => list.append(make("li", `${dateTime(r.createdAt)} · ${money(r.amount)} · ${r.method === "CASH" ? "Tiền mặt" : "Chuyển khoản"} · ${r.reason}${r.status === "FROZEN" ? " · ĐÓNG BĂNG" : r.method === "TRANSFER" && r.settledAt ? ` · đã hoàn CK ${dateTime(r.settledAt)}${r.settleNote ? ` (${r.settleNote})` : ""}` : ""}`)));
+    nodes.push(list);
+  }
+  holder.replaceChildren(...nodes);
+}
+
+function renderSalesSnapshots() {
+  if (!state.salesLoaded) {
+    $("#live-revenue-today").textContent = "—";
+    $("#live-paid-bills").textContent = "—";
+    $("#sales-notice").textContent = "Bấm Làm mới để đọc doanh thu 3/7 ngày từ snapshot POS.";
+    $("#sales-summary").replaceChildren();
+    $("#sales-chart").replaceChildren();
+    $("#sales-items").replaceChildren();
+    return;
+  }
+  const dashboard = state.dashboard;
+  const hasSnapshot = Boolean(dashboard.lastUpdatedAt);
+  $("#live-revenue-today").textContent = hasSnapshot ? money(dashboard.revenueToday) : "—";
+  $("#live-paid-bills").textContent = hasSnapshot ? String(Number(dashboard.paidBillsToday || 0)) : "—";
+
+  const keys = dailyKeys(state.salesDays);
+  const summary = summarizeDaily(state.dailyDocs, keys, dateKeyOf(new Date()));
+  const notes = [];
+  if (state.dailyError) notes.push(`Không đọc được snapshot ngày: ${state.dailyError}`);
+  else if (summary.unavailableDays.length) notes.push(`Chưa có snapshot ngày ${summary.unavailableDays.map(shortDay).join(", ")}: số liệu chưa đầy đủ, cần POS đồng bộ.`);
+  if (summary.needsFinalizeDays.length) notes.push(`Ngày ${summary.needsFinalizeDays.map(shortDay).join(", ")} chưa được POS chốt.`);
+  if (hasSnapshot && shouldMarkSnapshotStale(dashboard.lastUpdatedAt)) notes.push("Snapshot POS cũ hơn 15 phút, cần kiểm tra máy POS.");
+  $("#sales-notice").textContent = notes.join(" ");
+
+  document.querySelectorAll("[data-sales-days]").forEach((button) => button.classList.toggle("active", Number(button.dataset.salesDays) === keys.length));
+  document.querySelectorAll("[data-item-mode]").forEach((button) => button.classList.toggle("active", button.dataset.itemMode === state.itemMode));
+
+  const cards = [
+    [`Doanh thu đã chốt · ${keys.length} ngày`, summary.days.some((day) => day.available) ? money(summary.totalRevenue) : "Chưa có dữ liệu"],
+    ["Số bill đã thanh toán", summary.days.some((day) => day.available) ? summary.totalBills : "Chưa có dữ liệu"],
+    ["Bill trung bình", summary.days.some((day) => day.available) ? money(summary.averageBill) : "Chưa có dữ liệu"],
+  ];
+  $("#sales-summary").replaceChildren(...cards.map(([label, value]) => {
+    const node = $("#metric-template").content.firstElementChild.cloneNode(true);
+    node.querySelector("p").textContent = label;
+    node.querySelector("strong").textContent = value;
+    return node;
+  }));
+
+  const max = Math.max(1, ...summary.days.filter((day) => day.available).map((day) => day.revenue));
+  $("#sales-chart").innerHTML = summary.days.map((day) => {
+    const bar = day.available
+      ? `<div class="bar" style="height:${Math.max(2, Math.round(day.revenue / max * 100))}%"></div>`
+      : '<div class="bar empty" style="height:100%"></div>';
+    const value = day.available ? `${compactMoney(day.revenue)}` : "Chưa có";
+    const bills = day.available ? `${day.paidBills} bill` : "";
+    return `<div class="bar-col"><span class="bar-value">${escapeHtml(value)}</span><div class="bar-area">${bar}</div><small>${shortDay(day.dateKey)}</small><small>${escapeHtml(bills)}</small></div>`;
+  }).join("");
+
+  const host = $("#sales-items");
+  const table = (rows) => rows.length
+    ? `<table class="sales-table"><thead><tr><th>Món</th><th>SL</th><th>Doanh thu</th><th>Tỷ trọng</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${escapeHtml(row.name)}</td><td>${row.qty}</td><td>${money(row.revenue)}</td><td>${percent(row.share)}</td></tr>`).join("")}</tbody></table>`
+    : '<p class="muted empty-state">Chưa có món đã bán trong giai đoạn này.</p>';
+  if (state.itemMode === "byDay") {
+    const days = aggregateItems(state.dailyDocs, keys, "byDay");
+    host.innerHTML = days.length ? days.map((day) => `<h3 class="sales-day-title">${shortDay(day.dateKey)}</h3>${table(day.rows)}`).join("") : table([]);
+  } else {
+    host.innerHTML = table(aggregateItems(state.dailyDocs, keys, "combined"));
+  }
+}
+
+async function loadDailyDocs() {
+  // Chỉ đọc các ngày chưa có trong bộ nhớ: 3 hoặc 7 document, không đọc bill/order lịch sử.
+  const missing = dailyKeys(7).filter((key) => !(key in state.dailyDocs));
+  state.dailyError = "";
+  await Promise.all(missing.map(async (key) => {
+    try {
+      const snapshot = await getDoc(doc(db, ...root, "dashboardDaily", key));
+      state.dailyDocs[key] = snapshot.exists() ? snapshot.data() : null;
+    } catch (error) {
+      state.dailyDocs[key] = null; // lỗi đọc nghĩa là không có dữ liệu, tuyệt đối không hiển thị thành 0 đồng
+      state.dailyError = error.code || error.message || "lỗi không rõ";
+    }
   }));
 }
 
@@ -261,7 +399,8 @@ function renderTransactions() {
     const node = document.createElement("article");
     node.className = "transaction-card";
     const meta = [dateTime(r.at), r.person].filter(Boolean).join(" · ");
-    node.innerHTML = `<div><strong>${escapeHtml(r.title)}</strong><small>${escapeHtml(meta)}</small><p>${escapeHtml(r.note)}</p></div><b>${money(r.amount)}</b>`;
+    const actions = r.kind === "EXPENSE" ? `<div class="row-actions"><button type="button" class="text-button" data-edit-receipt="${escapeHtml(r.id)}">Sửa</button><button type="button" class="text-button danger" data-cancel-receipt="${escapeHtml(r.id)}">Huỷ phiếu</button></div>` : "";
+    node.innerHTML = `<div><strong>${escapeHtml(r.title)}</strong><small>${escapeHtml(meta)}</small><p>${escapeHtml(r.note)}</p>${actions}</div><b>${money(r.amount)}</b>`;
     return node;
   }));
 }
@@ -340,7 +479,7 @@ function renderExpenseDraft() {
   $("#expense-lines").innerHTML = expenseDraft.items.map(expenseLineMarkup).join("");
   setupMaterialSuggestions();
   $("#expense-total").textContent = money(calculateReceiptTotal(expenseDraft.items));
-  localStorage.setItem(`pos0210.expense-draft.${state.user.uid}`, JSON.stringify(expenseDraft));
+  if (!editingReceipt) localStorage.setItem(`pos0210.expense-draft.${state.user.uid}`, JSON.stringify(expenseDraft));
 }
 function applyExpenseInputs() {
   if (!expenseDraft) return;
@@ -365,20 +504,58 @@ function applyExpenseInputs() {
     node.querySelector("[data-field=materialCode]").value = code;
     return { ...existing, materialName: read("materialName"), materialCode: code, expenseGroup: group, qty: Number(read("qty")), unit: read("unit"), unitPrice: Number(read("unitPrice")) };
   });
-  if (state.user) localStorage.setItem(`pos0210.expense-draft.${state.user.uid}`, JSON.stringify(expenseDraft));
+  if (state.user && !editingReceipt) localStorage.setItem(`pos0210.expense-draft.${state.user.uid}`, JSON.stringify(expenseDraft));
 }
 async function saveExpenseReceipt(event) {
   event.preventDefault(); applyExpenseInputs(); const error = $("#expense-error"); error.textContent = "";
   const check = validateReceipt(expenseDraft); if (!check.ok) { error.textContent = check.error; return; }
-  const now = Date.now(); const payload = { ...expenseDraft, total: check.total, status: "ACTIVE", updatedAt: now, updatedByUid: state.user.uid, source: "WEB_MANAGER", items: expenseDraft.items.map((item) => ({ ...item, amount: Math.round(item.qty * item.unitPrice) })) };
-  try { await setDoc(doc(db, ...root, "expenseReceipts", expenseDraft.id), payload); rememberMaterials(expenseDraft.items); localStorage.removeItem(`pos0210.expense-draft.${state.user.uid}`); expenseDraft = null; $("#expense-dialog").close(); }
-  catch (e) { error.textContent = `Chưa đồng bộ được; bản nháp đã giữ lại: ${e.message || e}`; }
+  const now = Date.now();
+  const payload = editingReceipt
+    ? buildEditedReceipt(editingReceipt, expenseDraft, { now, uid: state.user.uid })
+    : { ...expenseDraft, total: check.total, status: "ACTIVE", updatedAt: now, updatedByUid: state.user.uid, source: "WEB_MANAGER", items: expenseDraft.items.map((item) => ({ ...item, materialGroup: item.expenseGroup, amount: Math.round(item.qty * item.unitPrice) })) };
+  try {
+    await setDoc(doc(db, ...root, "expenseReceipts", expenseDraft.id), payload);
+    rememberMaterials(expenseDraft.items);
+    if (editingReceipt) { replaceLocalReceipt(payload); editingReceipt = null; render(); }
+    else localStorage.removeItem(`pos0210.expense-draft.${state.user.uid}`);
+    expenseDraft = null; $("#expense-dialog").close();
+  }
+  catch (e) { error.textContent = editingReceipt ? `Chưa lưu được thay đổi: ${e.message || e}` : `Chưa đồng bộ được; bản nháp đã giữ lại: ${e.message || e}`; }
+}
+
+function replaceLocalReceipt(receipt) {
+  const index = state.expenseReceipts.findIndex((item) => item.id === receipt.id);
+  if (index >= 0) state.expenseReceipts[index] = receipt; else state.expenseReceipts.unshift(receipt);
+}
+
+function openReceiptEditor(id) {
+  const receipt = state.expenseReceipts.find((item) => item.id === id);
+  if (!receipt || !state.user) return;
+  editingReceipt = receipt;
+  expenseDraft = receiptToDraft(receipt, MATERIAL_GROUPS);
+  $("#expense-title").textContent = "Sửa phiếu";
+  $("#expense-submit").textContent = "LƯU THAY ĐỔI";
+  $("#expense-error").textContent = "";
+  renderExpenseDraft();
+  $("#expense-dialog").showModal();
+}
+
+async function cancelReceipt(id) {
+  const receipt = state.expenseReceipts.find((item) => item.id === id);
+  if (!receipt || !state.user) return;
+  const label = `${dateTime(receipt.purchaseDate)} · ${money(receipt.total)}`;
+  if (!window.confirm(`Huỷ phiếu chi ${label}? Phiếu sẽ không còn tính vào chi phí. Dữ liệu vẫn được giữ lại.`)) return;
+  const payload = buildCancelledReceipt(receipt, { now: Date.now(), uid: state.user.uid });
+  try { await setDoc(doc(db, ...root, "expenseReceipts", id), payload); replaceLocalReceipt(payload); render(); }
+  catch (e) { window.alert(`Chưa huỷ được phiếu: ${e.message || e}`); }
 }
 
 function render() {
   renderCumulativeSummary();
   renderPeriodSummary();
   renderTables();
+  renderSalesSnapshots();
+  renderPaymentFlow();
   renderFinanceMetadata();
   renderTransactions();
 }
@@ -388,14 +565,30 @@ async function refreshDashboard() {
   try {
     const dashboardDoc = await getDoc(doc(db, ...root, "dashboard", "current"));
     state.dashboard = dashboardDoc.exists() ? dashboardDoc.data() : {};
+    state.dailyDocs = {};
+    const hasLiveTables = Array.isArray(state.dashboard.liveTables);
+    if (hasLiveTables) state.tables = [];
     const sevenDays = startOfDay(new Date(Date.now() - 6 * 86400000));
     const read = async (name, key, q = null) => { const snapshot = await getDocs(q || collection(db, ...root, name)); state[key] = rows(snapshot); };
     await Promise.all([
-      read("tableStatus", "tables"),
+      hasLiveTables ? Promise.resolve() : read("tableStatus", "tables"),
+      loadDailyDocs(),
       read("expenseReceipts", "expenseReceipts", query(collection(db, ...root, "expenseReceipts"), where("purchaseDate", ">=", sevenDays), orderBy("purchaseDate", "desc"), limit(300))),
       read("financialMovements", "movements", query(collection(db, ...root, "financialMovements"), where("occurredAt", ">=", sevenDays), orderBy("occurredAt", "desc"), limit(300))),
       read("costCodes", "costCodes"), read("purchaseCategories", "purchaseCategories"), read("profitPartners", "profitPartners"), read("assetCategories", "assetCategories"), read("suppliers", "suppliers"),
     ]);
+    state.flowError = "";
+    try {
+      const flowDoc = await getDoc(doc(db, ...root, "config", "paymentFlow"));
+      state.paymentFlowDoc = flowDoc.exists() ? flowDoc.data() : null;
+      const refundSnap = await getDocs(query(collection(db, ...root, "refunds"), where("createdAt", ">=", sevenDays), orderBy("createdAt", "desc"), limit(200)));
+      state.refunds = rows(refundSnap);
+      try {
+        const frozenSnap = await getDocs(query(collection(db, ...root, "refunds"), where("status", "==", "FROZEN"), limit(200)));
+        state.frozenRefundDocs = rows(frozenSnap);
+      } catch { state.frozenRefundDocs = []; }
+    } catch (error) { state.flowError = error.message; state.paymentFlowDoc = null; state.refunds = []; }
+    state.salesLoaded = true;
     const stale = shouldMarkSnapshotStale(state.dashboard.lastUpdatedAt);
     $("#sync-status").textContent = state.dashboard.lastUpdatedAt ? `Snapshot POS: ${dateTime(state.dashboard.lastUpdatedAt)}${stale ? " · cần kiểm tra máy POS" : ""}` : "POS chưa gửi snapshot.";
     render();
@@ -508,6 +701,19 @@ $("#login-button").addEventListener("click", async () => {
 $("#password").addEventListener("keydown", (event) => { if (event.key === "Enter") $("#login-button").click(); });
 $("#logout-button").addEventListener("click", () => signOut(auth));
 $("#refresh-dashboard").addEventListener("click", refreshDashboard);
+$("#sales-days-filters").addEventListener("click", async (event) => {
+  const days = Number(event.target.dataset?.salesDays);
+  if (days !== 3 && days !== 7) return;
+  state.salesDays = days;
+  if (state.user) { await loadDailyDocs(); state.salesLoaded = true; }
+  renderSalesSnapshots();
+});
+$("#sales-item-modes").addEventListener("click", (event) => {
+  const mode = event.target.dataset?.itemMode;
+  if (mode !== "combined" && mode !== "byDay") return;
+  state.itemMode = mode;
+  renderSalesSnapshots();
+});
 $("#close-detail").addEventListener("click", () => $("#table-detail").close());
 $("#open-entry").addEventListener("click", () => {
   $("#entry-error").textContent = "";
@@ -521,13 +727,26 @@ $("#open-entry").addEventListener("click", () => {
 $("#close-entry").addEventListener("click", () => $("#entry-dialog").close());
 $("#open-expense").addEventListener("click", () => {
   if (!state.user) return;
+  editingReceipt = null;
+  $("#expense-title").textContent = "Phiếu nhiều vật tư";
+  $("#expense-submit").textContent = "LƯU VÀ ĐỒNG BỘ";
   expenseDraft = createStableDraft(localStorage, state.user, uuid);
   expenseDraft.items = expenseDraft.items.map(item => ({ ...item, expenseGroup: groupLabel(item.expenseGroup) }));
   $("#expense-error").textContent = "";
   renderExpenseDraft();
   $("#expense-dialog").showModal();
 });
-$("#close-expense").addEventListener("click", () => { applyExpenseInputs(); renderExpenseDraft(); $("#expense-dialog").close(); });
+$("#close-expense").addEventListener("click", () => {
+  if (editingReceipt) { editingReceipt = null; expenseDraft = null; $("#expense-dialog").close(); return; }
+  applyExpenseInputs(); renderExpenseDraft(); $("#expense-dialog").close();
+});
+$("#expense-dialog").addEventListener("close", () => { if (editingReceipt) { editingReceipt = null; expenseDraft = null; } });
+$("#transactions").addEventListener("click", (event) => {
+  const edit = event.target.closest?.("[data-edit-receipt]");
+  if (edit) { openReceiptEditor(edit.dataset.editReceipt); return; }
+  const cancel = event.target.closest?.("[data-cancel-receipt]");
+  if (cancel) cancelReceipt(cancel.dataset.cancelReceipt);
+});
 $("#add-expense-line").addEventListener("click", () => { applyExpenseInputs(); expenseDraft.items.push({ id: uuid(), materialName: "", materialCode: "", expenseGroup: "Thịt, gia cầm", qty: 1, unit: "kg", unitPrice: 0 }); renderExpenseDraft(); });
 $("#expense-lines").addEventListener("click", (event) => { const id = event.target.dataset.removeLine; if (!id || expenseDraft.items.length < 2) return; applyExpenseInputs(); expenseDraft.items = expenseDraft.items.filter((item) => item.id !== id); renderExpenseDraft(); });
 $("#expense-lines").addEventListener("input", (event) => { applyExpenseInputs(); if (event.target.matches("input[list]")) updateMaterialSuggestions(event.target); $("#expense-total").textContent = money(calculateReceiptTotal(expenseDraft.items)); });

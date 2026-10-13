@@ -69,7 +69,7 @@ class PosRepository(private val db:PosDatabase){
     }
 
     suspend fun openSession(tableId:String,employeeId:String,dataScope:String="LIVE"):TableSessionEntity {
-        val now=System.currentTimeMillis(); require(dataScope=="LIVE"||dataScope=="TEST"); val s=TableSessionEntity(UUID.randomUUID().toString(),tableId,now,employeeId,dataScope=dataScope)
+        val now=System.currentTimeMillis(); require(dataScope=="LIVE"||dataScope=="TEST"); val s=TableSessionEntity(UUID.randomUUID().toString(),tableId,now,employeeId,dataScope=dataScope,shiftId=if(dataScope=="LIVE")dao.activeShift()?.id else null)
         db.withTransaction { dao.insertSession(s); dao.audit(AuditEventEntity(UUID.randomUUID().toString(),"SESSION",s.id,"OPEN",employeeId,null,now,tableId)) }
         return s
     }
@@ -106,7 +106,7 @@ class PosRepository(private val db:PosDatabase){
             val nextSequence=dao.maxBatchSequence(sessionId)+1
             b=OrderBatchEntity(UUID.randomUUID().toString(),sessionId,nextSequence,ordererId,now,serviceNo=serviceNo)
             val fixed=protectedSnapshots.map{it.copy(id=if(it.id.isBlank()) UUID.randomUUID().toString() else it.id,batchId=b.id)}
-            dao.insertBatch(b)
+            dao.insertBatch(b);dao.touchActiveShift(now)
             dao.insertItems(fixed)
             dao.audit(AuditEventEntity(UUID.randomUUID().toString(),"BATCH",b.id,"CREATE",ordererId,null,now,"serviceNo=$serviceNo,items=${fixed.size}"))
         }
@@ -278,7 +278,7 @@ class PosRepository(private val db:PosDatabase){
             if(dao.closeSession(session.id,session.version)!=1) error("SESSION_ALREADY_CLOSED_OR_CHANGED")
             dao.insertBill(bill)
             if(loyaltyRewardId!=null) check(dao.redeemReward(loyaltyRewardId,bill.id,now)==1){"LOYALTY_ALREADY_USED"}
-            dao.insertPayment(PaymentEntity(UUID.randomUUID().toString(),bill.id,method,preview.total,cashierId,now,dataScope=session.dataScope))
+            dao.insertPayment(PaymentEntity(UUID.randomUUID().toString(),bill.id,method,preview.total,cashierId,now,dataScope=session.dataScope));dao.touchActiveShift(now)
 
             customer?.let { cu ->
                 dao.saveCustomer(cu)

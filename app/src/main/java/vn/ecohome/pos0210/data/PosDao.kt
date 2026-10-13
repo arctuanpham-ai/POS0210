@@ -280,4 +280,17 @@ WHERE s.dataScope='LIVE' AND ob.status!='CANCELLED' AND EXISTS(SELECT 1 FROM Bil
 @Query("UPDATE ProfitPartnerEntity SET active=0") suspend fun deactivateProfitPartners()
 @Query("UPDATE PurchaseEntity SET paidByName=:newName WHERE lower(trim(paidByName))=lower(trim(:oldName))") suspend fun renamePurchasePayerName(oldName:String,newName:String):Int
 @Query("UPDATE FinancialMovementEntity SET counterpartyName=:newName WHERE lower(trim(counterpartyName))=lower(trim(:oldName))") suspend fun renameReimbursementCounterparty(oldName:String,newName:String):Int
+
+@Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun saveShift(v:ShiftEntity)
+@Query("SELECT * FROM ShiftEntity WHERE status='open' AND dataScope='LIVE' ORDER BY checkInClient DESC LIMIT 1") fun activeShiftFlow():Flow<ShiftEntity?>
+@Query("SELECT * FROM ShiftEntity WHERE status='open' AND dataScope='LIVE' ORDER BY checkInClient DESC LIMIT 1") suspend fun activeShift():ShiftEntity?
+@Query("SELECT * FROM ShiftEntity WHERE id=:id LIMIT 1") suspend fun shiftById(id:String):ShiftEntity?
+@Query("SELECT * FROM ShiftEntity ORDER BY checkInClient DESC LIMIT 200") fun recentShifts():Flow<List<ShiftEntity>>
+@Query("SELECT * FROM ShiftEntity ORDER BY checkInClient") suspend fun shiftsSnapshot():List<ShiftEntity>
+@Query("UPDATE ShiftEntity SET lastActivityAt=:at,updatedAt=:at WHERE status='open' AND dataScope='LIVE'") suspend fun touchActiveShift(at:Long):Int
+@Query("SELECT * FROM TableSessionEntity WHERE shiftId=:shiftId AND status='OPEN'") suspend fun openSessionsOfShift(shiftId:String):List<TableSessionEntity>
+@Query("UPDATE TableSessionEntity SET shiftId=:shiftId WHERE id=:id") suspend fun setSessionShift(id:String,shiftId:String?):Int
+@Query("UPDATE TableSessionEntity SET shiftId=:newShift WHERE shiftId='PENDING_NEXT' AND status='OPEN'") suspend fun adoptPendingSessions(newShift:String):Int
+@Query("SELECT COALESCE(SUM(p.amount),0) FROM PaymentEntity p JOIN BillEntity b ON b.id=p.billId JOIN TableSessionEntity s ON s.id=b.sessionId WHERE s.shiftId=:shiftId AND p.method=:method AND p.dataScope='LIVE' AND b.status='PAID'") suspend fun shiftPaymentTotal(shiftId:String,method:String):Long
+@Query("SELECT COUNT(*) FROM BillEntity b JOIN TableSessionEntity s ON s.id=b.sessionId WHERE s.shiftId=:shiftId AND b.status='PAID' AND b.dataScope='LIVE'") suspend fun shiftPaidBillCount(shiftId:String):Int
 }

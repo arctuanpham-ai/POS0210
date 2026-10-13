@@ -5,7 +5,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
-@Database(entities=[EmployeeEntity::class,AreaEntity::class,DiningTableEntity::class,MenuCategoryEntity::class,ComboEntity::class,ComboItemEntity::class,MenuItemEntity::class,TableSessionEntity::class,OrderBatchEntity::class,OrderItemEntity::class,BillEntity::class,PaymentEntity::class,CustomerEntity::class,CustomerPointTransactionEntity::class,PricingRuleEntity::class,BillAdjustmentEntity::class,SupplierEntity::class,PurchaseEntity::class,PurchaseCategoryEntity::class,PurchaseItemEntity::class,MonthlyAccountingEntity::class,ProfitPartnerEntity::class,PrintJobEntity::class,AuditEventEntity::class,AppSettingEntity::class,PaymentSessionEntity::class,BankNotificationEventEntity::class,AssetCategoryEntity::class,AssetEntity::class,AssetValuationEntity::class,FinancialMovementEntity::class,OpeningCashAdjustmentEntity::class,CloudSyncStateEntity::class,CostCodeEntity::class,SyncQueueEntity::class,AttendanceSessionEntity::class,LoyaltyCampaignEntity::class,CustomerRewardEntity::class,BuyGetPromotionEntity::class],version=28,exportSchema=false)
+@Database(entities=[EmployeeEntity::class,AreaEntity::class,DiningTableEntity::class,MenuCategoryEntity::class,ComboEntity::class,ComboItemEntity::class,MenuItemEntity::class,TableSessionEntity::class,OrderBatchEntity::class,OrderItemEntity::class,BillEntity::class,PaymentEntity::class,CustomerEntity::class,CustomerPointTransactionEntity::class,PricingRuleEntity::class,BillAdjustmentEntity::class,SupplierEntity::class,PurchaseEntity::class,PurchaseCategoryEntity::class,PurchaseItemEntity::class,MonthlyAccountingEntity::class,ProfitPartnerEntity::class,PrintJobEntity::class,AuditEventEntity::class,AppSettingEntity::class,PaymentSessionEntity::class,BankNotificationEventEntity::class,AssetCategoryEntity::class,AssetEntity::class,AssetValuationEntity::class,FinancialMovementEntity::class,OpeningCashAdjustmentEntity::class,CloudSyncStateEntity::class,CostCodeEntity::class,SyncQueueEntity::class,AttendanceSessionEntity::class,LoyaltyCampaignEntity::class,CustomerRewardEntity::class,BuyGetPromotionEntity::class,ShiftEntity::class],version=29,exportSchema=false)
 abstract class PosDatabase:RoomDatabase(){
  abstract fun dao():PosDao
  companion object{
@@ -253,9 +253,18 @@ abstract class PosDatabase:RoomDatabase(){
     db.execSQL("ALTER TABLE OrderItemEntity ADD COLUMN comboPartsSnapshot TEXT")
    }
   }
+  val MIGRATION_28_29=object:Migration(28,29){
+   override fun migrate(db:SupportSQLiteDatabase){
+    db.execSQL("CREATE TABLE IF NOT EXISTS `ShiftEntity` (`id` TEXT NOT NULL, `date` TEXT NOT NULL, `staffId` TEXT NOT NULL, `staffName` TEXT NOT NULL, `role` TEXT NOT NULL, `checkInClient` INTEGER NOT NULL, `checkOutClient` INTEGER, `checkOutSource` TEXT, `lastActivityAt` INTEGER NOT NULL, `cashExpected` INTEGER, `cashCounted` INTEGER, `diff` INTEGER, `diffNote` TEXT NOT NULL, `transferTotal` INTEGER NOT NULL, `orderCount` INTEGER NOT NULL, `status` TEXT NOT NULL, `receivedBy` TEXT, `receivedAt` INTEGER, `attendanceId` TEXT, `dataScope` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_ShiftEntity_status ON ShiftEntity(status)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_ShiftEntity_date ON ShiftEntity(date)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_ShiftEntity_staffId ON ShiftEntity(staffId)")
+    db.execSQL("ALTER TABLE TableSessionEntity ADD COLUMN shiftId TEXT")
+   }
+  }
   fun get(context:Context):PosDatabase=instance?:synchronized(this){
    instance?:Room.databaseBuilder(context.applicationContext,PosDatabase::class.java,"pos0210.db")
-    .addMigrations(MIGRATION_3_4,MIGRATION_4_5,MIGRATION_5_6,MIGRATION_6_7,MIGRATION_7_8,MIGRATION_8_9,MIGRATION_9_10,MIGRATION_10_11,MIGRATION_11_12,MIGRATION_12_13,MIGRATION_13_14,MIGRATION_14_15,MIGRATION_15_16,MIGRATION_16_17,MIGRATION_17_18,MIGRATION_18_19,MIGRATION_19_20,MIGRATION_20_21,MIGRATION_21_22,MIGRATION_22_23,MIGRATION_23_24,MIGRATION_24_25,MIGRATION_25_26,MIGRATION_26_27,MIGRATION_27_28)
+    .addMigrations(MIGRATION_3_4,MIGRATION_4_5,MIGRATION_5_6,MIGRATION_6_7,MIGRATION_7_8,MIGRATION_8_9,MIGRATION_9_10,MIGRATION_10_11,MIGRATION_11_12,MIGRATION_12_13,MIGRATION_13_14,MIGRATION_14_15,MIGRATION_15_16,MIGRATION_16_17,MIGRATION_17_18,MIGRATION_18_19,MIGRATION_19_20,MIGRATION_20_21,MIGRATION_21_22,MIGRATION_22_23,MIGRATION_23_24,MIGRATION_24_25,MIGRATION_25_26,MIGRATION_26_27,MIGRATION_27_28,MIGRATION_28_29)
     .build().also{instance=it}
   }
   fun closeForRestore(){synchronized(this){instance?.close();instance=null}}

@@ -128,6 +128,9 @@ fun App(vm: PosViewModel = viewModel()) {
     val s by vm.currentSession.collectAsState()
     when (sc) {
         "LOGIN" -> Login(vm)
+        "SHIFT_START" -> StartShift(vm)
+        "SHIFT_END" -> ShiftEnd(vm)
+        "SHIFTS" -> ShiftList(vm)
         "TABLES" -> Tables(vm)
         "ORDER" -> t?.let { Order(vm, it) }
         "SENT" -> if (t != null && s != null) Sent(vm, t!!, s!!)
@@ -205,13 +208,13 @@ fun Login(vm: PosViewModel) {
 @Composable
 fun Operator(vm: PosViewModel) {
     val e by vm.currentEmployee.collectAsState()
-    val attendance by vm.myAttendance.collectAsState()
+    val shift by vm.activeShift.collectAsState()
     Row(Modifier.fillMaxWidth().padding(horizontal=12.dp),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically){
         AssistChip(onClick = { vm.logout() }, label = { Text("🔒 ${e?.name} · Đổi người") })
-        if(attendance==null){
-            AssistChip(onClick={vm.checkIn()},label={Text("CHECK-IN")})
+        if(shift==null){
+            AssistChip(onClick={vm.screen.value="SHIFT_START"},label={Text("CHƯA VÀO CA · BẮT ĐẦU")})
         }else{
-            AssistChip(onClick={vm.checkOut()},label={Text("CHECK-OUT · ĐANG TRONG CA")})
+            AssistChip(onClick={vm.screen.value="SHIFT_END"},label={Text("CA ${shift?.staffName} · RA CA")})
         }
     }
 }
@@ -1401,6 +1404,7 @@ fun Manage(vm: PosViewModel) {
                 Rowx("Cấu hình hạng thành viên", "Ngưỡng điểm · tự nâng hạng · % ưu đãi Member/VIP/VVIP") { vm.screen.value = "LOYALTY_CONFIG" }
                 Rowx("Chương trình tích điểm giảm bill", "Tùy chỉnh điểm → giảm tiền hoặc % một lần") { vm.screen.value = "LOYALTY_CAMPAIGNS" }
                 Rowx("Nhân viên", "Thêm · khóa · phân quyền") { vm.screen.value = "EMP" }
+                Rowx("Ca làm & nhận tiền", "Danh sách ca · tiền bàn giao · xác nhận đã nhận") { vm.screen.value = "SHIFTS" }
                 Rowx("Chấm công & Bảng lương", "Giờ vào/ra · tổng giờ · lương theo tháng") { vm.screen.value = "PAYROLL" }
             }
             if (employee?.role != null && employee?.role != "ADMIN") {

@@ -8,6 +8,7 @@ import androidx.room.withTransaction
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.Job
@@ -173,7 +174,7 @@ class PosViewModel(app:Application):AndroidViewModel(app){
   }
  }
 fun checkOut(){ val e=currentEmployee.value?:return; viewModelScope.launch(Dispatchers.IO){ attendanceMutex.withLock { val s=dao.openAttendance(e.id)?:run{printerMessage.value="CHƯA CHECK-IN";return@withLock}; val now=System.currentTimeMillis(); if(dao.closeAttendance(s.id,now)==1){myAttendance.value=null;refreshPayroll();dao.enqueueSync(SyncQueueEntity(UUID.randomUUID().toString(),"ATTENDANCE",s.id,"UPSERT","",now,now));audit("ATTENDANCE",s.id,"CHECK_OUT","minutes="+((now-s.checkInAt)/60000));printerMessage.value="ĐÃ CHECK-OUT · "+((now-s.checkInAt)/60000)+" PHÚT"} } } }
-fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==null)authError.value="PIN không đúng" else{currentEmployee.value=e;myAttendance.value=dao.openAttendance(e.id);authError.value="";screen.value="TABLES";audit("AUTH",e.id,"LOGIN")}}};fun logout(){val e=currentEmployee.value;viewModelScope.launch{if(e!=null)audit("AUTH",e.id,"LOGOUT")};businessTestMode.value=false;checkoutPrintTestMode.value=false;printedCheckoutKey.value=null;currentEmployee.value=null;screen.value="LOGIN"}
+fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==null)authError.value="PIN không đúng" else{currentEmployee.value=e;myAttendance.value=dao.openAttendance(e.id);authError.value="";screen.value=if(dao.activeShift()==null&&!businessTestMode.value)"SHIFT_START" else "TABLES";audit("AUTH",e.id,"LOGIN")}}};fun logout(){val e=currentEmployee.value;viewModelScope.launch{if(e!=null)audit("AUTH",e.id,"LOGOUT")};businessTestMode.value=false;checkoutPrintTestMode.value=false;printedCheckoutKey.value=null;currentEmployee.value=null;screen.value="LOGIN"}
  private suspend fun audit(type:String,id:String,action:String,payload:String=""){dao.audit(AuditEventEntity(UUID.randomUUID().toString(),type,id,action,currentEmployee.value?.id,"ANDROID",System.currentTimeMillis(),payload))}
  private fun autoBackup(){
   val root=setting("storage_root_uri")
@@ -952,6 +953,93 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
  fun selectVoucher(code:String,menuItemId:String){
   voucherMessage.value="ĐỔI VOUCHER ĐÃ TẠM KHÓA"
  }
+
+ // ===== CA LÀM (Phase 1): ca thuộc về máy, chỉ kết thúc bằng thao tác ra ca =====
+ val activeShift=dao.activeShiftFlow().stateIn(viewModelScope,SharingStarted.Eagerly,null)
+ val shifts=dao.recentShifts().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
+ val shiftMessage=MutableStateFlow("")
+ val shiftBlockers=MutableStateFlow<List<TableSessionEntity>>(emptyList())
+ val shiftTotals=MutableStateFlow<Triple<Long,Long,Int>?>(null)
+ fun startShift(){
+  val e=currentEmployee.value?:return
+  viewModelScope.launch(Dispatchers.IO){
+   attendanceMutex.withLock {
+    if(dao.activeShift()!=null){withContext(Dispatchers.Main){screen.value="TABLES"};return@withLock}
+    val now=System.currentTimeMillis()
+    var att=dao.openAttendance(e.id)
+    if(att==null){
+     val defaultRate=PayrollSettings.hourlyRate(setting("hourly_rate_default"),0L)
+     val rate=PayrollSettings.hourlyRate(setting("hourly_rate_"+e.id),defaultRate)
+     val multiplier=HolidayMultiplier.basisPoints(setting(HolidayMultiplier.settingKey(ShiftRules.workDate(now))))
+     att=AttendanceSessionEntity(UUID.randomUUID().toString(),e.id,now,hourlyRate=rate,multiplierBasisPoints=multiplier)
+     dao.insertAttendanceSession(att)
+    }
+    val shift=ShiftEntity(UUID.randomUUID().toString(),ShiftRules.workDate(now),e.id,e.name,e.role,now,lastActivityAt=now,attendanceId=att.id,updatedAt=now)
+    dao.saveShift(shift)
+    dao.adoptPendingSessions(shift.id)
+    myAttendance.value=att;refreshPayroll()
+    audit("SHIFT",shift.id,"START","staff=${e.name}")
+    dao.markCloudDirty()
+    withContext(Dispatchers.Main){screen.value="TABLES"}
+   }
+  }
+ }
+ fun loadShiftCheckout(){
+  viewModelScope.launch(Dispatchers.IO){
+   val sh=dao.activeShift()
+   if(sh==null){shiftBlockers.value=emptyList();shiftTotals.value=null;return@launch}
+   shiftBlockers.value=dao.openSessionsOfShift(sh.id)
+   shiftTotals.value=Triple(dao.shiftPaymentTotal(sh.id,"CASH"),dao.shiftPaymentTotal(sh.id,"TRANSFER"),dao.shiftPaidBillCount(sh.id))
+  }
+ }
+ fun deferSessionToNextShift(sessionId:String){
+  viewModelScope.launch(Dispatchers.IO){
+   dao.setSessionShift(sessionId,ShiftRules.PENDING_NEXT)
+   audit("SESSION",sessionId,"DEFER_TO_NEXT_SHIFT")
+   loadShiftCheckout()
+  }
+ }
+ /** Nhân viên (chủ ca) hoặc ADMIN nhập PIN để xác nhận ra ca. [receivePin] khác rỗng: ADMIN nhận tiền ngay. */
+ fun closeShift(pin:String,counted:Long,note:String,receivePin:String,onDone:(Boolean)->Unit){
+  viewModelScope.launch(Dispatchers.IO){
+   attendanceMutex.withLock {
+    val sh=dao.activeShift()
+    if(sh==null){shiftMessage.value="KHÔNG CÓ CA ĐANG MỞ";withContext(Dispatchers.Main){onDone(false)};return@withLock}
+    val who=dao.employeeByPin(pin)
+    if(who==null||!ShiftRules.canCloseShift(sh.staffId,who.id,who.role)){shiftMessage.value="PIN KHÔNG ĐÚNG HOẶC KHÔNG PHẢI CHỦ CA";withContext(Dispatchers.Main){onDone(false)};return@withLock}
+    if(dao.openSessionsOfShift(sh.id).isNotEmpty()){shiftMessage.value="CÒN ORDER CHƯA THANH TOÁN";loadShiftCheckout();withContext(Dispatchers.Main){onDone(false)};return@withLock}
+    val cashExpected=dao.shiftPaymentTotal(sh.id,"CASH")
+    val diff=ShiftRules.diff(counted,cashExpected)
+    if(!ShiftRules.canConfirm(diff,note)){shiftMessage.value="CHÊNH LỆCH LỚN · CẦN GHI CHÚ";withContext(Dispatchers.Main){onDone(false)};return@withLock}
+    val receiver=if(receivePin.isNotBlank())dao.employeeByPin(receivePin)?.takeIf{ShiftRules.canReceive("closed",it.role)} else null
+    if(receivePin.isNotBlank()&&receiver==null){shiftMessage.value="PIN NGƯỜI NHẬN TIỀN KHÔNG ĐÚNG";withContext(Dispatchers.Main){onDone(false)};return@withLock}
+    val now=System.currentTimeMillis()
+    val closed=sh.copy(checkOutClient=now,checkOutSource="self",cashExpected=cashExpected,cashCounted=counted,diff=diff,diffNote=note.trim(),
+     transferTotal=dao.shiftPaymentTotal(sh.id,"TRANSFER"),orderCount=dao.shiftPaidBillCount(sh.id),
+     status=if(receiver!=null)"received" else "closed",receivedBy=receiver?.id,receivedAt=receiver?.let{now},updatedAt=now)
+    dao.saveShift(closed)
+    sh.attendanceId?.let{dao.closeAttendance(it,now)}
+    myAttendance.value=null;refreshPayroll()
+    audit("SHIFT",sh.id,"CHECK_OUT","expected=$cashExpected,counted=$counted,diff=$diff,by=${who.name}")
+    dao.markCloudDirty()
+    shiftMessage.value="ĐÃ RA CA"
+    withContext(Dispatchers.Main){onDone(true);logout()}
+   }
+  }
+ }
+ fun receiveShift(shiftId:String,pin:String,onDone:(Boolean)->Unit){
+  viewModelScope.launch(Dispatchers.IO){
+   val who=dao.employeeByPin(pin)
+   val sh=dao.shiftById(shiftId)
+   if(who==null||sh==null||!ShiftRules.canReceive(sh.status,who.role)){shiftMessage.value="PIN ADMIN KHÔNG ĐÚNG HOẶC CA CHƯA RA";withContext(Dispatchers.Main){onDone(false)};return@launch}
+   val now=System.currentTimeMillis()
+   dao.saveShift(sh.copy(status="received",receivedBy=who.id,receivedAt=now,updatedAt=now))
+   audit("SHIFT",sh.id,"RECEIVED","by=${who.name}")
+   dao.markCloudDirty()
+   shiftMessage.value="ĐÃ NHẬN TIỀN"
+   withContext(Dispatchers.Main){onDone(true)}
+  }
+ }
  fun customerRewards(customerId:String)=dao.availableRewards(customerId)
  fun clearSelectedVoucher(){selectedVoucher.value=null;selectedVoucherItemId.value=null;verifiedVoucher.value=null;voucherMessage.value=""}
  fun sendBatch(){
@@ -963,6 +1051,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
   if(selectedVoucher.value!=null){orderMessage.value="ĐỔI VOUCHER ĐÃ TẠM KHÓA";clearSelectedVoucher();return}
   if(lines.isEmpty()&&selectedVoucher.value==null)return
   viewModelScope.launch{
+   if(!ShiftRules.canCreateOrder(dao.activeShift()!=null,businessTestMode.value)){orderMessage.value="CHƯA VÀO CA · Bắt đầu ca trước khi gửi order";screen.value="SHIFT_START";return@launch}
    val s=currentSession.value ?: repo.openSession(t.id,e.id,if(businessTestMode.value)"TEST" else "LIVE").also{currentSession.value=it}
    val bs=dao.batches(s.id).first()
    val historical=bs.filter{it.status!="CANCELLED"}.flatMap{dao.batchItems(it.id).first()}

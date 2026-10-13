@@ -22,7 +22,7 @@ internal object CloudQuotaPolicy {
             "dashboard","dashboardDaily" -> "dashboard"
             "menu","menuCategories","areas","config" -> "catalog"
             "purchases","purchaseItems","purchaseCategories","suppliers","costCodes","profitPartners","assetCategories","monthlyAccounting","assets","financialMovements" -> "finance"
-            "attendance","customers","loyalty" -> "people"
+            "attendance","shifts","customers","loyalty" -> "people"
             "privateBackup" -> "backup"
             "media" -> "media"
             else -> "system"

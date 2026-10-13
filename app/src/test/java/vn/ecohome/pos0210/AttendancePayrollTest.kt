@@ -27,15 +27,38 @@ class AttendancePayrollTest {
   assertEquals(setOf("TEST"),rows.map{it.dataScope}.toSet())
   assertEquals(listOf(120L,120L),AttendancePayroll.splitByDay(rows.last(),zone=zone).map{it.minutes})
  }
- @Test fun completedShiftsRoundToWholeHoursWithFifteenMinuteTolerance(){
-  assertEquals(540L,AttendancePayroll.payableMinutes(525L))
-  assertEquals(540L,AttendancePayroll.payableMinutes(555L))
-  assertEquals(480L,AttendancePayroll.payableMinutes(509L))
-  assertEquals(600L,AttendancePayroll.payableMinutes(570L))
-  val s=AttendanceSessionEntity("round","e1",ms("2026-10-08T06:00:00"),ms("2026-10-08T14:45:00"),"CLOSED",35000,10000)
+ @Test fun punchTimesWithinFifteenMinutesSnapToTheHour(){
+  fun snap(t:String)=TimeRounding.snapToHour(ms(t),zone)
+  assertEquals(ms("2026-10-08T06:00:00"),snap("2026-10-08T05:50:00"))
+  assertEquals(ms("2026-10-08T06:00:00"),snap("2026-10-08T06:10:00"))
+  assertEquals(ms("2026-10-08T06:00:00"),snap("2026-10-08T06:15:00"))
+  assertEquals(ms("2026-10-08T06:00:00"),snap("2026-10-08T05:45:00"))
+  assertEquals(ms("2026-10-08T06:00:00"),snap("2026-10-08T06:00:00"))
+ }
+ @Test fun punchTimesBeyondFifteenMinutesKeepTheExactMinute(){
+  fun snap(t:String)=TimeRounding.snapToHour(ms(t),zone)
+  assertEquals(ms("2026-10-08T06:16:00"),snap("2026-10-08T06:16:00"))
+  assertEquals(ms("2026-10-08T06:30:00"),snap("2026-10-08T06:30:00"))
+  assertEquals(ms("2026-10-08T05:44:00"),snap("2026-10-08T05:44:00"))
+ }
+ @Test fun snapAcrossMidnightMovesToTheNextDay(){
+  assertEquals(ms("2026-10-09T00:00:00"),TimeRounding.snapToHour(ms("2026-10-08T23:50:00"),zone))
+ }
+ @Test fun shiftIsPaidFromSnappedStartAndEnd(){
+  val s=AttendanceSessionEntity("round","e1",ms("2026-10-08T05:55:00"),ms("2026-10-08T14:45:00"),"CLOSED",35000,10000)
   val day=AttendancePayroll.splitByDay(s,zone=zone).single()
   assertEquals(540L,day.minutes)
   assertEquals(315000L,day.amount)
+ }
+ @Test fun shiftOutsideToleranceKeepsExactMinutes(){
+  val s=AttendanceSessionEntity("exact","e1",ms("2026-10-08T06:20:00"),ms("2026-10-08T10:10:00"),"CLOSED",60000,10000)
+  val day=AttendancePayroll.splitByDay(s,zone=zone).single()
+  assertEquals(220L,day.minutes)
+  assertEquals(220000L,day.amount)
+ }
+ @Test fun shiftShorterThanToleranceIsNotPaid(){
+  val s=AttendanceSessionEntity("tiny","e1",ms("2026-10-08T06:00:00"),ms("2026-10-08T06:10:00"),"CLOSED",35000,10000)
+  assertEquals(emptyList<PayrollDay>(),AttendancePayroll.splitByDay(s,zone=zone))
  }
  @Test fun openShiftIsNotPrematurelyRounded(){
   val start=ms("2026-10-08T06:00:00")

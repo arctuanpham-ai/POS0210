@@ -33,6 +33,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -126,6 +127,21 @@ fun App(vm: PosViewModel = viewModel()) {
     val sc by vm.screen.collectAsState()
     val t by vm.currentTable.collectAsState()
     val s by vm.currentSession.collectAsState()
+    val locked by vm.locked.collectAsState()
+    LaunchedEffect(Unit) {
+        while (true) {
+            vm.lockIfIdle()
+            kotlinx.coroutines.delay(1000)
+        }
+    }
+    Box(Modifier.fillMaxSize().pointerInput(Unit) {
+        awaitPointerEventScope {
+            while (true) {
+                awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                vm.touch()
+            }
+        }
+    }) {
     when (sc) {
         "LOGIN" -> Login(vm)
         "SHIFT_START" -> StartShift(vm)
@@ -161,6 +177,8 @@ fun App(vm: PosViewModel = viewModel()) {
         "CLOUD" -> CloudSyncSettings(vm)
         "RESET_PREOPENING_SALES" -> ResetPreOpeningSales(vm)
         "TEST_MODE" -> TestModeManager(vm)
+    }
+    if (locked) LockScreen(vm)
     }
 }
 

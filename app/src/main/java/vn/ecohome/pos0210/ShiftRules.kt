@@ -67,4 +67,9 @@ object ShiftRules {
         reason.isBlank() -> "Bắt buộc ghi lý do sửa công"
         else -> null
     }
+
+    const val LOCK_TIMEOUT_MS = 90_000L
+
+    /** Máy tự khoá khi không ai chạm đủ lâu (kể cả lúc tắt màn hình), để người khác cầm máy không vô tình dùng dưới tài khoản người trước. */
+    fun shouldLock(now: Long, lastTouchAt: Long, timeoutMs: Long = LOCK_TIMEOUT_MS): Boolean = now - lastTouchAt >= timeoutMs
 }

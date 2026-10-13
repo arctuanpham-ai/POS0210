@@ -228,3 +228,24 @@ private fun AttendanceEditDialog(vm: PosViewModel, employeeId: String, session: 
         dismissButton = { TextButton(onClick = onDismiss) { Text("Huỷ") } }
     )
 }
+
+@Composable
+fun LockScreen(vm: PosViewModel) {
+    val e by vm.currentEmployee.collectAsState()
+    val err by vm.authError.collectAsState()
+    var pin by remember { mutableStateOf("") }
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Text("🔒 MÁY ĐÃ KHOÁ", fontSize = 26.sp, fontWeight = FontWeight.Black)
+            Spacer(Modifier.height(8.dp))
+            Text("Đang đăng nhập: ${e?.name ?: ""}", fontWeight = FontWeight.Bold)
+            Text("Nhập PIN của bạn để tiếp tục. Nếu không phải ${e?.name ?: "người này"}, nhập PIN của chính bạn để đổi người (ca vẫn giữ nguyên).", fontSize = 12.sp)
+            OutlinedTextField(
+                value = pin,
+                onValueChange = { v -> pin = v.filter(Char::isDigit).take(4); if (pin.length == 4) { vm.unlock(pin); pin = "" } },
+                label = { Text("PIN 4 số") }, visualTransformation = PasswordVisualTransformation(), singleLine = true
+            )
+            if (err.isNotBlank()) Text(err, color = MaterialTheme.colorScheme.error)
+        }
+    }
+}

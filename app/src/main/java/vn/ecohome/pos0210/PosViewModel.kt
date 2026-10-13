@@ -174,7 +174,7 @@ class PosViewModel(app:Application):AndroidViewModel(app){
   }
  }
 fun checkOut(){ val e=currentEmployee.value?:return; viewModelScope.launch(Dispatchers.IO){ attendanceMutex.withLock { val s=dao.openAttendance(e.id)?:run{printerMessage.value="CHƯA CHECK-IN";return@withLock}; val now=System.currentTimeMillis(); if(dao.closeAttendance(s.id,now)==1){myAttendance.value=null;refreshPayroll();dao.enqueueSync(SyncQueueEntity(UUID.randomUUID().toString(),"ATTENDANCE",s.id,"UPSERT","",now,now));audit("ATTENDANCE",s.id,"CHECK_OUT","minutes="+((now-s.checkInAt)/60000));printerMessage.value="ĐÃ CHECK-OUT · "+((now-s.checkInAt)/60000)+" PHÚT"} } } }
-fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==null)authError.value="PIN không đúng" else{currentEmployee.value=e;myAttendance.value=dao.openAttendance(e.id);authError.value="";screen.value=if(dao.activeShift()==null&&!businessTestMode.value)"SHIFT_START" else "TABLES";audit("AUTH",e.id,"LOGIN")}}};fun logout(){val e=currentEmployee.value;viewModelScope.launch{if(e!=null)audit("AUTH",e.id,"LOGOUT")};businessTestMode.value=false;checkoutPrintTestMode.value=false;printedCheckoutKey.value=null;currentEmployee.value=null;screen.value="LOGIN"}
+fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==null)authError.value="PIN không đúng" else{currentEmployee.value=e;myAttendance.value=dao.openAttendance(e.id);authError.value="";touch();locked.value=false;screen.value=if(dao.activeShift()==null&&!businessTestMode.value)"SHIFT_START" else "TABLES";audit("AUTH",e.id,"LOGIN")}}};fun logout(){locked.value=false;val e=currentEmployee.value;viewModelScope.launch{if(e!=null)audit("AUTH",e.id,"LOGOUT")};businessTestMode.value=false;checkoutPrintTestMode.value=false;printedCheckoutKey.value=null;currentEmployee.value=null;screen.value="LOGIN"}
  private suspend fun audit(type:String,id:String,action:String,payload:String=""){dao.audit(AuditEventEntity(UUID.randomUUID().toString(),type,id,action,currentEmployee.value?.id,"ANDROID",System.currentTimeMillis(),payload))}
  private fun autoBackup(){
   val root=setting("storage_root_uri")
@@ -1075,6 +1075,30 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
     dao.markCloudDirty()
    }
    withContext(Dispatchers.Main){onResult(null)}
+  }
+ }
+
+ // ===== KHOÁ MÁY KHI KHÔNG AI CHẠM: người khác cầm máy phải nhập PIN của chính mình =====
+ val locked=MutableStateFlow(false)
+ @Volatile private var lastTouchAt=System.currentTimeMillis()
+ fun touch(){lastTouchAt=System.currentTimeMillis()}
+ fun lockIfIdle(){
+  if(currentEmployee.value!=null&&!locked.value&&ShiftRules.shouldLock(System.currentTimeMillis(),lastTouchAt))locked.value=true
+ }
+ /** PIN của người đang đăng nhập: mở khoá tiếp tục. PIN người khác: chuyển người (ca vẫn mở), về màn hình bàn. */
+ fun unlock(pin:String){
+  viewModelScope.launch{
+   val e=dao.employeeByPin(pin)
+   if(e==null){authError.value="PIN không đúng";return@launch}
+   authError.value=""
+   val cur=currentEmployee.value
+   if(cur==null||e.id!=cur.id){
+    audit("AUTH",e.id,"SWITCH_USER","from=${cur?.name}")
+    currentEmployee.value=e;myAttendance.value=dao.openAttendance(e.id)
+    cart.value=emptyMap();cartNotes.value=emptyMap();currentSession.value=null;currentTable.value=null
+    screen.value=if(dao.activeShift()==null&&!businessTestMode.value)"SHIFT_START" else "TABLES"
+   }
+   touch();locked.value=false
   }
  }
  fun customerRewards(customerId:String)=dao.availableRewards(customerId)

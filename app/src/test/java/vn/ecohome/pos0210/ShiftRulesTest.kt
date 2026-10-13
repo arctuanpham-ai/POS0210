@@ -81,3 +81,11 @@ class ShiftPayAndManualEditTest {
         assertTrue(ShiftRules.manualAttendanceError(now + 60_000, null, "", now, "r") != null)
     }
 }
+
+class IdleLockTest {
+    @Test fun locksOnlyAfterTimeout() {
+        assertFalse(ShiftRules.shouldLock(now = 89_000, lastTouchAt = 0))
+        assertTrue(ShiftRules.shouldLock(now = 90_000, lastTouchAt = 0))
+        assertTrue(ShiftRules.shouldLock(now = 3_600_000, lastTouchAt = 0))
+    }
+}

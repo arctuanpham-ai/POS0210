@@ -59,3 +59,13 @@ jobs:
           make_latest: false
           files: app/build/outputs/apk/debug/app-debug.apk
           fail_on_unmatched_files: true
+      - name: Publish signed APK for QA branch
+        if: github.ref == 'refs/heads/qa/report-v106'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: qa-${{ github.sha }}
+          name: POS0210 QA ${{ github.sha }}
+          prerelease: true
+          make_latest: false
+          files: app/build/outputs/apk/debug/app-debug.apk
+          fail_on_unmatched_files: true

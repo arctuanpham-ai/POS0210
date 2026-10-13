@@ -175,6 +175,7 @@ fun App(vm: PosViewModel = viewModel()) {
         "BUY_GET" -> BuyGetManager(vm)
         "DELIVERY" -> DeliveryQueue(vm)
         "PREPAID_ORDERS" -> PrepaidOrders(vm)
+        "REVIEW" -> t?.let { PrepaidReview(vm, it) }
         "PAYMENT_FLOW" -> PaymentFlowSettings(vm)
         "CUSTOMERS" -> Customers(vm)
         "LOYALTY_CONFIG" -> LoyaltyConfig(vm)
@@ -346,6 +347,7 @@ fun Order(vm: PosViewModel, t: DiningTableEntity) {
     val orderTest by vm.businessTestMode.collectAsState()
     val orderSession by vm.currentSession.collectAsState()
     val orderFlowSettings by vm.settings.collectAsState()
+    val orderIsPrepaid = orderSession?.flow == PaymentFlowRules.PREPAID || (orderSession == null && PaymentFlowRules.normalize(orderFlowSettings.firstOrNull { it.key == PaymentFlowRules.SETTING_KEY }?.value) == PaymentFlowRules.PREPAID)
     val orderBlocked = (orderSession?.dataScope ?: if (orderTest) "TEST" else "LIVE") == "LIVE" && !ShiftRules.canPay(orderShift?.staffId, orderUser?.id ?: "")
     val ms by vm.menu.collectAsState()
     val combos by vm.combos.collectAsState()
@@ -472,7 +474,7 @@ fun Order(vm: PosViewModel, t: DiningTableEntity) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { }, modifier = Modifier.weight(1f), enabled=false) { Text("VOUCHER TẠM KHÓA") }
             OutlinedButton(onClick = { showCart = true }, modifier = Modifier.weight(1f)) { Text("GIỎ HÀNG") }
-            Button(onClick = { vm.sendBatch() }, modifier = Modifier.weight(1f), enabled = (cart.isNotEmpty()||selectedVoucher!=null) && !orderBlocked) { Text(if (orderBlocked) "ĐÃ KHOÁ" else if (orderSession?.flow == PaymentFlowRules.PREPAID || (orderSession == null && PaymentFlowRules.normalize(orderFlowSettings.firstOrNull { it.key == PaymentFlowRules.SETTING_KEY }?.value) == PaymentFlowRules.PREPAID)) "THANH TOÁN" else "GỬI BẾP") }
+            Button(onClick = { if (orderIsPrepaid) vm.reviewPrepaid() else vm.sendBatch() }, modifier = Modifier.weight(1f), enabled = (cart.isNotEmpty()||selectedVoucher!=null) && !orderBlocked) { Text(if (orderBlocked) "ĐÃ KHOÁ" else if (orderIsPrepaid) "THANH TOÁN" else "GỬI BẾP") }
         }
     }
     if (showCart) OrderCartNotesDialog(vm) { showCart = false }
@@ -853,7 +855,17 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
     val shownBill = billImage?.takeIf { it.first == vn.ecohome.pos0210.payment.CheckoutPrintPolicy.key(s.id, preview.total, qrInfo) }?.second
 
     Column {
-        Header(if (isPrepaid) "Thanh toán trước" else "Thanh toán") { if (isPrepaid) vm.abandonPrepaid() else vm.screen.value = "SENT" }
+        var confirmEdit by remember { mutableStateOf(false) }
+        Header(if (isPrepaid) "Thanh toán trước" else "Thanh toán") {
+            if (isPrepaid) { if (billPrinted || shownBill != null) confirmEdit = true else vm.editPrepaidOrder() } else vm.screen.value = "SENT"
+        }
+        if (confirmEdit) AlertDialog(
+            onDismissRequest = { confirmEdit = false },
+            title = { Text("Sửa đơn sau khi đã in bill?") },
+            text = { Text("Bill đã in sẽ KHÔNG còn giá trị, phải in lại bill mới. Thao tác này được ghi vào nhật ký. Giỏ hàng được giữ nguyên để sửa.") },
+            confirmButton = { TextButton(onClick = { confirmEdit = false; vm.editPrepaidOrder() }) { Text("SỬA ĐƠN") } },
+            dismissButton = { TextButton(onClick = { confirmEdit = false }) { Text("Ở LẠI") } }
+        )
         Column(Modifier.weight(1f).padding(18.dp).verticalScroll(rememberScrollState())) {
             if (pendingDelivery.isNotEmpty()) {
                 Card(

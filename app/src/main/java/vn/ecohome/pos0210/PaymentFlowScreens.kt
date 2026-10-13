@@ -220,3 +220,68 @@ fun KitchenPrintOverlay(vm: PosViewModel, ui: KitchenPrintUi) {
         }
     }
 }
+
+/** Soát đơn trước khi tạo đơn và in bill: sửa số lượng, ghi chú, quay lại thêm món. Chưa tạo đơn nên chưa tốn số thứ tự. */
+@Composable
+fun PrepaidReview(vm: PosViewModel, t: vn.ecohome.pos0210.data.DiningTableEntity) {
+    val cart by vm.cart.collectAsState()
+    val notes by vm.cartNotes.collectAsState()
+    val menu by vm.menu.collectAsState()
+    val combos by vm.combos.collectAsState()
+    val message by vm.orderMessage.collectAsState()
+    val keys = cart.keys.toList()
+    var total = 0L
+    keys.forEach { k ->
+        val qty = (cart[k] ?: 0).toLong()
+        val price = if (k.startsWith("combo:")) combos.firstOrNull { it.id == k.removePrefix("combo:") }?.price else menu.firstOrNull { it.id == k }?.price
+        total += (price ?: 0L) * qty
+    }
+    Column {
+        Header("Soát đơn · ${t.name}") { vm.screen.value = "ORDER" }
+        Text("Đọc lại đơn với khách. Đúng rồi mới sang thanh toán và in bill.", Modifier.padding(horizontal = 18.dp), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Brown)
+        if (message.isNotBlank()) Text(message, Modifier.padding(horizontal = 18.dp, vertical = 4.dp), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFB3261E))
+        if (keys.isEmpty()) {
+            Text("Giỏ hàng trống.", Modifier.padding(20.dp))
+        }
+        LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(keys, key = { it }) { k ->
+                val qty = cart[k] ?: 0
+                val isCombo = k.startsWith("combo:")
+                val combo = if (isCombo) combos.firstOrNull { it.id == k.removePrefix("combo:") } else null
+                val item = if (!isCombo) menu.firstOrNull { it.id == k } else null
+                val name = combo?.name ?: item?.name ?: "Món"
+                val price = combo?.price ?: item?.price ?: 0L
+                Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                    Column(Modifier.padding(12.dp)) {
+                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(name, fontSize = 20.sp, fontWeight = FontWeight.Black)
+                                Text(vnd(price * qty), fontSize = 13.sp)
+                            }
+                            OutlinedButton(onClick = { if (combo != null) vm.subCombo(combo) else item?.let { vm.sub(it) } }, contentPadding = PaddingValues(0.dp), modifier = Modifier.size(44.dp)) { Text("−", fontSize = 22.sp) }
+                            Text("$qty", Modifier.padding(horizontal = 14.dp), fontSize = 24.sp, fontWeight = FontWeight.Black)
+                            OutlinedButton(onClick = { if (combo != null) vm.addCombo(combo) else item?.let { vm.add(it) } }, contentPadding = PaddingValues(0.dp), modifier = Modifier.size(44.dp)) { Text("+", fontSize = 22.sp) }
+                        }
+                        OutlinedTextField(
+                            value = notes[k].orEmpty(),
+                            onValueChange = { vm.setCartNote(k, it) },
+                            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                            label = { Text("Ghi chú cho bếp") },
+                            singleLine = true
+                        )
+                    }
+                }
+            }
+        }
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            Row(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                Text("${cart.values.sum()} món", Modifier.weight(1f), fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text("Tạm tính ${vnd(total)}", fontSize = 20.sp, fontWeight = FontWeight.Black)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(onClick = { vm.screen.value = "ORDER" }, Modifier.weight(1f).height(56.dp)) { Text("THÊM / SỬA MÓN", fontWeight = FontWeight.Bold) }
+                Button(onClick = { vm.sendBatch() }, Modifier.weight(1.3f).height(56.dp), enabled = keys.isNotEmpty()) { Text("ĐÚNG RỒI\nTHANH TOÁN".replace("\\n", "\n"), fontWeight = FontWeight.Black, textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
+            }
+        }
+    }
+}

@@ -1348,7 +1348,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
   kitchenPrint.value=null
   return true
  }
- private fun leavePaidOrder(){kitchenPrint.value=null;printedCheckoutKey.value=null;currentSession.value=null;currentTable.value=null;screen.value="TABLES"}
+ private fun leavePaidOrder(){prepaidCartBackup=null;kitchenPrint.value=null;printedCheckoutKey.value=null;currentSession.value=null;currentTable.value=null;screen.value="TABLES"}
  /** Bấm "IN LẠI" khi phiếu bếp lỗi: in lại các phiếu của đơn vừa thu tiền. */
  fun retryPaidKitchenPrint(){
   val s=currentSession.value?:return
@@ -1426,7 +1426,31 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
   }
  }
  /** Rời màn thanh toán mà chưa thu tiền: huỷ đơn nháp, không để lại đơn chưa thu. */
+ private var prepaidCartBackup:Pair<Map<String,Int>,Map<String,String>>?=null
+ /** Bước soát đơn trước khi tạo đơn/in bill (chưa tạo đơn nên không tốn số thứ tự). */
+ fun reviewPrepaid(){
+  if(cart.value.isEmpty())return
+  orderMessage.value=""
+  screen.value="REVIEW"
+ }
+ /** Quay lại sửa đơn từ màn thanh toán: huỷ đơn nháp chưa thu tiền nhưng GIỮ NGUYÊN giỏ hàng để sửa tiếp. */
+ fun editPrepaidOrder(){
+  val s=currentSession.value
+  val e=currentEmployee.value
+  val backup=prepaidCartBackup
+  val billShown=printedCheckoutKey.value!=null||checkoutBillImage.value!=null
+  viewModelScope.launch(Dispatchers.IO){
+   if(s!=null&&s.flow==PaymentFlowRules.PREPAID&&e!=null&&dao.billBySessionId(s.id)==null)cancelPrepaidSession(s,e.id,billShown)
+   withContext(Dispatchers.Main){
+    printedCheckoutKey.value=null;checkoutBillImage.value=null
+    currentSession.value=null
+    cart.value=backup?.first?:emptyMap();cartNotes.value=backup?.second?:emptyMap()
+    screen.value="REVIEW"
+   }
+  }
+ }
  fun abandonPrepaid(){
+  prepaidCartBackup=null
   val s=currentSession.value
   val e=currentEmployee.value
   viewModelScope.launch(Dispatchers.IO){
@@ -1434,11 +1458,11 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    withContext(Dispatchers.Main){currentSession.value=null;currentTable.value=null;cart.value=emptyMap();cartNotes.value=emptyMap();screen.value="TABLES"}
   }
  }
- private suspend fun cancelPrepaidSession(s:TableSessionEntity,actorId:String){
+ private suspend fun cancelPrepaidSession(s:TableSessionEntity,actorId:String,billPrinted:Boolean=false){
   runCatching{
    dao.batches(s.id).first().forEach{dao.cancelBatch(it.id)}
    repo.closeCancelledSession(s,actorId)
-   audit("SESSION",s.id,"PREPAID_ABANDONED","unpaid")
+   audit("SESSION",s.id,"PREPAID_ABANDONED",if(billPrinted)"bill_printed,unpaid" else "unpaid")
   }
  }
  /** Dọn các đơn trả trước còn dở (app bị tắt ở màn thanh toán): chưa có bill thì huỷ. */
@@ -1513,6 +1537,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    val created=creation.getOrThrow()
    if(voucher!=null&&dao.redeemReward(voucher.id,created.id,now)!=1){dao.cancelBatch(created.id);orderMessage.value="VOUCHER ĐÃ ĐƯỢC DÙNG Ở THIẾT BỊ KHÁC";clearSelectedVoucher();return@launch}
    if(voucher!=null)audit("LOYALTY",voucher.id,"VOUCHER_REDEEMED","batch="+created.id+",item="+voucherItem!!.id)
+   if(s.flow==PaymentFlowRules.PREPAID)prepaidCartBackup=lines to cartNotes.value
    cart.value=emptyMap();cartNotes.value=emptyMap();clearSelectedVoucher()
    autoBackup()
    screen.value=if(s.flow==PaymentFlowRules.PREPAID)"PAY" else "SENT"

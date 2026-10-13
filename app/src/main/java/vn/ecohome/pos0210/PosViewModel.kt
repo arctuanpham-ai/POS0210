@@ -1324,8 +1324,16 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
  val reminders=MutableStateFlow<Map<String,Pair<Int,Long>>>(emptyMap())
  /** In phiếu làm hàng của đơn trả trước sau khi đã thu tiền. Lỗi in không chặn bán: đơn vẫn nằm trong hàng chờ để in lại. */
  /** In phiếu bếp của đơn trả trước đã thu tiền. Trả về null nếu xong, hoặc nội dung lỗi (đơn vẫn đã ghi, nằm trong hàng chờ). */
+ /** Chế độ TEST/không máy in: hiện đúng ảnh các phiếu bếp trên màn hình để kiểm tra, không in giấy. */
+ val kitchenPreview=MutableStateFlow<Pair<String,List<android.graphics.Bitmap>>?>(null)
+ fun closeKitchenPreview(){kitchenPreview.value=null}
+ private suspend fun showKitchenPreview(b:OrderBatchEntity,tableName:String,orderer:String,flowTag:String){
+  val items=dao.batchItems(b.id).first()
+  val bmps=kitchenTicketBitmaps(tableName,b,orderer,flowTag,items,printerProfile())
+  kitchenPreview.value="$tableName · ĐƠN #${b.serviceNo.toString().padStart(3,'0')}" to bmps
+ }
  private suspend fun printPaidKitchenTicket(b:OrderBatchEntity,tableName:String,orderer:String,onProgress:(Int,Int)->Unit={_,_->}):String?{
-  if(printerMode()!="BLUETOOTH"){printerMessage.value="TEST · Không in phiếu bếp";return null}
+  if(printerMode()!="BLUETOOTH"){printerMessage.value="TEST · Không in phiếu bếp";runCatching{showKitchenPreview(b,tableName,orderer,"ĐÃ THU TIỀN · LÀM NGAY")};return null}
   val mac=kitchenPrinterMac()
   if(mac.isBlank())return "Chưa chọn máy in bếp"
   val profile=printerProfile()
@@ -1624,7 +1632,12 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
   val e=currentEmployee.value?:return
   if(!e.canSendKitchen&&e.role!="ADMIN"&&e.role!="MANAGER"){printerMessage.value="KHÔNG CÓ QUYỀN IN LẠI PHIẾU BẾP";return}
   viewModelScope.launch(Dispatchers.IO){
-   if(printerMode()!="BLUETOOTH"){printerMessage.value="CHỈ IN LẠI KHI ĐANG DÙNG MÁY IN BLUETOOTH";return@launch}
+   if(printerMode()!="BLUETOOTH"){
+    val session0=dao.sessionSnapshotById(b.sessionId)
+    val tn=session0?.let{s->dao.allTablesSnapshot().firstOrNull{it.id==s.tableId}?.name}?:"Bàn"
+    runCatching{showKitchenPreview(b,tn,"${e.name} · IN LẠI","IN LẠI")}
+    printerMessage.value="TEST · Không in phiếu bếp";return@launch
+   }
    val mac=kitchenPrinterMac();if(mac.isBlank()){printerMessage.value="CHƯA CHỌN MÁY IN BẾP";return@launch}
    val session=dao.sessionSnapshotById(b.sessionId)
    val tableName=session?.let{s->dao.allTablesSnapshot().firstOrNull{it.id==s.tableId}?.name}?:"Bàn"

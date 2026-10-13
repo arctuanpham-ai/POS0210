@@ -12,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -249,6 +250,27 @@ fun KitchenPrintOverlay(vm: PosViewModel, ui: KitchenPrintUi) {
                 OutlinedButton(onClick = { vm.skipPaidKitchenPrint() }, Modifier.fillMaxWidth().padding(top = 10.dp).height(52.dp)) { Text("TÔI BÁO BẾP TRỰC TIẾP") }
                 Text("Đơn vẫn nằm trong Đơn chờ giao để in lại hoặc nhắc bếp.", Modifier.padding(top = 8.dp), fontSize = 11.sp)
             }
+        }
+    }
+}
+
+/** Xem trước các phiếu bếp (TEST / chưa bật máy in): hiện đúng ảnh sẽ in, mỗi dòng món một phiếu. */
+@Composable
+fun KitchenPreviewScreen(vm: PosViewModel, title: String, tickets: List<android.graphics.Bitmap>) {
+    Surface(Modifier.fillMaxSize().clickable {}, color = Color(0xFFF7F0E8)) {
+        Column(Modifier.fillMaxSize()) {
+            Surface(color = Color(0xFFFFD8D8), modifier = Modifier.fillMaxWidth()) {
+                Text("XEM THỬ · CHƯA IN GIẤY (chế độ TEST/không có máy in)", Modifier.padding(10.dp), fontWeight = FontWeight.Black, color = Color(0xFFB3261E), fontSize = 13.sp)
+            }
+            Text("$title · ${tickets.size} phiếu", Modifier.padding(12.dp), fontSize = 20.sp, fontWeight = FontWeight.Black, color = Brown)
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                tickets.forEachIndexed { i, bmp ->
+                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                        androidx.compose.foundation.Image(bmp.asImageBitmap(), contentDescription = "Phiếu ${i + 1}", modifier = Modifier.fillMaxWidth().padding(8.dp), contentScale = androidx.compose.ui.layout.ContentScale.FillWidth)
+                    }
+                }
+            }
+            Button(onClick = { vm.closeKitchenPreview() }, Modifier.fillMaxWidth().padding(14.dp).height(56.dp)) { Text("ĐÃ XEM · ĐÓNG", fontWeight = FontWeight.Black) }
         }
     }
 }

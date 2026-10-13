@@ -45,3 +45,12 @@ class ShiftRulesTest {
         assertFalse(ShiftRules.canReceive("open", "ADMIN"))
     }
 }
+
+class ShiftAttendanceRuleTest {
+    @Test fun adminDecidesWhoClocksIn() {
+        assertTrue(ShiftRules.attendanceRequired("", "STAFF"))
+        assertFalse(ShiftRules.attendanceRequired("", "ADMIN"))
+        assertFalse(ShiftRules.attendanceRequired("0", "STAFF"))
+        assertTrue(ShiftRules.attendanceRequired("1", "ADMIN"))
+    }
+}

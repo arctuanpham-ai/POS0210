@@ -966,18 +966,21 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    attendanceMutex.withLock {
     if(dao.activeShift()!=null){withContext(Dispatchers.Main){screen.value="TABLES"};return@withLock}
     val now=System.currentTimeMillis()
-    var att=dao.openAttendance(e.id)
-    if(att==null){
-     val defaultRate=PayrollSettings.hourlyRate(setting("hourly_rate_default"),0L)
-     val rate=PayrollSettings.hourlyRate(setting("hourly_rate_"+e.id),defaultRate)
-     val multiplier=HolidayMultiplier.basisPoints(setting(HolidayMultiplier.settingKey(ShiftRules.workDate(now))))
-     att=AttendanceSessionEntity(UUID.randomUUID().toString(),e.id,now,hourlyRate=rate,multiplierBasisPoints=multiplier)
-     dao.insertAttendanceSession(att)
+    var att:AttendanceSessionEntity?=null
+    if(ShiftRules.attendanceRequired(setting(ShiftRules.attendanceSettingKey(e.id)),e.role)){
+     att=dao.openAttendance(e.id)
+     if(att==null){
+      val defaultRate=PayrollSettings.hourlyRate(setting("hourly_rate_default"),0L)
+      val rate=PayrollSettings.hourlyRate(setting("hourly_rate_"+e.id),defaultRate)
+      val multiplier=HolidayMultiplier.basisPoints(setting(HolidayMultiplier.settingKey(ShiftRules.workDate(now))))
+      att=AttendanceSessionEntity(UUID.randomUUID().toString(),e.id,now,hourlyRate=rate,multiplierBasisPoints=multiplier)
+      dao.insertAttendanceSession(att)
+     }
     }
-    val shift=ShiftEntity(UUID.randomUUID().toString(),ShiftRules.workDate(now),e.id,e.name,e.role,now,lastActivityAt=now,attendanceId=att.id,updatedAt=now)
+    val shift=ShiftEntity(UUID.randomUUID().toString(),ShiftRules.workDate(now),e.id,e.name,e.role,now,lastActivityAt=now,attendanceId=att?.id,updatedAt=now)
     dao.saveShift(shift)
     dao.adoptPendingSessions(shift.id)
-    myAttendance.value=att;refreshPayroll()
+    if(att!=null){myAttendance.value=att;refreshPayroll()}
     audit("SHIFT",shift.id,"START","staff=${e.name}")
     dao.markCloudDirty()
     withContext(Dispatchers.Main){screen.value="TABLES"}
@@ -1007,7 +1010,6 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
     if(sh==null){shiftMessage.value="KHÔNG CÓ CA ĐANG MỞ";withContext(Dispatchers.Main){onDone(false)};return@withLock}
     val who=dao.employeeByPin(pin)
     if(who==null||!ShiftRules.canCloseShift(sh.staffId,who.id,who.role)){shiftMessage.value="PIN KHÔNG ĐÚNG HOẶC KHÔNG PHẢI CHỦ CA";withContext(Dispatchers.Main){onDone(false)};return@withLock}
-    if(dao.openSessionsOfShift(sh.id).isNotEmpty()){shiftMessage.value="CÒN ORDER CHƯA THANH TOÁN";loadShiftCheckout();withContext(Dispatchers.Main){onDone(false)};return@withLock}
     val cashExpected=dao.shiftPaymentTotal(sh.id,"CASH")
     val diff=ShiftRules.diff(counted,cashExpected)
     if(!ShiftRules.canConfirm(diff,note)){shiftMessage.value="CHÊNH LỆCH LỚN · CẦN GHI CHÚ";withContext(Dispatchers.Main){onDone(false)};return@withLock}
@@ -1017,6 +1019,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
     val closed=sh.copy(checkOutClient=now,checkOutSource="self",cashExpected=cashExpected,cashCounted=counted,diff=diff,diffNote=note.trim(),
      transferTotal=dao.shiftPaymentTotal(sh.id,"TRANSFER"),orderCount=dao.shiftPaidBillCount(sh.id),
      status=if(receiver!=null)"received" else "closed",receivedBy=receiver?.id,receivedAt=receiver?.let{now},updatedAt=now)
+    dao.openSessionsOfShift(sh.id).forEach{dao.setSessionShift(it.id,ShiftRules.PENDING_NEXT)}
     dao.saveShift(closed)
     sh.attendanceId?.let{dao.closeAttendance(it,now)}
     myAttendance.value=null;refreshPayroll()

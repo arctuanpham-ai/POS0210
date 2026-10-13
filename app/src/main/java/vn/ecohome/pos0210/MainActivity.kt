@@ -2148,6 +2148,7 @@ fun Rowx(t: String, s: String, go: () -> Unit) {
 @Composable
 fun Employees(vm: PosViewModel) {
     val es by vm.employees.collectAsState()
+    val settingsNow by vm.settings.collectAsState()
     val current by vm.currentEmployee.collectAsState()
     var editing by remember { mutableStateOf<EmployeeEntity?>(null) }
     var adding by remember { mutableStateOf(false) }
@@ -2166,6 +2167,13 @@ fun Employees(vm: PosViewModel) {
                         Text("${e.name} · ${e.role}", fontWeight = FontWeight.Bold)
                         Text("Order ${e.canOrder} · Bếp ${e.canSendKitchen} · Thu ${e.canCheckout} · Nhập ${e.canPurchase}")
                         Text("Chạm để sửa quyền", fontSize = 12.sp)
+                        if (current?.role == "ADMIN") {
+                            val required = ShiftRules.attendanceRequired(settingsNow.firstOrNull { it.key == ShiftRules.attendanceSettingKey(e.id) }?.value ?: "", e.role)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Switch(checked = required, onCheckedChange = { vm.saveSetting(ShiftRules.attendanceSettingKey(e.id), if (it) "1" else "0") })
+                                Text(if (required) " Phải chấm công" else " Không chấm công")
+                            }
+                        }
                     }
                 }
             }

@@ -56,10 +56,7 @@ fun ShiftEnd(vm: PosViewModel) {
     val totals by vm.shiftTotals.collectAsState()
     val tables by vm.tables.collectAsState()
     val message by vm.shiftMessage.collectAsState()
-    var useDenoms by remember { mutableStateOf(false) }
     var countedText by remember { mutableStateOf("") }
-    val denomCounts = remember { mutableStateMapOf<Long, String>() }
-    var confirmedCount by remember { mutableStateOf<Long?>(null) }
     var note by remember { mutableStateOf("") }
     var pin by remember { mutableStateOf("") }
     var receivePin by remember { mutableStateOf("") }
@@ -71,87 +68,53 @@ fun ShiftEnd(vm: PosViewModel) {
             Text("Không có ca đang mở.", Modifier.padding(16.dp))
             return@Column
         }
+        val expected = totals?.first ?: 0L
+        val counted = countedText.toLongOrNull()
+        val diff = counted?.let { ShiftRules.diff(it, expected) }
         Column(Modifier.fillMaxSize().padding(horizontal = 16.dp).verticalScroll(rememberScrollState())) {
-            Text("Ca của ${sh.staffName} · vào ${hhmm(sh.checkInClient)}", fontWeight = FontWeight.Bold)
+            Text("Ca của ${sh.staffName} · vào ${hhmm(sh.checkInClient)} · ra ${hhmm(System.currentTimeMillis())}", fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(10.dp))
+            Text("Doanh thu ca (chỉ tính bill đã thanh toán)", fontWeight = FontWeight.Bold)
+            Text("Tiền mặt phải bàn giao: ${vnd(expected)}", fontSize = 20.sp, fontWeight = FontWeight.Black)
+            Text("Chuyển khoản: ${vnd(totals?.second ?: 0L)} · ${totals?.third ?: 0} bill")
             if (blockers.isNotEmpty()) {
-                Spacer(Modifier.height(12.dp))
-                Text("Còn ${blockers.size} bàn chưa thanh toán", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
-                Text("Thanh toán hoặc huỷ (ghi lý do) ở màn hình bàn, hoặc chuyển cho ca sau.", fontSize = 12.sp)
-                blockers.forEach { s ->
-                    val name = tables.firstOrNull { it.id == s.tableId }?.name ?: s.tableId
-                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Bàn $name · mở ${hhmm(s.openedAt)}", Modifier.weight(1f))
-                        OutlinedButton(onClick = { vm.deferSessionToNextShift(s.id) }) { Text("Chuyển ca sau") }
-                    }
-                }
-                OutlinedButton(onClick = { vm.loadShiftCheckout() }) { Text("Kiểm tra lại") }
-                return@Column
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Còn ${blockers.size} bàn chưa thanh toán (" + blockers.joinToString { s -> tables.firstOrNull { it.id == s.tableId }?.name ?: s.tableId } +
+                        "): không tính vào ca này, tự chuyển sang ca sau.",
+                    fontSize = 12.sp
+                )
             }
             Spacer(Modifier.height(12.dp))
-            if (confirmedCount == null) {
-                Text("Đếm tiền mặt trong két (chưa hiện số của máy)", fontWeight = FontWeight.Bold)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Switch(checked = useDenoms, onCheckedChange = { useDenoms = it })
-                    Text(" Nhập theo mệnh giá")
-                }
-                if (useDenoms) {
-                    ShiftRules.denominations.forEach { d ->
-                        OutlinedTextField(
-                            value = denomCounts[d] ?: "",
-                            onValueChange = { denomCounts[d] = it.filter(Char::isDigit).take(4) },
-                            label = { Text("Tờ ${vnd(d)}") }, singleLine = true, modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
-                val counted = if (useDenoms) ShiftRules.denominationTotal(denomCounts.mapValues { it.value.toIntOrNull() ?: 0 })
-                else countedText.toLongOrNull() ?: 0L
-                if (!useDenoms) OutlinedTextField(
-                    value = countedText, onValueChange = { countedText = it.filter(Char::isDigit).take(10) },
-                    label = { Text("Tiền mặt đếm được (đ)") }, singleLine = true, modifier = Modifier.fillMaxWidth()
-                ) else Text("Tổng đếm: ${vnd(counted)}", fontWeight = FontWeight.Bold)
-                Button(
-                    onClick = { confirmedCount = counted },
-                    enabled = useDenoms || countedText.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
-                ) { Text("TIẾP TỤC") }
-            } else {
-                val counted = confirmedCount ?: 0L
-                val expected = totals?.first ?: 0L
-                val diff = ShiftRules.diff(counted, expected)
-                Text("Tiền mặt dự kiến: ${vnd(expected)}")
-                Text("Đếm được: ${vnd(counted)}")
-                Text("Chênh lệch: ${vnd(diff)}", fontWeight = FontWeight.Bold,
-                    color = if (diff == 0L) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error)
-                if (ShiftRules.noteRequired(diff) || diff != 0L) {
-                    OutlinedTextField(
-                        value = note, onValueChange = { note = it },
-                        label = { Text(if (ShiftRules.noteRequired(diff)) "Ghi chú chênh lệch (bắt buộc)" else "Ghi chú chênh lệch") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-                Text("Tổng kết ca", fontWeight = FontWeight.Bold)
-                Text("Giờ vào ${hhmm(sh.checkInClient)} · Giờ ra ${hhmm(System.currentTimeMillis())}")
-                Text("Số order đã thanh toán: ${totals?.third ?: 0}")
-                Text("Tiền mặt bàn giao: ${vnd(counted)}")
-                Text("Tổng chuyển khoản: ${vnd(totals?.second ?: 0L)}")
-                OutlinedTextField(
-                    value = pin, onValueChange = { pin = it.filter(Char::isDigit).take(4) }, label = { Text("PIN xác nhận ra ca") },
-                    visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth()
+            OutlinedTextField(
+                value = countedText, onValueChange = { countedText = it.filter(Char::isDigit).take(10) },
+                label = { Text("Tiền mặt thực tế bàn giao (đ)") }, singleLine = true, modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedButton(onClick = { countedText = expected.toString() }) { Text("Đúng bằng doanh thu tiền mặt") }
+            if (diff != null) {
+                if (diff == 0L) Text("✔ KHỚP doanh thu", fontWeight = FontWeight.Bold)
+                else Text("✖ LỆCH ${vnd(diff)} so với doanh thu", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                if (diff != 0L) OutlinedTextField(
+                    value = note, onValueChange = { note = it },
+                    label = { Text(if (ShiftRules.noteRequired(diff)) "Ghi chú chênh lệch (bắt buộc)" else "Ghi chú chênh lệch") },
+                    modifier = Modifier.fillMaxWidth()
                 )
-                OutlinedTextField(
-                    value = receivePin, onValueChange = { receivePin = it.filter(Char::isDigit).take(4) },
-                    label = { Text("PIN quản lý nhận tiền (có thể để trống)") },
-                    visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth()
-                )
-                if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.error)
-                Button(
-                    onClick = { vm.closeShift(pin, counted, note, receivePin) { } },
-                    enabled = pin.length == 4 && ShiftRules.canConfirm(diff, note) && (receivePin.isEmpty() || receivePin.length == 4),
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
-                ) { Text("XÁC NHẬN RA CA") }
-                TextButton(onClick = { confirmedCount = null }) { Text("Đếm lại") }
             }
+            OutlinedTextField(
+                value = pin, onValueChange = { pin = it.filter(Char::isDigit).take(4) }, label = { Text("PIN xác nhận ra ca") },
+                visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                value = receivePin, onValueChange = { receivePin = it.filter(Char::isDigit).take(4) },
+                label = { Text("PIN quản lý nhận tiền (có thể để trống)") },
+                visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth()
+            )
+            if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.error)
+            Button(
+                onClick = { vm.closeShift(pin, counted ?: 0L, note, receivePin) { } },
+                enabled = counted != null && pin.length == 4 && ShiftRules.canConfirm(diff ?: 0L, note) && (receivePin.isEmpty() || receivePin.length == 4),
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+            ) { Text("XÁC NHẬN RA CA") }
             Spacer(Modifier.height(24.dp))
         }
     }

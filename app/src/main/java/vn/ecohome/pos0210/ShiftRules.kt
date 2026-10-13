@@ -34,4 +34,13 @@ object ShiftRules {
 
     /** Ca mới vào được order: có ca đang mở, hoặc đang ở chế độ thử. */
     fun canCreateOrder(hasActiveShift: Boolean, testMode: Boolean): Boolean = hasActiveShift || testMode
+
+    /** Ai phải chấm công: ADMIN chỉ định từng tài khoản ("1"/"0"); chưa chỉ định thì STAFF có, ADMIN không. */
+    fun attendanceRequired(setting: String, role: String): Boolean = when (setting) {
+        "1" -> true
+        "0" -> false
+        else -> role != "ADMIN"
+    }
+
+    fun attendanceSettingKey(employeeId: String) = "attendance_required_$employeeId"
 }

@@ -18,7 +18,7 @@ internal object CloudQuotaPolicy {
     fun category(path:String):String {
         val collection=path.split('/').getOrNull(4)
         return when(collection){
-            "tableStatus","sessions","orderBatches","orderItems","bills","payments" -> "sales"
+            "tableStatus","sessions","orderBatches","orderItems","bills","payments","refunds" -> "sales"
             "dashboard","dashboardDaily" -> "dashboard"
             "menu","menuCategories","areas","config" -> "catalog"
             "purchases","purchaseItems","purchaseCategories","suppliers","costCodes","profitPartners","assetCategories","monthlyAccounting","assets","financialMovements" -> "finance"

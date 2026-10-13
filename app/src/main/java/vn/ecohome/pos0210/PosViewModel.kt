@@ -174,7 +174,7 @@ class PosViewModel(app:Application):AndroidViewModel(app){
   }
  }
 fun checkOut(){ val e=currentEmployee.value?:return; viewModelScope.launch(Dispatchers.IO){ attendanceMutex.withLock { val s=dao.openAttendance(e.id)?:run{printerMessage.value="CHƯA CHECK-IN";return@withLock}; val now=System.currentTimeMillis(); if(dao.closeAttendance(s.id,now)==1){myAttendance.value=null;refreshPayroll();dao.enqueueSync(SyncQueueEntity(UUID.randomUUID().toString(),"ATTENDANCE",s.id,"UPSERT","",now,now));audit("ATTENDANCE",s.id,"CHECK_OUT","minutes="+((now-s.checkInAt)/60000));printerMessage.value="ĐÃ CHECK-OUT · "+((now-s.checkInAt)/60000)+" PHÚT"} } } }
-fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==null)authError.value="PIN không đúng" else{currentEmployee.value=e;myAttendance.value=dao.openAttendance(e.id);authError.value="";touch();locked.value=false;screen.value=if(dao.activeShift()==null&&!businessTestMode.value)"SHIFT_START" else "TABLES";audit("AUTH",e.id,"LOGIN")}}};fun logout(){locked.value=false;val e=currentEmployee.value;viewModelScope.launch{if(e!=null)audit("AUTH",e.id,"LOGOUT")};businessTestMode.value=false;checkoutPrintTestMode.value=false;printedCheckoutKey.value=null;currentEmployee.value=null;screen.value="LOGIN"}
+fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==null)authError.value="PIN không đúng" else{currentEmployee.value=e;myAttendance.value=dao.openAttendance(e.id);authError.value="";touch();locked.value=false;runCatching{cleanupAbandonedPrepaid()};screen.value=if(dao.activeShift()==null&&!businessTestMode.value)"SHIFT_START" else "TABLES";audit("AUTH",e.id,"LOGIN")}}};fun logout(){locked.value=false;val e=currentEmployee.value;viewModelScope.launch{if(e!=null)audit("AUTH",e.id,"LOGOUT")};businessTestMode.value=false;checkoutPrintTestMode.value=false;printedCheckoutKey.value=null;currentEmployee.value=null;screen.value="LOGIN"}
  private suspend fun audit(type:String,id:String,action:String,payload:String=""){dao.audit(AuditEventEntity(UUID.randomUUID().toString(),type,id,action,currentEmployee.value?.id,"ANDROID",System.currentTimeMillis(),payload))}
  private fun autoBackup(){
   val root=setting("storage_root_uri")
@@ -1100,14 +1100,14 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
     if(sh==null){shiftMessage.value="KHÔNG CÓ CA ĐANG MỞ";withContext(Dispatchers.Main){onDone(false)};return@withLock}
     val who=dao.employeeByPin(pin)
     if(who==null||!ShiftRules.canCloseShift(sh.staffId,who.id,who.role)){shiftMessage.value="PIN KHÔNG ĐÚNG HOẶC KHÔNG PHẢI CHỦ CA";withContext(Dispatchers.Main){onDone(false)};return@withLock}
-    val cashExpected=dao.shiftPaymentTotal(sh.id,"CASH")
+    val cashExpected=dao.shiftPaymentTotalUntil(sh.id,"CASH",Long.MAX_VALUE)
     val diff=ShiftRules.diff(counted,cashExpected)
     if(!ShiftRules.canConfirm(diff,note)){shiftMessage.value="CHÊNH LỆCH LỚN · CẦN GHI CHÚ";withContext(Dispatchers.Main){onDone(false)};return@withLock}
     val receiver=if(receivePin.isNotBlank())dao.employeeByPin(receivePin)?.takeIf{ShiftRules.canReceive("closed",it.role)} else null
     if(receivePin.isNotBlank()&&receiver==null){shiftMessage.value="PIN NGƯỜI NHẬN TIỀN KHÔNG ĐÚNG";withContext(Dispatchers.Main){onDone(false)};return@withLock}
     val now=System.currentTimeMillis()
     val closed=sh.copy(checkOutClient=now,checkOutSource="self",cashExpected=cashExpected,cashCounted=counted,diff=diff,diffNote=note.trim(),
-     transferTotal=dao.shiftPaymentTotal(sh.id,"TRANSFER"),orderCount=dao.shiftPaidBillCount(sh.id),
+     transferTotal=dao.shiftPaymentTotalUntil(sh.id,"TRANSFER",Long.MAX_VALUE),orderCount=dao.shiftPaidBillCount(sh.id),
      status=if(receiver!=null)"received" else "closed",receivedBy=receiver?.id,receivedAt=receiver?.let{now},updatedAt=now)
     dao.openSessionsOfShift(sh.id).forEach{dao.setSessionShift(it.id,ShiftRules.PENDING_NEXT)}
     dao.saveShift(closed)
@@ -1278,6 +1278,80 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    withContext(Dispatchers.Main){onDone(null)}
   }
  }
+
+ // ===== QUY TRÌNH THANH TOÁN: Trả sau (mặc định) / Trả trước =====
+ fun paymentFlow():String=PaymentFlowRules.normalize(setting(PaymentFlowRules.SETTING_KEY))
+ val prepaidTable=DiningTableEntity(PaymentFlowRules.PREPAID_TABLE_ID,"prepaid","Trả trước")
+ val paymentFlowMessage=MutableStateFlow("")
+ val prepaidOrders=dao.prepaidOrdersSince(ShiftRulesTodayStart.todayStart()).stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
+ /** Đổi chế độ (ADMIN): chặn nếu còn bàn/đơn chưa thanh toán hoặc giỏ hàng đang soạn; ghi lịch sử local. */
+ fun changePaymentFlow(target:String,onDone:(String?)->Unit){
+  val e=currentEmployee.value
+  viewModelScope.launch(Dispatchers.IO){
+   fun fail(m:String){viewModelScope.launch(Dispatchers.Main){onDone(m)}}
+   if(e==null||e.role!="ADMIN"){fail("Chỉ ADMIN được đổi chế độ thanh toán");return@launch}
+   cleanupAbandonedPrepaid()
+   val open=dao.openSessions().first()
+   val tableNames=dao.tables().first().associate{it.id to it.name}
+   val names=open.map{tableNames[it.tableId]?:"Đơn trả trước"}
+   val old=paymentFlow()
+   PaymentFlowRules.changeBlocker(old,target,names,cart.value.isEmpty())?.let{fail(it);return@launch}
+   val now=System.currentTimeMillis()
+   val history=PaymentFlowRules.appendHistory(setting(PaymentFlowRules.HISTORY_KEY),PaymentFlowRules.historyLine(now,e.name,old,target))
+   db.withTransaction{
+    dao.saveSetting(AppSettingEntity(PaymentFlowRules.HISTORY_KEY,history))
+    dao.saveSetting(AppSettingEntity(PaymentFlowRules.SETTING_KEY,PaymentFlowRules.normalize(target)))
+   }
+   audit("SETTING",PaymentFlowRules.SETTING_KEY,"PAYMENT_FLOW_CHANGED","$old→$target")
+   dao.markCloudDirty()
+   withContext(Dispatchers.Main){onDone(null)}
+  }
+ }
+ /** Bắt đầu đơn trả trước: bàn ảo, chưa có phiên; phiên chỉ được tạo khi gửi để thanh toán. */
+ fun startPrepaidOrder(){
+  val e=currentEmployee.value?:return
+  if(!e.canOrder&&e.role!="ADMIN")return
+  viewModelScope.launch{
+   val shift=dao.activeShift()
+   if(!ShiftRules.canCreateOrder(shift!=null,businessTestMode.value)){orderMessage.value="CHƯA VÀO CA · Bắt đầu ca trước";screen.value="SHIFT_START";return@launch}
+   cart.value=emptyMap();cartNotes.value=emptyMap();currentSession.value=null;currentTable.value=prepaidTable
+   screen.value="ORDER"
+  }
+ }
+ /** Rời màn thanh toán mà chưa thu tiền: huỷ đơn nháp, không để lại đơn chưa thu. */
+ fun abandonPrepaid(){
+  val s=currentSession.value
+  val e=currentEmployee.value
+  viewModelScope.launch(Dispatchers.IO){
+   if(s!=null&&s.flow==PaymentFlowRules.PREPAID&&e!=null&&dao.billBySessionId(s.id)==null)cancelPrepaidSession(s,e.id)
+   withContext(Dispatchers.Main){currentSession.value=null;currentTable.value=null;cart.value=emptyMap();cartNotes.value=emptyMap();screen.value="TABLES"}
+  }
+ }
+ private suspend fun cancelPrepaidSession(s:TableSessionEntity,actorId:String){
+  runCatching{
+   dao.batches(s.id).first().forEach{dao.cancelBatch(it.id)}
+   repo.closeCancelledSession(s,actorId)
+   audit("SESSION",s.id,"PREPAID_ABANDONED","unpaid")
+  }
+ }
+ /** Dọn các đơn trả trước còn dở (app bị tắt ở màn thanh toán): chưa có bill thì huỷ. */
+ suspend fun cleanupAbandonedPrepaid(){
+  val actor=currentEmployee.value?.id?:"system"
+  dao.openPrepaidSessions().forEach{ s-> if(dao.billBySessionId(s.id)==null&&s.id!=currentSession.value?.id)cancelPrepaidSession(s,actor) }
+ }
+ /** Huỷ đơn trả trước đã thu: bắt buộc lý do, ghi khoản hoàn, không xoá đơn. */
+ fun refundPrepaidOrder(sessionId:String,batchId:String,reason:String,onDone:(String?)->Unit){
+  val e=currentEmployee.value
+  viewModelScope.launch(Dispatchers.IO){
+   fun fail(m:String){viewModelScope.launch(Dispatchers.Main){onDone(m)}}
+   if(e==null||!canCancelOrder()){fail("Không có quyền huỷ đơn");return@launch}
+   if(reason.isBlank()){fail("Bắt buộc ghi lý do");return@launch}
+   val result=runCatching{repo.refundPrepaidOrder(sessionId,batchId,reason,e.id)}
+   result.onFailure{fail(when(it.message){"ORDER_ALREADY_REFUNDED_OR_NOT_PAID"->"Đơn đã hoàn tiền rồi";else->"Không hoàn tiền được: ${it.message}"});return@launch}
+   dao.markCloudDirty();autoBackup()
+   withContext(Dispatchers.Main){onDone(null)}
+  }
+ }
  fun customerRewards(customerId:String)=dao.availableRewards(customerId)
  fun clearSelectedVoucher(){selectedVoucher.value=null;selectedVoucherItemId.value=null;verifiedVoucher.value=null;voucherMessage.value=""}
  fun sendBatch(){
@@ -1293,7 +1367,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    val sessionScope=currentSession.value?.dataScope?:if(businessTestMode.value)"TEST" else "LIVE"
    if(sessionScope=="LIVE"&&!ShiftRules.canPay(runningShift?.staffId,e.id)){orderMessage.value="ĐANG TRONG CA CỦA ${runningShift?.staffName} · CHỈ ${runningShift?.staffName} ĐƯỢC ORDER";return@launch}
    if(!ShiftRules.canCreateOrder(dao.activeShift()!=null,businessTestMode.value)){orderMessage.value="CHƯA VÀO CA · Bắt đầu ca trước khi gửi order";screen.value="SHIFT_START";return@launch}
-   val s=currentSession.value ?: repo.openSession(t.id,e.id,if(businessTestMode.value)"TEST" else "LIVE").also{currentSession.value=it}
+   val s=currentSession.value ?: repo.openSession(t.id,e.id,if(businessTestMode.value)"TEST" else "LIVE",if(t.id==PaymentFlowRules.PREPAID_TABLE_ID)PaymentFlowRules.PREPAID else PaymentFlowRules.POSTPAID).also{currentSession.value=it}
    val bs=dao.batches(s.id).first()
    val historical=bs.filter{it.status!="CANCELLED"}.flatMap{dao.batchItems(it.id).first()}
    val its=mutableListOf<OrderItemEntity>()
@@ -1334,7 +1408,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    if(voucher!=null)audit("LOYALTY",voucher.id,"VOUCHER_REDEEMED","batch="+created.id+",item="+voucherItem!!.id)
    cart.value=emptyMap();cartNotes.value=emptyMap();clearSelectedVoucher()
    autoBackup()
-   screen.value="SENT"
+   screen.value=if(s.flow==PaymentFlowRules.PREPAID)"PAY" else "SENT"
   }
  }
  fun markBatchSent(b:OrderBatchEntity){
@@ -1779,7 +1853,7 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
    else{dao.markPrintFailed(job.id,result.exceptionOrNull()?.message?:"UNKNOWN");printerMessage.value="VOUCHER ĐÃ LƯU NHƯNG IN LỖI · CÓ THỂ IN LẠI"}
   }
  }
- fun close(method:String,preview:PricingPreview,qrInfo:String,customerPhone:String="",customerName:String="",loyaltyRewardId:String?=null){
+ fun close(method:String,preview:PricingPreview,qrInfo:String,customerPhone:String="",customerName:String="",loyaltyRewardId:String?=null,cashReceived:Long?=null){
   val session=currentSession.value?:return
   val employee=currentEmployee.value?:return
   val table=currentTable.value
@@ -1787,6 +1861,8 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
   val runningShift=activeShift.value
   if(session.dataScope=="LIVE"&&!ShiftRules.canPay(runningShift?.staffId,employee.id)){printerMessage.value="ĐANG TRONG CA CỦA ${runningShift?.staffName} · CHỈ ${runningShift?.staffName} ĐƯỢC THANH TOÁN (hoặc chờ ra ca)";return}
   if(checkoutPrinting.value){printerMessage.value="ĐANG IN BILL · Vui lòng chờ in hoàn tất";return}
+  val prepaidCash=session.flow==PaymentFlowRules.PREPAID&&method=="CASH"
+  if(prepaidCash&&!PaymentFlowRules.canConfirmCash(session.flow,preview.total,cashReceived)){printerMessage.value="KHÁCH ĐƯA CHƯA ĐỦ TIỀN";return}
   val checkoutKey=CheckoutPrintPolicy.key(session.id,preview.total,qrInfo)
   if(!CheckoutPrintPolicy.canConfirm(checkoutKey,printedCheckoutKey.value,checkoutPrintAttemptedKey.value)){printerMessage.value="BILL/QR ĐÃ THAY ĐỔI · VUI LÒNG IN LẠI TRƯỚC KHI XÁC NHẬN";return}
   viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO){
@@ -1804,7 +1880,9 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
      vipMinPoints=setting("vip_min_points").toIntOrNull() ?: 200,
      vvipMinPoints=setting("vvip_min_points").toIntOrNull() ?: 500,
      loyaltyRewardId=loyaltyRewardId,
-     pointUnitVnd=setting("loyalty_vnd_per_point").toLongOrNull() ?: 10000L
+     pointUnitVnd=setting("loyalty_vnd_per_point").toLongOrNull() ?: 10000L,
+     cashReceived=if(prepaidCash)cashReceived else null,
+     change=if(prepaidCash)cashReceived?.let{PaymentFlowRules.change(preview.total,it)} else null
     )
    }.getOrElse { err ->
     printerMessage.value=when(err.message){
@@ -1816,6 +1894,7 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
     return@launch
    }
    val bill=commit.bill
+   if(session.flow==PaymentFlowRules.PREPAID){val t0=System.currentTimeMillis();dao.batches(session.id).first().filter{it.status=="DRAFT"}.forEach{dao.transitionBatch(it.id,"DRAFT","WAITING",t0)}}
    if(method=="TRANSFER"&&pendingPaymentSession!=null)dao.confirmPaymentSession(pendingPaymentSession.id,bill.id)
    else dao.cancelPaymentSessions(session.id)
    val customer=commit.customer

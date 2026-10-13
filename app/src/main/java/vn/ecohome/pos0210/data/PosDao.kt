@@ -37,7 +37,7 @@ WHERE s.status='OPEN' GROUP BY s.id""") fun tableServiceTimings():Flow<List<Tabl
 @Query("SELECT * FROM TableSessionEntity WHERE id=:id LIMIT 1") fun sessionById(id:String):Flow<TableSessionEntity?>
 @Query("SELECT * FROM TableSessionEntity WHERE tableId=:tableId AND status='OPEN' LIMIT 1") suspend fun openSessionForTable(tableId:String):TableSessionEntity?
 @Query("SELECT * FROM OrderBatchEntity WHERE sessionId=:sessionId ORDER BY sequence") fun batches(sessionId:String):Flow<List<OrderBatchEntity>>
-@Query("SELECT ob.* FROM OrderBatchEntity ob INNER JOIN TableSessionEntity s ON s.id=ob.sessionId WHERE ob.status='WAITING' AND s.status='OPEN' ORDER BY ob.serviceNo,ob.createdAt") fun waitingBatches():Flow<List<OrderBatchEntity>>
+@Query("SELECT ob.* FROM OrderBatchEntity ob INNER JOIN TableSessionEntity s ON s.id=ob.sessionId WHERE ob.status='WAITING' AND (s.status='OPEN' OR s.flow='prepaid') ORDER BY ob.serviceNo,ob.createdAt") fun waitingBatches():Flow<List<OrderBatchEntity>>
 @Query("SELECT COUNT(*) FROM OrderBatchEntity WHERE sessionId=:sessionId AND status='WAITING'") suspend fun waitingCountForSession(sessionId:String):Int
 @Query("SELECT COUNT(*) FROM OrderBatchEntity WHERE sessionId=:sessionId AND status IN ('DRAFT','WAITING')") suspend fun unfulfilledCountForSession(sessionId:String):Int
 @Query("SELECT COALESCE(MAX(sequence),0) FROM OrderBatchEntity WHERE sessionId=:sessionId") suspend fun maxBatchSequence(sessionId:String):Int
@@ -295,7 +295,14 @@ WHERE s.dataScope='LIVE' AND ob.status!='CANCELLED' AND EXISTS(SELECT 1 FROM Bil
 @Query("SELECT COUNT(*) FROM BillEntity b JOIN TableSessionEntity s ON s.id=b.sessionId WHERE s.shiftId=:shiftId AND b.status='PAID' AND b.dataScope='LIVE'") suspend fun shiftPaidBillCount(shiftId:String):Int
 @Query("SELECT * FROM EmployeeEntity WHERE id=:id LIMIT 1") suspend fun employeeById(id:String):EmployeeEntity?
 @Query("DELETE FROM AttendanceSessionEntity WHERE id=:id AND dataScope='LIVE'") suspend fun deleteAttendance(id:String):Int
-@Query("SELECT COALESCE(SUM(p.amount),0) FROM PaymentEntity p JOIN BillEntity b ON b.id=p.billId JOIN TableSessionEntity s ON s.id=b.sessionId WHERE s.shiftId=:shiftId AND p.method=:method AND p.dataScope='LIVE' AND b.status='PAID' AND p.paidAt<=:until") suspend fun shiftPaymentTotalUntil(shiftId:String,method:String,until:Long):Long
+@Query("SELECT COALESCE(SUM(p.amount),0) - COALESCE((SELECT SUM(r.amount) FROM RefundEntity r WHERE r.shiftId=:shiftId AND r.method=:method AND r.dataScope='LIVE' AND r.createdAt<=:until),0) FROM PaymentEntity p JOIN BillEntity b ON b.id=p.billId JOIN TableSessionEntity s ON s.id=b.sessionId WHERE s.shiftId=:shiftId AND p.method=:method AND p.dataScope='LIVE' AND b.status IN ('PAID','REFUNDED') AND p.paidAt<=:until") suspend fun shiftPaymentTotalUntil(shiftId:String,method:String,until:Long):Long
 @Query("SELECT COUNT(*) FROM BillEntity b JOIN TableSessionEntity s ON s.id=b.sessionId JOIN PaymentEntity p ON p.billId=b.id WHERE s.shiftId=:shiftId AND b.status='PAID' AND b.dataScope='LIVE' AND p.paidAt<=:until") suspend fun shiftPaidBillCountUntil(shiftId:String,until:Long):Int
 @Query("SELECT DISTINCT s.id FROM TableSessionEntity s JOIN BillEntity b ON b.sessionId=s.id JOIN PaymentEntity p ON p.billId=b.id WHERE s.shiftId=:shiftId AND p.paidAt>:until") suspend fun sessionIdsPaidAfter(shiftId:String,until:Long):List<String>
+@Insert(onConflict=OnConflictStrategy.ABORT) suspend fun insertRefund(v:RefundEntity)
+@Query("SELECT * FROM RefundEntity ORDER BY createdAt") suspend fun refundsSnapshot():List<RefundEntity>
+@Query("SELECT * FROM BillEntity WHERE sessionId=:sessionId LIMIT 1") suspend fun billBySessionId(sessionId:String):BillEntity?
+@Query("UPDATE BillEntity SET status='REFUNDED' WHERE id=:id AND status='PAID'") suspend fun markBillRefunded(id:String):Int
+@Query("UPDATE OrderBatchEntity SET status='CANCELLED' WHERE id=:id AND status IN ('WAITING','DELIVERED')") suspend fun cancelPaidBatch(id:String):Int
+@Query("SELECT * FROM TableSessionEntity WHERE flow='prepaid' AND status='OPEN'") suspend fun openPrepaidSessions():List<TableSessionEntity>
+@Query("SELECT s.id AS sessionId, ob.id AS batchId, ob.serviceNo AS serviceNo, ob.status AS batchStatus, b.id AS billId, b.total AS total, p.method AS method, p.cashReceived AS cashReceived, p.`change` AS `change`, p.paidAt AS paidAt, b.status AS billStatus, s.openedAt AS openedAt FROM TableSessionEntity s JOIN OrderBatchEntity ob ON ob.sessionId=s.id JOIN BillEntity b ON b.sessionId=s.id LEFT JOIN PaymentEntity p ON p.billId=b.id WHERE s.flow='prepaid' AND s.openedAt>=:since AND s.dataScope='LIVE' ORDER BY ob.serviceNo DESC") fun prepaidOrdersSince(since:Long):Flow<List<PrepaidOrderRow>>
 }

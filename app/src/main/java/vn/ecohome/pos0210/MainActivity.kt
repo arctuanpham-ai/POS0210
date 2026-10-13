@@ -174,6 +174,8 @@ fun App(vm: PosViewModel = viewModel()) {
         "PRICING" -> PricingManager(vm)
         "BUY_GET" -> BuyGetManager(vm)
         "DELIVERY" -> DeliveryQueue(vm)
+        "PREPAID_ORDERS" -> PrepaidOrders(vm)
+        "PAYMENT_FLOW" -> PaymentFlowSettings(vm)
         "CUSTOMERS" -> Customers(vm)
         "LOYALTY_CONFIG" -> LoyaltyConfig(vm)
         "LOYALTY_CAMPAIGNS" -> LoyaltyCampaignManager(vm)
@@ -307,6 +309,21 @@ fun Tables(vm: PosViewModel) {
                     }
                     TableCardUi(tb.id,tb.name,areaName,open!=null,nextService?.serviceNo,priorityRank,serviceTimer)
         }
+        val flowSettings by vm.settings.collectAsState()
+        val prepaidMode = PaymentFlowRules.normalize(flowSettings.firstOrNull { it.key == PaymentFlowRules.SETTING_KEY }?.value) == PaymentFlowRules.PREPAID
+        if (prepaidMode) {
+            Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("TRẢ TRƯỚC · Thu tiền xong mới tạo đơn", fontWeight = FontWeight.Black, color = Coffee)
+                Button(
+                    onClick = { vm.startPrepaidOrder() },
+                    modifier = Modifier.fillMaxWidth().weight(1f)
+                ) { Text("＋ ĐƠN MỚI\nTHANH TOÁN TRƯỚC".replace("\\n", "\n"), fontSize = 26.sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Center) }
+                OutlinedButton(
+                    onClick = { vm.screen.value = "PREPAID_ORDERS" },
+                    modifier = Modifier.fillMaxWidth().height(56.dp)
+                ) { Text("ĐƠN HÔM NAY", fontWeight = FontWeight.Bold) }
+            }
+        } else
         ResponsiveTableGrid(tableCards,Modifier.weight(1f).fillMaxWidth().padding(horizontal=12.dp,vertical=8.dp)){id->ts.firstOrNull{it.id==id}?.let(vm::selectTable)}
 
         if (waiting.isNotEmpty()) {
@@ -456,7 +473,7 @@ fun Order(vm: PosViewModel, t: DiningTableEntity) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { }, modifier = Modifier.weight(1f), enabled=false) { Text("VOUCHER TẠM KHÓA") }
             OutlinedButton(onClick = { showCart = true }, modifier = Modifier.weight(1f)) { Text("GIỎ HÀNG") }
-            Button(onClick = { vm.sendBatch() }, modifier = Modifier.weight(1f), enabled = (cart.isNotEmpty()||selectedVoucher!=null) && !orderBlocked) { Text(if (orderBlocked) "ĐÃ KHOÁ" else "GỬI BẾP") }
+            Button(onClick = { vm.sendBatch() }, modifier = Modifier.weight(1f), enabled = (cart.isNotEmpty()||selectedVoucher!=null) && !orderBlocked) { Text(if (orderBlocked) "ĐÃ KHOÁ" else if (t.id == PaymentFlowRules.PREPAID_TABLE_ID) "THANH TOÁN" else "GỬI BẾP") }
         }
     }
     if (showCart) OrderCartNotesDialog(vm) { showCart = false }
@@ -780,7 +797,9 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
     val e by vm.currentEmployee.collectAsState()
     val settings by vm.settings.collectAsState()
     val sessionBatches by vm.batches(s.id).collectAsState(initial = emptyList())
-    val pendingDelivery = sessionBatches.filter { it.status == "DRAFT" || it.status == "WAITING" }.sortedBy { it.serviceNo }
+    val isPrepaid = s.flow == PaymentFlowRules.PREPAID
+    val pendingDelivery = if (isPrepaid) emptyList() else sessionBatches.filter { it.status == "DRAFT" || it.status == "WAITING" }.sortedBy { it.serviceNo }
+    var cashGiven by remember { mutableStateOf("") }
     fun setting(key: String) = settings.firstOrNull { it.key == key }?.value ?: ""
     var codeText by remember { mutableStateOf("") }
     var appliedCode by remember { mutableStateOf("") }
@@ -833,7 +852,7 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
     val ambiguousEvent=bankEvents.firstOrNull{it.matchStatus=="AMBIGUOUS"&&it.amount==preview.total&&it.receivedAt>=s.openedAt}
 
     Column {
-        Header("Thanh toán") { vm.screen.value = "SENT" }
+        Header(if (isPrepaid) "Thanh toán trước" else "Thanh toán") { if (isPrepaid) vm.abandonPrepaid() else vm.screen.value = "SENT" }
         Column(Modifier.weight(1f).padding(18.dp).verticalScroll(rememberScrollState())) {
             if (pendingDelivery.isNotEmpty()) {
                 Card(
@@ -987,11 +1006,35 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                 }
                 Text("Bill trên màn hình và mã QR luôn khả dụng. Nếu máy in lỗi, vẫn có thể xác nhận sau khi nhận đủ tiền.", Modifier.padding(top=6.dp),fontSize=11.sp)
             }
+            val cashValue = cashGiven.filter(Char::isDigit).toLongOrNull()
+            val cashOk = PaymentFlowRules.canConfirmCash(s.flow, preview.total, cashValue)
+            if (isPrepaid) {
+                OutlinedTextField(
+                    value = cashGiven,
+                    onValueChange = { cashGiven = it.filter(Char::isDigit).take(9) },
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                    label = { Text("Tiền khách đưa (chỉ cho tiền mặt)") },
+                    singleLine = true
+                )
+                Row(Modifier.fillMaxWidth().padding(bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    AssistChip(onClick = { cashGiven = preview.total.toString() }, label = { Text("Vừa đủ") })
+                    listOf(50_000L, 100_000L, 200_000L, 500_000L).forEach { v ->
+                        AssistChip(onClick = { cashGiven = v.toString() }, label = { Text("${v / 1000}k") })
+                    }
+                }
+                val ch = cashValue?.let { PaymentFlowRules.change(preview.total, it) }
+                Text(
+                    if (cashValue == null) "Nhập tiền khách đưa để xác nhận tiền mặt" else if (ch == null) "Khách đưa chưa đủ · thiếu ${money(preview.total - cashValue)}" else "TIỀN THỐI: ${money(ch)}",
+                    fontWeight = FontWeight.Black, fontSize = 18.sp,
+                    color = if (ch == null) Color(0xFF9A2B1F) else Color(0xFF41633A),
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
+            }
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)){
                 OutlinedButton(
-                    onClick={vm.close("CASH",preview,qrInfo,customerPhone,customerName,if(applyReward)billReward?.id else null)},
+                    onClick={vm.close("CASH",preview,qrInfo,customerPhone,customerName,if(applyReward)billReward?.id else null,if(isPrepaid)cashValue else null)},
                     modifier=Modifier.weight(1f),
-                    enabled=!checkoutPrinting&&preview.total>0&&pendingDelivery.isEmpty()&&validPaymentSession!=null
+                    enabled=!checkoutPrinting&&preview.total>0&&pendingDelivery.isEmpty()&&validPaymentSession!=null&&cashOk
                 ){Text("XÁC NHẬN\\nTIỀN MẶT".replace("\\n","\n"),textAlign=TextAlign.Center)}
                 Button(
                     onClick={vm.close("TRANSFER",preview,qrInfo,customerPhone,customerName,if(applyReward)billReward?.id else null)},
@@ -1031,7 +1074,7 @@ fun DeliveryQueue(vm: PosViewModel) {
                         Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    "#${b.serviceNo.toString().padStart(3,'0')} · ${table?.name ?: "Bàn"}",
+                                    "#${b.serviceNo.toString().padStart(3,'0')} · ${table?.name ?: "Trả trước"}",
                                     fontSize = 20.sp,
                                     fontWeight = FontWeight.Black
                                 )
@@ -1448,6 +1491,7 @@ fun Manage(vm: PosViewModel) {
             }
             Rowx("Khách hàng", "Tra cứu · cập nhật tên/SĐT/địa chỉ · Member/VIP/VVIP") { vm.screen.value = "CUSTOMERS" }
             if (employee?.role == "ADMIN") {
+                Rowx("Quy trình thanh toán", "Trả sau (theo bàn) · Trả trước (thu tiền rồi pha chế) · lịch sử đổi") { vm.screen.value = "PAYMENT_FLOW" }
                 Rowx("Cấu hình hạng thành viên", "Ngưỡng điểm · tự nâng hạng · % ưu đãi Member/VIP/VVIP") { vm.screen.value = "LOYALTY_CONFIG" }
                 Rowx("Chương trình tích điểm giảm bill", "Tùy chỉnh điểm → giảm tiền hoặc % một lần") { vm.screen.value = "LOYALTY_CAMPAIGNS" }
                 Rowx("Nhân sự & Lương", "Nhân viên · ca làm · chấm công · sửa công · bảng lương") { vm.screen.value = "HR" }

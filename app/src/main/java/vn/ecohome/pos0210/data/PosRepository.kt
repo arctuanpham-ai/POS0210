@@ -68,8 +68,8 @@ class PosRepository(private val db:PosDatabase){
         return earned
     }
 
-    suspend fun openSession(tableId:String,employeeId:String,dataScope:String="LIVE"):TableSessionEntity {
-        val now=System.currentTimeMillis(); require(dataScope=="LIVE"||dataScope=="TEST"); val s=TableSessionEntity(UUID.randomUUID().toString(),tableId,now,employeeId,dataScope=dataScope,shiftId=if(dataScope=="LIVE")dao.activeShift()?.id else null)
+    suspend fun openSession(tableId:String,employeeId:String,dataScope:String="LIVE",flow:String="postpaid"):TableSessionEntity {
+        val now=System.currentTimeMillis(); require(dataScope=="LIVE"||dataScope=="TEST"); val s=TableSessionEntity(UUID.randomUUID().toString(),tableId,now,employeeId,dataScope=dataScope,shiftId=if(dataScope=="LIVE")dao.activeShift()?.id else null,flow=flow)
         db.withTransaction { dao.insertSession(s); dao.audit(AuditEventEntity(UUID.randomUUID().toString(),"SESSION",s.id,"OPEN",employeeId,null,now,tableId)) }
         return s
     }
@@ -210,7 +210,9 @@ class PosRepository(private val db:PosDatabase){
         vipMinPoints:Int=200,
         vvipMinPoints:Int=500,
         loyaltyRewardId:String?=null,
-        pointUnitVnd:Long=10000L
+        pointUnitVnd:Long=10000L,
+        cashReceived:Long?=null,
+        change:Long?=null
     ):PaymentCommitResult {
         require(method=="CASH" || method=="TRANSFER") { "INVALID_PAYMENT_METHOD" }
         require(preview.subtotal>=0L && preview.total>=0L && preview.surcharge>=0L && preview.discount>=0L) { "INVALID_PAYMENT_AMOUNT" }
@@ -222,7 +224,7 @@ class PosRepository(private val db:PosDatabase){
         return db.withTransaction {
             val storedSession=dao.sessionSnapshotById(session.id) ?: error("SESSION_MISSING")
             check(storedSession.status=="OPEN"&&storedSession.version==session.version&&storedSession.dataScope==session.dataScope){"SESSION_ALREADY_CLOSED_OR_CHANGED"}
-            if(dao.unfulfilledCountForSession(session.id)>0) error("PENDING_ORDER_NOT_COMPLETED")
+            if(storedSession.flow!="prepaid"&&dao.unfulfilledCountForSession(session.id)>0) error("PENDING_ORDER_NOT_COMPLETED")
             val liveSubtotal=dao.sessionTotalSnapshot(session.id)
             if(liveSubtotal!=preview.subtotal) error("ORDER_TOTAL_CHANGED")
             var customer:CustomerEntity?=null
@@ -278,7 +280,7 @@ class PosRepository(private val db:PosDatabase){
             if(dao.closeSession(session.id,session.version)!=1) error("SESSION_ALREADY_CLOSED_OR_CHANGED")
             dao.insertBill(bill)
             if(loyaltyRewardId!=null) check(dao.redeemReward(loyaltyRewardId,bill.id,now)==1){"LOYALTY_ALREADY_USED"}
-            dao.insertPayment(PaymentEntity(UUID.randomUUID().toString(),bill.id,method,preview.total,cashierId,now,dataScope=session.dataScope));dao.touchActiveShift(now)
+            dao.insertPayment(PaymentEntity(UUID.randomUUID().toString(),bill.id,method,preview.total,cashierId,now,dataScope=session.dataScope,cashReceived=cashReceived,change=change));dao.touchActiveShift(now)
 
             customer?.let { cu ->
                 dao.saveCustomer(cu)
@@ -451,5 +453,23 @@ class PosRepository(private val db:PosDatabase){
             dao.deletePurchaseItemsForWebExpense(p.id)
             if(items.isNotEmpty()) dao.saveWebExpenseItems(items)
         }
+    }
+
+    /** Huỷ đơn trả trước đã thu tiền: ghi khoản hoàn (không xoá đơn), bill chuyển REFUNDED, món chuyển CANCELLED. */
+    suspend fun refundPrepaidOrder(sessionId:String,batchId:String,reason:String,actorId:String):RefundEntity = db.withTransaction {
+        require(reason.isNotBlank()){"REFUND_REASON_REQUIRED"}
+        val now=System.currentTimeMillis()
+        val session=dao.sessionSnapshotById(sessionId) ?: error("SESSION_MISSING")
+        check(session.flow=="prepaid"){"NOT_A_PREPAID_ORDER"}
+        val bill=dao.billBySessionId(sessionId) ?: error("BILL_MISSING")
+        check(bill.status=="PAID"){"ORDER_ALREADY_REFUNDED_OR_NOT_PAID"}
+        val payment=dao.paymentByBillId(bill.id) ?: error("PAYMENT_MISSING")
+        val refund=RefundEntity(UUID.randomUUID().toString(),bill.id,sessionId,batchId,payment.amount,payment.method,reason.trim(),actorId,dao.activeShift()?.id,now,payment.dataScope)
+        check(dao.markBillRefunded(bill.id)==1){"ORDER_ALREADY_REFUNDED_OR_NOT_PAID"}
+        dao.insertRefund(refund)
+        dao.cancelPaidBatch(batchId)
+        dao.touchActiveShift(now)
+        dao.audit(AuditEventEntity(UUID.randomUUID().toString(),"BILL",bill.id,"REFUND",actorId,null,now,"amount=${payment.amount},method=${payment.method},reason=${reason.trim()}"))
+        refund
     }
 }

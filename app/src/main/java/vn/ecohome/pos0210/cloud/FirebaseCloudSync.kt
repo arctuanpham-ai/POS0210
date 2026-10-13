@@ -190,12 +190,15 @@ object FirebaseCloudSync {
         writeMaps(fs,root.collection("orderItems"),dao.cloudOrderItemsSnapshot().map{i->i.id to mapOf("id" to i.id,"batchId" to i.batchId,"menuItemId" to i.menuItemId,"itemName" to i.itemNameSnapshot,"unitPrice" to i.unitPriceSnapshot,"qty" to i.qty,"note" to i.note,"adjustmentOfItemId" to i.adjustmentOfItemId,"categoryIdSnapshot" to i.categoryIdSnapshot,"categoryNameSnapshot" to i.categoryNameSnapshot,"comboPartsSnapshot" to i.comboPartsSnapshot,"loyaltyRewardId" to i.loyaltyRewardId,"buyGetPromotionId" to i.buyGetPromotionId)})
         writeMaps(fs,root.collection("bills"),bills.map{b->b.id to mapOf("id" to b.id,"sessionId" to b.sessionId,"billNo" to b.billNo,"openedAt" to b.openedAt,"closedAt" to b.closedAt,"subtotal" to b.subtotal,"total" to b.total,"status" to b.status)})
         writeMaps(fs,root.collection("payments"),paymentMirror.map{p->p.id to mapOf("id" to p.id,"billId" to p.billId,"method" to p.method,"amount" to p.amount,"cashierId" to p.cashierId,"paidAt" to p.paidAt,"reference" to p.reference,"dataScope" to p.dataScope,"cashReceived" to p.cashReceived,"change" to p.change)})
+        // Refund/payment-flow mirrors are best effort: a rules or quota failure here must never block shifts/days/config below.
+        runCatching{
         writeMaps(fs,root.collection("refunds"),dao.refundsSnapshot().map{r->r.id to mapOf("id" to r.id,"billId" to r.billId,"sessionId" to r.sessionId,"batchId" to r.batchId,"amount" to r.amount,"method" to r.method,"reason" to r.reason,"actorId" to r.actorId,"shiftId" to r.shiftId,"createdAt" to r.createdAt,"dataScope" to r.dataScope)})
         run{
             val st=dao.allSettingsSnapshot().associate{it.key to it.value}
             val hist=(st["payment_flow_history"]?:"").lines().filter{l->l.isNotBlank()}.mapNotNull{l->l.split("|").takeIf{x->x.size>=4}?.let{x->mapOf("at" to (x[0].toLongOrNull()?:0L),"by" to x[1],"from" to x[2],"to" to x[3])}}
             writeMaps(fs,root.collection("config"),listOf("paymentFlow" to mapOf("current" to vn.ecohome.pos0210.PaymentFlowRules.normalize(st["payment_flow"]),"history" to hist)))
         }
+        }.onFailure{e->android.util.Log.w("POS0210_SYNC","refunds/paymentFlow mirror skipped: "+e.message)}
         writeMaps(fs,root.collection("shifts"),dao.shiftsSnapshot().filter{it.dataScope=="LIVE"}.map{sh->sh.id to mapOf("id" to sh.id,"date" to sh.date,"staffId" to sh.staffId,"staffName" to sh.staffName,"role" to sh.role,"checkInClient" to sh.checkInClient,"checkOutClient" to sh.checkOutClient,"checkOutSource" to sh.checkOutSource,"lastActivityAt" to sh.lastActivityAt,"cashExpected" to sh.cashExpected,"cashCounted" to sh.cashCounted,"diff" to sh.diff,"diffNote" to sh.diffNote,"transferTotal" to sh.transferTotal,"orderCount" to sh.orderCount,"status" to sh.status,"receivedBy" to sh.receivedBy,"receivedAt" to sh.receivedAt,"updatedAt" to sh.updatedAt,"workMinutes" to vn.ecohome.pos0210.ShiftRules.shiftMinutes(sh.checkInClient,sh.checkOutClient),"editLog" to sh.editLog.lines().filter{l->l.isNotBlank()})})
         run{
             val liveShifts=dao.shiftsSnapshot().filter{it.dataScope=="LIVE"}

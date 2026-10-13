@@ -77,6 +77,8 @@ class PosViewModel(app:Application):AndroidViewModel(app){
  val openingCashAdjustments=dao.openingCashAdjustments().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
  val cloudSyncState=dao.cloudSyncState().stateIn(viewModelScope,SharingStarted.Eagerly,null)
  val cloudMessage=MutableStateFlow("");val cloudDashboard=MutableStateFlow(CloudDashboard());private var cloudDashboardJob:Job?=null
+ // true khi máy còn nhớ syncedUid nhưng FirebaseAuth đã mất phiên: UI hiện "Đăng nhập lại, giữ nguyên UID" thay vì bắt đăng xuất.
+ val firebaseSessionMissing=MutableStateFlow(false)
  init{
   viewModelScope.launch{bootstrap()}
   viewModelScope.launch{openAttendances.collect{refreshPayroll()}}
@@ -630,9 +632,9 @@ fun configureFirebase(projectId:String,applicationId:String,apiKey:String){
 }
 fun firebaseSignIn(email:String,password:String){
  val e=currentEmployee.value?:return;if(e.role!="ADMIN"||email.isBlank()||password.isBlank())return
- viewModelScope.launch(Dispatchers.IO){runCatching{FirebaseCloudSync.signIn(getApplication(),email,password)}.onSuccess{uid->dao.saveSetting(AppSettingEntity("firebase_email",email.trim()));dao.saveCloudSyncState((dao.cloudSyncStateSnapshot()?:CloudSyncStateEntity()).copy(enabled=true,dirty=true,lastError=null,syncedUid=uid));FirebaseCloudSync.schedule(getApplication());cloudMessage.value="Đăng nhập Firebase thành công";syncFirebase();observeCloudDashboard()}.onFailure{cloudMessage.value="Đăng nhập lỗi: ${it.message}"}}
+ viewModelScope.launch(Dispatchers.IO){runCatching{FirebaseCloudSync.signIn(getApplication(),email,password)}.onSuccess{uid->dao.saveSetting(AppSettingEntity("firebase_email",email.trim()));dao.saveCloudSyncState((dao.cloudSyncStateSnapshot()?:CloudSyncStateEntity()).copy(enabled=true,dirty=true,lastError=null,syncedUid=uid));firebaseSessionMissing.value=false;FirebaseCloudSync.schedule(getApplication());cloudMessage.value="Đăng nhập Firebase thành công";syncFirebase();observeCloudDashboard()}.onFailure{cloudMessage.value="Đăng nhập lỗi: ${it.message}"}}
 }
-fun firebaseSignOut(){FirebaseCloudSync.signOut(getApplication());viewModelScope.launch(Dispatchers.IO){dao.saveCloudSyncState((dao.cloudSyncStateSnapshot()?:CloudSyncStateEntity()).copy(enabled=false,syncedUid=null));cloudMessage.value="Đã đăng xuất Firebase"};cloudDashboardJob?.cancel()}
+fun firebaseSignOut(){FirebaseCloudSync.signOut(getApplication());firebaseSessionMissing.value=false;viewModelScope.launch(Dispatchers.IO){dao.saveCloudSyncState((dao.cloudSyncStateSnapshot()?:CloudSyncStateEntity()).copy(enabled=false,syncedUid=null));cloudMessage.value="Đã đăng xuất Firebase"};cloudDashboardJob?.cancel()}
 private var manualCloudJob:Job?=null
 fun syncFirebase(){
  if(manualCloudJob?.isActive==true)return
@@ -640,7 +642,7 @@ fun syncFirebase(){
   cloudMessage.value="Đang đồng bộ · các bước hiển thị bên dưới…"
   FirebaseCloudSync.syncNow(getApplication())
    .onSuccess{cloudMessage.value="Dữ liệu realtime đã được server xác nhận · backup và ảnh chạy riêng"}
-   .onFailure{cloudMessage.value=if(it.message?.contains("MUTEX_BUSY")==true)"Tác vụ Cloud khác đang chạy · lần bấm này chưa bắt đầu; theo dõi các bước bên dưới" else "Đồng bộ chưa hoàn tất: ${it.message} · giữ dữ liệu và hàng đợi local"}
+   .onFailure{if(it.message?.contains("AUTH_SESSION_MISSING")==true)firebaseSessionMissing.value=true;cloudMessage.value=if(it.message?.contains("MUTEX_BUSY")==true)"Tác vụ Cloud khác đang chạy · lần bấm này chưa bắt đầu; theo dõi các bước bên dưới" else "Đồng bộ chưa hoàn tất: ${it.message} · giữ dữ liệu và hàng đợi local"}
  }
 }
 fun transferCloudMedia(upload:Boolean){val e=currentEmployee.value?:return;if(e.role!="ADMIN")return;viewModelScope.launch(Dispatchers.IO){cloudMessage.value=if(upload)"Đang đẩy ảnh lên Cloud…" else "Đang tải ảnh từ Cloud…";runCatching{val uid=FirebaseCloudSync.currentUid(getApplication())?:error("Chưa đăng nhập Firebase");val cfg=FirebaseCloudSync.config(getApplication());val app=FirebaseCloudSync.firebaseApp(getApplication(),cfg);val fs=com.google.firebase.firestore.FirebaseFirestore.getInstance(app);val r=if(upload)CloudMediaSync.uploadLocal(getApplication(),fs,uid) else CloudMediaSync.restoreMissing(getApplication(),fs,uid);val count=CloudMediaSync.cloudManifestCount(getApplication(),fs,uid);cloudMessage.value="Media: upload ${r.uploaded} · tải ${r.downloaded} · bỏ qua ${r.skipped} · lỗi ${r.errors} · Cloud ${count} file"+(r.firstError?.let{" · Lỗi đầu: $it"}?:"")}.onFailure{cloudMessage.value="Lỗi Media: ${it.message}"}}}
@@ -650,6 +652,7 @@ fun reconcileFirebaseSession(){
   // A cold start otherwise reports null and incorrectly erases the stored UID.
   val actualUid=runCatching{val cfg=FirebaseCloudSync.config(getApplication());FirebaseCloudSync.firebaseApp(getApplication(),cfg);FirebaseCloudSync.currentUid(getApplication())}.getOrNull()
   val saved=dao.cloudSyncStateSnapshot()?:CloudSyncStateEntity()
+  firebaseSessionMissing.value=actualUid==null&&saved.syncedUid!=null
   when{
    actualUid==null&&saved.syncedUid!=null->dao.saveCloudSyncState(saved.copy(lastError="Phiên Firebase chưa sẵn sàng · kiểm tra đăng nhập, giữ nguyên UID đã lưu"))
    actualUid!=null&&saved.syncedUid!=null&&saved.syncedUid!=actualUid->dao.saveCloudSyncState(saved.copy(lastError="AUTH_UID_MISMATCH · giữ nguyên UID đã lưu, không đồng bộ"))

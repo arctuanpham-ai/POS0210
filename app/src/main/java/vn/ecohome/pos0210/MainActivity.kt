@@ -1638,7 +1638,7 @@ fun CloudSyncSettings(vm:PosViewModel){
     val quotaStatus by vn.ecohome.pos0210.cloud.CloudQuotaGuard.status.collectAsState()
     val cloudActive by vn.ecohome.pos0210.cloud.CloudExecution.active.collectAsState()
     val realtimeBusy=cloudActive.keys.any{it in setOf("REALTIME","DASHBOARD","PUBLISH_MENU","BACKUP_SNAPSHOT","RESTORE_DB")}
-    val settings by vm.settings.collectAsState();val state by vm.cloudSyncState.collectAsState();val message by vm.cloudMessage.collectAsState();val dashboard by vm.cloudDashboard.collectAsState()
+    val settings by vm.settings.collectAsState();val state by vm.cloudSyncState.collectAsState();val message by vm.cloudMessage.collectAsState();val dashboard by vm.cloudDashboard.collectAsState();val sessionMissing by vm.firebaseSessionMissing.collectAsState()
     fun current(key:String)=settings.firstOrNull{it.key==key}?.value.orEmpty()
     val firebaseDefaults=vn.ecohome.pos0210.cloud.FirebaseCloudSync.defaultConfig();var projectId by remember(settings){mutableStateOf(current("firebase_project_id").ifBlank{firebaseDefaults.projectId})};var applicationId by remember(settings){mutableStateOf(current("firebase_application_id").ifBlank{firebaseDefaults.applicationId})};var apiKey by remember(settings){mutableStateOf(current("firebase_api_key").ifBlank{firebaseDefaults.apiKey})}
     var email by remember(settings){mutableStateOf(current("firebase_email"))};var password by remember{mutableStateOf("")};var confirmRestore by remember{mutableStateOf(false)}
@@ -1657,9 +1657,10 @@ fun CloudSyncSettings(vm:PosViewModel){
             Text("TÀI KHOẢN CHỦ QUÁN",fontWeight=FontWeight.Black)
             OutlinedTextField(email,{email=it.trim()},Modifier.fillMaxWidth(),label={Text("Email Firebase")},singleLine=true)
             OutlinedTextField(password,{password=it},Modifier.fillMaxWidth(),label={Text("Mật khẩu")},visualTransformation=PasswordVisualTransformation(),singleLine=true)
-            if(state?.syncedUid==null)Button({vm.firebaseSignIn(email,password);password=""},Modifier.fillMaxWidth(),enabled=email.isNotBlank()&&password.length>=6){Text("ĐĂNG NHẬP & BẬT ĐỒNG BỘ")}
+            if(state?.syncedUid!=null&&sessionMissing)Text("Phiên đăng nhập Firebase đã hết. Dữ liệu bill/order trên máy vẫn giữ nguyên. Nhập lại mật khẩu của đúng tài khoản cũ để tiếp tục đồng bộ.",fontSize=12.sp,color=Color(0xFF9A4B3D),fontWeight=FontWeight.Bold)
+            if(state?.syncedUid==null||sessionMissing)Button({vm.firebaseSignIn(email,password);password=""},Modifier.fillMaxWidth(),enabled=email.isNotBlank()&&password.length>=6){Text(if(sessionMissing&&state?.syncedUid!=null)"ĐĂNG NHẬP LẠI · GIỮ NGUYÊN UID" else "ĐĂNG NHẬP & BẬT ĐỒNG BỘ")}
             else OutlinedButton({vm.firebaseSignOut()},Modifier.fillMaxWidth()){Text("ĐĂNG XUẤT FIREBASE")}
-            Button({vm.syncFirebase()},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null&&!realtimeBusy){Text(if(realtimeBusy)"TÁC VỤ CLOUD ĐANG CHẠY…" else "ĐỒNG BỘ REALTIME NGAY")}
+            Button({vm.syncFirebase()},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null&&!sessionMissing&&!realtimeBusy){Text(if(realtimeBusy)"TÁC VỤ CLOUD ĐANG CHẠY…" else "ĐỒNG BỘ REALTIME NGAY")}
             Button({vm.transferCloudMedia(true)},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null){Text("ĐẨY TOÀN BỘ ẢNH LÊN CLOUD (MÁY GỐC)")}
             OutlinedButton({vm.transferCloudMedia(false)},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null){Text("TẢI ẢNH TỪ CLOUD (MÁY ORDER)")}
             Text("Chỉ bấm ĐẨY trên máy còn ảnh gốc. Màn hình sẽ báo số file và lỗi đầu tiên nếu Storage/URI không đọc được.",fontSize=11.sp)
@@ -1668,7 +1669,7 @@ fun CloudSyncSettings(vm:PosViewModel){
             Text("Backup khi dữ liệu thay đổi, tối thiểu 1 giờ/lần có mạng · giữ 2 bản A/B luân phiên. Restore ưu tiên bản mới nhất hợp lệ và tự fallback sang bản còn lại nếu checksum lỗi.",fontSize=11.sp)
             if(message.isNotBlank())Text(message,fontWeight=FontWeight.Bold)
             val backupOnlyError=state?.lastError?.takeIf{it.startsWith("PRIVATE_BACKUP_ONLY:")}
-            Text("Realtime sync: "+when{state?.syncedUid==null->"Chưa đăng nhập";realtimeBusy->"Đang chạy";state?.lastError!=null&&backupOnlyError==null->"Lần gần nhất chưa hoàn tất";state?.lastSuccessAt!=null->"Đã có lần thành công (xem thời gian bên dưới)";else->"Chưa có lần thành công"},fontWeight=FontWeight.Bold)
+            Text("Realtime sync: "+when{state?.syncedUid==null->"Chưa đăng nhập";sessionMissing->"Mất phiên đăng nhập · cần đăng nhập lại";realtimeBusy->"Đang chạy";state?.lastError!=null&&backupOnlyError==null->"Lần gần nhất chưa hoàn tất";state?.lastSuccessAt!=null->"Đã có lần thành công (xem thời gian bên dưới)";else->"Chưa có lần thành công"},fontWeight=FontWeight.Bold)
             state?.lastSuccessAt?.let{Text("Lần realtime thành công: ${time(it)}",fontSize=12.sp)}
             val backupConfirmed=current("cloud_backup_confirmed_at").toLongOrNull()
             Text("Cloud backup: "+if(backupOnlyError!=null)"Có lỗi" else if(backupConfirmed!=null)"Đã được server xác nhận" else "Chưa có xác nhận trên máy này",fontWeight=FontWeight.Bold)

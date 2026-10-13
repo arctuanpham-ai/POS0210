@@ -208,18 +208,26 @@ object ReceiptRenderer {
         pointsAfter:Int=0,
         method:String,
         qr:Bitmap?,
-        profile:PrinterProfile=PrinterProfile.MM58
+        profile:PrinterProfile=PrinterProfile.MM58,
+        orderTag:String?=null
     ):Bitmap{
         dimensions(profile)
         val adjustmentHeight = (if(surcharge>0) 34 else 0) + (if(discount>0) 34 else 0) + adjustmentLines.size*24
         val customerHeight=if(customerTier!=null)92 else 48
-        val estimated=740+items.size*100+adjustmentHeight+customerHeight+(if(qr!=null)430 else 0)
+        val estimated=(if(orderTag!=null)160 else 0)+740+items.size*100+adjustmentHeight+customerHeight+(if(qr!=null)430 else 0)
         val (b,c)=canvas(estimated)
         var y=48f
         c.drawText("0210",W/2f,y,paint(40f,true,Paint.Align.CENTER));y+=27
         c.drawText("BREAKFAST · COFFEE · DRINKS",W/2f,y,paint(18f,false,Paint.Align.CENTER));y+=32
         c.drawText("BILL THANH TOÁN",W/2f,y,paint(28f,true,Paint.Align.CENTER));y+=25
-        c.drawText("${table.uppercase()}  ·  $period",W/2f,y,paint(18f,false,Paint.Align.CENTER));y+=22
+        if(orderTag!=null){
+            y+=30
+            c.drawText(table.uppercase(),W/2f,y,paint(52f,true,Paint.Align.CENTER));y+=34
+            c.drawText(orderTag,W/2f,y,paint(26f,true,Paint.Align.CENTER));y+=24
+            c.drawText(period,W/2f,y,paint(18f,false,Paint.Align.CENTER));y+=22
+        }else{
+            c.drawText("${table.uppercase()}  ·  $period",W/2f,y,paint(18f,false,Paint.Align.CENTER));y+=22
+        }
         line(c,y);y+=28
         items.forEach{(name,qty,unitPrice)->
             y=item(c,y,"$qty × $name",money(unitPrice*qty))
@@ -260,32 +268,83 @@ object ReceiptRenderer {
             c.drawText("CHỜ LOA XÁC NHẬN TIỀN VỀ",W/2f,y,paint(16f,true,Paint.Align.CENTER));y+=24
         }
         line(c,y);y+=30
+        if(orderTag!=null){
+            c.drawText("GIỮ BILL NÀY",W/2f,y,paint(22f,true,Paint.Align.CENTER));y+=26
+            c.drawText("Báo số thẻ khi nhận món",W/2f,y,paint(18f,false,Paint.Align.CENTER));y+=30
+            line(c,y);y+=30
+        }
         c.drawText("CẢM ƠN QUÝ KHÁCH!",W/2f,y,paint(17f,true,Paint.Align.CENTER));y+=23
         c.drawText("Good Food · Good Coffee · Brighter Day",W/2f,y,paint(18f,false,Paint.Align.CENTER))
         return crop(b,(y+28).toInt())
     }
 
+    private fun invertedBar(c:Canvas,top:Float,height:Float,text:String,size:Float){
+        c.drawRect(0f,top,W.toFloat(),top+height,Paint().apply{color=Color.BLACK})
+        val p=paint(size,true,Paint.Align.CENTER).apply{color=Color.WHITE}
+        c.drawText(text,W/2f,top+height/2f+size*0.36f,p)
+    }
+
+    private fun thickLine(c:Canvas,y:Float){ c.drawLine(0f,y,W.toFloat(),y,Paint().apply{color=Color.BLACK;strokeWidth=4f}) }
+
+    private fun hhmm(t:Long)=java.text.SimpleDateFormat("HH:mm",java.util.Locale.getDefault()).format(java.util.Date(t))
+
+    /** Phiếu làm hàng: số thẻ/bàn to nhất, số đơn, giờ, trạng thái thu tiền, rồi từng món (số lượng lớn) + ghi chú. */
     @Synchronized
-    fun kitchen(table:String,sequence:Int,serviceNo:Int,orderer:String,items:List<Triple<String,Int,String>>,profile:PrinterProfile=PrinterProfile.MM58):Bitmap{
+    fun kitchen(table:String,sequence:Int,serviceNo:Int,orderer:String,items:List<Triple<String,Int,String>>,profile:PrinterProfile=PrinterProfile.MM58,flowTag:String="",at:Long=System.currentTimeMillis()):Bitmap{
         dimensions(profile)
-        val h=420+items.size*170
+        val h=620+items.size*300
         val (b,c)=canvas(h)
-        var y=45f
-        c.drawText("0210",W/2f,y,paint(38f,true,Paint.Align.CENTER));y+=30
-        c.drawText("PHIẾU LÀM HÀNG",W/2f,y,paint(30f,true,Paint.Align.CENTER));y+=28
-        c.drawText("THỨ TỰ RA ĐƠN #${serviceNo.toString().padStart(3,'0')}",W/2f,y,paint(24f,true,Paint.Align.CENTER));y+=26
-        c.drawText("${table.uppercase()}  ·  ĐƠN #$sequence",W/2f,y,paint(18f,true,Paint.Align.CENTER));y+=22
-        line(c,y);y+=32
+        invertedBar(c,0f,96f,table.uppercase(),if(table.length>8)44f else 58f)
+        var y=146f
+        c.drawText("#${serviceNo.toString().padStart(3,'0')}",PAD,y,paint(50f,true))
+        c.drawText(hhmm(at),W-PAD,y,paint(32f,true,Paint.Align.RIGHT));y+=14
+        if(flowTag.isNotBlank()){
+            val tagPaint=paint(22f,true,Paint.Align.CENTER)
+            val box=Paint().apply{color=Color.BLACK;style=Paint.Style.STROKE;strokeWidth=3f}
+            c.drawRect(PAD,y+6f,W-PAD,y+44f,box)
+            c.drawText(flowTag,W/2f,y+34f,tagPaint);y+=62f
+        }else y+=10f
+        thickLine(c,y);y+=48f
+        val qtyW=78f
         items.forEach{(name,qty,note)->
-            y=wrap(c,"$qty × $name",PAD,y,W-PAD*2,paint(24f,true),28f)
+            val top=y
+            c.drawText("$qty",PAD,top+4f,paint(46f,true))
+            val end=wrap(c,name,PAD+qtyW,top,W-PAD*2-qtyW,paint(28f,true),33f)
+            y=maxOf(end,top+44f)
             if(note.isNotBlank()){
-                y=wrap(c,"GHI CHÚ: ${note.trim()}",PAD+10f,y,W-PAD*2-10f,paint(18f,true),21f)
-                y+=8
-            }else y+=12
+                y=wrap(c,"GHI CHÚ: ${note.trim()}",PAD+qtyW,y-4f,W-PAD*2-qtyW,paint(21f,true),25f)
+            }
+            y+=6f
+            line(c,y);y+=40f
         }
-        line(c,y);y+=28
-        c.drawText("Order: $orderer",PAD,y,paint(18f,true))
-        return crop(b,(y+28).toInt())
+        val total=items.sumOf{it.second.coerceAtLeast(0)}
+        c.drawText("TỔNG: $total món",PAD,y,paint(24f,true));y+=34f
+        c.drawText("Đơn #$sequence · $orderer",PAD,y,paint(17f,true))
+        return crop(b,(y+30).toInt())
+    }
+
+    /** Phiếu nhắc bếp: in lại đơn đang chờ, nói rõ đã chờ bao lâu và nhắc lần thứ mấy. */
+    @Synchronized
+    fun kitchenReminder(table:String,serviceNo:Int,items:List<Triple<String,Int,String>>,waitedMinutes:Long,remindCount:Int,profile:PrinterProfile=PrinterProfile.MM58):Bitmap{
+        dimensions(profile)
+        val (b,c)=canvas(560+items.size*300)
+        invertedBar(c,0f,84f,"NHẮC BẾP · LÀM GẤP",36f)
+        var y=150f
+        c.drawText(table.uppercase(),PAD,y,paint(54f,true));y+=58f
+        c.drawText("ĐƠN #${serviceNo.toString().padStart(3,'0')}",PAD,y,paint(40f,true));y+=44f
+        c.drawText("ĐÃ CHỜ $waitedMinutes PHÚT · NHẮC LẦN $remindCount",PAD,y,paint(21f,true));y+=22f
+        thickLine(c,y);y+=44f
+        items.forEach{(name,qty,note)->
+            val top=y
+            c.drawText("$qty",PAD,top+4f,paint(40f,true))
+            val end=wrap(c,name,PAD+70f,top,W-PAD*2-70f,paint(26f,true),31f)
+            y=maxOf(end,top+40f)
+            if(note.isNotBlank())y=wrap(c,"GHI CHÚ: ${note.trim()}",PAD+70f,y-4f,W-PAD*2-70f,paint(20f,true),24f)
+            y+=18f
+        }
+        line(c,y);y+=30f
+        c.drawText("In lúc ${hhmm(System.currentTimeMillis())}",PAD,y,paint(17f,true))
+        return crop(b,(y+30).toInt())
     }
 
     @Synchronized

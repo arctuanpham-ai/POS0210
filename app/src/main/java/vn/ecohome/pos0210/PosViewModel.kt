@@ -283,6 +283,7 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
  fun selectTable(t:DiningTableEntity){
   val e=currentEmployee.value?:return
   if(!e.canOrder&&e.role!="ADMIN")return
+  if(paymentFlow()==PaymentFlowRules.PREPAID){startPrepaidOrder(t);return}
   viewModelScope.launch{
    currentTable.value=t
    val existing=dao.openSessionForTable(t.id)
@@ -1283,6 +1284,52 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
  fun paymentFlow():String=PaymentFlowRules.normalize(setting(PaymentFlowRules.SETTING_KEY))
  val prepaidTable=DiningTableEntity(PaymentFlowRules.PREPAID_TABLE_ID,"prepaid","Trả trước")
  val paymentFlowMessage=MutableStateFlow("")
+ val waitingOrders=dao.waitingOrders().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
+ fun sessionItems(sessionId:String)=dao.sessionItems(sessionId)
+ /** Số lần đã nhắc bếp + lần nhắc cuối, theo từng đơn (trong phiên chạy app). */
+ val reminders=MutableStateFlow<Map<String,Pair<Int,Long>>>(emptyMap())
+ /** In phiếu làm hàng của đơn trả trước sau khi đã thu tiền. Lỗi in không chặn bán: đơn vẫn nằm trong hàng chờ để in lại. */
+ private suspend fun printPaidKitchenTicket(b:OrderBatchEntity,tableName:String,orderer:String){
+  if(printerMode()!="BLUETOOTH"){printerMessage.value="TEST · Không in phiếu bếp";return}
+  val mac=kitchenPrinterMac()
+  if(mac.isBlank()){printerMessage.value="CHƯA CHỌN MÁY IN BẾP · đơn đã nằm trong hàng chờ";return}
+  val items=dao.batchItems(b.id).first().map{Triple(it.itemNameSnapshot,it.qty,it.note)}
+  val profile=printerProfile()
+  val job=PrintJobEntity(UUID.randomUUID().toString(),b.id,null,"KITCHEN_PREPAID",createdAt=System.currentTimeMillis())
+  dao.insertPrintJob(job)
+  if(!repo.claimPrint(job.id,"ANDROID"))return
+  val result=BluetoothPrinter.printBitmap(getApplication(),mac,ReceiptRenderer.kitchen(tableName,b.sequence,b.serviceNo,orderer,items,profile,"ĐÃ THU TIỀN · LÀM NGAY",b.sentAt?:b.createdAt),profile,vn.ecohome.pos0210.printing.PrintJobType.KITCHEN)
+  if(result.isSuccess){dao.markPrintSuccess(job.id,System.currentTimeMillis());audit("PRINT",b.id,"KITCHEN_PRINTED","prepaid,printer=${kitchenPrinterName()},job=${job.id}");printerMessage.value="ĐÃ IN PHIẾU BẾP #${b.serviceNo.toString().padStart(3,'0')}"}
+  else{dao.markPrintFailed(job.id,result.exceptionOrNull()?.message?:"UNKNOWN");audit("PRINT",b.id,"KITCHEN_PRINT_FAILED","prepaid,job=${job.id}");printerMessage.value="IN PHIẾU BẾP LỖI · bấm IN LẠI PHIẾU trong Đơn chờ giao"}
+ }
+ /** Nhắc bếp: in phiếu nhắc (số thẻ, số đơn, món, đã chờ bao lâu). Chống bấm dồn trong 20 giây. */
+ fun remindKitchen(o:WaitingOrderRow){
+  val e=currentEmployee.value?:return
+  viewModelScope.launch(Dispatchers.IO){
+   val now=System.currentTimeMillis()
+   val prev=reminders.value[o.batchId]
+   if(prev!=null&&now-prev.second<20_000L){printerMessage.value="VỪA NHẮC XONG · chờ vài giây";return@launch}
+   val count=(prev?.first?:0)+1
+   val waited=((now-(o.sentAt?:o.createdAt))/60_000L).coerceAtLeast(0)
+   if(printerMode()!="BLUETOOTH"||kitchenPrinterMac().isBlank()){
+    reminders.value=reminders.value+(o.batchId to (count to now))
+    printerMessage.value="ĐÃ GHI NHẮC LẦN $count · chưa có máy in bếp để in phiếu nhắc"
+    return@launch
+   }
+   val items=dao.batchItems(o.batchId).first().map{Triple(it.itemNameSnapshot,it.qty,it.note)}
+   val profile=printerProfile()
+   val job=PrintJobEntity(UUID.randomUUID().toString(),o.batchId,null,"KITCHEN_REMIND",createdAt=now)
+   dao.insertPrintJob(job)
+   if(!repo.claimPrint(job.id,"ANDROID"))return@launch
+   val result=BluetoothPrinter.printBitmap(getApplication(),kitchenPrinterMac(),ReceiptRenderer.kitchenReminder(o.tableName.ifBlank{"TRẢ TRƯỚC"},o.serviceNo,items,waited,count,profile),profile,vn.ecohome.pos0210.printing.PrintJobType.KITCHEN)
+   if(result.isSuccess){
+    dao.markPrintSuccess(job.id,System.currentTimeMillis())
+    reminders.value=reminders.value+(o.batchId to (count to now))
+    audit("BATCH",o.batchId,"KITCHEN_REMINDED","count=$count,waited=${waited}m,by=${e.name}")
+    printerMessage.value="ĐÃ NHẮC BẾP #${o.serviceNo.toString().padStart(3,'0')} · lần $count"
+   }else{dao.markPrintFailed(job.id,result.exceptionOrNull()?.message?:"UNKNOWN");printerMessage.value="NHẮC BẾP LỖI · ${result.exceptionOrNull()?.message?:"Thử lại"}"}
+  }
+ }
  val prepaidOrders=dao.prepaidOrdersSince(ShiftRulesTodayStart.todayStart()).stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
  /** Đổi chế độ (ADMIN): chặn nếu còn bàn/đơn chưa thanh toán hoặc giỏ hàng đang soạn; ghi lịch sử local. */
  fun changePaymentFlow(target:String,onDone:(String?)->Unit){
@@ -1308,13 +1355,14 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
   }
  }
  /** Bắt đầu đơn trả trước: bàn ảo, chưa có phiên; phiên chỉ được tạo khi gửi để thanh toán. */
- fun startPrepaidOrder(){
+ fun startPrepaidOrder(t:DiningTableEntity){
   val e=currentEmployee.value?:return
   if(!e.canOrder&&e.role!="ADMIN")return
+  if(waitingOrders.value.any{it.tableId==t.id}){screen.value="DELIVERY";return}
   viewModelScope.launch{
    val shift=dao.activeShift()
    if(!ShiftRules.canCreateOrder(shift!=null,businessTestMode.value)){orderMessage.value="CHƯA VÀO CA · Bắt đầu ca trước";screen.value="SHIFT_START";return@launch}
-   cart.value=emptyMap();cartNotes.value=emptyMap();currentSession.value=null;currentTable.value=prepaidTable
+   cart.value=emptyMap();cartNotes.value=emptyMap();currentSession.value=null;currentTable.value=t
    screen.value="ORDER"
   }
  }
@@ -1367,7 +1415,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    val sessionScope=currentSession.value?.dataScope?:if(businessTestMode.value)"TEST" else "LIVE"
    if(sessionScope=="LIVE"&&!ShiftRules.canPay(runningShift?.staffId,e.id)){orderMessage.value="ĐANG TRONG CA CỦA ${runningShift?.staffName} · CHỈ ${runningShift?.staffName} ĐƯỢC ORDER";return@launch}
    if(!ShiftRules.canCreateOrder(dao.activeShift()!=null,businessTestMode.value)){orderMessage.value="CHƯA VÀO CA · Bắt đầu ca trước khi gửi order";screen.value="SHIFT_START";return@launch}
-   val s=currentSession.value ?: repo.openSession(t.id,e.id,if(businessTestMode.value)"TEST" else "LIVE",if(t.id==PaymentFlowRules.PREPAID_TABLE_ID)PaymentFlowRules.PREPAID else PaymentFlowRules.POSTPAID).also{currentSession.value=it}
+   val s=currentSession.value ?: repo.openSession(t.id,e.id,if(businessTestMode.value)"TEST" else "LIVE",paymentFlow()).also{currentSession.value=it}
    val bs=dao.batches(s.id).first()
    val historical=bs.filter{it.status!="CANCELLED"}.flatMap{dao.batchItems(it.id).first()}
    val its=mutableListOf<OrderItemEntity>()
@@ -1788,7 +1836,8 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
     preview.buyGetLabel?.let{label->add("ƯU ĐÃI $label  · quà tặng -${java.text.NumberFormat.getNumberInstance(java.util.Locale("vi","VN")).format(preview.buyGetDiscount)+"đ"}")}
    }
    val profile=printerProfile()
-   val bitmap=ReceiptRenderer.bill(table.name,period,lines,preview.subtotal,preview.surcharge,preview.discount,preview.total,adjustments,customerName.ifBlank{"KHÁCH LẠ"},null,0,0,0,"CHƯA XÁC NHẬN",qr,profile)
+   val orderTag=if(session.flow==PaymentFlowRules.PREPAID)batches.firstOrNull()?.let{"ĐƠN "+PaymentFlowRules.orderNoLabel(it.serviceNo)} else null
+   val bitmap=ReceiptRenderer.bill(table.name,period,lines,preview.subtotal,preview.surcharge,preview.discount,preview.total,adjustments,customerName.ifBlank{"KHÁCH LẠ"},null,0,0,0,"CHƯA XÁC NHẬN",qr,profile,orderTag)
    val job=PrintJobEntity(UUID.randomUUID().toString(),null,null,"BILL_PREPAY",createdAt=now)
    dao.insertPrintJob(job)
    if(repo.claimPrint(job.id,"ANDROID")){
@@ -1894,7 +1943,7 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
     return@launch
    }
    val bill=commit.bill
-   if(session.flow==PaymentFlowRules.PREPAID){val t0=System.currentTimeMillis();dao.batches(session.id).first().filter{it.status=="DRAFT"}.forEach{dao.transitionBatch(it.id,"DRAFT","WAITING",t0)}}
+   if(session.flow==PaymentFlowRules.PREPAID){val t0=System.currentTimeMillis();dao.batches(session.id).first().filter{it.status=="DRAFT"}.forEach{dao.transitionBatch(it.id,"DRAFT","WAITING",t0)};dao.batches(session.id).first().filter{it.status=="WAITING"}.forEach{printPaidKitchenTicket(it,table?.name?:"Trả trước",employee.name)}}
    if(method=="TRANSFER"&&pendingPaymentSession!=null)dao.confirmPaymentSession(pendingPaymentSession.id,bill.id)
    else dao.cancelPaymentSessions(session.id)
    val customer=commit.customer

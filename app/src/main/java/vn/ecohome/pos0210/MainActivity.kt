@@ -278,6 +278,8 @@ fun Tables(vm: PosViewModel) {
     val testMode by vm.businessTestMode.collectAsState()
     var assignmentTarget by remember { mutableStateOf("KITCHEN") }
     val canReport = current?.role == "ADMIN" || current?.canViewReport == true
+    val flowSettings by vm.settings.collectAsState()
+    val prepaidMode = PaymentFlowRules.normalize(flowSettings.firstOrNull { it.key == PaymentFlowRules.SETTING_KEY }?.value) == PaymentFlowRules.PREPAID
     val waitingOrdered = waiting.sortedWith(compareBy<OrderBatchEntity> { it.serviceNo }.thenBy { it.createdAt })
     val waitingRankById = waitingOrdered.mapIndexed { index, batch -> batch.id to index }.toMap()
 
@@ -290,6 +292,8 @@ fun Tables(vm: PosViewModel) {
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             FilterChip(true, {}, { Text("BÁN HÀNG") })
+            if (prepaidMode)
+                FilterChip(false, { vm.screen.value = "PREPAID_ORDERS" }, { Text("ĐƠN HÔM NAY") })
             if (canReport) {
                 FilterChip(false, { vm.screen.value = "REPORT" }, { Text("LỊCH SỬ") })
                 FilterChip(false, { vm.screen.value = "REPORT" }, { Text("BÁO CÁO") })
@@ -309,22 +313,14 @@ fun Tables(vm: PosViewModel) {
                     }
                     TableCardUi(tb.id,tb.name,areaName,open!=null,nextService?.serviceNo,priorityRank,serviceTimer)
         }
-        val flowSettings by vm.settings.collectAsState()
-        val prepaidMode = PaymentFlowRules.normalize(flowSettings.firstOrNull { it.key == PaymentFlowRules.SETTING_KEY }?.value) == PaymentFlowRules.PREPAID
-        if (prepaidMode) {
-            Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("TRẢ TRƯỚC · Thu tiền xong mới tạo đơn", fontWeight = FontWeight.Black, color = Coffee)
-                Button(
-                    onClick = { vm.startPrepaidOrder() },
-                    modifier = Modifier.fillMaxWidth().weight(1f)
-                ) { Text("＋ ĐƠN MỚI\nTHANH TOÁN TRƯỚC".replace("\\n", "\n"), fontSize = 26.sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Center) }
-                OutlinedButton(
-                    onClick = { vm.screen.value = "PREPAID_ORDERS" },
-                    modifier = Modifier.fillMaxWidth().height(56.dp)
-                ) { Text("ĐƠN HÔM NAY", fontWeight = FontWeight.Bold) }
-            }
-        } else
-        ResponsiveTableGrid(tableCards,Modifier.weight(1f).fillMaxWidth().padding(horizontal=12.dp,vertical=8.dp)){id->ts.firstOrNull{it.id==id}?.let(vm::selectTable)}
+        val waitingOrders by vm.waitingOrders.collectAsState()
+        val shownCards = if (!prepaidMode) tableCards else ts.map { tb ->
+            val mine = waitingOrders.filter { it.tableId == tb.id }.minByOrNull { it.serviceNo }
+            val rank = mine?.let { m -> waitingOrders.sortedBy { it.serviceNo }.indexOfFirst { it.batchId == m.batchId } }
+            TableCardUi(tb.id, tb.name, areas.firstOrNull { it.id == tb.areaId }?.name ?: tb.areaId, mine != null, mine?.serviceNo, rank, null, "● ĐANG CHỜ MÓN")
+        }
+        if (prepaidMode) Text("TRẢ TRƯỚC · Chọn số thẻ bàn của khách", Modifier.padding(horizontal = 14.dp), fontWeight = FontWeight.Black, color = Coffee)
+        ResponsiveTableGrid(shownCards,Modifier.weight(1f).fillMaxWidth().padding(horizontal=12.dp,vertical=8.dp)){id->ts.firstOrNull{it.id==id}?.let(vm::selectTable)}
 
         if (waiting.isNotEmpty()) {
             Button(
@@ -347,6 +343,7 @@ fun Order(vm: PosViewModel, t: DiningTableEntity) {
     val orderUser by vm.currentEmployee.collectAsState()
     val orderTest by vm.businessTestMode.collectAsState()
     val orderSession by vm.currentSession.collectAsState()
+    val orderFlowSettings by vm.settings.collectAsState()
     val orderBlocked = (orderSession?.dataScope ?: if (orderTest) "TEST" else "LIVE") == "LIVE" && !ShiftRules.canPay(orderShift?.staffId, orderUser?.id ?: "")
     val ms by vm.menu.collectAsState()
     val combos by vm.combos.collectAsState()
@@ -473,7 +470,7 @@ fun Order(vm: PosViewModel, t: DiningTableEntity) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { }, modifier = Modifier.weight(1f), enabled=false) { Text("VOUCHER TẠM KHÓA") }
             OutlinedButton(onClick = { showCart = true }, modifier = Modifier.weight(1f)) { Text("GIỎ HÀNG") }
-            Button(onClick = { vm.sendBatch() }, modifier = Modifier.weight(1f), enabled = (cart.isNotEmpty()||selectedVoucher!=null) && !orderBlocked) { Text(if (orderBlocked) "ĐÃ KHOÁ" else if (t.id == PaymentFlowRules.PREPAID_TABLE_ID) "THANH TOÁN" else "GỬI BẾP") }
+            Button(onClick = { vm.sendBatch() }, modifier = Modifier.weight(1f), enabled = (cart.isNotEmpty()||selectedVoucher!=null) && !orderBlocked) { Text(if (orderBlocked) "ĐÃ KHOÁ" else if (orderSession?.flow == PaymentFlowRules.PREPAID || (orderSession == null && PaymentFlowRules.normalize(orderFlowSettings.firstOrNull { it.key == PaymentFlowRules.SETTING_KEY }?.value) == PaymentFlowRules.PREPAID)) "THANH TOÁN" else "GỬI BẾP") }
         }
     }
     if (showCart) OrderCartNotesDialog(vm) { showCart = false }
@@ -887,6 +884,17 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                     }
                 }
             }
+            if (isPrepaid) {
+                val payItems by vm.sessionItems(s.id).collectAsState(initial = emptyList())
+                val orderNo = sessionBatches.firstOrNull { it.status != "CANCELLED" }?.serviceNo
+                Card(Modifier.fillMaxWidth().padding(bottom = 12.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFF1E4D3))) {
+                    Column(Modifier.padding(14.dp)) {
+                        Text("${t.name.uppercase()}${orderNo?.let { " · ĐƠN " + PaymentFlowRules.orderNoLabel(it) } ?: ""}", fontSize = 26.sp, fontWeight = FontWeight.Black, color = Coffee)
+                        payItems.forEach { Text("${it.qty} × ${it.itemNameSnapshot}" + if (it.note.isNotBlank()) "  [${it.note}]" else "", fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 3.dp)) }
+                        Text("① IN BILL đưa khách  ② khách thanh toán  ③ XÁC NHẬN → phiếu bếp tự in", fontSize = 11.sp, modifier = Modifier.padding(top = 10.dp))
+                    }
+                }
+            }
             Text("TẠM TÍNH")
             Text(money(preview.subtotal), fontSize = 24.sp, fontWeight = FontWeight.Bold)
             if (preview.surcharge > 0) Text("Phụ thu: +${money(preview.surcharge)}", fontWeight = FontWeight.Bold)
@@ -1041,57 +1049,6 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                     modifier=Modifier.weight(1f),
                     enabled=!checkoutPrinting&&preview.total>0&&pendingDelivery.isEmpty()&&validPaymentSession!=null
                 ){Text("XÁC NHẬN\\nCHUYỂN KHOẢN".replace("\\n","\n"),textAlign=TextAlign.Center)}
-            }
-        }
-    }
-}
-
-@Composable
-fun DeliveryQueue(vm: PosViewModel) {
-    val waiting by vm.waitingBatches.collectAsState()
-    val sessions by vm.sessions.collectAsState()
-    val tables by vm.tables.collectAsState()
-    Column {
-        Header("Đơn chờ giao") { vm.screen.value = "TABLES" }
-        if (waiting.isEmpty()) {
-            Text("Không còn đơn chờ giao.", Modifier.padding(20.dp))
-        } else {
-            val ordered = waiting.sortedWith(compareBy<OrderBatchEntity> { it.serviceNo }.thenBy { it.createdAt })
-            LazyColumn(Modifier.fillMaxSize().padding(12.dp)) {
-                itemsIndexed(ordered, key = { _, b -> b.id }) { index, b ->
-                    val session = sessions.firstOrNull { it.id == b.sessionId }
-                    val table = session?.let { s -> tables.firstOrNull { it.id == s.tableId } }
-                    Card(
-                        Modifier.fillMaxWidth().padding(vertical = 5.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = when (index) {
-                                0 -> WaitingPriority1
-                                1 -> WaitingPriority2
-                                else -> WaitingDelivery
-                            }
-                        )
-                    ) {
-                        Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    "#${b.serviceNo.toString().padStart(3,'0')} · ${table?.name ?: "Trả trước"}",
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Black
-                                )
-                                Text(
-                                    when (index) {
-                                        0 -> "ƯU TIÊN GIAO TRƯỚC"
-                                        1 -> "ƯU TIÊN KẾ TIẾP"
-                                        else -> "ĐANG CHỜ GIAO"
-                                    },
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text("Đơn #${b.sequence} · ${SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(b.createdAt))}")
-                            }
-                            Button(onClick = { vm.markDelivered(b) }) { Text("ĐÃ GIAO ĐỦ") }
-                        }
-                    }
-                }
             }
         }
     }

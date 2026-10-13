@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.sp
 
 data class TableCardUi(
     val id:String,val name:String,val areaName:String,val occupied:Boolean,
-    val serviceNo:Int?=null,val priorityRank:Int?=null,val timer:ServiceTimerPresentation?=null
+    val serviceNo:Int?=null,val priorityRank:Int?=null,val timer:ServiceTimerPresentation?=null,val busyLabel:String?=null
 )
 
 data class TableGridSpec(val columns:Int,val minCardHeight:Dp,val gap:Dp,val compact:Boolean)
@@ -68,7 +68,7 @@ fun TableCard(card:TableCardUi,spec:TableGridSpec,onClick:(String)->Unit={}) {
                 Text("Trống",Modifier.testTag("table-status-${card.id}"),fontSize=if(spec.compact)11.sp else 13.sp,maxLines=1)
                 Spacer(Modifier.height(if(spec.compact)4.dp else 8.dp))
             } else {
-                Text("● CÓ KHÁCH",Modifier.testTag("table-status-${card.id}"),fontWeight=FontWeight.Bold,fontSize=if(spec.compact)10.sp else 11.sp,maxLines=1)
+                Text(card.busyLabel?:"● CÓ KHÁCH",Modifier.testTag("table-status-${card.id}"),fontWeight=FontWeight.Bold,fontSize=if(spec.compact)10.sp else 11.sp,maxLines=1)
                 card.serviceNo?.let { no ->
                     val detail=when(card.priorityRank){0->if(spec.columns>=4)"#${no.toString().padStart(3,'0')} · P1" else "#${no.toString().padStart(3,'0')} · ƯU TIÊN 1";1->if(spec.columns>=4)"#${no.toString().padStart(3,'0')} · P2" else "#${no.toString().padStart(3,'0')} · ƯU TIÊN 2";else->"#${no.toString().padStart(3,'0')} · CHỜ"}
                     Text(detail,Modifier.testTag("table-priority-${card.id}"),fontWeight=FontWeight.Black,fontSize=if(spec.compact)9.sp else 10.sp,maxLines=1,overflow=TextOverflow.Ellipsis)

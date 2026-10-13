@@ -1,6 +1,8 @@
 package vn.ecohome.pos0210
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -13,6 +15,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import vn.ecohome.pos0210.data.PrepaidOrderRow
+import vn.ecohome.pos0210.data.WaitingOrderRow
+import vn.ecohome.pos0210.data.OrderBatchEntity
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -39,12 +43,13 @@ fun PrepaidOrders(vm: PosViewModel) {
                     Card(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
                         Column(Modifier.padding(14.dp)) {
                             Row {
-                                Text(PaymentFlowRules.orderNoLabel(o.serviceNo), fontSize = 22.sp, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
+                                Text("${o.tableName.ifBlank { "Trả trước" }.uppercase()} · ${PaymentFlowRules.orderNoLabel(o.serviceNo)}", fontSize = 22.sp, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
                                 Text(PaymentFlowRules.statusLabel(o.billStatus, o.batchStatus), fontWeight = FontWeight.Bold,
                                     color = if (refunded) Color(0xFF9A2B1F) else Color(0xFF41633A))
                             }
                             Text("${vnd(o.total ?: 0L)} · ${if (o.method == "CASH") "Tiền mặt" else if (o.method == "TRANSFER") "Chuyển khoản" else "—"}" +
                                 (o.paidAt?.let { " · ${fmt.format(Date(it))}" } ?: ""))
+                            o.itemsText?.lines()?.forEach { Text(it, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 2.dp)) }
                             if (o.method == "CASH" && o.cashReceived != null) Text("Khách đưa ${vnd(o.cashReceived)} · thối ${vnd(o.change ?: 0L)}", fontSize = 12.sp)
                             if (!refunded && o.billId != null) {
                                 Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -131,5 +136,62 @@ fun PaymentFlowSettings(vm: PosViewModel) {
             },
             dismissButton = { TextButton(onClick = { confirm = false }) { Text("HUỶ") } }
         )
+    }
+}
+
+
+private val Brown = Color(0xFF6E432D)
+
+/** Hàng chờ pha chế/giao: mỗi đơn là một thẻ lớn (số thẻ bàn, số đơn, thời gian chờ, danh sách món) + nhắc bếp / đã giao. */
+@Composable
+fun DeliveryQueue(vm: PosViewModel) {
+    val orders by vm.waitingOrders.collectAsState()
+    val reminders by vm.reminders.collectAsState()
+    val message by vm.printerMessage.collectAsState()
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(15_000L); now = System.currentTimeMillis() } }
+    val fmt = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+    Column {
+        Header("Đơn chờ giao · ${orders.size}") { vm.screen.value = "TABLES" }
+        if (message.isNotBlank()) Text(message, Modifier.padding(horizontal = 16.dp, vertical = 2.dp), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Brown)
+        if (orders.isEmpty()) {
+            Text("Không còn đơn chờ giao.", Modifier.padding(20.dp))
+        } else {
+            LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                items(orders, key = { it.batchId }) { o ->
+                    val waited = ((now - (o.sentAt ?: o.createdAt)) / 60_000L).coerceAtLeast(0)
+                    val waitColor = when { waited >= 10 -> Color(0xFFB3261E); waited >= 5 -> Color(0xFFC96A12); else -> Color(0xFF41633A) }
+                    val remind = reminders[o.batchId]
+                    val stub = OrderBatchEntity(o.batchId, o.sessionId, o.sequence, "", o.createdAt, o.sentAt, "WAITING", o.serviceNo)
+                    Card(
+                        Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        border = BorderStroke(2.dp, waitColor)
+                    ) {
+                        Column(Modifier.padding(14.dp)) {
+                            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(o.tableName.ifBlank { "TRẢ TRƯỚC" }.uppercase(), fontSize = 28.sp, fontWeight = FontWeight.Black, color = Brown)
+                                    Text("${PaymentFlowRules.orderNoLabel(o.serviceNo)} · lúc ${fmt.format(Date(o.sentAt ?: o.createdAt))} · ${if (o.flow == PaymentFlowRules.PREPAID) "ĐÃ THU TIỀN" else "TRẢ SAU"}", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Text("⏱ ${waited}'", fontSize = 26.sp, fontWeight = FontWeight.Black, color = waitColor)
+                            }
+                            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                            (o.itemsText ?: "").lines().filter { it.isNotBlank() }.forEach {
+                                Text(it, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 2.dp))
+                            }
+                            Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(onClick = { vm.remindKitchen(o) }, Modifier.weight(1f)) {
+                                    Text(if (remind != null) "🔔 NHẮC BẾP (${remind.first})" else "🔔 NHẮC BẾP", fontWeight = FontWeight.Bold)
+                                }
+                                Button(onClick = { vm.markDelivered(stub) }, Modifier.weight(1f)) { Text("ĐÃ GIAO ĐỦ", fontWeight = FontWeight.Black) }
+                            }
+                            TextButton(onClick = { vm.reprintKitchenBatch(stub) }) { Text("IN LẠI PHIẾU BẾP", fontSize = 12.sp) }
+                        }
+                    }
+                }
+            }
+        }
     }
 }

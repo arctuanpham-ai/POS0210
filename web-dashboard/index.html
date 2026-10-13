@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20261012-3" />
+    <link rel="stylesheet" href="styles.css?v=20261013-1" />
     <title>0210 · Manager</title>
   </head>
   <body>
@@ -17,7 +17,7 @@
         <p class="eyebrow">0210 · BREAKFAST · COFFEE · DRINKS</p>
         <h1 id="login-title">Manager realtime</h1>
         <p class="muted">Theo dõi quán và nhập phiếu tài chính từ xa.</p>
-        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.12.3 · Quản lý vật tư</p>
+        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.13.1 · Snapshot 3/7 ngày</p>
         <label>Email Firebase<input id="email" type="email" autocomplete="username" inputmode="email" /></label>
         <label>Mật khẩu<input id="password" type="password" autocomplete="current-password" /></label>
         <button id="login-button" class="primary">Đăng nhập</button>
@@ -40,9 +40,32 @@
         </section>
         <section class="live-strip" aria-label="Tình trạng bàn realtime">
           <article><span>Bàn đang phục vụ</span><strong id="live-open-tables">0</strong></article>
-          <article><span>Tổng tạm tính</span><strong id="live-open-total">0đ</strong></article>
+          <article><span>Tổng tạm tính bàn mở (chưa phải doanh thu)</span><strong id="live-open-total">0đ</strong></article>
+          <article class="closed"><span>Doanh thu hôm nay đã chốt</span><strong id="live-revenue-today">—</strong></article>
+          <article class="closed"><span>Bill hôm nay đã thanh toán</span><strong id="live-paid-bills">—</strong></article>
         </section>
         <section id="tables" class="table-grid" aria-live="polite"></section>
+
+        <section class="section-heading compact">
+          <div><p class="eyebrow">DOANH THU ĐÃ CHỐT</p><h2>Kết quả 3 ngày / 7 ngày</h2></div>
+        </section>
+        <div class="filter-row" id="sales-days-filters">
+          <button data-sales-days="3" class="filter">3 ngày</button>
+          <button data-sales-days="7" class="filter active">7 ngày</button>
+        </div>
+        <p id="sales-notice" class="sales-notice" role="status"></p>
+        <section id="sales-summary" class="summary-grid" aria-label="Tổng quan doanh thu theo ngày"></section>
+        <section id="sales-chart" class="sales-chart" aria-label="Biểu đồ doanh thu theo ngày"></section>
+
+        <section class="section-heading compact">
+          <div><p class="eyebrow">THỐNG KÊ MÓN</p><h2>Món đã bán</h2></div>
+        </section>
+        <div class="filter-row" id="sales-item-modes">
+          <button data-item-mode="combined" class="filter active">Gộp cả giai đoạn</button>
+          <button data-item-mode="byDay" class="filter">Theo từng ngày</button>
+        </div>
+        <section id="sales-items" class="sales-items"></section>
+        <p class="muted">Doanh thu món là tổng giá bán các món đã thanh toán, tính trước giảm giá nên có thể cao hơn doanh thu bill.</p>
 
         <section class="section-heading report-heading">
           <div><p class="eyebrow">TÀI CHÍNH</p><h2>Tình hình quán</h2></div>
@@ -203,6 +226,6 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261012-3"></script>
+    <script type="module" src="app.js?v=20261013-1"></script>
   </body>
 </html>

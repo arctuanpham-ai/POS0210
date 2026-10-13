@@ -22,6 +22,7 @@ import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261012-3";
 import { calculateReceiptTotal, createStableDraft, validateReceipt } from "./expense-domain.js?v=20261012-3";
 import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261012-3";
 import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261012-3";
+import { aggregateItems, dailyKeys, dateKeyOf, liveSummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261013-1";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",
@@ -42,7 +43,7 @@ const state = {
   dashboard: {}, tables: [], sessions: [], batches: [], items: [],
   bills: [], purchases: [], expenseReceipts: [], purchaseItems: [], movements: [], costCodes: [],
   purchaseCategories: [], profitPartners: [], assetCategories: [], suppliers: [],
-  unsubs: [], period: "today", customFrom: null, customTo: null,
+  unsubs: [], dailyDocs: {}, dailyError: "", salesLoaded: false, salesDays: 7, itemMode: "combined", period: "today", customFrom: null, customTo: null,
   transactionKind: "ALL", payerFilter: "ALL", user: null,
 };
 let expenseDraft = null;
@@ -195,6 +196,25 @@ function renderPeriodSummary() {
 
 function renderTables() {
   const host = $("#tables");
+  const live = liveSummary(state.dashboard);
+  if (live.available) {
+    // Snapshot mới: danh sách bàn mở nằm sẵn trong dashboard/current, không cần đọc tableStatus.
+    $("#live-open-tables").textContent = live.openTables;
+    $("#live-open-total").textContent = money(live.provisionalTotal);
+    if (!live.tables.length) { host.innerHTML = '<p class="muted empty-state">Hiện không có bàn nào đang phục vụ.</p>'; return; }
+    host.replaceChildren(...live.tables.map((row) => {
+      const node = $("#table-template").content.firstElementChild.cloneNode(true);
+      node.classList.add("occupied");
+      node.querySelector(".table-state").textContent = "ĐANG PHỤC VỤ · TẠM TÍNH";
+      node.querySelector("strong").textContent = row.name;
+      node.querySelector("small").textContent = `${elapsed(row.openedAt)} · ${serviceStatusLabel(row.serviceStatus)}`;
+      node.querySelector("b").textContent = money(row.currentTotal);
+      node.addEventListener("click", () => showDetail({ table: { name: row.name, openedAt: row.openedAt }, session: { openedAt: row.openedAt }, batches: [{ status: row.serviceStatus }], items: [], total: row.currentTotal }));
+      return node;
+    }));
+    return;
+  }
+  // POS bản cũ chưa gửi liveTables: dùng tableStatus như trước.
   const records = state.tables.filter((table) => table.active !== false).map(currentTable);
   records.sort((a, b) => String(a.table.name).localeCompare(String(b.table.name), "vi"));
   const activeRecords = records.filter((r) => r.occupied);
@@ -211,6 +231,86 @@ function renderTables() {
     node.disabled = !occupied;
     node.addEventListener("click", () => showDetail(record));
     return node;
+  }));
+}
+
+const shortDay = (key) => `${key.slice(8, 10)}/${key.slice(5, 7)}`;
+const compactMoney = (value) => value >= 1000000 ? `${(value / 1000000).toLocaleString("vi-VN", { maximumFractionDigits: 1 })}tr` : value >= 1000 ? `${Math.round(value / 1000).toLocaleString("vi-VN")}k` : String(value);
+const percent = (share) => `${(share * 100).toLocaleString("vi-VN", { maximumFractionDigits: 1 })}%`;
+
+function renderSalesSnapshots() {
+  if (!state.salesLoaded) {
+    $("#live-revenue-today").textContent = "—";
+    $("#live-paid-bills").textContent = "—";
+    $("#sales-notice").textContent = "Bấm Làm mới để đọc doanh thu 3/7 ngày từ snapshot POS.";
+    $("#sales-summary").replaceChildren();
+    $("#sales-chart").replaceChildren();
+    $("#sales-items").replaceChildren();
+    return;
+  }
+  const dashboard = state.dashboard;
+  const hasSnapshot = Boolean(dashboard.lastUpdatedAt);
+  $("#live-revenue-today").textContent = hasSnapshot ? money(dashboard.revenueToday) : "—";
+  $("#live-paid-bills").textContent = hasSnapshot ? String(Number(dashboard.paidBillsToday || 0)) : "—";
+
+  const keys = dailyKeys(state.salesDays);
+  const summary = summarizeDaily(state.dailyDocs, keys, dateKeyOf(new Date()));
+  const notes = [];
+  if (state.dailyError) notes.push(`Không đọc được snapshot ngày: ${state.dailyError}`);
+  else if (summary.unavailableDays.length) notes.push(`Chưa có snapshot ngày ${summary.unavailableDays.map(shortDay).join(", ")}: số liệu chưa đầy đủ, cần POS đồng bộ.`);
+  if (summary.needsFinalizeDays.length) notes.push(`Ngày ${summary.needsFinalizeDays.map(shortDay).join(", ")} chưa được POS chốt.`);
+  if (hasSnapshot && shouldMarkSnapshotStale(dashboard.lastUpdatedAt)) notes.push("Snapshot POS cũ hơn 15 phút, cần kiểm tra máy POS.");
+  $("#sales-notice").textContent = notes.join(" ");
+
+  document.querySelectorAll("[data-sales-days]").forEach((button) => button.classList.toggle("active", Number(button.dataset.salesDays) === keys.length));
+  document.querySelectorAll("[data-item-mode]").forEach((button) => button.classList.toggle("active", button.dataset.itemMode === state.itemMode));
+
+  const cards = [
+    [`Doanh thu đã chốt · ${keys.length} ngày`, summary.days.some((day) => day.available) ? money(summary.totalRevenue) : "Chưa có dữ liệu"],
+    ["Số bill đã thanh toán", summary.days.some((day) => day.available) ? summary.totalBills : "Chưa có dữ liệu"],
+    ["Bill trung bình", summary.days.some((day) => day.available) ? money(summary.averageBill) : "Chưa có dữ liệu"],
+  ];
+  $("#sales-summary").replaceChildren(...cards.map(([label, value]) => {
+    const node = $("#metric-template").content.firstElementChild.cloneNode(true);
+    node.querySelector("p").textContent = label;
+    node.querySelector("strong").textContent = value;
+    return node;
+  }));
+
+  const max = Math.max(1, ...summary.days.filter((day) => day.available).map((day) => day.revenue));
+  $("#sales-chart").innerHTML = summary.days.map((day) => {
+    const bar = day.available
+      ? `<div class="bar" style="height:${Math.max(2, Math.round(day.revenue / max * 100))}%"></div>`
+      : '<div class="bar empty" style="height:100%"></div>';
+    const value = day.available ? `${compactMoney(day.revenue)}` : "Chưa có";
+    const bills = day.available ? `${day.paidBills} bill` : "";
+    return `<div class="bar-col"><span class="bar-value">${escapeHtml(value)}</span><div class="bar-area">${bar}</div><small>${shortDay(day.dateKey)}</small><small>${escapeHtml(bills)}</small></div>`;
+  }).join("");
+
+  const host = $("#sales-items");
+  const table = (rows) => rows.length
+    ? `<table class="sales-table"><thead><tr><th>Món</th><th>SL</th><th>Doanh thu</th><th>Tỷ trọng</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${escapeHtml(row.name)}</td><td>${row.qty}</td><td>${money(row.revenue)}</td><td>${percent(row.share)}</td></tr>`).join("")}</tbody></table>`
+    : '<p class="muted empty-state">Chưa có món đã bán trong giai đoạn này.</p>';
+  if (state.itemMode === "byDay") {
+    const days = aggregateItems(state.dailyDocs, keys, "byDay");
+    host.innerHTML = days.length ? days.map((day) => `<h3 class="sales-day-title">${shortDay(day.dateKey)}</h3>${table(day.rows)}`).join("") : table([]);
+  } else {
+    host.innerHTML = table(aggregateItems(state.dailyDocs, keys, "combined"));
+  }
+}
+
+async function loadDailyDocs() {
+  // Chỉ đọc các ngày chưa có trong bộ nhớ: 3 hoặc 7 document, không đọc bill/order lịch sử.
+  const missing = dailyKeys(state.salesDays).filter((key) => !(key in state.dailyDocs));
+  state.dailyError = "";
+  await Promise.all(missing.map(async (key) => {
+    try {
+      const snapshot = await getDoc(doc(db, ...root, "dashboardDaily", key));
+      state.dailyDocs[key] = snapshot.exists() ? snapshot.data() : null;
+    } catch (error) {
+      state.dailyDocs[key] = null; // lỗi đọc nghĩa là không có dữ liệu, tuyệt đối không hiển thị thành 0 đồng
+      state.dailyError = error.code || error.message || "lỗi không rõ";
+    }
   }));
 }
 
@@ -379,6 +479,7 @@ function render() {
   renderCumulativeSummary();
   renderPeriodSummary();
   renderTables();
+  renderSalesSnapshots();
   renderFinanceMetadata();
   renderTransactions();
 }
@@ -388,14 +489,19 @@ async function refreshDashboard() {
   try {
     const dashboardDoc = await getDoc(doc(db, ...root, "dashboard", "current"));
     state.dashboard = dashboardDoc.exists() ? dashboardDoc.data() : {};
+    state.dailyDocs = {};
+    const hasLiveTables = Array.isArray(state.dashboard.liveTables);
+    if (hasLiveTables) state.tables = [];
     const sevenDays = startOfDay(new Date(Date.now() - 6 * 86400000));
     const read = async (name, key, q = null) => { const snapshot = await getDocs(q || collection(db, ...root, name)); state[key] = rows(snapshot); };
     await Promise.all([
-      read("tableStatus", "tables"),
+      hasLiveTables ? Promise.resolve() : read("tableStatus", "tables"),
+      loadDailyDocs(),
       read("expenseReceipts", "expenseReceipts", query(collection(db, ...root, "expenseReceipts"), where("purchaseDate", ">=", sevenDays), orderBy("purchaseDate", "desc"), limit(300))),
       read("financialMovements", "movements", query(collection(db, ...root, "financialMovements"), where("occurredAt", ">=", sevenDays), orderBy("occurredAt", "desc"), limit(300))),
       read("costCodes", "costCodes"), read("purchaseCategories", "purchaseCategories"), read("profitPartners", "profitPartners"), read("assetCategories", "assetCategories"), read("suppliers", "suppliers"),
     ]);
+    state.salesLoaded = true;
     const stale = shouldMarkSnapshotStale(state.dashboard.lastUpdatedAt);
     $("#sync-status").textContent = state.dashboard.lastUpdatedAt ? `Snapshot POS: ${dateTime(state.dashboard.lastUpdatedAt)}${stale ? " · cần kiểm tra máy POS" : ""}` : "POS chưa gửi snapshot.";
     render();
@@ -508,6 +614,19 @@ $("#login-button").addEventListener("click", async () => {
 $("#password").addEventListener("keydown", (event) => { if (event.key === "Enter") $("#login-button").click(); });
 $("#logout-button").addEventListener("click", () => signOut(auth));
 $("#refresh-dashboard").addEventListener("click", refreshDashboard);
+$("#sales-days-filters").addEventListener("click", async (event) => {
+  const days = Number(event.target.dataset?.salesDays);
+  if (days !== 3 && days !== 7) return;
+  state.salesDays = days;
+  if (state.user) { await loadDailyDocs(); state.salesLoaded = true; }
+  renderSalesSnapshots();
+});
+$("#sales-item-modes").addEventListener("click", (event) => {
+  const mode = event.target.dataset?.itemMode;
+  if (mode !== "combined" && mode !== "byDay") return;
+  state.itemMode = mode;
+  renderSalesSnapshots();
+});
 $("#close-detail").addEventListener("click", () => $("#table-detail").close());
 $("#open-entry").addEventListener("click", () => {
   $("#entry-error").textContent = "";

@@ -65,7 +65,7 @@ object ExpenseReceiptContract {
             enteredByUid = receipt.enteredByUid,
             enteredByName = receipt.enteredByName,
             note = receipt.note,
-            status = receipt.status.ifBlank { "ACTIVE" },
+            status = ExpenseReceiptTranslator.normalizeStatus(receipt.status),
             updatedAt = receipt.updatedAt,
             total = lines.sumOf { it.amount },
             lines = lines
@@ -81,7 +81,8 @@ object ExpenseReceiptContract {
             if (line.id.isBlank() || line.materialName.isBlank() || line.qty <= 0.0 || line.unit.isBlank() || line.unitPrice <= 0L) {
                 return ReceiptValidation(false, "Dòng vật tư không hợp lệ")
             }
-            if (line.amount != (line.qty * line.unitPrice).toLong()) return ReceiptValidation(false, "Thành tiền dòng không khớp")
+            // Web làm tròn (Math.round), Android cắt phần lẻ (toLong): chấp nhận lệch dưới 1 đồng do làm tròn.
+            if (kotlin.math.abs(line.amount - line.qty * line.unitPrice) >= 1.0) return ReceiptValidation(false, "Thành tiền dòng không khớp")
         }
         return ReceiptValidation(true)
     }
@@ -99,15 +100,17 @@ object ExpenseReceiptParser {
     fun parse(id: String, fields: Map<String, Any?>): RemoteExpenseReceipt? {
         val purchaseDate = fields.long("purchaseDate") ?: return null
         val updatedAt = fields.long("updatedAt") ?: return null
-        val items = (fields["items"] as? List<*>)?.mapNotNull { raw ->
-            val line = raw as? Map<*, *> ?: return@mapNotNull null
-            val materialName = line.text("materialName") ?: return@mapNotNull null
-            val qty = line.number("qty")?.takeIf { it > 0 } ?: return@mapNotNull null
-            val unit = line.text("unit") ?: return@mapNotNull null
-            val unitPrice = line.long("unitPrice")?.takeIf { it >= 0 } ?: return@mapNotNull null
-            val lineId = line.text("id") ?: return@mapNotNull null
+        val rawItems = fields["items"] as? List<*> ?: return null
+        // Một dòng hỏng làm hỏng cả phiếu: không nhập phiếu thiếu dòng với tổng tiền nhỏ hơn thực tế.
+        val items = rawItems.map { raw ->
+            val line = raw as? Map<*, *> ?: return null
+            val materialName = line.text("materialName") ?: return null
+            val qty = line.number("qty")?.takeIf { it > 0 } ?: return null
+            val unit = line.text("unit") ?: return null
+            val unitPrice = line.long("unitPrice")?.takeIf { it >= 0 } ?: return null
+            val lineId = line.text("id") ?: return null
             RemoteExpenseLine(lineId, materialName, line.text("materialCode").orEmpty(), line.text("expenseGroup").orEmpty(), qty, unit, unitPrice, line.long("amount") ?: (qty * unitPrice).toLong())
-        }.orEmpty()
+        }
         if (items.isEmpty()) return null
         return RemoteExpenseReceipt(id, purchaseDate, fields.text("enteredByUid").orEmpty(), fields.text("enteredByName").orEmpty(), fields.text("note").orEmpty(), fields.text("status").orEmpty(), updatedAt, items)
     }
@@ -118,18 +121,34 @@ object ExpenseReceiptParser {
 }
 
 object ExpenseReceiptTranslator {
+    /** Trạng thái chuẩn: ACTIVE hoặc DELETED (Android và Web đều dùng DELETED); CANCELLED là tên gọi khác của DELETED. */
+    fun normalizeStatus(status: String): String = when (val s = status.trim().uppercase()) {
+        "", "ACTIVE" -> "ACTIVE"
+        "DELETED", "CANCELLED" -> "DELETED"
+        else -> s
+    }
+
+    fun isDeleted(status: String) = normalizeStatus(status) == "DELETED"
+
     fun translate(receipt: RemoteExpenseReceipt): TranslatedExpenseReceipt {
         val purchaseId = "web:${receipt.id}"
         val items = receipt.items.map { line ->
             PurchaseItemEntity("$purchaseId:${line.id}", purchaseId, line.materialCode.ifBlank { "web-${line.expenseGroup.lowercase()}" }, line.materialName, line.qty, line.unit.ifBlank { "lần" }, line.unitPrice, line.amount)
         }
         return TranslatedExpenseReceipt(
-            PurchaseEntity(purchaseId, null, receipt.enteredByUid.ifBlank { "WEB_MANAGER" }, receipt.purchaseDate, items.sumOf { it.amount }, receipt.note, status = receipt.status.ifBlank { "ACTIVE" }, expenseCategory = categoryFor(receipt.items), paidByName = receipt.enteredByName, updatedAt = receipt.updatedAt),
+            PurchaseEntity(purchaseId, null, receipt.enteredByUid.ifBlank { "WEB_MANAGER" }, receipt.purchaseDate, items.sumOf { it.amount }, receipt.note, status = normalizeStatus(receipt.status), expenseCategory = categoryFor(receipt.items), paidByName = receipt.enteredByName, updatedAt = receipt.updatedAt),
             items
         )
     }
 
-    private fun categoryFor(lines: List<RemoteExpenseLine>) = when (lines.firstOrNull()?.expenseGroup?.trim()?.lowercase()) {
+    internal fun categoryFor(lines: List<RemoteExpenseLine>): String {
+        val group = lines.firstOrNull()?.expenseGroup?.trim().orEmpty()
+        // Phiếu do Android đẩy lên mang sẵn mã nhóm (INVENTORY_PURCHASE...): giữ nguyên, không rơi về OTHER_EXPENSE.
+        if (group.uppercase() in ExpenseCategories.all) return group.uppercase()
+        return categoryForWebGroup(group)
+    }
+
+    private fun categoryForWebGroup(group: String) = when (group.lowercase()) {
         "food", "drink", "nguyên liệu", "đồ uống" -> ExpenseCategories.INVENTORY_PURCHASE
         "consumable", "vật tư tiêu hao" -> ExpenseCategories.CONSUMABLES
         "payroll", "lương / nhân sự" -> ExpenseCategories.PAYROLL

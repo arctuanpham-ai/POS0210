@@ -307,6 +307,8 @@ object FirebaseCloudSync {
         pending.forEach { queued ->
             if(dao.claimSync(queued.id,System.currentTimeMillis())!=1)return@forEach
             try {
+                // Phiếu "web:..." là bản sao nhập từ Web: không bao giờ đẩy ngược lên cloud (tránh vòng lặp/trùng).
+                if(queued.entityId.startsWith("web:")){dao.completeSync(queued.id);return@forEach}
                 val purchase=dao.purchaseById(queued.entityId)?:run{dao.completeSync(queued.id);return@forEach}
                 val lines=dao.purchaseItemsSnapshot(purchase.id)
                 val now=System.currentTimeMillis()
@@ -346,11 +348,25 @@ object FirebaseCloudSync {
             if(page.isEmpty()) return
             page.forEach { doc ->
                 val updatedAt=doc.getLong("updatedAt")?:cursor.updatedAt
-                val uploadedByThisApp = doc.getString("source") == "ANDROID_POS" && dao.purchaseById(doc.id) != null
-                if (!uploadedByThisApp) {
-                    ExpenseReceiptParser.parse(doc.id,doc.data.orEmpty())?.let { receipt ->
-                        val translated=ExpenseReceiptTranslator.translate(receipt)
-                        repository.replaceWebExpenseReceipt(translated.purchase,translated.items)
+                // Phiếu do Android đẩy lên đã đến các máy Android qua kênh mirror purchases/purchaseItems.
+                // Nhập thêm bản "web:" ở đây sẽ làm máy order tính trùng chi phí, nên chỉ nhập phiếu do Web tạo.
+                val fromAndroid = doc.getString("source") == "ANDROID_POS"
+                if (!fromAndroid) {
+                    val receipt=ExpenseReceiptParser.parse(doc.id,doc.data.orEmpty())
+                    if(receipt==null){
+                        CloudExecution.trace("EXPENSE_RECEIPT_SKIPPED ${doc.id} dữ liệu phiếu không đọc được")
+                    } else {
+                        val deleted=ExpenseReceiptTranslator.isDeleted(receipt.status)
+                        val validation=ExpenseReceiptContract.validate(receipt)
+                        when {
+                            // Phiếu đã xoá mà máy này chưa từng có: không tạo thêm dòng rác trong DB local.
+                            deleted&&dao.purchaseById("web:${receipt.id}")==null -> Unit
+                            !deleted&&!validation.valid -> CloudExecution.trace("EXPENSE_RECEIPT_SKIPPED ${doc.id} ${validation.error.orEmpty()}")
+                            else -> {
+                                val translated=ExpenseReceiptTranslator.translate(receipt)
+                                repository.replaceWebExpenseReceipt(translated.purchase,translated.items)
+                            }
+                        }
                     }
                 }
                 cursor=cursor.advance(doc.id,updatedAt)

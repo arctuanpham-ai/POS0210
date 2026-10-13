@@ -1,6 +1,8 @@
 package vn.ecohome.pos0210.cloud
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -66,5 +68,62 @@ class ExpenseReceiptTranslatorTest {
         assertEquals("receipt-43", canonical.receiptId)
         assertEquals(280_000L, canonical.total)
         assertEquals(2, canonical.lines.size)
+    }
+
+    private fun fields(vararg lines: Map<String, Any?>) = mapOf<String, Any?>(
+        "purchaseDate" to 1_728_000_000_000L,
+        "updatedAt" to 1_728_000_100_000L,
+        "status" to "ACTIVE",
+        "items" to lines.toList()
+    )
+
+    private fun goodLine(id: String = "line-a") = mapOf<String, Any?>(
+        "id" to id, "materialName" to "Gà", "materialCode" to "NL-GA", "expenseGroup" to "Nguyên liệu",
+        "qty" to 2.0, "unit" to "kg", "unitPrice" to 95_000L, "amount" to 190_000L
+    )
+
+    @Test fun parserRejectsWholeReceiptWhenOneLineIsBroken() {
+        val broken = goodLine("line-b") - "materialName"
+        assertNull(ExpenseReceiptParser.parse("r1", fields(goodLine(), broken)))
+        assertNotNull(ExpenseReceiptParser.parse("r1", fields(goodLine())))
+    }
+
+    @Test fun parserRejectsReceiptWithoutItems() {
+        assertNull(ExpenseReceiptParser.parse("r2", fields()))
+    }
+
+    @Test fun cancelledIsTreatedAsDeletedAndBlankAsActive() {
+        assertEquals("DELETED", ExpenseReceiptTranslator.normalizeStatus("CANCELLED"))
+        assertEquals("DELETED", ExpenseReceiptTranslator.normalizeStatus(" deleted "))
+        assertEquals("ACTIVE", ExpenseReceiptTranslator.normalizeStatus(""))
+        assertTrue(ExpenseReceiptTranslator.isDeleted("CANCELLED"))
+        assertTrue(!ExpenseReceiptTranslator.isDeleted("ACTIVE"))
+    }
+
+    @Test fun deletedReceiptKeepsDeletedStatusWhenTranslated() {
+        val receipt = RemoteExpenseReceipt(
+            "r3", 1_728_000_000_000L, "staff-a", "Hương", "", "CANCELLED", 1_728_000_100_000L,
+            listOf(RemoteExpenseLine("line-a", "Gà", "NL-GA", "Nguyên liệu", 2.0, "kg", 95_000L, 190_000L))
+        )
+        assertEquals("DELETED", ExpenseReceiptTranslator.translate(receipt).purchase.status)
+    }
+
+    @Test fun androidCategoryCodeSurvivesRoundTrip() {
+        val line = RemoteExpenseLine("a", "Gà", "pc_production", "INVENTORY_PURCHASE", 1.0, "kg", 1_000L, 1_000L)
+        assertEquals("INVENTORY_PURCHASE", ExpenseReceiptTranslator.categoryFor(listOf(line)))
+        val webLine = line.copy(expenseGroup = "Nguyên liệu")
+        assertEquals("INVENTORY_PURCHASE", ExpenseReceiptTranslator.categoryFor(listOf(webLine)))
+        val unknown = line.copy(expenseGroup = "không rõ")
+        assertEquals("OTHER_EXPENSE", ExpenseReceiptTranslator.categoryFor(listOf(unknown)))
+    }
+
+    @Test fun validationToleratesRoundingButNotRealMismatch() {
+        fun receipt(amount: Long) = RemoteExpenseReceipt(
+            "r4", 1_728_000_000_000L, "staff-a", "Hương", "", "ACTIVE", 1_728_000_100_000L,
+            listOf(RemoteExpenseLine("line-a", "Gạo", "NL-GAO", "Nguyên liệu", 0.5, "kg", 25_001L, amount))
+        )
+        assertTrue(ExpenseReceiptContract.validate(receipt(12_500L)).valid)
+        assertTrue(ExpenseReceiptContract.validate(receipt(12_501L)).valid)
+        assertTrue(!ExpenseReceiptContract.validate(receipt(13_000L)).valid)
     }
 }

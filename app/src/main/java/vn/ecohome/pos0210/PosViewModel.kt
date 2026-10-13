@@ -729,8 +729,16 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
     PurchaseEntity(id,supplierId,e.id,at,amount,note,managed,expenseCategory=expenseCategory,paidByName=paidByName.trim(),costCodeId=costCodeId),
     listOf(PurchaseItemEntity(UUID.randomUUID().toString(),id,categoryId,name.trim(),qty,unit.ifBlank{"lần"},unitPrice,amount)),asset?.copy(id=assetIdForPurchase(id))
    )
+   queueExpenseReceiptSync(id)
    audit("PURCHASE",id,"CREATE","${name.trim()}:$qty:$unit:$unitPrice:$amount:payer=${paidByName.trim()}");autoBackup();autoBackupMedia()
   }
+ }
+ /** Đưa phiếu chi vào hàng đợi đẩy lên cloud (expenseReceipts). Phiếu "web:..." là bản sao từ Web nên không đẩy ngược. */
+ private suspend fun queueExpenseReceiptSync(purchaseId:String){
+  if(purchaseId.startsWith("web:"))return
+  val now=System.currentTimeMillis()
+  dao.enqueueSync(SyncQueueEntity(UUID.randomUUID().toString(),"EXPENSE_RECEIPT",purchaseId,"UPSERT","",now,now))
+  dao.markCloudDirty()
  }
  fun addPurchaseReceipt(lines:List<PurchaseReceiptLine>,note:String,at:Long=System.currentTimeMillis(),supplierName:String="",expenseCategory:String=ExpenseCategories.INVENTORY_PURCHASE,paidByName:String="",costCodeId:String?=null){
   val e=currentEmployee.value?:return
@@ -742,8 +750,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    val items=valid.map{line->PurchaseItemEntity(UUID.randomUUID().toString(),id,line.categoryId.ifBlank{"pc_production"},line.name.trim(),line.qty,line.unit.ifBlank{"lần"},line.unitPrice,line.amount)}
    val total=items.sumOf{it.amount}
    repo.savePurchase(PurchaseEntity(id,supplierId,e.id,at,total,note.trim(),expenseCategory=expenseCategory,paidByName=paidByName.trim(),costCodeId=costCodeId),items)
-   dao.enqueueSync(SyncQueueEntity(UUID.randomUUID().toString(),"EXPENSE_RECEIPT",id,"UPSERT","",System.currentTimeMillis(),System.currentTimeMillis()))
-   dao.markCloudDirty()
+   queueExpenseReceiptSync(id)
    audit("PURCHASE",id,"CREATE_RECEIPT","lines=${items.size},total=${total},payer=${paidByName.trim()}")
    autoBackup()
   }
@@ -760,13 +767,16 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    val amount=(qty*unitPrice).toLong();val now=System.currentTimeMillis()
    val linkedAsset=assets.value.firstOrNull{assetMatchesPurchaseSignature(it,p,line.name)}
    db.withTransaction{
-    dao.updatePurchase(p.copy(supplierId=supplierId,purchasedAt=at,total=amount,note=note.trim(),expenseCategory=category,paidByName=paidByName.trim(),costCodeId=costCodeId,updatedAt=now))
     dao.updatePurchaseItem(line.copy(categoryId=detailCategoryId,qty=qty,unit=unit.ifBlank{"lần"},unitPrice=unitPrice,amount=amount))
+    // Tổng phiếu = tổng mọi dòng (phiếu nhiều vật tư chỉ sửa 1 dòng không được làm tổng thành tiền của riêng dòng đó).
+    val receiptTotal=dao.purchaseItemsSnapshot(p.id).sumOf{it.amount}
+    dao.updatePurchase(p.copy(supplierId=supplierId,purchasedAt=at,total=receiptTotal,note=note.trim(),expenseCategory=category,paidByName=paidByName.trim(),costCodeId=costCodeId,updatedAt=now))
     linkedAsset?.let{a->
      val investmentClass=assetInvestmentClassForExpense(category)
      if(investmentClass==null) dao.setAssetStatus(a.id,"DELETED") else dao.saveAsset(a.copy(purchaseDate=at,purchasePrice=unitPrice,quantity=qty.toInt().coerceAtLeast(1),totalCost=amount,supplier=supplierName.trim(),note=note.trim(),investmentClass=investmentClass))
     }
    }
+   queueExpenseReceiptSync(p.id)
    audit("PURCHASE",p.id,"UPDATE","amount=${p.total}->$amount,category=${p.expenseCategory}->$category,payer=${p.paidByName}->${paidByName.trim()},costCode=${p.costCodeId}->${costCodeId}");autoBackup()
   }
  }
@@ -778,7 +788,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
   val e=currentEmployee.value?:return;if(!e.canPurchase&&e.role!="ADMIN")return
   if(category !in vn.ecohome.pos0210.ExpenseCategories.all)return
   viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO){
-   if(dao.updatePurchaseExpenseCategory(p.id,category)==1){audit("PURCHASE",p.id,"CLASSIFY","${p.expenseCategory}->$category");autoBackup()}
+   if(dao.updatePurchaseExpenseCategory(p.id,category)==1){queueExpenseReceiptSync(p.id);audit("PURCHASE",p.id,"CLASSIFY","${p.expenseCategory}->$category");autoBackup()}
   }
  }
  fun saveMonthlyAccounting(v:MonthlyAccountingEntity){
@@ -1168,6 +1178,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    val line=dao.purchaseItemsSnapshot(p.id).firstOrNull()
    val linkedAssetId=line?.let{l->assets.value.firstOrNull{assetMatchesPurchaseSignature(it,p,l.name)}?.id}
    if(repo.deletePurchaseAudited(p,reason,e.id,linkedAssetId)){
+    queueExpenseReceiptSync(p.id)
     autoBackup()
    }
   }

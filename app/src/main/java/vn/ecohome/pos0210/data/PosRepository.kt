@@ -432,6 +432,17 @@ class PosRepository(private val db:PosDatabase){
         db.withTransaction{dao.insertPurchase(p);dao.insertPurchaseItems(items);asset?.let{dao.saveAsset(it)}}
     }
 
+    /** Web sửa/huỷ phiếu do Android tạo: thay nội dung phiếu và các dòng của chính phiếu đó, trong một giao dịch. */
+    suspend fun applyWebEditToAndroidReceipt(p:PurchaseEntity,items:List<PurchaseItemEntity>){
+        require(!p.id.startsWith("web:")) { "ANDROID_RECEIPT_NAMESPACE_REQUIRED" }
+        require(items.all { it.purchaseId==p.id }) { "ANDROID_RECEIPT_ITEM_SCOPE_REQUIRED" }
+        db.withTransaction {
+            dao.updatePurchase(p)
+            dao.deletePurchaseItemsForWebExpense(p.id)
+            if(items.isNotEmpty()) dao.saveWebExpenseItems(items)
+        }
+    }
+
     suspend fun replaceWebExpenseReceipt(p:PurchaseEntity,items:List<PurchaseItemEntity>){
         require(p.id.startsWith("web:")) { "WEB_EXPENSE_NAMESPACE_REQUIRED" }
         require(items.all { it.purchaseId==p.id && it.id.startsWith("${p.id}:") }) { "WEB_EXPENSE_ITEM_SCOPE_REQUIRED" }

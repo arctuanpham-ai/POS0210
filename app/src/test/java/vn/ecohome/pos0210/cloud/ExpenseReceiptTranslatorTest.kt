@@ -126,4 +126,64 @@ class ExpenseReceiptTranslatorTest {
         assertTrue(ExpenseReceiptContract.validate(receipt(12_501L)).valid)
         assertTrue(!ExpenseReceiptContract.validate(receipt(13_000L)).valid)
     }
+
+    private fun purchase(updatedAt: Long? = null, status: String = "ACTIVE") =
+        vn.ecohome.pos0210.data.PurchaseEntity("p1", null, "emp", 1_000L, 100_000L, "ghi chú cũ", status = status, expenseCategory = "INVENTORY_PURCHASE", paidByName = "Hương", updatedAt = updatedAt)
+
+    private fun item(id: String, code: String, name: String = "Gà", qty: Double = 1.0, price: Long = 100_000L) =
+        vn.ecohome.pos0210.data.PurchaseItemEntity(id, "p1", code, name, qty, "kg", price, (qty * price).toLong())
+
+    @Test fun androidPayloadCarriesGroupFromMaterialCodeAndReceiptCategory() {
+        val map = AndroidReceiptPayload.toMap(purchase(), listOf(item("i1", "THIT-AAAAAAAAAAAA"), item("i2", "pc_production", "Điện")), 5L)
+        assertEquals("ANDROID_POS", map["source"])
+        assertEquals("INVENTORY_PURCHASE", map["expenseCategory"])
+        assertEquals(200_000L, map["total"])
+        @Suppress("UNCHECKED_CAST") val lines = map["items"] as List<Map<String, Any?>>
+        assertEquals("Thịt, gia cầm", lines[0]["expenseGroup"])
+        assertEquals("Thịt, gia cầm", lines[0]["materialGroup"])
+        assertEquals("INVENTORY_PURCHASE", lines[1]["expenseGroup"])
+        assertEquals("", lines[1]["materialGroup"])
+    }
+
+    @Test fun webEditIsRecognisedOnlyOnAndroidDocumentsMarkedByWeb() {
+        assertTrue(WebEditOfAndroidReceipt.isWebEdit(mapOf("source" to "ANDROID_POS", "editedBy" to "WEB_MANAGER")))
+        assertTrue(!WebEditOfAndroidReceipt.isWebEdit(mapOf("source" to "ANDROID_POS")))
+        assertTrue(!WebEditOfAndroidReceipt.isWebEdit(mapOf("source" to "WEB_MANAGER", "editedBy" to "WEB_MANAGER")))
+    }
+
+    private fun remote(status: String = "ACTIVE", updatedAt: Long = 10L, lines: List<RemoteExpenseLine>) =
+        RemoteExpenseReceipt("p1", 2_000L, "emp", "Hương", "ghi chú mới", status, updatedAt, lines)
+
+    @Test fun webEditReplacesLinesNoteDateAndTotalOfTheLocalReceipt() {
+        val applied = WebEditOfAndroidReceipt.apply(
+            purchase(updatedAt = 5L),
+            remote(lines = listOf(RemoteExpenseLine("i1", "Gà", "THIT-AAAAAAAAAAAA", "Thịt, gia cầm", 2.0, "kg", 90_000L, 180_000L), RemoteExpenseLine("new", "Chanh", "RAU-BBBBBBBBBBBB", "Rau, củ, quả", 1.0, "kg", 20_000L, 20_000L)))
+        )!!
+        assertEquals("p1", applied.purchase.id)
+        assertEquals(200_000L, applied.purchase.total)
+        assertEquals("ghi chú mới", applied.purchase.note)
+        assertEquals(2_000L, applied.purchase.purchasedAt)
+        assertEquals("ACTIVE", applied.purchase.status)
+        assertEquals("INVENTORY_PURCHASE", applied.purchase.expenseCategory)
+        assertEquals("Hương", applied.purchase.paidByName)
+        assertEquals(10L, applied.purchase.updatedAt)
+        assertEquals(listOf("i1", "new"), applied.items.map { it.id })
+        assertTrue(applied.items.all { it.purchaseId == "p1" })
+        assertEquals("THIT-AAAAAAAAAAAA", applied.items[0].categoryId)
+    }
+
+    @Test fun webCancelMarksLocalReceiptDeleted() {
+        val applied = WebEditOfAndroidReceipt.apply(
+            purchase(),
+            remote(status = "DELETED", lines = listOf(RemoteExpenseLine("i1", "Gà", "THIT-AAAAAAAAAAAA", "Thịt, gia cầm", 1.0, "kg", 100_000L, 100_000L)))
+        )!!
+        assertEquals("DELETED", applied.purchase.status)
+    }
+
+    @Test fun staleOrWebCopyReceiptsAreNotApplied() {
+        val line = RemoteExpenseLine("i1", "Gà", "THIT-AAAAAAAAAAAA", "Thịt, gia cầm", 1.0, "kg", 100_000L, 100_000L)
+        assertNull(WebEditOfAndroidReceipt.apply(purchase(updatedAt = 10L), remote(updatedAt = 10L, lines = listOf(line))))
+        assertNull(WebEditOfAndroidReceipt.apply(purchase(updatedAt = 20L), remote(updatedAt = 10L, lines = listOf(line))))
+        assertNull(WebEditOfAndroidReceipt.apply(purchase().copy(id = "web:p1"), remote(lines = listOf(line))))
+    }
 }

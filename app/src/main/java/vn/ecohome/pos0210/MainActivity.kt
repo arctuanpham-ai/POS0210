@@ -30,6 +30,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -2791,7 +2792,9 @@ fun Purchases(vm: PosViewModel) {
     var movementMethod by remember{mutableStateOf("CASH")};var movementPartnerId by remember{mutableStateOf<String?>(null)}
     var selectedCategoryId by remember { mutableStateOf("") }
     var showCategoryManager by remember { mutableStateOf(false) }
-    var receiptLines by remember { mutableStateOf<List<PurchaseReceiptLine>>(emptyList()) }
+    val allPurchaseItems by vm.allPurchaseItems.collectAsState()
+    val knownMaterials = remember(allPurchaseItems) { MaterialCatalog.knownFrom(allPurchaseItems.map { Triple(it.name, it.categoryId, it.unit) }) }
+    val draftLines = remember { mutableStateListOf(DraftReceiptLine(UUID.randomUUID().toString())) }
     var dateText by remember {
         mutableStateOf(SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date()))
     }
@@ -2813,8 +2816,7 @@ fun Purchases(vm: PosViewModel) {
     val qty = qtyText.replace(',', '.').toDoubleOrNull()
     val unitPrice = unitPriceText.toLongOrNull()
     val total = if (qty != null && unitPrice != null) (qty * unitPrice).toLong() else 0L
-    val currentLine = if (itemName.isNotBlank() && (unitPrice ?: 0L) > 0L) PurchaseReceiptLine(name = itemName.trim(), categoryId = materialCode.ifBlank { selectedCategoryId }, qty = qty ?: 1.0, unit = unit.ifBlank { selectedCategory?.defaultUnit ?: "lần" }, unitPrice = unitPrice ?: 0L) else null
-    val receiptTotal = receiptLines.sumOf { it.amount } + (currentLine?.amount ?: 0L)
+    val receiptTotal = draftLines.sumOf { it.amount }
 
     Column {
         Header("Nhập đầu vào") { vm.screen.value = "MANAGE" }
@@ -2909,8 +2911,8 @@ fun Purchases(vm: PosViewModel) {
                         supportingText = { Text("Người thực tế bỏ tiền. Có thể cấu hình tên chuẩn và tỷ lệ chia trong Báo cáo tháng.") }
                     )
                 }
-                Card(Modifier.fillMaxWidth().padding(top = 8.dp)) { Column(Modifier.padding(12.dp)) {
-                Text(if (transactionType == FinancialTransactionTypes.OPERATING_EXPENSE) "Dòng vật tư đang nhập" else "Nội dung giao dịch", fontWeight = FontWeight.Bold)
+                if (transactionType != FinancialTransactionTypes.OPERATING_EXPENSE) Card(Modifier.fillMaxWidth().padding(top = 8.dp)) { Column(Modifier.padding(12.dp)) {
+                Text("Nội dung giao dịch", fontWeight = FontWeight.Bold)
                 OutlinedTextField(
                     itemName,
                     { itemName = it },
@@ -2939,20 +2941,7 @@ fun Purchases(vm: PosViewModel) {
                     label = { Text(if(FinancialTransactionTypes.usesPurchaseDocument(transactionType)) if (isPayrollExpense(expenseCategory)) "Đơn giá / ngày công" else "Đơn giá" else "Số tiền") }
                 )
                 } }
-                if (transactionType == FinancialTransactionTypes.OPERATING_EXPENSE) {
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedButton(onClick = { currentLine?.let { line -> receiptLines = receiptLines + line; itemName = ""; materialCode = ""; qtyText = "1"; unit = ""; unitPriceText = ""; selectedCategoryId = ""; selectedCostCodeId = null } }, enabled = currentLine != null, modifier = Modifier.fillMaxWidth()) { Text("＋ THÊM VẬT TƯ") }
-                    if (receiptLines.isNotEmpty()) {
-                        Spacer(Modifier.height(8.dp))
-                        Text("Danh sách vật tư trong phiếu (" + receiptLines.size + ")", fontWeight = FontWeight.Bold)
-                        receiptLines.forEachIndexed { index, line ->
-                            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text((index + 1).toString() + ". " + line.name + " · " + line.qty + " " + line.unit + " × " + money(line.unitPrice), modifier = Modifier.weight(1f), fontSize = 13.sp)
-                                TextButton(onClick = { receiptLines = receiptLines.filterIndexed { i, _ -> i != index } }) { Text("XÓA") }
-                            }
-                        }
-                    }
-                }
+                if (transactionType == FinancialTransactionTypes.OPERATING_EXPENSE) ReceiptLinesEditor(draftLines, knownMaterials, receiptTotal)
                 if(!FinancialTransactionTypes.usesPurchaseDocument(transactionType)){
                     Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){FilterChip(movementMethod=="CASH",{movementMethod="CASH"},{Text("Tiền mặt")});FilterChip(movementMethod=="TRANSFER",{movementMethod="TRANSFER"},{Text("Chuyển khoản")})}
                     if(transactionType in setOf(FinancialTransactionTypes.PROFIT_WITHDRAWAL,FinancialTransactionTypes.OWNER_WITHDRAWAL)){
@@ -2984,8 +2973,9 @@ fun Purchases(vm: PosViewModel) {
                         val parsedAt = runCatching { parser.parse(dateText)?.time }.getOrNull()
                             ?: System.currentTimeMillis()
                         val asset=if(transactionType in setOf(FinancialTransactionTypes.ASSET_PURCHASE,FinancialTransactionTypes.ADDITIONAL_INVESTMENT))selectedAssetCategory?.let{c->AssetEntity(UUID.randomUUID().toString(),itemName.trim(),c.id,parsedAt,unitPrice?:0,qty?.toInt()?.coerceAtLeast(1)?:1,total,supplier=supplier.trim(),usefulLifeMonths=usefulLifeText.toIntOrNull()?:c.defaultUsefulLifeMonths,residualValue=(residualText.toLongOrNull()?:0).coerceAtMost(total),estimatedLiquidationValue=liquidationText.toLongOrNull()?:0,note=note,investmentClass=if(transactionType==FinancialTransactionTypes.ADDITIONAL_INVESTMENT)"ADDITIONAL" else "INITIAL")} else null
-                        if (transactionType == FinancialTransactionTypes.OPERATING_EXPENSE && receiptLines.isNotEmpty()) {
-                            vm.addPurchaseReceipt(lines = receiptLines + listOfNotNull(currentLine), note = note, at = parsedAt, supplierName = supplier, expenseCategory = FinancialTransactionTypes.legacyExpenseCode(transactionType,expenseCategory), paidByName = paidByName, costCodeId = selectedCostCodeId)
+                        if (transactionType == FinancialTransactionTypes.OPERATING_EXPENSE) {
+                            val receipt = draftLines.map { line -> PurchaseReceiptLine(name = line.name.trim(), categoryId = line.code.ifBlank { MaterialCatalog.newMaterialCode(line.groupCode) }, qty = line.qty ?: 0.0, unit = line.unit.trim(), unitPrice = line.unitPrice ?: 0L) }
+                            vm.addPurchaseReceipt(lines = receipt, note = note, at = parsedAt, supplierName = supplier, expenseCategory = FinancialTransactionTypes.legacyExpenseCode(transactionType,expenseCategory), paidByName = paidByName, costCodeId = selectedCostCodeId)
                         } else if(FinancialTransactionTypes.usesPurchaseDocument(transactionType)) vm.addPurchaseDetailed(
                             name = itemName,
                             qty = qty ?: 0.0,
@@ -3010,12 +3000,12 @@ fun Purchases(vm: PosViewModel) {
                         note = ""
                         paidByName = ""
                         selectedCostCodeId = null
-                        receiptLines = emptyList()
+                        draftLines.clear(); draftLines.add(DraftReceiptLine(UUID.randomUUID().toString()))
                         invoiceImage = null
                     },
                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                    enabled = ((itemName.isNotBlank() && (unitPrice ?: 0L) > 0) || (transactionType == FinancialTransactionTypes.OPERATING_EXPENSE && receiptLines.isNotEmpty())) &&
-                        (!FinancialTransactionTypes.usesPurchaseDocument(transactionType)||(qty?:0.0)>0) &&
+                    enabled = (if (transactionType == FinancialTransactionTypes.OPERATING_EXPENSE) draftLines.isNotEmpty() && draftLines.all { it.isValid } else itemName.isNotBlank() && (unitPrice ?: 0L) > 0) &&
+                        (transactionType == FinancialTransactionTypes.OPERATING_EXPENSE||!FinancialTransactionTypes.usesPurchaseDocument(transactionType)||(qty?:0.0)>0) &&
                         (transactionType!=FinancialTransactionTypes.OPERATING_EXPENSE||expenseCategory!=ExpenseCategories.UNCLASSIFIED) &&
                         (transactionType !in setOf(FinancialTransactionTypes.ASSET_PURCHASE,FinancialTransactionTypes.ADDITIONAL_INVESTMENT)||(selectedAssetCategory!=null&&(usefulLifeText.toIntOrNull()?:0)>0&&(residualText.toLongOrNull()?:0)<=total)) &&
                         (transactionType !in setOf(FinancialTransactionTypes.PROFIT_WITHDRAWAL,FinancialTransactionTypes.OWNER_WITHDRAWAL)||movementPartnerId!=null)
@@ -4561,4 +4551,43 @@ private fun BuyGetRuleDialog(
             }
         }
     )
+}
+
+/** Phiếu nhiều vật tư giống Web: mỗi vật tư một thẻ sửa trực tiếp, mã tự sinh theo nhóm, gợi ý tên từ lần nhập trước. */
+@Composable
+fun ReceiptLinesEditor(lines: SnapshotStateList<DraftReceiptLine>, known: List<KnownMaterial>, total: Long) {
+    Text("CHI PHÍ MUA HÀNG · Phiếu nhiều vật tư", Modifier.padding(top = 8.dp), fontWeight = FontWeight.Black)
+    lines.forEachIndexed { index, line ->
+        key(line.id) {
+            Card(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Vật tư ${index + 1}", fontWeight = FontWeight.Bold)
+                    OutlinedTextField(line.name, { lines[index] = MaterialCatalog.withName(lines[index], it.take(120), known) }, Modifier.fillMaxWidth(), label = { Text("Tên vật tư") }, singleLine = true)
+                    val suggestions = if (line.name.isBlank() || MaterialCatalog.exactMatch(known, line.name) != null) emptyList() else MaterialCatalog.suggest(known, line.name)
+                    if (suggestions.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        suggestions.forEach { m -> FilterChip(false, { lines[index] = MaterialCatalog.withKnown(lines[index], m) }, { Text(m.name) }) }
+                    }
+                    OutlinedTextField(line.code, { }, Modifier.fillMaxWidth(), readOnly = true, label = { Text("Mã vật tư (tự sinh)") }, singleLine = true)
+                    Text("Nhóm vật tư", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        MaterialCatalog.groups.forEach { (code, label) -> FilterChip(line.groupCode == code, { lines[index] = MaterialCatalog.withGroup(lines[index], code) }, { Text(label) }) }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(line.qtyText, { v -> lines[index] = lines[index].copy(qtyText = v.filter { ch -> ch.isDigit() || ch == ',' || ch == '.' }) }, Modifier.weight(1f), label = { Text("Số lượng") }, singleLine = true)
+                        OutlinedTextField(line.unit, { v -> lines[index] = lines[index].copy(unit = v.take(20)) }, Modifier.weight(1f), label = { Text("Đơn vị tính") }, singleLine = true)
+                    }
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        MaterialCatalog.units.forEach { u -> FilterChip(line.unit == u, { lines[index] = lines[index].copy(unit = u) }, { Text(u) }) }
+                    }
+                    OutlinedTextField(line.priceText, { v -> lines[index] = lines[index].copy(priceText = v.filter(Char::isDigit)) }, Modifier.fillMaxWidth(), label = { Text("Đơn giá") }, singleLine = true)
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Thành tiền: ${money(line.amount)}", Modifier.weight(1f), fontWeight = FontWeight.Bold)
+                        TextButton(onClick = { lines.removeAt(index) }, enabled = lines.size > 1) { Text("BỎ DÒNG") }
+                    }
+                }
+            }
+        }
+    }
+    OutlinedButton(onClick = { lines.add(DraftReceiptLine(UUID.randomUUID().toString())) }, Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("＋ THÊM VẬT TƯ") }
+    Text("Tổng phiếu: ${money(total)}", Modifier.padding(vertical = 8.dp), fontWeight = FontWeight.Black, fontSize = 18.sp)
 }

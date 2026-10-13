@@ -41,6 +41,7 @@ data class PurchaseReceiptLine(
 class PosViewModel(app:Application):AndroidViewModel(app){
  private val db=PosDatabase.get(app);private val repo=PosRepository(db);private val dao=db.dao();private val masterMutex=Mutex();private val attendanceMutex=Mutex()
  val orderMessage=MutableStateFlow("")
+ val allPurchaseItems=dao.allPurchaseItems().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
  val salesReport=repo.salesReportData().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),SalesReportData())
  val monthlyAccounting=dao.monthlyAccounting().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val profitPartners=dao.profitPartners().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val tableServiceTimings=dao.tableServiceTimings().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val areas=repo.areas().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val tables=repo.tables().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val waitingBatches=dao.waitingBatches().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val categories=repo.categories().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val menu=repo.menuItems().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val combos=dao.combos().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val employees=repo.employees().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val sessions=repo.openSessions().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val bills=repo.paidBills().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val testBills=dao.testPaidBills().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val openAttendances=dao.openAttendances().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val myAttendance=MutableStateFlow<AttendanceSessionEntity?>(null);val suppliers=dao.suppliers().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val purchases=dao.purchases().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val purchaseCosts=dao.purchaseCosts().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val purchaseCategories=dao.purchaseCategories().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val costCodes=dao.costCodes().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val purchaseItemsAll=dao.allPurchaseItems().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val payments=dao.payments().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val customers=dao.customers().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val customerItemStats=dao.customerItemStats().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val pricingRules=dao.pricingRules().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val buyGetPromotions=dao.buyGetPromotions().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val billAdjustments=dao.billAdjustments().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val settings=dao.settings().stateIn(viewModelScope,SharingStarted.Eagerly,emptyList());val printJobs=dao.printJobs().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val audits=dao.audits().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val itemSales=dao.paidItemSales().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList());val loyaltyCampaigns=dao.allLoyaltyCampaigns().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
  val payrollDays=MutableStateFlow<List<PayrollDay>>(emptyList())
@@ -657,7 +658,30 @@ fun reconcileFirebaseSession(){
    actualUid==null&&saved.syncedUid!=null->dao.saveCloudSyncState(saved.copy(lastError="Phiên Firebase chưa sẵn sàng · kiểm tra đăng nhập, giữ nguyên UID đã lưu"))
    actualUid!=null&&saved.syncedUid!=null&&saved.syncedUid!=actualUid->dao.saveCloudSyncState(saved.copy(lastError="AUTH_UID_MISMATCH · giữ nguyên UID đã lưu, không đồng bộ"))
   }
-  if(actualUid!=null)FirebaseCloudSync.schedule(getApplication())
+  if(actualUid!=null){FirebaseCloudSync.schedule(getApplication());restoreMissingMediaOnce(actualUid)}
+ }
+}
+private var mediaAutoRestoreTried=false
+/** Máy thiếu file ảnh món/combo (cài mới, khôi phục dữ liệu...) thì tự tải ảnh từ Cloud một lần mỗi lần mở app. Chỉ thêm file ảnh, không sửa menu/bill. */
+private suspend fun restoreMissingMediaOnce(uid:String){
+ if(mediaAutoRestoreTried)return
+ mediaAutoRestoreTried=true
+ runCatching{
+  fun readable(uri:String?):Boolean{
+   if(uri.isNullOrBlank())return false
+   val parsed=android.net.Uri.parse(uri)
+   return when(parsed.scheme){
+    "file"->parsed.path?.let{java.io.File(it).exists()}==true
+    "content"->runCatching{getApplication<Application>().contentResolver.openInputStream(parsed)?.use{true}?:false}.getOrDefault(false)
+    else->false
+   }
+  }
+  val missing=dao.allMenuSnapshot().any{it.active&&!readable(it.imageUri)}||dao.allCombosSnapshot().any{it.active&&!readable(it.imageUri)}
+  if(!missing)return@runCatching
+  val cfg=FirebaseCloudSync.config(getApplication())
+  val fs=com.google.firebase.firestore.FirebaseFirestore.getInstance(FirebaseCloudSync.firebaseApp(getApplication(),cfg))
+  val r=CloudMediaSync.restoreMissing(getApplication(),fs,uid)
+  if(r.downloaded>0)audit("MEDIA",uid,"AUTO_RESTORE","downloaded=${r.downloaded},errors=${r.errors}")
  }
 }
 fun createFirebaseBackup(){

@@ -327,18 +327,7 @@ object FirebaseCloudSync {
                 val purchase=dao.purchaseById(queued.entityId)?:run{dao.completeSync(queued.id);return@forEach}
                 val lines=dao.purchaseItemsSnapshot(purchase.id)
                 val now=System.currentTimeMillis()
-                val payload=mapOf(
-                    "id" to purchase.id,
-                    "purchaseDate" to purchase.purchasedAt,
-                    "enteredByUid" to purchase.enteredBy,
-                    "enteredByName" to purchase.paidByName,
-                    "note" to purchase.note,
-                    "status" to purchase.status,
-                    "updatedAt" to now,
-                    "source" to "ANDROID_POS",
-                    "items" to lines.map { line -> mapOf("id" to line.id,"materialName" to line.name,"materialCode" to line.categoryId,"expenseGroup" to purchase.expenseCategory,"qty" to line.qty,"unit" to line.unit,"unitPrice" to line.unitPrice,"amount" to line.amount) },
-                    "total" to lines.sumOf { it.amount }
-                )
+                val payload=AndroidReceiptPayload.toMap(purchase,lines,now)
                 stage("PUSH_EXPENSE_RECEIPT"){root.collection("expenseReceipts").document(purchase.id).set(payload).await()}
                 dao.completeSync(queued.id)
             } catch(e:CancellationException){throw e
@@ -366,7 +355,23 @@ object FirebaseCloudSync {
                 // Phiếu do Android đẩy lên đã đến các máy Android qua kênh mirror purchases/purchaseItems.
                 // Nhập thêm bản "web:" ở đây sẽ làm máy order tính trùng chi phí, nên chỉ nhập phiếu do Web tạo.
                 val fromAndroid = doc.getString("source") == "ANDROID_POS"
-                if (!fromAndroid) {
+                if (fromAndroid) {
+                    // Web sửa/huỷ phiếu do Android tạo: áp dụng vào bản local nếu máy này có phiếu đó.
+                    if (WebEditOfAndroidReceipt.isWebEdit(doc.data.orEmpty())) {
+                        val receipt=ExpenseReceiptParser.parse(doc.id,doc.data.orEmpty())
+                        val local=dao.purchaseById(doc.id)
+                        if (receipt==null||local==null) {
+                            CloudExecution.trace("EXPENSE_RECEIPT_WEB_EDIT_SKIPPED ${doc.id} ${if(receipt==null)"dữ liệu phiếu không đọc được" else "máy này chưa có phiếu"}")
+                        } else if (!ExpenseReceiptContract.validate(receipt).valid) {
+                            CloudExecution.trace("EXPENSE_RECEIPT_WEB_EDIT_SKIPPED ${doc.id} ${ExpenseReceiptContract.validate(receipt).error.orEmpty()}")
+                        } else {
+                            WebEditOfAndroidReceipt.apply(local,receipt)?.let{ applied ->
+                                repository.applyWebEditToAndroidReceipt(applied.purchase,applied.items)
+                                dao.markCloudDirty()
+                            }
+                        }
+                    }
+                } else {
                     val receipt=ExpenseReceiptParser.parse(doc.id,doc.data.orEmpty())
                     if(receipt==null){
                         CloudExecution.trace("EXPENSE_RECEIPT_SKIPPED ${doc.id} dữ liệu phiếu không đọc được")

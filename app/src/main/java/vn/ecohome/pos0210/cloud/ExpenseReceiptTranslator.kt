@@ -1,6 +1,7 @@
 package vn.ecohome.pos0210.cloud
 
 import vn.ecohome.pos0210.ExpenseCategories
+import vn.ecohome.pos0210.MaterialCatalog
 import vn.ecohome.pos0210.data.PurchaseEntity
 import vn.ecohome.pos0210.data.PurchaseItemEntity
 
@@ -156,5 +157,60 @@ object ExpenseReceiptTranslator {
         "asset", "tài sản" -> ExpenseCategories.CAPITAL_ASSET
         "operating", "chi phí vận hành" -> ExpenseCategories.VARIABLE_EXPENSE
         else -> ExpenseCategories.OTHER_EXPENSE
+    }
+}
+
+/** Phiếu do Android tạo và đẩy lên Web (expenseReceipts/{id}). */
+object AndroidReceiptPayload {
+    /** Nhóm vật tư lấy từ tiền tố mã (THIT-...). Mã cũ không có tiền tố thì giữ mã nhóm chi phí để Web không mất dữ liệu. */
+    fun lineMap(line: PurchaseItemEntity, expenseCategory: String): Map<String, Any?> {
+        val groupLabel = MaterialCatalog.groupLabelFromMaterialCode(line.categoryId)
+        return mapOf(
+            "id" to line.id,
+            "materialName" to line.name,
+            "materialCode" to line.categoryId,
+            "materialGroup" to (groupLabel ?: ""),
+            "expenseGroup" to (groupLabel ?: expenseCategory),
+            "qty" to line.qty,
+            "unit" to line.unit,
+            "unitPrice" to line.unitPrice,
+            "amount" to line.amount
+        )
+    }
+
+    fun toMap(purchase: PurchaseEntity, lines: List<PurchaseItemEntity>, updatedAt: Long): Map<String, Any?> = mapOf(
+        "id" to purchase.id,
+        "purchaseDate" to purchase.purchasedAt,
+        "enteredByUid" to purchase.enteredBy,
+        "enteredByName" to purchase.paidByName,
+        "note" to purchase.note,
+        "status" to purchase.status,
+        "updatedAt" to updatedAt,
+        "source" to "ANDROID_POS",
+        "expenseCategory" to purchase.expenseCategory,
+        "items" to lines.map { lineMap(it, purchase.expenseCategory) },
+        "total" to lines.sumOf { it.amount }
+    )
+}
+
+/**
+ * Web sửa hoặc huỷ phiếu do Android tạo: Web ghi lại đúng document đó, giữ source=ANDROID_POS và thêm editedBy=WEB_MANAGER.
+ * Máy Android đã có phiếu này áp dụng thay đổi vào bản local. Lần Android đẩy phiếu kế tiếp sẽ ghi đè và xoá editedBy.
+ */
+object WebEditOfAndroidReceipt {
+    const val EDITED_BY_WEB = "WEB_MANAGER"
+
+    fun isWebEdit(fields: Map<String, Any?>): Boolean = fields["source"] == "ANDROID_POS" && fields["editedBy"] == EDITED_BY_WEB
+
+    /** Chỉ áp dụng khi bản trên cloud mới hơn bản local; trả về null nếu không cần làm gì. */
+    fun apply(local: PurchaseEntity, receipt: RemoteExpenseReceipt): TranslatedExpenseReceipt? {
+        if (local.id.startsWith("web:")) return null
+        if (receipt.updatedAt <= (local.updatedAt ?: 0L)) return null
+        val status = if (ExpenseReceiptTranslator.isDeleted(receipt.status)) "DELETED" else "ACTIVE"
+        val items = receipt.items.map { line ->
+            PurchaseItemEntity(line.id, local.id, line.materialCode.ifBlank { "pc_production" }, line.materialName, line.qty, line.unit.ifBlank { "lần" }, line.unitPrice, line.amount)
+        }
+        val purchase = local.copy(purchasedAt = receipt.purchaseDate, total = items.sumOf { it.amount }, note = receipt.note, status = status, updatedAt = receipt.updatedAt)
+        return TranslatedExpenseReceipt(purchase, items)
     }
 }

@@ -22,6 +22,7 @@ import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261012-3";
 import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261013-2";
 import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261012-3";
 import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261012-3";
+import { currentFlow, flowLabel, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261013-4";
 import { aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261013-2";
 
 const firebaseConfig = {
@@ -43,7 +44,7 @@ const state = {
   dashboard: {}, tables: [], sessions: [], batches: [], items: [],
   bills: [], purchases: [], expenseReceipts: [], purchaseItems: [], movements: [], costCodes: [],
   purchaseCategories: [], profitPartners: [], assetCategories: [], suppliers: [],
-  unsubs: [], dailyDocs: {}, dailyError: "", salesLoaded: false, salesDays: 7, itemMode: "combined", period: "today", customFrom: null, customTo: null,
+  unsubs: [], paymentFlowDoc: null, refunds: [], flowError: "", dailyDocs: {}, dailyError: "", salesLoaded: false, salesDays: 7, itemMode: "combined", period: "today", customFrom: null, customTo: null,
   transactionKind: "ALL", payerFilter: "ALL", user: null,
 };
 let expenseDraft = null;
@@ -241,6 +242,31 @@ function renderTables() {
 const shortDay = (key) => `${key.slice(8, 10)}/${key.slice(5, 7)}`;
 const compactMoney = (value) => value >= 1000000 ? `${(value / 1000000).toLocaleString("vi-VN", { maximumFractionDigits: 1 })}tr` : value >= 1000 ? `${Math.round(value / 1000).toLocaleString("vi-VN")}k` : String(value);
 const percent = (share) => `${(share * 100).toLocaleString("vi-VN", { maximumFractionDigits: 1 })}%`;
+
+function renderPaymentFlow() {
+  const holder = $("#payment-flow");
+  if (!holder) return;
+  if (!state.salesLoaded) { holder.replaceChildren(); return; }
+  const make = (tag, text, cls) => { const el = document.createElement(tag); el.textContent = text; if (cls) el.className = cls; return el; };
+  const nodes = [];
+  if (state.flowError) nodes.push(make("p", `Không đọc được quy trình thanh toán/hoàn tiền: ${state.flowError}. Kiểm tra quy tắc Firestore.`, "sales-notice"));
+  const flow = currentFlow(state.paymentFlowDoc);
+  nodes.push(make("p", state.paymentFlowDoc ? `Chế độ đang dùng: ${flowLabel(flow)}` : "POS chưa gửi chế độ thanh toán (mặc định Trả sau).", "muted"));
+  const history = historyRows(state.paymentFlowDoc);
+  if (history.length) {
+    const list = document.createElement("ul");
+    history.slice(0, 10).forEach((h) => list.append(make("li", `${dateTime(h.at)} · ${h.by} · ${flowLabel(h.from)} → ${flowLabel(h.to)}`)));
+    nodes.push(make("p", "Lịch sử đổi chế độ", "eyebrow"), list);
+  }
+  const refunds = summarizeRefunds(state.refunds, startOfDay(new Date(Date.now() - 6 * 86400000)));
+  nodes.push(make("p", `Hoàn tiền 7 ngày: ${refunds.count} khoản · ${money(refunds.total)} (tiền mặt ${money(refunds.cash)} · chuyển khoản ${money(refunds.transfer)})`, "muted"));
+  if (refunds.rows.length) {
+    const list = document.createElement("ul");
+    refunds.rows.slice(0, 20).forEach((r) => list.append(make("li", `${dateTime(r.createdAt)} · ${money(r.amount)} · ${r.method === "CASH" ? "Tiền mặt" : "Chuyển khoản"} · ${r.reason}`)));
+    nodes.push(list);
+  }
+  holder.replaceChildren(...nodes);
+}
 
 function renderSalesSnapshots() {
   if (!state.salesLoaded) {
@@ -521,6 +547,7 @@ function render() {
   renderPeriodSummary();
   renderTables();
   renderSalesSnapshots();
+  renderPaymentFlow();
   renderFinanceMetadata();
   renderTransactions();
 }
@@ -542,6 +569,13 @@ async function refreshDashboard() {
       read("financialMovements", "movements", query(collection(db, ...root, "financialMovements"), where("occurredAt", ">=", sevenDays), orderBy("occurredAt", "desc"), limit(300))),
       read("costCodes", "costCodes"), read("purchaseCategories", "purchaseCategories"), read("profitPartners", "profitPartners"), read("assetCategories", "assetCategories"), read("suppliers", "suppliers"),
     ]);
+    state.flowError = "";
+    try {
+      const flowDoc = await getDoc(doc(db, ...root, "config", "paymentFlow"));
+      state.paymentFlowDoc = flowDoc.exists() ? flowDoc.data() : null;
+      const refundSnap = await getDocs(query(collection(db, ...root, "refunds"), where("createdAt", ">=", sevenDays), orderBy("createdAt", "desc"), limit(200)));
+      state.refunds = rows(refundSnap);
+    } catch (error) { state.flowError = error.message; state.paymentFlowDoc = null; state.refunds = []; }
     state.salesLoaded = true;
     const stale = shouldMarkSnapshotStale(state.dashboard.lastUpdatedAt);
     $("#sync-status").textContent = state.dashboard.lastUpdatedAt ? `Snapshot POS: ${dateTime(state.dashboard.lastUpdatedAt)}${stale ? " · cần kiểm tra máy POS" : ""}` : "POS chưa gửi snapshot.";

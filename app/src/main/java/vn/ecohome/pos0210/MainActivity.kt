@@ -288,15 +288,15 @@ fun Tables(vm: PosViewModel) {
         Operator(vm)
         if(testMode) Surface(Modifier.fillMaxWidth(),color=Color(0xFFFFD8D8)){Text("TEST MODE · KHÔNG TÍNH DOANH THU",Modifier.fillMaxWidth().padding(8.dp),textAlign=TextAlign.Center,fontWeight=FontWeight.Black,color=Color.Red)}
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            FilterChip(true, {}, { Text("BÁN HÀNG") })
+            FilterChip(true, {}, { Text("BÁN HÀNG", maxLines = 1, softWrap = false) })
             if (prepaidMode)
-                FilterChip(false, { vm.screen.value = "PREPAID_ORDERS" }, { Text("ĐƠN HÔM NAY") })
+                FilterChip(false, { vm.screen.value = "PREPAID_ORDERS" }, { Text("ĐƠN HÔM NAY", maxLines = 1, softWrap = false) })
             if (canReport) {
-                FilterChip(false, { vm.screen.value = "REPORT" }, { Text("LỊCH SỬ") })
-                FilterChip(false, { vm.screen.value = "REPORT" }, { Text("BÁO CÁO") })
+                FilterChip(false, { vm.screen.value = "REPORT" }, { Text("LỊCH SỬ", maxLines = 1, softWrap = false) })
+                FilterChip(false, { vm.screen.value = "REPORT" }, { Text("BÁO CÁO", maxLines = 1, softWrap = false) })
             }
         }
 

@@ -9,6 +9,7 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.launch
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentChange
 import com.google.firebase.firestore.FirebaseFirestore
@@ -37,6 +38,10 @@ object ShiftAlerts {
     }
 
     fun start(context: Context) {
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch { startNow(context) }
+    }
+
+    private suspend fun startNow(context: Context) {
         if (!enabled(context)) return
         val app = context.applicationContext
         runCatching {

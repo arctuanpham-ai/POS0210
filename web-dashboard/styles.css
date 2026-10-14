@@ -108,3 +108,21 @@ dialog article { padding: 6px; }
 .text-button.danger { color: #9f4430; }
 .show-password { display: flex; align-items: center; gap: 8px; margin: 6px 0 12px; font-weight: 600; }
 .show-password input { width: auto; margin: 0; }
+
+/* Lịch sử bill trong ngày */
+.bill-list { display: grid; gap: 8px; margin-bottom: 8px; }
+.bill-row { display: grid; grid-template-columns: 54px 1fr auto; gap: 10px; align-items: center; width: 100%; padding: 12px 14px; border: 1px solid #dfcfb8; background: #fffcf7; border-radius: 14px; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.bill-row:active { background: #f4ead9; }
+.bill-row time { font-weight: 800; font-size: 15px; color: #5d4231; }
+.bill-row .bill-main strong { display: block; font-size: 14px; }
+.bill-row .bill-main small { color: #796758; font-size: 12px; }
+.bill-row .bill-amount { text-align: right; font-weight: 800; }
+.bill-row .bill-amount small { display: block; font-weight: 600; color: #796758; font-size: 12px; }
+.bill-tag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 750; background: #efe3cf; color: #5d4231; }
+.bill-tag.warn { background: #f8dcd5; color: #9f2f20; }
+.bill-group { margin: 14px 0 4px; padding-top: 10px; border-top: 1px dashed #d7c2a8; }
+.bill-group h3 { margin: 0 0 6px; font-size: 13px; color: #5d4231; }
+.bill-line { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: 14px; }
+.bill-line small { display: block; color: #796758; }
+.bill-pay { margin-top: 14px; padding: 12px; border: 1px solid #dfcfb8; border-radius: 14px; background: #fbf4e8; font-size: 14px; }
+.bill-pay div { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; }

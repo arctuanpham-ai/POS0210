@@ -10,6 +10,8 @@ import android.speech.tts.UtteranceProgressListener
 import java.util.Locale
 
 object BankPaymentAnnouncer {
+ /** Số tiền đọc tự nhiên: 180.000 → "180 nghìn đồng"; 27.500 → "27.500 đồng". */
+ internal fun spokenAmount(amount:Long)=if(amount>=1000&&amount%1000==0L)"${amount/1000} nghìn đồng" else "${"%,d".format(amount).replace(',','.')} đồng"
  fun announce(context:Context,amount:Long,tableName:String?,vibrate:Boolean,speak:Boolean){
   if(vibrate)runCatching{
    val vibrator=if(Build.VERSION.SDK_INT>=31)context.getSystemService(VibratorManager::class.java).defaultVibrator else @Suppress("DEPRECATION")(context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator)
@@ -28,7 +30,7 @@ object BankPaymentAnnouncer {
      @Deprecated("Deprecated in Java") override fun onError(utteranceId:String?){engine.shutdown()}
     })
     val subject=tableName?.takeIf{it.isNotBlank()}?.let{"$it đã thanh toán"}?:"Đã nhận"
-    engine.speak("$subject ${"%,d".format(amount).replace(',','.')} đồng",TextToSpeech.QUEUE_FLUSH,null,"bank-payment")
+    engine.speak("$subject ${spokenAmount(amount)}",TextToSpeech.QUEUE_FLUSH,null,"bank-payment")
    } else ttsHolder[0]?.shutdown()
   }
   ttsHolder[0]=engineInstance

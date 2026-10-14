@@ -34,7 +34,12 @@ class BankNotificationListenerService:NotificationListenerService(){
   if(tx==null||tx.direction!=TransactionDirection.CREDIT)return
   val result=PaymentMatcher.match(tx,dao.waitingPaymentSessions(tx.amount,receivedAt),receivedAt)
   val target=result.session
-  if(target==null){dao.updateBankNotificationMatch(tx.rawHash,result.confidence.name,null);return}
+  if(target==null){
+   dao.updateBankNotificationMatch(tx.rawHash,result.confidence.name,null)
+   // Tiền về nhưng chưa khớp bill nào: vẫn đọc số tiền để nhân viên biết có tiền vào.
+   BankPaymentAnnouncer.announce(applicationContext,tx.amount,null,dao.settingValue("bank_notification_vibrate")!="false",dao.settingValue("bank_notification_tts")!="false")
+   return
+  }
   if(dao.markPaymentDetected(target.id,tx.rawHash,tx.bank,tx.amount,receivedAt,result.confidence.name)!=1)return
   dao.updateBankNotificationMatch(tx.rawHash,"MATCHED_${result.confidence.name}",target.id)
   val tableName=dao.allTablesSnapshot().firstOrNull{it.id==target.tableId}?.name

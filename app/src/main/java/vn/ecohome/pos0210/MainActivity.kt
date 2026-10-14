@@ -895,7 +895,6 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                     color = if (last?.parserResult == "PARSE_FAILED") Color(0xFF9A2B1F) else Color(0xFF655C55)
                 )
             }
-            Button(onClick = { showBigQr = true }, modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).height(52.dp), enabled = preview.total > 0) { Text("HIỆN QR TO CHO KHÁCH QUÉT", fontWeight = FontWeight.Black) }
         }
         if (showBigQr) androidx.compose.ui.window.Dialog(
             onDismissRequest = { showBigQr = false },
@@ -950,7 +949,7 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                     }
                 }
             }
-            if (shownBill != null) {
+            if (shownBill != null && !isPrepaid) {
                 Text("BILL · Khách quét QR trên màn hình hoặc trên bill", fontWeight = FontWeight.Black, color = Coffee, modifier = Modifier.padding(bottom = 6.dp))
                 Card(
                     Modifier.fillMaxWidth(0.92f).align(Alignment.CenterHorizontally).padding(bottom = 12.dp),
@@ -966,14 +965,32 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                     )
                 }
             }
-            if (isPrepaid && shownBill == null) {
+            if (isPrepaid) {
+                // Bill đầy đủ hiện ngay khi vào thanh toán: số tiền, QR to, danh sách món. Khách chọn tiền mặt hay chuyển khoản.
                 val payItems by vm.sessionItems(s.id).collectAsState(initial = emptyList())
                 val orderNo = sessionBatches.firstOrNull { it.status != "CANCELLED" }?.serviceNo
-                Card(Modifier.fillMaxWidth().padding(bottom = 12.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFF1E4D3))) {
-                    Column(Modifier.padding(14.dp)) {
-                        Text("${t.name.uppercase()}${orderNo?.let { " · ĐƠN " + PaymentFlowRules.orderNoLabel(it) } ?: ""}", fontSize = 26.sp, fontWeight = FontWeight.Black, color = Coffee)
-                        payItems.forEach { Text("${it.qty} × ${it.itemNameSnapshot}" + if (it.note.isNotBlank()) "  [${it.note}]" else "", fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 3.dp)) }
-                        Text("① IN BILL đưa khách  ② khách thanh toán  ③ XÁC NHẬN → phiếu bếp tự in", fontSize = 11.sp, modifier = Modifier.padding(top = 10.dp))
+                Card(
+                    Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    border = BorderStroke(1.dp, Color(0xFFE4DBD0)),
+                    shape = RoundedCornerShape(18.dp)
+                ) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("${t.name.uppercase()}${orderNo?.let { " · ĐƠN " + PaymentFlowRules.orderNoLabel(it) } ?: ""}", fontSize = 24.sp, fontWeight = FontWeight.Black, color = Coffee)
+                        Text(money(preview.total), fontSize = 42.sp, fontWeight = FontWeight.Black)
+                        if (qrConfigured) {
+                            PaymentQrImage(qrMode, setting("bank_name"), setting("bank_account"), setting("bank_holder"), preview.total, qrInfo, Modifier.fillMaxWidth(0.85f).aspectRatio(1f).padding(vertical = 6.dp))
+                            Text(
+                                if (soundboxStatic) "Quét QR Techcombank · nhập đúng số tiền trên" else "Quét mã bằng app ngân hàng · số tiền đã nhúng sẵn",
+                                fontSize = 13.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center
+                            )
+                            if (!soundboxStatic) Text("${setting("bank_holder")} · ${setting("bank_name")}", fontSize = 12.sp, color = Color(0xFF655C55))
+                        } else Text("Chưa cấu hình QR · khách thanh toán tiền mặt", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        HorizontalDivider(Modifier.padding(vertical = 10.dp))
+                        Column(Modifier.fillMaxWidth()) {
+                            payItems.forEach { Text("${it.qty} × ${it.itemNameSnapshot}" + if (it.note.isNotBlank()) "  [${it.note}]" else "", fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 1.dp)) }
+                        }
+                        Text("Khách giữ bill · báo số thẻ ${t.name} khi nhận món", fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
                     }
                 }
             }

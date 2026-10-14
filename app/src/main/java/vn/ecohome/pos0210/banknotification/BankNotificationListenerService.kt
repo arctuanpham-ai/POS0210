@@ -11,11 +11,12 @@ class BankNotificationListenerService:NotificationListenerService(){
  private val scope=CoroutineScope(SupervisorJob()+Dispatchers.IO)
  override fun onDestroy(){scope.cancel();super.onDestroy()}
  override fun onNotificationPosted(sbn:StatusBarNotification){
-  val parser=BankParserRegistry.parser(sbn.packageName)?:return
+  if(sbn.packageName==applicationContext.packageName)return
   val extras=sbn.notification.extras
   val title=extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
   val body=(extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?:extras.getCharSequence(Notification.EXTRA_TEXT))?.toString().orEmpty()
   if(body.isBlank())return
+  val parser=BankParserRegistry.parser(sbn.packageName)?:BankParserRegistry.detect(title,body)?:return
   scope.launch{process(sbn.packageName,title,body,sbn.postTime,parser)}
  }
  private suspend fun process(packageName:String,title:String,body:String,receivedAt:Long,parser:BankNotificationParser){

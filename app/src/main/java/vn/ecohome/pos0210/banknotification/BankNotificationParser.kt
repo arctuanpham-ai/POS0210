@@ -90,4 +90,6 @@ object BankParserRegistry {
  )
  val supportedPackages:Set<String> get()=parsers.keys
  fun parser(packageName:String)=parsers[packageName]
+ /** App ngân hàng lạ (đổi package, bản mới…): thử mọi parser trên nội dung thông báo, chỉ nhận khi đọc ra giao dịch. */
+ fun detect(title:String,body:String):BankNotificationParser?=parsers.values.firstOrNull{runCatching{it.parse(title,body)}.getOrNull()!=null}
 }

@@ -23,6 +23,7 @@ import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, creat
 import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261012-3";
 import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261012-3";
 import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261014-3";
+import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261014-7";
 import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261014-6";
 import { buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261014-4";
 import { aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261013-2";
@@ -48,7 +49,7 @@ const state = {
   purchaseCategories: [], profitPartners: [], assetCategories: [], suppliers: [],
   unsubs: [], paymentFlowDoc: null, refunds: [], frozenRefundDocs: [], flowError: "", dailyDocs: {}, dailyError: "", salesLoaded: false, salesDays: 7, itemMode: "combined", period: "today", customFrom: null, customTo: null,
   transactionKind: "ALL", payerFilter: "ALL", user: null,
-  historyDay: "today", historyDocs: {}, historyTables: null, historyError: "", historyLoading: false, billDetailCache: {},
+  expenseRules: [], rulesError: "", historyDay: "today", historyDocs: {}, historyTables: null, historyError: "", historyLoading: false, billDetailCache: {},
 };
 let expenseDraft = null;
 let editingReceipt = null;
@@ -569,8 +570,51 @@ function nextMaterialCode(group) {
 function expenseLineMarkup(item) {
   const safe = (value) => escapeHtml(String(value ?? "")).replace(/"/g, "&quot;");
   const id = safe(item.id);
-  const group = groupLabel(item.expenseGroup);
-  return `<article class="expense-line" data-line-id="${id}"><label>Tên vật tư<input data-field="materialName" list="materials-${id}" maxlength="120" value="${safe(item.materialName)}" required autocomplete="off" /><datalist id="materials-${id}"></datalist></label><div class="two-col"><label>Mã vật tư<input data-field="materialCode" maxlength="40" value="${safe(item.materialCode)}" readonly /></label><label>Nhóm vật tư<input data-field="expenseGroup" list="groups-${id}" value="${safe(group)}" required autocomplete="off" /><datalist id="groups-${id}"></datalist></label></div><div class="two-col"><label>Số lượng<input data-field="qty" type="number" min="0.001" step="0.001" value="${Number(item.qty || 0)}" /></label><label>Đơn vị tính<input data-field="unit" list="units-${id}" maxlength="20" value="${safe(item.unit || "kg")}" required autocomplete="off" /><datalist id="units-${id}"></datalist></label></div><label>Đơn giá<input data-field="unitPrice" type="number" min="0" step="1" value="${Number(item.unitPrice || 0)}" /></label><button type="button" class="text-button" data-remove-line="${id}">Bỏ dòng</button></article>`;
+  const group = item.expenseGroup ? groupLabel(item.expenseGroup) : "";
+  return `<article class="expense-line" data-line-id="${id}" data-group-touched="${item.groupTouched ? 1 : 0}"><label>Tên vật tư<input data-field="materialName" list="materials-${id}" maxlength="120" value="${safe(item.materialName)}" required autocomplete="off" /><datalist id="materials-${id}"></datalist></label><div class="two-col"><label>Mã vật tư<input data-field="materialCode" maxlength="40" value="${safe(item.materialCode)}" readonly /></label><label>Nhóm vật tư<input data-field="expenseGroup" list="groups-${id}" value="${safe(group)}" required autocomplete="off" /><datalist id="groups-${id}"></datalist></label></div><p class="rule-hint" data-hint aria-live="polite"></p><div class="two-col"><label>Số lượng<input data-field="qty" type="number" min="0.001" step="0.001" value="${Number(item.qty || 0)}" /></label><label>Đơn vị tính<input data-field="unit" list="units-${id}" maxlength="20" value="${safe(item.unit || "kg")}" required autocomplete="off" /><datalist id="units-${id}"></datalist></label></div><label>Đơn giá<input data-field="unitPrice" type="number" min="0" step="1" value="${Number(item.unitPrice || 0)}" /></label><button type="button" class="text-button" data-remove-line="${id}">Bỏ dòng</button></article>`;
+}
+function refreshRuleHint(line) {
+  const hint = line.querySelector("[data-hint]");
+  if (!hint) return;
+  const name = line.querySelector("[data-field=materialName]").value;
+  if (!name.trim()) { hint.textContent = ""; hint.className = "rule-hint"; return; }
+  const s = classifyMaterial(name, state.expenseRules);
+  const chosen = groupCodeOrNull(line.querySelector("[data-field=expenseGroup]").value);
+  let text, warn = false;
+  if (s.status === "learned" || s.status === "matched") {
+    const label = groupLabelOf(s.group);
+    if (!chosen) text = `Gợi ý: ${label}`;
+    else if (chosen === s.group) text = `✓ Khớp quy tắc${s.status === "matched" ? ` (từ khoá “${s.matched}”)` : " đã học"}: ${label}`;
+    else { text = `Khác gợi ý (${label}). Lựa chọn của bạn sẽ được ghi nhớ cho lần sau.`; warn = true; }
+  } else if (s.status === "ambiguous") { text = `Tên này có thể thuộc: ${s.groups.map(groupLabelOf).join(" hoặc ")}. Hãy chọn đúng nhóm.`; warn = true; }
+  else { text = chosen ? "Chưa có quy tắc cho tên này; lựa chọn của bạn sẽ được ghi nhớ." : "Chưa khớp quy tắc nào, hãy chọn nhóm vật tư."; warn = true; }
+  hint.textContent = text;
+  hint.className = warn ? "rule-hint warn" : "rule-hint";
+}
+function renderClassificationReview() {
+  const host = $("#review-list");
+  const summaryHost = $("#review-summary");
+  if (!host) return;
+  const data = reviewItems(state.expenseReceipts, state.expenseRules);
+  const s = summarizeReview(data);
+  const tiles = [
+    ["Số dòng vật tư (7 ngày)", String(s.total)],
+    ["Khớp quy tắc", s.okRate == null ? "—" : `${Math.round(s.okRate * 100)}% (${s.ok})`],
+    ["Khác gợi ý", String(s.mismatch)],
+    ["Mơ hồ / chưa khớp", `${s.ambiguous} / ${s.unmatched}`],
+  ];
+  summaryHost.replaceChildren(...tiles.map(([label, value]) => {
+    const node = $("#metric-template").content.firstElementChild.cloneNode(true);
+    node.querySelector("p").textContent = label;
+    node.querySelector("strong").textContent = value;
+    return node;
+  }));
+  const labelOf = { mismatch: "Khác gợi ý", ambiguous: "Mơ hồ", unmatched: "Chưa có quy tắc" };
+  const issues = data.filter((r) => r.status !== "ok").slice(0, 100);
+  const note = state.rulesError ? `<p class="error">${escapeHtml(state.rulesError)}</p>` : "";
+  host.innerHTML = note + (issues.length
+    ? issues.map((r) => `<article class="review-row"><div><strong>${escapeHtml(r.name || "—")}</strong><small>${dateTime(r.date)} · ${money(r.amount)}</small><small>Đang ở: ${escapeHtml(r.stored ? groupLabelOf(r.stored) : "chưa rõ")}${r.status === "mismatch" ? ` · gợi ý: ${escapeHtml(groupLabelOf(r.suggested))}` : r.status === "ambiguous" ? ` · có thể: ${escapeHtml(r.candidates.map(groupLabelOf).join(" / "))}` : ""}</small></div><div class="review-actions"><span class="bill-tag warn">${labelOf[r.status]}</span><button type="button" class="text-button" data-edit-receipt="${escapeHtml(r.receiptId)}">Sửa phiếu</button></div></article>`).join("")
+    : (s.total ? '<p class="muted empty-state">Mọi dòng trong 7 ngày đều khớp quy tắc.</p>' : '<p class="muted empty-state">Chưa có phiếu chi trong 7 ngày.</p>'));
 }
 function renderExpenseDraft() {
   if (!expenseDraft) return;
@@ -578,6 +622,7 @@ function renderExpenseDraft() {
   $("#expense-note").value = expenseDraft.note || "";
   $("#expense-lines").innerHTML = expenseDraft.items.map(expenseLineMarkup).join("");
   setupMaterialSuggestions();
+  document.querySelectorAll("#expense-lines .expense-line").forEach(refreshRuleHint);
   $("#expense-total").textContent = money(calculateReceiptTotal(expenseDraft.items));
   if (!editingReceipt) localStorage.setItem(`pos0210.expense-draft.${state.user.uid}`, JSON.stringify(expenseDraft));
 }
@@ -589,26 +634,33 @@ function applyExpenseInputs() {
   expenseDraft.items = [...$("#expense-lines").querySelectorAll(".expense-line")].map((node) => {
     const existing = expenseDraft.items.find((x) => x.id === node.dataset.lineId) || { id: node.dataset.lineId };
     const read = (field) => node.querySelector(`[data-field="${field}"]`).value;
-    const group = groupLabel(read("expenseGroup"));
+    const rawGroup = read("expenseGroup");
+    const group = groupCodeOrNull(rawGroup) ? groupLabel(rawGroup) : "";
     let code = read("materialCode");
     if (!read("materialName").trim()) code = "";
     else {
       if (existing.materialName && normalizeMaterial(existing.materialName) !== normalizeMaterial(read("materialName"))) code = "";
-      if (!code) {
-      const known = savedMaterials().find((item) => normalizeMaterial(item.materialName) === normalizeMaterial(read("materialName")));
-      code = known?.materialCode || nextMaterialCode(group);
-      while (allocated.has(code) && !known) code = nextMaterialCode(group);
-      allocated.add(code);
-      }
+      // Mã vật tư sinh cố định từ tên + nhóm: cùng tên luôn ra cùng mã trên mọi thiết bị. Dòng đã có mã và chưa đổi tên/nhóm giữ nguyên mã cũ.
+      if (!code && group) code = materialCodeFor(groupCode(group), read("materialName"));
+      if (code) allocated.add(code);
     }
     node.querySelector("[data-field=materialCode]").value = code;
-    return { ...existing, materialName: read("materialName"), materialCode: code, expenseGroup: group, qty: Number(read("qty")), unit: read("unit"), unitPrice: Number(read("unitPrice")) };
+    return { ...existing, materialName: read("materialName"), materialCode: code, expenseGroup: group, groupTouched: node.dataset.groupTouched === "1", qty: Number(read("qty")), unit: read("unit"), unitPrice: Number(read("unitPrice")) };
   });
   if (state.user && !editingReceipt) localStorage.setItem(`pos0210.expense-draft.${state.user.uid}`, JSON.stringify(expenseDraft));
 }
 async function saveExpenseReceipt(event) {
   event.preventDefault(); applyExpenseInputs(); const error = $("#expense-error"); error.textContent = "";
   const check = validateReceipt(expenseDraft); if (!check.ok) { error.textContent = check.error; return; }
+  const missingGroup = expenseDraft.items.findIndex((item) => !groupCodeOrNull(item.expenseGroup));
+  if (missingGroup >= 0) { error.textContent = `Dòng ${missingGroup + 1}: hãy chọn nhóm vật tư.`; return; }
+  const learnList = rulesToLearn(expenseDraft.items, state.expenseRules);
+  expenseDraft.items = expenseDraft.items.map(({ groupTouched, ...item }) => {
+    const suggestion = classifyMaterial(item.materialName, state.expenseRules);
+    const chosen = groupCodeOrNull(item.expenseGroup);
+    const source = suggestion.group && suggestion.group === chosen ? (suggestion.status === "learned" ? "LEARNED_RULE" : "KEYWORD_RULE") : "MANUAL";
+    return { ...item, ...normalizeQuantity(item.qty, item.unit), classification: { source, suggestedGroup: suggestion.group, status: suggestion.status } };
+  });
   const now = Date.now();
   const payload = editingReceipt
     ? buildEditedReceipt(editingReceipt, expenseDraft, { now, uid: state.user.uid })
@@ -616,6 +668,13 @@ async function saveExpenseReceipt(event) {
   try {
     await setDoc(doc(db, ...root, "expenseReceipts", expenseDraft.id), payload);
     rememberMaterials(expenseDraft.items);
+    for (const rule of learnList) {
+      try {
+        const learned = { id: rule.id, name: rule.name, group: rule.group, updatedAt: now, updatedByName: state.user.displayName || state.user.email || "" };
+        await setDoc(doc(db, ...root, "expenseRules", rule.id), learned);
+        state.expenseRules = [...state.expenseRules.filter((x) => x.id !== rule.id), learned];
+      } catch { /* học quy tắc là phụ: phiếu đã lưu, lần sau sẽ thử lại khi người nhập chọn nhóm khác gợi ý */ }
+    }
     if (editingReceipt) { replaceLocalReceipt(payload); editingReceipt = null; render(); }
     else localStorage.removeItem(`pos0210.expense-draft.${state.user.uid}`);
     expenseDraft = null; $("#expense-dialog").close();
@@ -657,6 +716,7 @@ function render() {
   renderSalesSnapshots();
   renderPaymentFlow();
   renderBillHistory();
+  renderClassificationReview();
   renderFinanceMetadata();
   renderTransactions();
 }
@@ -691,6 +751,10 @@ async function refreshDashboard() {
         state.frozenRefundDocs = rows(frozenSnap);
       } catch { state.frozenRefundDocs = []; }
     } catch (error) { state.flowError = error.message; state.paymentFlowDoc = null; state.refunds = []; }
+    try {
+      state.expenseRules = rows(await getDocs(query(collection(db, ...root, "expenseRules"), limit(2000))));
+      state.rulesError = "";
+    } catch (error) { state.expenseRules = []; state.rulesError = error.code === "permission-denied" ? "Chưa có quyền đọc quy tắc đã học (expenseRules)." : (error.message || "lỗi không rõ"); }
     state.salesLoaded = true;
     const stale = shouldMarkSnapshotStale(state.dashboard.lastUpdatedAt);
     $("#sync-status").textContent = state.dashboard.lastUpdatedAt ? `Snapshot POS: ${dateTime(state.dashboard.lastUpdatedAt)}${stale ? " · cần kiểm tra máy POS" : ""}` : "POS chưa gửi snapshot.";
@@ -843,6 +907,7 @@ $("#bill-history-list").addEventListener("click", (event) => {
   const button = event.target.closest("[data-bill-id]");
   if (button) openBillDetail(button.dataset.billId);
 });
+$("#review-list").addEventListener("click", (event) => { const edit = event.target.closest("[data-edit-receipt]"); if (edit) openReceiptEditor(edit.dataset.editReceipt); });
 $("#close-bill-detail").addEventListener("click", () => $("#bill-detail").close());
 
 $("#open-entry").addEventListener("click", () => {
@@ -861,7 +926,7 @@ $("#open-expense").addEventListener("click", () => {
   $("#expense-title").textContent = "Phiếu nhiều vật tư";
   $("#expense-submit").textContent = "LƯU VÀ ĐỒNG BỘ";
   expenseDraft = createStableDraft(localStorage, state.user, uuid);
-  expenseDraft.items = expenseDraft.items.map(item => ({ ...item, expenseGroup: groupLabel(item.expenseGroup) }));
+  expenseDraft.items = expenseDraft.items.map(item => ({ ...item, expenseGroup: item.materialName ? groupLabel(item.expenseGroup) : "" }));
   $("#expense-error").textContent = "";
   renderExpenseDraft();
   $("#expense-dialog").showModal();
@@ -877,10 +942,31 @@ $("#transactions").addEventListener("click", (event) => {
   const cancel = event.target.closest?.("[data-cancel-receipt]");
   if (cancel) cancelReceipt(cancel.dataset.cancelReceipt);
 });
-$("#add-expense-line").addEventListener("click", () => { applyExpenseInputs(); expenseDraft.items.push({ id: uuid(), materialName: "", materialCode: "", expenseGroup: "Thịt, gia cầm", qty: 1, unit: "kg", unitPrice: 0 }); renderExpenseDraft(); });
+$("#add-expense-line").addEventListener("click", () => { applyExpenseInputs(); expenseDraft.items.push({ id: uuid(), materialName: "", materialCode: "", expenseGroup: "", qty: 1, unit: "kg", unitPrice: 0 }); renderExpenseDraft(); });
 $("#expense-lines").addEventListener("click", (event) => { const id = event.target.dataset.removeLine; if (!id || expenseDraft.items.length < 2) return; applyExpenseInputs(); expenseDraft.items = expenseDraft.items.filter((item) => item.id !== id); renderExpenseDraft(); });
 $("#expense-lines").addEventListener("input", (event) => { applyExpenseInputs(); if (event.target.matches("input[list]")) updateMaterialSuggestions(event.target); $("#expense-total").textContent = money(calculateReceiptTotal(expenseDraft.items)); });
-$("#expense-lines").addEventListener("change", (event) => { const input = event.target; if (input.matches("[data-field=materialName]")) { const found = savedMaterials().find((item) => normalizeMaterial(item.materialName) === normalizeMaterial(input.value)); if (found) { const line = input.closest(".expense-line"); for (const [field, value] of [["materialCode", found.materialCode], ["expenseGroup", found.expenseGroup], ["unit", found.unit]]) line.querySelector(`[data-field="${field}"]`).value = value; applyExpenseInputs(); } return; } if (!input.matches("[data-field=expenseGroup]")) return; const line = input.closest(".expense-line"); if (!MATERIAL_GROUPS.some(([, name]) => name === input.value)) { input.setCustomValidity("Chọn nhóm vật tư trong danh sách"); return; } input.setCustomValidity(""); const code = line.querySelector("[data-field=materialCode]"); if (line.querySelector("[data-field=materialName]").value.trim()) { const known = savedMaterials().find((item) => normalizeMaterial(item.materialName) === normalizeMaterial(line.querySelector("[data-field=materialName]").value)); if (!known) code.value = nextMaterialCode(input.value); } applyExpenseInputs(); });
+$("#expense-lines").addEventListener("change", (event) => {
+  const input = event.target;
+  const line = input.closest(".expense-line");
+  if (!line) return;
+  if (input.matches("[data-field=materialName]")) {
+    const suggestion = classifyMaterial(input.value, state.expenseRules);
+    // Nhóm tự điền không được sót lại khi đổi tên: gợi ý rõ thì điền, mơ hồ hoặc chưa khớp thì xoá để buộc người nhập chọn.
+    if (line.dataset.groupTouched !== "1") line.querySelector("[data-field=expenseGroup]").value = suggestion.group ? groupLabelOf(suggestion.group) : "";
+    const known = savedMaterials().find((item) => normalizeMaterial(item.materialName) === normalizeMaterial(input.value));
+    if (known?.unit) line.querySelector("[data-field=unit]").value = known.unit;
+    line.querySelector("[data-field=materialCode]").value = "";
+    applyExpenseInputs(); refreshRuleHint(line);
+    return;
+  }
+  if (input.matches("[data-field=expenseGroup]")) {
+    if (!MATERIAL_GROUPS.some(([, name]) => name === input.value)) { input.setCustomValidity("Chọn nhóm vật tư trong danh sách"); return; }
+    input.setCustomValidity("");
+    line.dataset.groupTouched = "1";
+    line.querySelector("[data-field=materialCode]").value = "";
+    applyExpenseInputs(); refreshRuleHint(line);
+  }
+});
 $("#expense-date").addEventListener("change", applyExpenseInputs);
 $("#expense-note").addEventListener("input", applyExpenseInputs);
 $("#expense-form").addEventListener("submit", saveExpenseReceipt);

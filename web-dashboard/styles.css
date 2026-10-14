@@ -135,3 +135,12 @@ dialog article { padding: 6px; }
 .page[hidden] { display: none; }
 @media (min-width: 720px) { .tabbar { margin: 0 -28px 6px; padding: 12px 28px; } }
 .summary-grid + .bill-list { margin-top: 12px; }
+
+/* Gợi ý quy tắc phân nhóm và màn rà soát */
+.rule-hint { margin: 6px 0 4px; font-size: 12px; line-height: 1.4; color: #3f6b3a; min-height: 1.2em; }
+.rule-hint.warn { color: #9a5a12; }
+.review-list { display: grid; gap: 8px; margin-bottom: 8px; }
+.review-row { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; padding: 12px 14px; border: 1px solid #dfcfb8; background: #fffcf7; border-radius: 14px; }
+.review-row small { display: block; color: #796758; font-size: 12px; margin-top: 2px; }
+.review-actions { display: grid; justify-items: end; gap: 4px; flex: 0 0 auto; }
+.summary-grid + .review-list { margin-top: 12px; }

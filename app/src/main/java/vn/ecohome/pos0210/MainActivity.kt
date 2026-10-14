@@ -884,6 +884,17 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
             } else if (!soundboxStatic) {
                 Text("Đang chờ tiền về… (app tự báo khi nhận thông báo ngân hàng)", Modifier.padding(horizontal = 16.dp, vertical = 2.dp), fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
+            if (!soundboxStatic) {
+                val last = bankEvents.firstOrNull()
+                val hhmm = remember(last?.receivedAt) { last?.let { java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(it.receivedAt)) } }
+                Text(
+                    if (last == null) "Chưa nhận thông báo ngân hàng nào · kiểm tra quyền đọc thông báo (Quản lý → Thanh toán chuyển khoản)"
+                    else "TB ngân hàng gần nhất $hhmm" + (last.amount?.let { " · ${if (last.direction == "DEBIT") "-" else "+"}${money(it)}" } ?: "") +
+                        " · " + (if (last.parserResult == "PARSE_FAILED") "KHÔNG ĐỌC ĐƯỢC" else if (last.matchStatus.startsWith("MATCHED")) "KHỚP BILL" else "CHƯA KHỚP BILL"),
+                    Modifier.padding(horizontal = 16.dp, vertical = 2.dp), fontSize = 11.sp,
+                    color = if (last?.parserResult == "PARSE_FAILED") Color(0xFF9A2B1F) else Color(0xFF655C55)
+                )
+            }
             Button(onClick = { showBigQr = true }, modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).height(52.dp), enabled = preview.total > 0) { Text("HIỆN QR TO CHO KHÁCH QUÉT", fontWeight = FontWeight.Black) }
         }
         if (showBigQr) androidx.compose.ui.window.Dialog(
@@ -3305,7 +3316,7 @@ fun VietQr(vm: PosViewModel) {
                 if (bin != null) "✓ Nhận diện ngân hàng · BIN $bin" else "Chưa nhận diện được ngân hàng. Nhập tên viết tắt (TCB, VCB, MB, BIDV, ACB…) hoặc BIN 6 số bắt đầu bằng 970.",
                 fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (bin != null) Color(0xFF41633A) else Color(0xFF9A2B1F)
             )
-            OutlinedTextField(acc, { acc = it.filter(Char::isDigit); saved = false }, label = { Text("Số tài khoản") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(acc, { acc = it.filter(Char::isLetterOrDigit).uppercase().take(19); saved = false }, label = { Text("Số tài khoản hoặc mã VietQR (VD: MS00P0000001284119)") }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(holder, { holder = it; saved = false }, label = { Text("Chủ tài khoản") }, modifier = Modifier.fillMaxWidth())
             Button(enabled = canSave, onClick = {
                 vm.saveSetting("bank_name", bank.trim())

@@ -161,3 +161,7 @@ dialog article { padding: 6px; }
 .month-card dl div { display: flex; justify-content: space-between; gap: 12px; }
 .month-card dt { color: var(--muted, #666); }
 .month-card dd { margin: 0; font-weight: 600; text-align: right; }
+
+.sim-banner { margin: 8px 0; padding: 10px 12px; border-radius: 10px; font-weight: 600; background: #fff3cd; color: #664d03; border: 1px solid #ffda6a; }
+body.simulating #taichinh-page, body.simulating [data-page="taichinh"] { outline: 3px dashed #ffc107; outline-offset: -3px; }
+@media (prefers-color-scheme: dark) { .sim-banner { background: #3d3000; color: #ffe08a; border-color: #8a6d00; } }

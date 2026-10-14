@@ -15,8 +15,8 @@ import {
   where,
   orderBy,
   limit,
-  setDoc,
-  writeBatch,
+  setDoc as rawSetDoc,
+  writeBatch as rawWriteBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261012-3";
 import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261013-2";
@@ -25,6 +25,7 @@ import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions
 import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261014-3";
 import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261014-8";
 import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261014-7";
+import { buildSimulation } from "./sim-data.js?v=20261014-10";
 import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261014-9";
 import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261014-9";
 import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261014-6";
@@ -52,7 +53,7 @@ const state = {
   purchaseCategories: [], profitPartners: [], assetCategories: [], suppliers: [],
   unsubs: [], paymentFlowDoc: null, refunds: [], frozenRefundDocs: [], flowError: "", dailyDocs: {}, dailyError: "", salesLoaded: false, salesDays: 7, itemMode: "combined", period: "today", customFrom: null, customTo: null,
   transactionKind: "ALL", payerFilter: "ALL", user: null,
-  expenseRules: [], rulesError: "", monthlyDocs: {}, monthlyError: "", reportFrom: 0, receiptsNote: "", detailCutoff: null, receiptsFrom: 0, summaryBlocks: [], historyDay: "today", historyDocs: {}, historyTables: null, historyError: "", historyLoading: false, billDetailCache: {},
+  expenseRules: [], rulesError: "", simulation: null, monthlyDocs: {}, monthlyError: "", reportFrom: 0, receiptsNote: "", detailCutoff: null, receiptsFrom: 0, summaryBlocks: [], historyDay: "today", historyDocs: {}, historyTables: null, historyError: "", historyLoading: false, billDetailCache: {},
 };
 let expenseDraft = null;
 let editingReceipt = null;
@@ -66,6 +67,11 @@ const expenseRows = () => state.expenseReceipts.map((receipt) => ({
   note: receipt.note || "",
   summary: isSummaryReceipt(receipt),
 }));
+
+// Chế độ mô phỏng không bao giờ được ghi Firestore: mọi đường ghi đi qua hai hàm này.
+const SIM_BLOCKED = "Đang ở chế độ mô phỏng: không ghi dữ liệu thật. Tắt mô phỏng để lưu.";
+const setDoc = (...args) => { if (state.simulation) throw new Error(SIM_BLOCKED); return rawSetDoc(...args); };
+const writeBatch = (...args) => { if (state.simulation) throw new Error(SIM_BLOCKED); return rawWriteBatch(...args); };
 
 const $ = (selector) => document.querySelector(selector);
 const money = (value) => `${new Intl.NumberFormat("vi-VN").format(Number(value || 0))}đ`;
@@ -602,7 +608,7 @@ function renderClassificationReview() {
   const data = reviewItems(state.expenseReceipts, state.expenseRules);
   const s = summarizeReview(data);
   const tiles = [
-    ["Số dòng vật tư (7 ngày)", String(s.total)],
+    ["Số dòng vật tư (phiếu đã tải)", String(s.total)],
     ["Khớp quy tắc", s.okRate == null ? "—" : `${Math.round(s.okRate * 100)}% (${s.ok})`],
     ["Khác gợi ý", String(s.mismatch)],
     ["Mơ hồ / chưa khớp", `${s.ambiguous} / ${s.unmatched}`],
@@ -731,6 +737,7 @@ function render() {
 }
 async function refreshDashboard() {
   if (!state.user) return;
+  if (state.simulation) { $("#sync-status").textContent = "Đang ở chế độ mô phỏng. Tắt mô phỏng để đọc dữ liệu thật."; return; }
   $("#sync-status").textContent = "Đang đọc snapshot…";
   try {
     const dashboardDoc = await getDoc(doc(db, ...root, "dashboard", "current"));
@@ -934,6 +941,7 @@ $("#summary-blocks").addEventListener("click", (event) => {
 });
 $("#summary-form").addEventListener("submit", saveSummaryBlocks);
 $("#summary-to-detail").addEventListener("click", startUpgradeToDetail);
+$("#sim-toggle").addEventListener("click", () => setSimulation(!state.simulation));
 $("#export-monthly-csv").addEventListener("click", () => exportMonthly("csv"));
 $("#export-monthly-json").addEventListener("click", () => exportMonthly("json"));
 $("#save-cutoff").addEventListener("click", () => saveCutoff(false));
@@ -1292,7 +1300,7 @@ function renderMonthlyReport() {
   const report = all.filter((r) => r.monthKey >= since);
   const note = [state.receiptsNote, state.monthlyError].filter(Boolean).join(" · ");
   $("#monthly-note").textContent = note;
-  target.innerHTML = report.slice().reverse().map((r) => `<article class="month-card"><h3>${r.monthKey}${r.revenueFinal ? "" : " · đang chạy"}</h3><dl>
+  target.innerHTML = report.slice().reverse().map((r) => `<article class="month-card"><h3>${r.monthKey}${r.monthKey === report[report.length - 1].monthKey ? " · đang chạy" : ""}</h3><dl>
     <div><dt>Nhập hàng</dt><dd>${money(r.purchases)}</dd></div>
     <div><dt>Doanh thu</dt><dd>${r.revenue === null ? "chưa có dữ liệu" : money(r.revenue)}</dd></div>
     <div><dt>Nhập / doanh thu</dt><dd>${r.ratio === null ? "—" : `${(r.ratio * 100).toFixed(1)}%`}</dd></div>
@@ -1307,15 +1315,31 @@ function exportMonthly(kind) {
   const since = reportSinceKey();
   const report = currentMonthReport().filter((r) => r.monthKey >= since);
   const stamp = new Date().toISOString().slice(0, 10);
-  if (kind === "csv") downloadFile(`nhap-hang-theo-thang-${stamp}.csv`, "text/csv;charset=utf-8", monthlyCsv(report));
-  else downloadFile(`nhap-hang-theo-thang-${stamp}.json`, "application/json", monthlyJson(report, { rules: state.expenseRules }));
+  if (kind === "csv") downloadFile(`${state.simulation ? "MOPHONG-" : ""}nhap-hang-theo-thang-${stamp}.csv`, "text/csv;charset=utf-8", monthlyCsv(report));
+  else downloadFile(`${state.simulation ? "MOPHONG-" : ""}nhap-hang-theo-thang-${stamp}.json`, "application/json", monthlyJson(report, { rules: state.expenseRules }));
+}
+
+/* ---------- Chế độ mô phỏng: dữ liệu giả hoàn toàn trong trình duyệt, không đọc/ghi Firestore, không đụng bộ đệm ---------- */
+function setSimulation(on) {
+  if (on === !!state.simulation) return;
+  if (on) {
+    const sim = buildSimulation({ months: 6 });
+    state.simulation = { stash: { expenseReceipts: state.expenseReceipts, monthlyDocs: state.monthlyDocs, receiptsFrom: state.receiptsFrom, reportFrom: state.reportFrom, receiptsNote: state.receiptsNote, monthlyError: state.monthlyError, expenseRules: state.expenseRules } };
+    Object.assign(state, { expenseReceipts: sim.receipts, monthlyDocs: sim.monthlyDocs, receiptsFrom: sim.from, reportFrom: sim.from, receiptsNote: "MÔ PHỎNG 6 tháng: phiếu tổng 2 tháng đầu, sau đó phiếu chi tiết; có dòng sai nhóm, tên mơ hồ, 1 tháng thiếu doanh thu, 1 phiếu huỷ", monthlyError: "", expenseRules: [] });
+  } else {
+    Object.assign(state, state.simulation.stash, { simulation: null });
+  }
+  document.body.classList.toggle("simulating", !!state.simulation);
+  $("#sim-banner").hidden = !state.simulation;
+  $("#sim-toggle").textContent = state.simulation ? "Tắt mô phỏng" : "Chạy mô phỏng (không ghi dữ liệu)";
+  render();
 }
 
 /* ---------- Tải phiếu cũ hơn 7 ngày khi chọn kỳ xem xa hơn (tối đa 500 phiếu) ---------- */
 async function ensureReceiptsLoaded() {
   const range = rangeForPeriod();
   const from = Number.isFinite(range.from) ? Math.max(range.from, 0) : 0;
-  if (!state.user || from >= state.receiptsFrom) return;
+  if (!state.user || state.simulation || from >= state.receiptsFrom) return;
   try {
     const snap = await getDocs(query(collection(db, ...root, "expenseReceipts"), where("purchaseDate", ">=", from), orderBy("purchaseDate", "desc"), limit(500)));
     const fetched = rows(snap);

@@ -17,7 +17,7 @@
         <p class="eyebrow">0210 · BREAKFAST · COFFEE · DRINKS</p>
         <h1 id="login-title">Manager realtime</h1>
         <p class="muted">Theo dõi quán và nhập phiếu tài chính từ xa.</p>
-        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.14.9 · Nhập hàng theo tháng</p>
+        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.14.10 · Mô phỏng</p>
         <label>Email Firebase<input id="email" type="email" autocomplete="username" inputmode="email" /></label>
         <label>Mật khẩu<input id="password" type="password" autocomplete="current-password" /></label>
         <label class="show-password"><input id="show-password" type="checkbox" /> Hiện mật khẩu để kiểm tra khi gõ</label>
@@ -34,7 +34,7 @@
           <div class="heading-actions"><button id="refresh-dashboard" class="secondary">Làm mới</button><button id="request-sync" class="secondary" title="Yêu cầu máy POS ở quán đồng bộ ngay">Yêu cầu đồng bộ</button><button id="logout-button" class="text-button">Đăng xuất</button></div>
         </header>
 
-        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.14.9 · Nhập hàng theo tháng</p>
+        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.14.10 · Mô phỏng</p>
 
         <nav class="tabbar" id="tabbar" aria-label="Các trang">
           <a href="#ban" data-tab="ban">Bàn</a>
@@ -131,6 +131,9 @@
           <div><p class="eyebrow">TÍCH LŨY</p><h2>Chỉ số toàn thời gian</h2></div>
         </section>
         <section id="summary" class="summary-grid cumulative-grid" aria-label="Chỉ số tích lũy"></section>
+
+        <div class="payer-filter-block"><button id="sim-toggle" type="button" class="secondary">Chạy mô phỏng (không ghi dữ liệu)</button></div>
+        <p id="sim-banner" class="sim-banner" role="status" hidden>ĐANG MÔ PHỎNG: mọi số liệu trong tab này là dữ liệu giả, chỉ nằm trong trình duyệt. Không có gì được ghi lên Firestore. Tải lại trang hoặc bấm "Tắt mô phỏng" để quay về dữ liệu thật.</p>
 
         <section class="section-heading compact">
           <div><p class="eyebrow">NHẬP HÀNG THEO THÁNG</p><h2>So với doanh thu tháng</h2></div>
@@ -304,6 +307,6 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261014-9"></script>
+    <script type="module" src="app.js?v=20261014-10"></script>
   </body>
 </html>

@@ -12,7 +12,7 @@ android {
         applicationId = "vn.ecohome.pos0210"
         minSdk = 26
         targetSdk = 35
-        versionCode = 139
+        versionCode = 140
         versionName = "1.0.0-alpha103-test-preview"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

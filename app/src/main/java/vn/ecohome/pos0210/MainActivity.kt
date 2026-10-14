@@ -3316,7 +3316,7 @@ fun VietQr(vm: PosViewModel) {
                 if (bin != null) "✓ Nhận diện ngân hàng · BIN $bin" else "Chưa nhận diện được ngân hàng. Nhập tên viết tắt (TCB, VCB, MB, BIDV, ACB…) hoặc BIN 6 số bắt đầu bằng 970.",
                 fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (bin != null) Color(0xFF41633A) else Color(0xFF9A2B1F)
             )
-            OutlinedTextField(acc, { acc = it.filter(Char::isLetterOrDigit).uppercase().take(19); saved = false }, label = { Text("Số tài khoản hoặc mã VietQR (VD: MS00P0000001284119)") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(acc, { acc = it.filter(Char::isLetterOrDigit).uppercase().take(19); saved = false }, label = { Text("Số tài khoản hoặc mã VietQR (VD: MS00P00000001284119)") }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(holder, { holder = it; saved = false }, label = { Text("Chủ tài khoản") }, modifier = Modifier.fillMaxWidth())
             Button(enabled = canSave, onClick = {
                 vm.saveSetting("bank_name", bank.trim())

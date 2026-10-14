@@ -126,3 +126,12 @@ dialog article { padding: 6px; }
 .bill-line small { display: block; color: #796758; }
 .bill-pay { margin-top: 14px; padding: 12px; border: 1px solid #dfcfb8; border-radius: 14px; background: #fbf4e8; font-size: 14px; }
 .bill-pay div { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; }
+
+/* Tab chuyển trang */
+.tabbar { position: sticky; top: 0; z-index: 5; display: flex; gap: 6px; margin: 0 -16px 6px; padding: 10px 16px; overflow-x: auto; background: #f6f0e5ee; backdrop-filter: blur(6px); border-bottom: 1px solid #ddcdb7; scrollbar-width: none; }
+.tabbar::-webkit-scrollbar { display: none; }
+.tabbar a { flex: 0 0 auto; padding: 9px 16px; border: 1px solid #d5c2a8; border-radius: 999px; background: #fffcf7; color: #5d4231; font-weight: 750; font-size: 14px; text-decoration: none; white-space: nowrap; }
+.tabbar a.active { background: #34241b; border-color: #34241b; color: #fffaf2; }
+.page[hidden] { display: none; }
+@media (min-width: 720px) { .tabbar { margin: 0 -28px 6px; padding: 12px 28px; } }
+.summary-grid + .bill-list { margin-top: 12px; }

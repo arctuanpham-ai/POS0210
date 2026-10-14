@@ -857,6 +857,47 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
     val billImage by vm.checkoutBillImage.collectAsState()
     val shownBill = billImage?.takeIf { it.first == vn.ecohome.pos0210.payment.CheckoutPrintPolicy.key(s.id, preview.total, qrInfo) }?.second
 
+    val cashValue = cashGiven.filter(Char::isDigit).toLongOrNull()
+    val cashOk = PaymentFlowRules.canConfirmCash(s.flow, preview.total, cashValue)
+    // Phần điều khiển thanh toán: Trả sau nằm ở thanh dưới cố định; Trả trước nằm trong vùng cuộn ngay dưới bill để QR không bị che.
+    val payControls: @Composable () -> Unit = {
+            if(checkoutPrinting) Text("ĐANG IN BILL… · Hóa đơn và QR vẫn hiển thị để khách xem", fontWeight=FontWeight.Bold)
+            if(!billPrinted){
+                Button(
+                    onClick={
+                        if(checkoutPrintTestMode) vm.confirmCheckoutBillTest(preview,qrInfo)
+                        else vm.printCheckoutBill(preview,qrInfo,matchedCustomer?.name?:customerName)
+                    },
+                    modifier=Modifier.fillMaxWidth(),
+                    enabled=!checkoutPrinting&&preview.total>0&&pendingDelivery.isEmpty()&&validPaymentSession!=null
+                ){
+                    Text(if(pendingDelivery.isNotEmpty()) "CHƯA GIAO ĐỦ · CHƯA THỂ IN BILL" else "IN BILL")
+                }
+                Text("Bill trên màn hình và mã QR luôn khả dụng. Nếu máy in lỗi, vẫn có thể xác nhận sau khi nhận đủ tiền.", Modifier.padding(top=6.dp),fontSize=11.sp)
+            }
+            if (isPrepaid) {
+                OutlinedTextField(
+                    value = cashGiven,
+                    onValueChange = { cashGiven = it.filter(Char::isDigit).take(9) },
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                    label = { Text("Tiền khách đưa (chỉ cho tiền mặt)") },
+                    singleLine = true
+                )
+                Row(Modifier.fillMaxWidth().padding(bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    AssistChip(onClick = { cashGiven = preview.total.toString() }, label = { Text("Vừa đủ") })
+                    listOf(50_000L, 100_000L, 200_000L, 500_000L).forEach { v ->
+                        AssistChip(onClick = { cashGiven = v.toString() }, label = { Text("${v / 1000}k") })
+                    }
+                }
+                val ch = cashValue?.let { PaymentFlowRules.change(preview.total, it) }
+                Text(
+                    if (cashValue == null) "Nhập tiền khách đưa để xác nhận tiền mặt" else if (ch == null) "Khách đưa chưa đủ · thiếu ${money(preview.total - cashValue)}" else "TIỀN THỐI: ${money(ch)}",
+                    fontWeight = FontWeight.Black, fontSize = 18.sp,
+                    color = if (ch == null) Color(0xFF9A2B1F) else Color(0xFF41633A),
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
+            }
+    }
     Column {
         var confirmEdit by remember { mutableStateOf(false) }
         Header(if (isPrepaid) "Thanh toán trước" else "Thanh toán") {
@@ -882,7 +923,7 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
             } else if (ambiguousEvent != null) {
                 Text("Có giao dịch cùng số tiền nhưng chưa chắc của bill này · kiểm tra app ngân hàng", Modifier.padding(horizontal = 16.dp, vertical = 4.dp), color = Color(0xFF9A5B28), fontSize = 12.sp, fontWeight = FontWeight.Bold)
             } else if (!soundboxStatic) {
-                Text("Đang chờ tiền về… (app tự báo khi nhận thông báo ngân hàng)", Modifier.padding(horizontal = 16.dp, vertical = 2.dp), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text("Đang chờ tiền về…", Modifier.padding(horizontal = 16.dp, vertical = 2.dp), fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
             if (!soundboxStatic) {
                 val last = bankEvents.firstOrNull()
@@ -1098,6 +1139,7 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                     Text("Đã phát hiện giao dịch cùng số tiền nhưng chưa xác định được bill.",Modifier.padding(top=8.dp),color=Color(0xFF9A5B28),fontSize=12.sp,fontWeight=FontWeight.Bold)
                 }else Text("Đang chờ thông báo ngân hàng · vẫn có thể xác nhận thủ công",Modifier.padding(top=8.dp),fontSize=11.sp)
             }
+            if (isPrepaid) payControls()
         }
         if (isPrepaid) {
             LaunchedEffect(checkoutKey, preview.total, validPaymentSession != null) {
@@ -1105,44 +1147,7 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
             }
         }
         Column(Modifier.fillMaxWidth().padding(18.dp)) {
-            if(checkoutPrinting) Text("ĐANG IN BILL… · Hóa đơn và QR vẫn hiển thị để khách xem", fontWeight=FontWeight.Bold)
-            if(!billPrinted){
-                Button(
-                    onClick={
-                        if(checkoutPrintTestMode) vm.confirmCheckoutBillTest(preview,qrInfo)
-                        else vm.printCheckoutBill(preview,qrInfo,matchedCustomer?.name?:customerName)
-                    },
-                    modifier=Modifier.fillMaxWidth(),
-                    enabled=!checkoutPrinting&&preview.total>0&&pendingDelivery.isEmpty()&&validPaymentSession!=null
-                ){
-                    Text(if(pendingDelivery.isNotEmpty()) "CHƯA GIAO ĐỦ · CHƯA THỂ IN BILL" else "IN BILL")
-                }
-                Text("Bill trên màn hình và mã QR luôn khả dụng. Nếu máy in lỗi, vẫn có thể xác nhận sau khi nhận đủ tiền.", Modifier.padding(top=6.dp),fontSize=11.sp)
-            }
-            val cashValue = cashGiven.filter(Char::isDigit).toLongOrNull()
-            val cashOk = PaymentFlowRules.canConfirmCash(s.flow, preview.total, cashValue)
-            if (isPrepaid) {
-                OutlinedTextField(
-                    value = cashGiven,
-                    onValueChange = { cashGiven = it.filter(Char::isDigit).take(9) },
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                    label = { Text("Tiền khách đưa (chỉ cho tiền mặt)") },
-                    singleLine = true
-                )
-                Row(Modifier.fillMaxWidth().padding(bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    AssistChip(onClick = { cashGiven = preview.total.toString() }, label = { Text("Vừa đủ") })
-                    listOf(50_000L, 100_000L, 200_000L, 500_000L).forEach { v ->
-                        AssistChip(onClick = { cashGiven = v.toString() }, label = { Text("${v / 1000}k") })
-                    }
-                }
-                val ch = cashValue?.let { PaymentFlowRules.change(preview.total, it) }
-                Text(
-                    if (cashValue == null) "Nhập tiền khách đưa để xác nhận tiền mặt" else if (ch == null) "Khách đưa chưa đủ · thiếu ${money(preview.total - cashValue)}" else "TIỀN THỐI: ${money(ch)}",
-                    fontWeight = FontWeight.Black, fontSize = 18.sp,
-                    color = if (ch == null) Color(0xFF9A2B1F) else Color(0xFF41633A),
-                    modifier = Modifier.padding(bottom = 6.dp)
-                )
-            }
+            if (!isPrepaid) payControls()
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)){
                 OutlinedButton(
                     onClick={vm.close("CASH",preview,qrInfo,customerPhone,customerName,if(applyReward)billReward?.id else null,if(isPrepaid)cashValue else null)},

@@ -203,6 +203,7 @@ fun App(vm: PosViewModel = viewModel()) {
     if (locked) LockScreen(vm)
     val kitchenUi by vm.kitchenPrint.collectAsState()
     kitchenUi?.let { KitchenPrintOverlay(vm, it) }
+    if (!locked && sc != "LOGIN") BankReceivedBanner(vm)
         val kitchenPrev by vm.kitchenPreview.collectAsState(); kitchenPrev?.let { KitchenPreviewScreen(vm, it.first, it.second) }
     }
 }

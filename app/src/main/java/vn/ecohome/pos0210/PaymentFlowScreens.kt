@@ -365,3 +365,39 @@ fun KitchenWarningBanner(vm: PosViewModel) {
         }
     }
 }
+
+/** Thông báo nổi trên mọi màn hình khi app ngân hàng báo có tiền vào. Chỉ để nhân viên biết, xác nhận thanh toán vẫn làm thủ công. */
+@Composable
+fun BankReceivedBanner(vm: PosViewModel) {
+    val events by vm.recentBankNotifications.collectAsState()
+    val latest = events.firstOrNull { it.direction == "CREDIT" && it.amount != null }
+    var shownKey by remember { mutableStateOf<String?>(null) }
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(latest?.fingerprint) {
+        val e = latest ?: return@LaunchedEffect
+        if (e.fingerprint != shownKey && System.currentTimeMillis() - e.receivedAt < 60_000L) {
+            shownKey = e.fingerprint
+            visible = true
+            kotlinx.coroutines.delay(12_000L)
+            visible = false
+        }
+    }
+    val e = latest ?: return
+    if (!visible) return
+    androidx.compose.ui.window.Popup(alignment = androidx.compose.ui.Alignment.TopCenter, properties = androidx.compose.ui.window.PopupProperties(focusable = false)) {
+        Surface(
+            Modifier.fillMaxWidth().padding(12.dp).clickable { visible = false },
+            color = Color(0xFF2E7D32), shape = RoundedCornerShape(12.dp), shadowElevation = 8.dp
+        ) {
+            Column(Modifier.padding(14.dp)) {
+                Text("✓ ĐÃ NHẬN SỐ TIỀN ${vnd(e.amount ?: 0L)}", color = Color.White, fontWeight = FontWeight.Black, fontSize = 20.sp)
+                Text(
+                    (if (e.matchStatus.startsWith("MATCHED")) "Khớp bill đang chờ thanh toán" else "Chưa khớp bill nào đang chờ") +
+                        (e.content?.takeIf { it.isNotBlank() }?.let { " · ${it.take(60)}" } ?: ""),
+                    color = Color.White, fontSize = 12.sp
+                )
+                Text("Nhân viên kiểm tra rồi bấm XÁC NHẬN CK như bình thường.", color = Color.White, fontSize = 11.sp)
+            }
+        }
+    }
+}

@@ -25,6 +25,8 @@ import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions
 import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261014-3";
 import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261014-8";
 import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261014-7";
+import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261014-9";
+import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261014-9";
 import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261014-6";
 import { buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261014-4";
 import { aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261013-2";
@@ -50,7 +52,7 @@ const state = {
   purchaseCategories: [], profitPartners: [], assetCategories: [], suppliers: [],
   unsubs: [], paymentFlowDoc: null, refunds: [], frozenRefundDocs: [], flowError: "", dailyDocs: {}, dailyError: "", salesLoaded: false, salesDays: 7, itemMode: "combined", period: "today", customFrom: null, customTo: null,
   transactionKind: "ALL", payerFilter: "ALL", user: null,
-  expenseRules: [], rulesError: "", detailCutoff: null, receiptsFrom: 0, summaryBlocks: [], historyDay: "today", historyDocs: {}, historyTables: null, historyError: "", historyLoading: false, billDetailCache: {},
+  expenseRules: [], rulesError: "", monthlyDocs: {}, monthlyError: "", reportFrom: 0, receiptsNote: "", detailCutoff: null, receiptsFrom: 0, summaryBlocks: [], historyDay: "today", historyDocs: {}, historyTables: null, historyError: "", historyLoading: false, billDetailCache: {},
 };
 let expenseDraft = null;
 let editingReceipt = null;
@@ -723,6 +725,7 @@ function render() {
   renderBillHistory();
   renderClassificationReview();
   renderDetailLevel();
+  renderMonthlyReport();
   renderFinanceMetadata();
   renderTransactions();
 }
@@ -742,11 +745,11 @@ async function refreshDashboard() {
     await Promise.all([
       hasLiveTables ? Promise.resolve() : read("tableStatus", "tables"),
       loadDailyDocs(),
-      read("expenseReceipts", "expenseReceipts", query(collection(db, ...root, "expenseReceipts"), where("purchaseDate", ">=", sevenDays), orderBy("purchaseDate", "desc"), limit(300))),
+      loadReceiptsCached(),
+      loadMonthlyDocs(),
       read("financialMovements", "movements", query(collection(db, ...root, "financialMovements"), where("occurredAt", ">=", sevenDays), orderBy("occurredAt", "desc"), limit(300))),
       read("costCodes", "costCodes"), read("purchaseCategories", "purchaseCategories"), read("profitPartners", "profitPartners"), read("assetCategories", "assetCategories"), read("suppliers", "suppliers"),
     ]);
-    state.receiptsFrom = sevenDays;
     state.flowError = "";
     try {
       const cutoffDoc = await getDoc(doc(db, ...root, "config", "expenseDetail"));
@@ -931,6 +934,8 @@ $("#summary-blocks").addEventListener("click", (event) => {
 });
 $("#summary-form").addEventListener("submit", saveSummaryBlocks);
 $("#summary-to-detail").addEventListener("click", startUpgradeToDetail);
+$("#export-monthly-csv").addEventListener("click", () => exportMonthly("csv"));
+$("#export-monthly-json").addEventListener("click", () => exportMonthly("json"));
 $("#save-cutoff").addEventListener("click", () => saveCutoff(false));
 $("#clear-cutoff").addEventListener("click", () => saveCutoff(true));
 $("#close-bill-detail").addEventListener("click", () => $("#bill-detail").close());
@@ -1223,6 +1228,87 @@ async function saveCutoff(clear) {
     state.detailCutoff = cutoffAt;
     renderDetailLevel();
   } catch (error) { $("#cutoff-note").textContent = error.code === "permission-denied" ? "Không có quyền ghi mốc (cần mở quy tắc Firestore cho config/expenseDetail)." : `Không lưu được mốc: ${error.message}`; }
+}
+
+/* ---------- Phiếu chi: giữ ≥ từ đầu tháng trước, đọc tăng dần theo updatedAt, đệm trong trình duyệt ---------- */
+const RECEIPT_CACHE_KEY = "pos0210.receipts.v1";
+function readReceiptCache() { try { return JSON.parse(localStorage.getItem(RECEIPT_CACHE_KEY) || "null"); } catch { return null; } }
+function writeReceiptCache(cache) { try { localStorage.setItem(RECEIPT_CACHE_KEY, JSON.stringify(cache)); } catch { /* đầy hoặc bị chặn: bỏ qua, lần sau đọc đủ */ } }
+async function loadReceiptsCached() {
+  const uid = state.user?.uid;
+  const from = startOfPreviousMonth();
+  const cache = readReceiptCache();
+  const plan = planLoad(cache, { uid, from });
+  try {
+    const q = plan.mode === "incremental"
+      ? query(collection(db, ...root, "expenseReceipts"), where("updatedAt", ">", plan.cursor), orderBy("updatedAt", "asc"), limit(500))
+      : query(collection(db, ...root, "expenseReceipts"), where("purchaseDate", ">=", from), orderBy("purchaseDate", "desc"), limit(1000));
+    const fetched = rows(await getDocs(q));
+    const merged = mergeReceipts(plan.mode === "incremental" ? cache : null, fetched, { uid, from });
+    writeReceiptCache(merged);
+    state.expenseReceipts = merged.receipts;
+    state.receiptsFrom = merged.from;
+    state.reportFrom = merged.from;
+    state.receiptsNote = plan.mode === "incremental" ? `Đọc thêm ${fetched.length} phiếu đổi` : `Đọc ${fetched.length} phiếu từ đầu tháng trước`;
+  } catch (error) {
+    // Lỗi mạng/quyền: dùng cache nếu có, nhưng nói rõ dữ liệu có thể cũ.
+    if (cache?.uid === uid && Array.isArray(cache.receipts)) { state.expenseReceipts = cache.receipts; state.receiptsFrom = cache.from; state.reportFrom = cache.from; state.receiptsNote = `Không cập nhật được phiếu (${error.code || error.message}); đang dùng bản đã lưu`; }
+    else { state.expenseReceipts = []; state.receiptsFrom = Date.now(); state.reportFrom = Date.now(); state.receiptsNote = `Không đọc được phiếu: ${error.code || error.message}`; }
+  }
+}
+
+/* ---------- Doanh thu theo tháng (dashboardMonthly) cho so sánh nhập hàng/doanh thu ---------- */
+const MONTHLY_REPORT_MONTHS = 13;
+async function loadMonthlyDocs() {
+  state.monthlyError = "";
+  const keys = lastMonthKeys(MONTHLY_REPORT_MONTHS);
+  const current = keys[keys.length - 1];
+  await Promise.all(keys.map(async (key) => {
+    if (key !== current && state.monthlyDocs[key]) return; // tháng đã chốt không đọc lại
+    try {
+      const snap = await getDoc(doc(db, ...root, "dashboardMonthly", key));
+      state.monthlyDocs[key] = snap.exists() ? snap.data() : null;
+    } catch (error) { state.monthlyDocs[key] = null; state.monthlyError = error.code === "permission-denied" ? "Chưa có quyền đọc dashboardMonthly (cần mở quy tắc Firestore)." : (error.code || error.message); }
+  }));
+}
+/** Tháng đầu tiên web có đủ phiếu: tháng của mốc nếu mốc là đầu tháng, ngược lại tháng kế tiếp. */
+const reportSinceKey = () => {
+  const from = new Date(state.reportFrom || Date.now());
+  const startsMonth = from.getDate() === 1 && from.getHours() === 0 && from.getMinutes() === 0;
+  return monthKeyOf(startsMonth ? from.getTime() : new Date(from.getFullYear(), from.getMonth() + 1, 1).getTime());
+};
+const currentMonthReport = () => {
+  const keys = lastMonthKeys(MONTHLY_REPORT_MONTHS);
+  const current = keys[keys.length - 1];
+  const fallback = state.dashboard?.monthRevenue;
+  return buildMonthlyReport({ receipts: state.expenseReceipts, monthlyDocs: state.monthlyDocs, monthKeys: keys, currentMonthKey: current, revenueFallback: fallback === undefined ? null : fallback });
+};
+function renderMonthlyReport() {
+  const target = $("#monthly-report");
+  if (!target) return;
+  const all = currentMonthReport();
+  const since = reportSinceKey();
+  // Chỉ hiện các tháng web đã đọc đủ phiếu (từ đầu tháng của mốc đệm); tháng cũ hơn chỉ có doanh thu nên không so sánh được.
+  const report = all.filter((r) => r.monthKey >= since);
+  const note = [state.receiptsNote, state.monthlyError].filter(Boolean).join(" · ");
+  $("#monthly-note").textContent = note;
+  target.innerHTML = report.slice().reverse().map((r) => `<article class="month-card"><h3>${r.monthKey}${r.revenueFinal ? "" : " · đang chạy"}</h3><dl>
+    <div><dt>Nhập hàng</dt><dd>${money(r.purchases)}</dd></div>
+    <div><dt>Doanh thu</dt><dd>${r.revenue === null ? "chưa có dữ liệu" : money(r.revenue)}</dd></div>
+    <div><dt>Nhập / doanh thu</dt><dd>${r.ratio === null ? "—" : `${(r.ratio * 100).toFixed(1)}%`}</dd></div>
+    <div><dt>Phiếu</dt><dd>${r.receiptCount} · tổng ${money(r.summaryAmount)} · chi tiết ${money(r.itemizedAmount)}</dd></div></dl></article>`).join("") || '<p class="muted">Chưa có phiếu trong khoảng đã tải.</p>';
+}
+function downloadFile(name, mime, text) {
+  const url = URL.createObjectURL(new Blob([text], { type: mime }));
+  const a = Object.assign(document.createElement("a"), { href: url, download: name });
+  document.body.append(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
+function exportMonthly(kind) {
+  const since = reportSinceKey();
+  const report = currentMonthReport().filter((r) => r.monthKey >= since);
+  const stamp = new Date().toISOString().slice(0, 10);
+  if (kind === "csv") downloadFile(`nhap-hang-theo-thang-${stamp}.csv`, "text/csv;charset=utf-8", monthlyCsv(report));
+  else downloadFile(`nhap-hang-theo-thang-${stamp}.json`, "application/json", monthlyJson(report, { rules: state.expenseRules }));
 }
 
 /* ---------- Tải phiếu cũ hơn 7 ngày khi chọn kỳ xem xa hơn (tối đa 500 phiếu) ---------- */

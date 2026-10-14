@@ -153,3 +153,11 @@ dialog article { padding: 6px; }
 .summary-line .text-button { margin-bottom: 8px; }
 .summary-block-actions { display: flex; justify-content: space-between; gap: 12px; }
 #summary-to-detail { margin: 4px 0; }
+
+.month-list { display: grid; gap: 10px; }
+.month-card { border: 1px solid var(--line, #d9d9d9); border-radius: 12px; padding: 12px 14px; background: var(--card, #fff); }
+.month-card h3 { margin: 0 0 8px; font-size: 1rem; }
+.month-card dl { margin: 0; display: grid; gap: 6px; }
+.month-card dl div { display: flex; justify-content: space-between; gap: 12px; }
+.month-card dt { color: var(--muted, #666); }
+.month-card dd { margin: 0; font-weight: 600; text-align: right; }

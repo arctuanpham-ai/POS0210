@@ -250,7 +250,7 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
  fun previewBitmap(kind:String):android.graphics.Bitmap?{
   val profile=printerProfile()
   return when(kind){
-   "KITCHEN"->ReceiptRenderer.stack(listOf(ReceiptRenderer.kitchenItem("BÀN 02",27,1,2,"Bún gà",3,"không hành","Tuấn","ĐÃ THU TIỀN · LÀM NGAY",System.currentTimeMillis(),profile),ReceiptRenderer.kitchenItem("BÀN 02",27,2,2,"Cà phê sữa",1,"","Tuấn","ĐÃ THU TIỀN · LÀM NGAY",System.currentTimeMillis(),profile)))
+   "KITCHEN"->ReceiptRenderer.kitchen("BÀN 02",1,27,"Tuấn",listOf(Triple("Bún gà",3,"không hành"),Triple("Cà phê sữa",1,"")),profile,"ĐÃ THU TIỀN · LÀM NGAY",System.currentTimeMillis())
    "BILL"->{
     val qr=if(isQrConfigured())runCatching{qrBitmap(121500L,"0210 BAN 02")}.getOrNull() else null
     ReceiptRenderer.bill("BÀN 02","08:32–09:25",listOf(Triple("Bún gà",2,40000L),Triple("Bạc xỉu",1,30000L),Triple("Đen đá",1,25000L)),135000L,0L,13500L,121500L,listOf("ƯU ĐÃI HẠNG VIP  -10%"),"ANH NAM","VIP",188,12,200,"CHUYỂN KHOẢN",qr,profile,"ĐƠN #027")
@@ -1302,9 +1302,15 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
  val waitingOrders=dao.waitingOrders().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
  fun sessionItems(sessionId:String)=dao.sessionItems(sessionId)
  /** Phiếu bếp tách món: mỗi dòng món một phiếu, cùng bàn, cùng số thứ tự đơn. */
+ /** false = một phiếu bếp gom cả bàn/đơn (như cũ). true = tách mỗi dòng món một phiếu. */
+ private val KITCHEN_SPLIT_PER_ITEM=false
  private fun kitchenTicketBitmaps(tableName:String,b:OrderBatchEntity,orderer:String,flowTag:String,items:List<OrderItemEntity>,profile:vn.ecohome.pos0210.printing.PrinterProfile):List<android.graphics.Bitmap>{
   val lines=items.filter{it.qty>0}
   val at=b.sentAt?:b.createdAt
+  if(!KITCHEN_SPLIT_PER_ITEM){
+   if(lines.isEmpty())return emptyList()
+   return listOf(ReceiptRenderer.kitchen(tableName,b.sequence,b.serviceNo,orderer,lines.map{Triple(it.itemNameSnapshot.removePrefix("🎁").trim(),it.qty,if(it.itemNameSnapshot.startsWith("🎁")&&it.note.isBlank())"QUÀ TẶNG" else it.note)},profile,flowTag,at))
+  }
   return lines.mapIndexed{i,it->ReceiptRenderer.kitchenItem(tableName,b.serviceNo,i+1,lines.size,it.itemNameSnapshot.removePrefix("🎁").trim(),it.qty,if(it.itemNameSnapshot.startsWith("🎁")&&it.note.isBlank())"QUÀ TẶNG" else it.note,orderer,flowTag,at,profile)}
  }
  /** In lần lượt từng phiếu (mỗi phiếu một lệnh để xé từng tờ ngay). Lỗi giữa chừng báo đã in được bao nhiêu phiếu. */

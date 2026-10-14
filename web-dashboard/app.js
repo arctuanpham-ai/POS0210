@@ -22,7 +22,7 @@ import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261012-3";
 import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261013-2";
 import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261012-3";
 import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261012-3";
-import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261014-1";
+import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261014-2";
 import { aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261013-2";
 
 const firebaseConfig = {
@@ -698,6 +698,7 @@ $("#login-button").addEventListener("click", async () => {
   try { await signInWithEmailAndPassword(auth, email, password); }
   catch (error) { $("#login-error").textContent = "Không đăng nhập được. Kiểm tra email hoặc mật khẩu."; }
 });
+$("#show-password").addEventListener("change", (event) => { $("#password").type = event.target.checked ? "text" : "password"; });
 $("#password").addEventListener("keydown", (event) => { if (event.key === "Enter") $("#login-button").click(); });
 $("#logout-button").addEventListener("click", () => signOut(auth));
 $("#refresh-dashboard").addEventListener("click", refreshDashboard);

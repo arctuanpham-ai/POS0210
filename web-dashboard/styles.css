@@ -106,3 +106,5 @@ dialog article { padding: 6px; }
 .row-actions { display: flex; gap: 16px; margin-top: 6px; }
 .row-actions .text-button { padding: 4px 0; font-size: 13px; }
 .text-button.danger { color: #9f4430; }
+.show-password { display: flex; align-items: center; gap: 8px; margin: 6px 0 12px; font-weight: 600; }
+.show-password input { width: auto; margin: 0; }

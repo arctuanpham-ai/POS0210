@@ -8,6 +8,7 @@ import vn.ecohome.pos0210.data.TableSessionEntity
 import java.security.MessageDigest
 import java.time.Instant
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneId
 
 /** Bàn đang mở: chỉ là TẠM TÍNH, không phải doanh thu. */
@@ -44,6 +45,18 @@ data class DailySalesSnapshot(
         "paidBills" to paidBills,
         "averageBill" to averageBill,
         "items" to items.map { it.toMap() },
+        "finalized" to finalized,
+        "schemaVersion" to 1
+    )
+}
+
+/** Doanh thu một tháng đã chốt. Chỉ bill PAID, dataScope LIVE, tính theo closedAt. Doanh thu bill (sau giảm giá), không phải giá món. */
+data class MonthlySalesSnapshot(val monthKey: String, val revenue: Long, val paidBills: Int, val finalized: Boolean) {
+    fun toMap(updatedAt: Long): Map<String, Any?> = mapOf(
+        "monthKey" to monthKey,
+        "updatedAt" to updatedAt,
+        "revenue" to revenue,
+        "paidBills" to paidBills,
         "finalized" to finalized,
         "schemaVersion" to 1
     )
@@ -131,6 +144,37 @@ object DashboardSalesSnapshot {
             finalized = dateKey < todayKey
         )
     }
+
+    const val MONTHS = 13
+
+    fun monthKey(epochMillis: Long, zone: ZoneId = ZoneId.systemDefault()): String =
+        YearMonth.from(Instant.ofEpochMilli(epochMillis).atZone(zone)).toString()
+
+    /** ID document monthly chính là monthKey (YYYY-MM): chạy lại cùng tháng luôn ghi đè cùng một document. */
+    fun monthlyDocumentId(monthKey: String): String {
+        require(Regex("""\d{4}-\d{2}""").matches(monthKey)) { "MONTH_KEY_INVALID" }
+        return monthKey
+    }
+
+    /** Tháng hiện tại và 12 tháng trước đó, mới nhất trước. */
+    fun lastMonthKeys(currentMonthKey: String, months: Int = MONTHS): List<String> {
+        val current = YearMonth.parse(currentMonthKey)
+        return (0 until months).map { current.minusMonths(it.toLong()).toString() }
+    }
+
+    fun composeMonthly(monthKey: String, currentMonthKey: String, bills: List<BillEntity>, zone: ZoneId = ZoneId.systemDefault()): MonthlySalesSnapshot {
+        monthlyDocumentId(monthKey)
+        val month = YearMonth.parse(monthKey)
+        val from = month.atDay(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        val to = month.plusMonths(1).atDay(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        val paid = bills.filter { it.status == "PAID" && it.dataScope == "LIVE" && (it.closedAt ?: Long.MIN_VALUE) in from until to }
+        return MonthlySalesSnapshot(monthKey, paid.sumOf { it.total }, paid.size, monthKey < currentMonthKey)
+    }
+
+    fun fingerprint(snapshot: MonthlySalesSnapshot): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(snapshot.toMap(0L).toSortedMap().toString().toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
 
     /** Dấu vân tay chỉ gồm dữ liệu nghiệp vụ; bỏ updatedAt để không ghi lại khi chỉ đổi giờ. */
     fun fingerprint(snapshot: DailySalesSnapshot): String =

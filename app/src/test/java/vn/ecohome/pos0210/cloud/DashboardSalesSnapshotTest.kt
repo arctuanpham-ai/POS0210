@@ -150,4 +150,39 @@ class DashboardSalesSnapshotTest {
         assertNotEquals(DashboardSalesSnapshot.fingerprint(a), DashboardSalesSnapshot.fingerprint(changed))
         assertNotEquals(a.toMap(1L)["updatedAt"], a.toMap(2L)["updatedAt"])
     }
+
+    @Test fun monthlyRevenueCountsOnlyLivePaidBillsClosedInThatMonth() {
+        val bills = listOf(
+            bill("a", "s1", 100_000L, at(2026, 9, 1, 0, 0)),               // đầu tháng 9
+            bill("b", "s1", 50_000L, at(2026, 9, 30, 23, 59)),             // cuối tháng 9
+            bill("c", "s1", 70_000L, at(2026, 10, 1, 0, 0)),               // sang tháng 10
+            bill("d", "s1", 999_000L, at(2026, 9, 15, 10, 0), scope = "TEST"),
+            bill("e", "s1", 888_000L, at(2026, 9, 16, 10, 0), status = "OPEN"),
+            bill("f", "s1", 777_000L, null)
+        )
+        val sep = DashboardSalesSnapshot.composeMonthly("2026-09", "2026-10", bills, zone)
+        assertEquals(150_000L, sep.revenue)
+        assertEquals(2, sep.paidBills)
+        assertTrue(sep.finalized)
+        val oct = DashboardSalesSnapshot.composeMonthly("2026-10", "2026-10", bills, zone)
+        assertEquals(70_000L, oct.revenue)
+        assertEquals(false, oct.finalized)
+    }
+
+    @Test fun monthKeysAndIdsAreStable() {
+        assertEquals("2026-10", DashboardSalesSnapshot.monthKey(at(2026, 10, 14, 23, 59), zone))
+        assertEquals("2026-11", DashboardSalesSnapshot.monthKey(at(2026, 11, 1, 0, 0), zone))
+        val keys = DashboardSalesSnapshot.lastMonthKeys("2026-02")
+        assertEquals(13, keys.size)
+        assertEquals("2026-02", keys.first())
+        assertEquals("2025-02", keys.last())
+        assertEquals("2026-09", DashboardSalesSnapshot.monthlyDocumentId("2026-09"))
+        assertTrue(runCatching { DashboardSalesSnapshot.monthlyDocumentId("2026-9") }.isFailure)
+    }
+
+    @Test fun monthlyFingerprintIgnoresUpdatedAtButNotRevenue() {
+        val a = MonthlySalesSnapshot("2026-09", 150_000L, 2, true)
+        assertEquals(DashboardSalesSnapshot.fingerprint(a), DashboardSalesSnapshot.fingerprint(a.copy()))
+        assertNotEquals(DashboardSalesSnapshot.fingerprint(a), DashboardSalesSnapshot.fingerprint(a.copy(revenue = 150_001L)))
+    }
 }

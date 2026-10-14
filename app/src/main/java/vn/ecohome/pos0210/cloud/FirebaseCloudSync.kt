@@ -170,6 +170,7 @@ object FirebaseCloudSync {
         val liveSnapshot=DashboardSalesSnapshot.composeCurrent(tables,sessions,batches,orderItems)
         stage("DASHBOARD",60_000L){writeDashboard(root.collection("dashboard").document("current"),financialDashboard(dao,bills,payments,now)+mapOf("openTables" to open.size,"openTableNames" to tables.filter{openByTable.containsKey(it.id)}.map{it.name},"revenueToday" to paidToday.sumOf{it.total},"paidBillsToday" to paidToday.size,"provisionalOpenTotal" to liveSnapshot.provisionalOpenTotal,"liveTables" to liveSnapshot.liveTables.map{it.toMap()},"lastUpdatedAt" to now),dashboardOperation)}
         publishDailySnapshots(fs,root,bills,batches,orderItems,now,dashboardOperation)
+        publishMonthlySnapshots(fs,root,bills,now,dashboardOperation)
         writeMaps(fs,root.collection("tableStatus"),tables.map{t->
             val session=openByTable[t.id]
             val activeBatches=if(session==null) emptyList() else batches.filter{it.sessionId==session.id&&it.status!="CANCELLED"}
@@ -251,6 +252,7 @@ object FirebaseCloudSync {
         val liveSnapshot=DashboardSalesSnapshot.composeCurrent(tables,sessions,batches,items)
         stage("DASHBOARD_WRITE",60_000L){writeDashboard(root.collection("dashboard").document("current"),financialDashboard(dao,bills,dao.cloudPaymentsSnapshot(),now)+mapOf("openTables" to open.size,"openTableNames" to tables.filter{openByTable.containsKey(it.id)}.map{it.name},"revenueToday" to paidToday.sumOf{it.total},"paidBillsToday" to paidToday.size,"provisionalOpenTotal" to liveSnapshot.provisionalOpenTotal,"liveTables" to liveSnapshot.liveTables.map{it.toMap()},"lastUpdatedAt" to now),dashboardOperation)}
         publishDailySnapshots(fs,root,bills,batches,items,now,dashboardOperation)
+        publishMonthlySnapshots(fs,root,bills,now,dashboardOperation)
         // Cùng nội dung với syncNow (có currentTotal, serviceStatus) để hai đường ghi không đè lẫn nhau.
         writeMaps(fs,root.collection("tableStatus"),tables.map{t->
             val session=openByTable[t.id]
@@ -555,6 +557,34 @@ object FirebaseCloudSync {
         }catch(e:CancellationException){throw e
         }catch(e:CloudQuotaDeferred){CloudExecution.trace("DASHBOARD_DAILY DEFERRED ${e.message}")
         }catch(e:Exception){CloudExecution.trace("DASHBOARD_DAILY FAILED ${e.message}")}
+    }
+
+    /** Doanh thu theo tháng (13 tháng) cho so sánh nhập hàng/doanh thu trên web. Chỉ ghi khi nội dung đổi; tháng hiện tại giới hạn 10 phút một lần. */
+    private suspend fun publishMonthlySnapshots(fs:FirebaseFirestore,root:com.google.firebase.firestore.DocumentReference,bills:List<vn.ecohome.pos0210.data.BillEntity>,now:Long,operation:String){
+        try{
+            val prefs=fs.app.applicationContext.getSharedPreferences("pos0210_cloud_ack_v1",Context.MODE_PRIVATE)
+            val project=fs.app.options.projectId.orEmpty()
+            val zone=java.time.ZoneId.systemDefault()
+            val currentKey=DashboardSalesSnapshot.monthKey(now,zone)
+            val gateKey="$project/${root.path}/dashboardMonthly/lastWriteAt"
+            val gateOpen=now-prefs.getLong(gateKey,0L)>=DASHBOARD_DAILY_MIN_INTERVAL_MS
+            val changed=DashboardSalesSnapshot.lastMonthKeys(currentKey).mapNotNull{key->
+                val snapshot=DashboardSalesSnapshot.composeMonthly(key,currentKey,bills,zone)
+                val fingerprint=DashboardSalesSnapshot.fingerprint(snapshot)
+                if(prefs.getString("$project/${root.path}/dashboardMonthly/$key",null)==fingerprint)null else Triple(key,snapshot,fingerprint)
+            }
+            val due=changed.filter{it.second.finalized||gateOpen}
+            if(due.isEmpty())return
+            stage("DASHBOARD_MONTHLY",60_000L){
+                FirestoreServerWriter.commit(fs,due.map{(key,snapshot,_)->root.collection("dashboardMonthly").document(DashboardSalesSnapshot.monthlyDocumentId(key)).path to snapshot.toMap(now)},operation)
+            }
+            val editor=prefs.edit()
+            due.forEach{(key,_,fingerprint)->editor.putString("$project/${root.path}/dashboardMonthly/$key",fingerprint)}
+            editor.putLong(gateKey,now).commit()
+            CloudExecution.trace("DASHBOARD_MONTHLY written=${due.size}")
+        }catch(e:CancellationException){throw e
+        }catch(e:CloudQuotaDeferred){CloudExecution.trace("DASHBOARD_MONTHLY DEFERRED ${e.message}")
+        }catch(e:Exception){CloudExecution.trace("DASHBOARD_MONTHLY FAILED ${e.message}")}
     }
 
     private suspend fun writeDashboard(doc:com.google.firebase.firestore.DocumentReference,data:Map<String,Any?>,operation:String=java.util.UUID.randomUUID().toString()){

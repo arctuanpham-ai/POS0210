@@ -129,7 +129,7 @@ export const rulesToLearn = (lines, learned = []) => {
 export const reviewItems = (receipts, learned = []) => {
   const rows = [];
   for (const receipt of Array.isArray(receipts) ? receipts : []) {
-    if (receipt.status === "DELETED") continue;
+    if (receipt.status === "DELETED" || isSummaryReceipt(receipt)) continue; // phiếu tổng không có tên vật tư để khớp quy tắc
     for (const item of receipt.items || []) {
       const stored = groupCodeOrNull(item.materialGroup) || groupCodeOrNull(item.expenseGroup) || (String(item.materialCode || "").includes("-") ? groupCodeOrNull(String(item.materialCode).split("-")[0]) : null);
       const suggestion = classifyMaterial(item.materialName, learned);
@@ -151,4 +151,66 @@ export const summarizeReview = (rows) => {
   const total = rows.length;
   const ok = count("ok");
   return { total, ok, mismatch: count("mismatch"), ambiguous: count("ambiguous"), unmatched: count("unmatched"), okRate: total ? ok / total : null };
+};
+
+// ---------- Phiếu tổng (hóa đơn cũ chưa có chi tiết) ----------
+// Dòng phiếu tổng giữ đúng khuôn mà app Android chấp nhận (tên, SL > 0, đơn vị, SL × đơn giá = thành tiền)
+// nhưng mang cờ kind = SUMMARY_LINE và phiếu mang detailLevel = SUMMARY, nên phân tích giá/khối lượng theo vật tư phải bỏ qua.
+export const DETAIL_SUMMARY = "SUMMARY";
+export const DETAIL_ITEMIZED = "ITEMIZED";
+export const SUMMARY_LINE_KIND = "SUMMARY_LINE";
+
+export const isSummaryReceipt = (receipt) =>
+  receipt?.detailLevel === DETAIL_SUMMARY || (Array.isArray(receipt?.items) && receipt.items.length > 0 && receipt.items.every((item) => item.kind === SUMMARY_LINE_KIND));
+
+/** Dòng nhập vào: { group (mã hoặc nhãn), amount, note? }. Trả về các dòng phiếu đúng khuôn. */
+export const buildSummaryLines = (lines, createId) => lines.map((line, index) => {
+  const code = groupCodeOrNull(line.group);
+  const label = groupLabelOf(code);
+  const amount = Math.round(Number(line.amount || 0));
+  return {
+    id: line.id || createId(index),
+    materialName: `Tổng hợp · ${label}`,
+    materialCode: "",
+    expenseGroup: label,
+    materialGroup: label,
+    qty: 1,
+    unit: "lần",
+    unitPrice: amount,
+    amount,
+    kind: SUMMARY_LINE_KIND,
+    note: String(line.note ?? "").trim(),
+  };
+});
+
+export const validateSummaryReceipt = ({ purchaseDate, lines }) => {
+  if (!Number.isFinite(Number(purchaseDate)) || Number(purchaseDate) <= 0) return { ok: false, error: "Ngày mua không hợp lệ" };
+  if (!Array.isArray(lines) || lines.length === 0) return { ok: false, error: "Phiếu chưa có dòng nào" };
+  for (const [index, line] of lines.entries()) {
+    const n = index + 1;
+    if (!groupCodeOrNull(line.group)) return { ok: false, error: `Dòng ${n}: hãy chọn nhóm` };
+    const amount = Number(line.amount);
+    if (!Number.isFinite(amount) || amount <= 0 || Math.round(amount) !== amount) return { ok: false, error: `Dòng ${n}: số tiền phải là số nguyên lớn hơn 0` };
+  }
+  return { ok: true, total: lines.reduce((sum, line) => sum + Number(line.amount), 0) };
+};
+
+/** Chênh lệch giữa tổng phiếu tổng gốc và tổng các dòng chi tiết nhập thay thế. */
+export const detailGap = (summaryTotal, itemizedTotal) => {
+  const difference = Math.round(Number(itemizedTotal || 0) - Number(summaryTotal || 0));
+  return { difference, matches: difference === 0 };
+};
+
+/** Ngày mốc bắt buộc chi tiết: chưa đặt (null/NaN/0) thì không bắt buộc gì. */
+export const detailRequired = (purchaseDate, cutoffAt) => {
+  const cutoff = Number(cutoffAt);
+  return Number.isFinite(cutoff) && cutoff > 0 && Number(purchaseDate) >= cutoff;
+};
+
+/** Thống kê mức chi tiết của các phiếu còn hiệu lực. */
+export const detailLevelSummary = (receipts) => {
+  const live = (Array.isArray(receipts) ? receipts : []).filter((r) => r.status !== "DELETED");
+  const summary = live.filter(isSummaryReceipt);
+  const sum = (list) => list.reduce((s, r) => s + Number(r.total || 0), 0);
+  return { total: live.length, summaryCount: summary.length, itemizedCount: live.length - summary.length, summaryAmount: sum(summary), itemizedAmount: sum(live) - sum(summary) };
 };

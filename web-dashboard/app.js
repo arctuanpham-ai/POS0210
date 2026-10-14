@@ -23,6 +23,7 @@ import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, creat
 import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261012-3";
 import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261012-3";
 import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261014-3";
+import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261014-8";
 import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261014-7";
 import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261014-6";
 import { buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261014-4";
@@ -49,7 +50,7 @@ const state = {
   purchaseCategories: [], profitPartners: [], assetCategories: [], suppliers: [],
   unsubs: [], paymentFlowDoc: null, refunds: [], frozenRefundDocs: [], flowError: "", dailyDocs: {}, dailyError: "", salesLoaded: false, salesDays: 7, itemMode: "combined", period: "today", customFrom: null, customTo: null,
   transactionKind: "ALL", payerFilter: "ALL", user: null,
-  expenseRules: [], rulesError: "", historyDay: "today", historyDocs: {}, historyTables: null, historyError: "", historyLoading: false, billDetailCache: {},
+  expenseRules: [], rulesError: "", detailCutoff: null, receiptsFrom: 0, summaryBlocks: [], historyDay: "today", historyDocs: {}, historyTables: null, historyError: "", historyLoading: false, billDetailCache: {},
 };
 let expenseDraft = null;
 let editingReceipt = null;
@@ -61,6 +62,7 @@ const expenseRows = () => state.expenseReceipts.map((receipt) => ({
   expenseCategory: receipt.expenseCategory || receipt.items?.[0]?.expenseGroup || "OTHER_EXPENSE",
   paidByName: receipt.enteredByName || "",
   note: receipt.note || "",
+  summary: isSummaryReceipt(receipt),
 }));
 
 const $ = (selector) => document.querySelector(selector);
@@ -484,7 +486,7 @@ function renderTransactions() {
   const purchases = expenseRows()
     .filter((p) => p.status !== "DELETED" && inRange(p.purchasedAt, range))
     .filter((p) => matchesPayer(state.payerFilter, p.paidByName))
-    .map((p) => ({ kind: "EXPENSE", at: Number(p.purchasedAt || 0), id: p.id, amount: Number(p.total || 0), title: EXPENSE_LABELS[p.expenseCategory] || "Phiếu chi", person: p.paidByName || "", note: p.note || "" }));
+    .map((p) => ({ kind: "EXPENSE", at: Number(p.purchasedAt || 0), id: p.id, amount: Number(p.total || 0), title: `${p.summary ? "Phiếu tổng · " : ""}${EXPENSE_LABELS[p.expenseCategory] || p.expenseCategory || "Phiếu chi"}`, person: p.paidByName || "", note: p.note || "" }));
   const movements = state.movements
     .filter((m) => inRange(m.occurredAt, range) && matchesPayer(state.payerFilter, m.counterpartyName))
     .map((m) => ({ kind: "MOVEMENT", at: Number(m.occurredAt || 0), id: m.id, amount: Number(m.amount || 0), title: MOVEMENT_LABELS[m.type] || m.type || "Dòng tiền", person: m.counterpartyName || "", note: m.note || "" }));
@@ -624,6 +626,7 @@ function renderExpenseDraft() {
   setupMaterialSuggestions();
   document.querySelectorAll("#expense-lines .expense-line").forEach(refreshRuleHint);
   $("#expense-total").textContent = money(calculateReceiptTotal(expenseDraft.items));
+  updateGapNote();
   if (!editingReceipt) localStorage.setItem(`pos0210.expense-draft.${state.user.uid}`, JSON.stringify(expenseDraft));
 }
 function applyExpenseInputs() {
@@ -663,7 +666,7 @@ async function saveExpenseReceipt(event) {
   });
   const now = Date.now();
   const payload = editingReceipt
-    ? buildEditedReceipt(editingReceipt, expenseDraft, { now, uid: state.user.uid })
+    ? { ...buildEditedReceipt(editingReceipt, expenseDraft, { now, uid: state.user.uid }), ...(upgradeFrom ? { detailLevel: DETAIL_ITEMIZED } : {}) }
     : { ...expenseDraft, total: check.total, status: "ACTIVE", updatedAt: now, updatedByUid: state.user.uid, source: "WEB_MANAGER", items: expenseDraft.items.map((item) => ({ ...item, materialGroup: item.expenseGroup, amount: Math.round(item.qty * item.unitPrice) })) };
   try {
     await setDoc(doc(db, ...root, "expenseReceipts", expenseDraft.id), payload);
@@ -675,7 +678,7 @@ async function saveExpenseReceipt(event) {
         state.expenseRules = [...state.expenseRules.filter((x) => x.id !== rule.id), learned];
       } catch { /* học quy tắc là phụ: phiếu đã lưu, lần sau sẽ thử lại khi người nhập chọn nhóm khác gợi ý */ }
     }
-    if (editingReceipt) { replaceLocalReceipt(payload); editingReceipt = null; render(); }
+    if (editingReceipt) { replaceLocalReceipt(payload); editingReceipt = null; upgradeFrom = null; render(); }
     else localStorage.removeItem(`pos0210.expense-draft.${state.user.uid}`);
     expenseDraft = null; $("#expense-dialog").close();
   }
@@ -690,6 +693,8 @@ function replaceLocalReceipt(receipt) {
 function openReceiptEditor(id) {
   const receipt = state.expenseReceipts.find((item) => item.id === id);
   if (!receipt || !state.user) return;
+  if (isSummaryReceipt(receipt)) { openSummaryDialog(receipt); return; }
+  upgradeFrom = null;
   editingReceipt = receipt;
   expenseDraft = receiptToDraft(receipt, MATERIAL_GROUPS);
   $("#expense-title").textContent = "Sửa phiếu";
@@ -717,6 +722,7 @@ function render() {
   renderPaymentFlow();
   renderBillHistory();
   renderClassificationReview();
+  renderDetailLevel();
   renderFinanceMetadata();
   renderTransactions();
 }
@@ -740,7 +746,12 @@ async function refreshDashboard() {
       read("financialMovements", "movements", query(collection(db, ...root, "financialMovements"), where("occurredAt", ">=", sevenDays), orderBy("occurredAt", "desc"), limit(300))),
       read("costCodes", "costCodes"), read("purchaseCategories", "purchaseCategories"), read("profitPartners", "profitPartners"), read("assetCategories", "assetCategories"), read("suppliers", "suppliers"),
     ]);
+    state.receiptsFrom = sevenDays;
     state.flowError = "";
+    try {
+      const cutoffDoc = await getDoc(doc(db, ...root, "config", "expenseDetail"));
+      state.detailCutoff = cutoffDoc.exists() && Number(cutoffDoc.data().cutoffAt) > 0 ? Number(cutoffDoc.data().cutoffAt) : null;
+    } catch { state.detailCutoff = null; }
     try {
       const flowDoc = await getDoc(doc(db, ...root, "config", "paymentFlow"));
       state.paymentFlowDoc = flowDoc.exists() ? flowDoc.data() : null;
@@ -908,6 +919,20 @@ $("#bill-history-list").addEventListener("click", (event) => {
   if (button) openBillDetail(button.dataset.billId);
 });
 $("#review-list").addEventListener("click", (event) => { const edit = event.target.closest("[data-edit-receipt]"); if (edit) openReceiptEditor(edit.dataset.editReceipt); });
+$("#open-summary").addEventListener("click", () => openSummaryDialog(null));
+$("#close-summary").addEventListener("click", () => { editingSummary = null; $("#summary-dialog").close(); });
+$("#add-summary-block").addEventListener("click", () => { readSummaryBlocks(); const last = state.summaryBlocks[state.summaryBlocks.length - 1]; state.summaryBlocks.push(blockDefaults(last?.date)); renderSummaryBlocks(); });
+$("#summary-blocks").addEventListener("input", () => { readSummaryBlocks(); updateSummaryTotals(); });
+$("#summary-blocks").addEventListener("click", (event) => {
+  const t = event.target;
+  if (t.dataset.addLine) { readSummaryBlocks(); const b = state.summaryBlocks.find((x) => x.id === t.dataset.addLine); if (b) b.lines.push({ id: uuid(), group: "", amount: "" }); renderSummaryBlocks(); }
+  else if (t.dataset.removeLine) { readSummaryBlocks(); state.summaryBlocks.forEach((b) => { if (b.lines.length > 1) b.lines = b.lines.filter((l) => l.id !== t.dataset.removeLine); }); renderSummaryBlocks(); }
+  else if (t.dataset.removeBlock) { readSummaryBlocks(); state.summaryBlocks = state.summaryBlocks.filter((b) => b.id !== t.dataset.removeBlock); renderSummaryBlocks(); }
+});
+$("#summary-form").addEventListener("submit", saveSummaryBlocks);
+$("#summary-to-detail").addEventListener("click", startUpgradeToDetail);
+$("#save-cutoff").addEventListener("click", () => saveCutoff(false));
+$("#clear-cutoff").addEventListener("click", () => saveCutoff(true));
 $("#close-bill-detail").addEventListener("click", () => $("#bill-detail").close());
 
 $("#open-entry").addEventListener("click", () => {
@@ -923,6 +948,7 @@ $("#close-entry").addEventListener("click", () => $("#entry-dialog").close());
 $("#open-expense").addEventListener("click", () => {
   if (!state.user) return;
   editingReceipt = null;
+  upgradeFrom = null;
   $("#expense-title").textContent = "Phiếu nhiều vật tư";
   $("#expense-submit").textContent = "LƯU VÀ ĐỒNG BỘ";
   expenseDraft = createStableDraft(localStorage, state.user, uuid);
@@ -932,10 +958,10 @@ $("#open-expense").addEventListener("click", () => {
   $("#expense-dialog").showModal();
 });
 $("#close-expense").addEventListener("click", () => {
-  if (editingReceipt) { editingReceipt = null; expenseDraft = null; $("#expense-dialog").close(); return; }
+  if (editingReceipt) { editingReceipt = null; upgradeFrom = null; expenseDraft = null; $("#expense-dialog").close(); updateGapNote(); return; }
   applyExpenseInputs(); renderExpenseDraft(); $("#expense-dialog").close();
 });
-$("#expense-dialog").addEventListener("close", () => { if (editingReceipt) { editingReceipt = null; expenseDraft = null; } });
+$("#expense-dialog").addEventListener("close", () => { if (editingReceipt) { editingReceipt = null; upgradeFrom = null; expenseDraft = null; } updateGapNote(); });
 $("#transactions").addEventListener("click", (event) => {
   const edit = event.target.closest?.("[data-edit-receipt]");
   if (edit) { openReceiptEditor(edit.dataset.editReceipt); return; }
@@ -944,7 +970,7 @@ $("#transactions").addEventListener("click", (event) => {
 });
 $("#add-expense-line").addEventListener("click", () => { applyExpenseInputs(); expenseDraft.items.push({ id: uuid(), materialName: "", materialCode: "", expenseGroup: "", qty: 1, unit: "kg", unitPrice: 0 }); renderExpenseDraft(); });
 $("#expense-lines").addEventListener("click", (event) => { const id = event.target.dataset.removeLine; if (!id || expenseDraft.items.length < 2) return; applyExpenseInputs(); expenseDraft.items = expenseDraft.items.filter((item) => item.id !== id); renderExpenseDraft(); });
-$("#expense-lines").addEventListener("input", (event) => { applyExpenseInputs(); if (event.target.matches("input[list]")) updateMaterialSuggestions(event.target); $("#expense-total").textContent = money(calculateReceiptTotal(expenseDraft.items)); });
+$("#expense-lines").addEventListener("input", (event) => { applyExpenseInputs(); if (event.target.matches("input[list]")) updateMaterialSuggestions(event.target); $("#expense-total").textContent = money(calculateReceiptTotal(expenseDraft.items)); updateGapNote(); });
 $("#expense-lines").addEventListener("change", (event) => {
   const input = event.target;
   const line = input.closest(".expense-line");
@@ -1005,6 +1031,7 @@ $("#period-filters").addEventListener("click", (event) => {
   $("#period-filters").querySelectorAll(".filter").forEach((b) => b.classList.toggle("active", b === button));
   $("#custom-range").hidden = state.period !== "custom";
   render();
+  ensureReceiptsLoaded();
 });
 $("#apply-range").addEventListener("click", () => {
   const from = $("#from-date").value;
@@ -1013,6 +1040,7 @@ $("#apply-range").addEventListener("click", () => {
   state.customFrom = startOfDay(new Date(`${from}T00:00:00`));
   state.customTo = endOfDay(new Date(`${to}T00:00:00`));
   render();
+  ensureReceiptsLoaded();
 });
 $("#transaction-filters").addEventListener("click", (event) => {
   const button = event.target.closest("[data-kind]");
@@ -1061,6 +1089,156 @@ async function requestRemoteSync() {
   }, 6000);
 }
 $("#request-sync").addEventListener("click", requestRemoteSync);
+
+/* ---------- Phiếu tổng: nhập hóa đơn cũ chưa có chi tiết ---------- */
+let editingSummary = null;
+let upgradeFrom = null;
+const summaryDateMs = (value) => new Date(`${value}T12:00:00`).getTime();
+const blockDefaults = (date) => ({ id: uuid(), date: date || localDateInput(new Date()), place: "", payer: "", lines: [{ id: uuid(), group: "", amount: "" }] });
+
+function renderSummaryBlocks() {
+  const host = $("#summary-blocks");
+  const safe = (v) => escapeHtml(String(v ?? "")).replace(/"/g, "&quot;");
+  host.innerHTML = state.summaryBlocks.map((block, bi) => `<article class="summary-block" data-block="${safe(block.id)}">
+    <div class="two-col"><label>Ngày hóa đơn<input data-field="date" type="date" value="${safe(block.date)}" required /></label><label>Nơi mua / ghi chú<input data-field="place" type="text" maxlength="120" value="${safe(block.place)}" placeholder="vd: chợ, đại lý" /></label></div>
+    <label>Người chi (để trống = bạn)<input data-field="payer" type="text" maxlength="60" value="${safe(block.payer)}" /></label>
+    ${block.lines.map((line) => `<div class="summary-line" data-line="${safe(line.id)}"><label>Nhóm<input data-field="group" list="summary-groups" value="${safe(line.group)}" autocomplete="off" required /></label><label>Số tiền<input data-field="amount" type="number" min="1" step="1" inputmode="numeric" value="${safe(line.amount)}" required /></label>${block.lines.length > 1 ? `<button type="button" class="text-button danger" data-remove-line="${safe(line.id)}">Bỏ</button>` : ""}</div>`).join("")}
+    <div class="summary-block-actions"><button type="button" class="text-button" data-add-line="${safe(block.id)}">+ Thêm nhóm</button>${state.summaryBlocks.length > 1 && !editingSummary ? `<button type="button" class="text-button danger" data-remove-block="${safe(block.id)}">Bỏ hóa đơn ${bi + 1}</button>` : ""}</div>
+  </article>`).join("");
+  updateSummaryTotals();
+}
+function readSummaryBlocks() {
+  state.summaryBlocks = [...document.querySelectorAll("#summary-blocks .summary-block")].map((node) => {
+    const prev = state.summaryBlocks.find((b) => b.id === node.dataset.block) || { id: node.dataset.block };
+    const field = (root0, name) => root0.querySelector(`[data-field="${name}"]`)?.value ?? "";
+    return { ...prev, date: field(node, "date"), place: field(node, "place").trim(), payer: field(node, "payer").trim(),
+      lines: [...node.querySelectorAll(".summary-line")].map((ln) => ({ id: ln.dataset.line, group: field(ln, "group").trim(), amount: field(ln, "amount") })) };
+  });
+}
+function updateSummaryTotals() {
+  const total = state.summaryBlocks.reduce((s, b) => s + b.lines.reduce((x, l) => x + (Number(l.amount) || 0), 0), 0);
+  $("#summary-total").textContent = money(total);
+  $("#summary-count").textContent = String(state.summaryBlocks.length);
+}
+function openSummaryDialog(receipt = null) {
+  if (!state.user) return;
+  editingSummary = receipt;
+  $("#summary-groups").replaceChildren(...MATERIAL_GROUPS.map(([, name]) => new Option(name, name)));
+  if (receipt) {
+    state.summaryBlocks = [{ id: receipt.id, date: localDateInput(new Date(Number(receipt.purchaseDate))), place: receipt.note || "", payer: receipt.enteredByName || "",
+      lines: (receipt.items || []).map((item) => ({ id: item.id, group: item.materialGroup || item.expenseGroup || "", amount: String(item.amount ?? "") })) }];
+  } else state.summaryBlocks = [blockDefaults()];
+  $("#summary-title").textContent = receipt ? "Sửa phiếu tổng" : "Phiếu tổng";
+  $("#summary-submit").textContent = receipt ? "LƯU THAY ĐỔI" : "LƯU TẤT CẢ";
+  $("#add-summary-block").hidden = Boolean(receipt);
+  $("#summary-to-detail").hidden = !receipt;
+  $("#summary-error").textContent = "";
+  renderSummaryBlocks();
+  $("#summary-dialog").showModal();
+}
+async function saveSummaryBlocks(event) {
+  event.preventDefault();
+  readSummaryBlocks();
+  const error = $("#summary-error");
+  error.textContent = "";
+  if (!state.user) { error.textContent = "Phiên đăng nhập đã hết."; return; }
+  // Kiểm tra toàn bộ trước khi ghi để không lưu dở dang.
+  const prepared = [];
+  for (const [index, block] of state.summaryBlocks.entries()) {
+    const where = state.summaryBlocks.length > 1 ? `Hóa đơn ${index + 1}: ` : "";
+    const purchaseDate = summaryDateMs(block.date);
+    const check = validateSummaryReceipt({ purchaseDate, lines: block.lines });
+    if (!check.ok) { error.textContent = where + check.error; return; }
+    if (detailRequired(purchaseDate, state.detailCutoff)) { error.textContent = `${where}từ ngày ${new Date(state.detailCutoff).toLocaleDateString("vi-VN")} trở đi phải nhập chi tiết vật tư, không dùng phiếu tổng.`; return; }
+    prepared.push({ block, purchaseDate, total: check.total });
+  }
+  const now = Date.now();
+  const button = $("#summary-submit");
+  button.disabled = true;
+  const failed = [];
+  let saved = 0;
+  for (const { block, purchaseDate, total } of prepared) {
+    const items = buildSummaryLines(block.lines, () => uuid());
+    const base = editingSummary ? { ...editingSummary } : { id: block.id, createdAt: now, source: "WEB_MANAGER" };
+    const payload = { ...base, purchaseDate, note: block.place, enteredByUid: state.user.uid, enteredByName: block.payer || state.user.displayName || state.user.email || "Quản lý",
+      items, total, status: "ACTIVE", detailLevel: "SUMMARY", updatedAt: Math.max(now, Number(editingSummary?.updatedAt || 0) + 1), updatedByUid: state.user.uid };
+    try { await setDoc(doc(db, ...root, "expenseReceipts", payload.id), payload); replaceLocalReceipt(payload); saved += 1; }
+    catch (e) { failed.push({ block, message: e.message || String(e) }); }
+  }
+  button.disabled = false;
+  if (failed.length) {
+    state.summaryBlocks = failed.map((f) => f.block);
+    renderSummaryBlocks();
+    error.textContent = `Đã lưu ${saved}/${prepared.length}. Còn ${failed.length} hóa đơn chưa lưu được: ${failed[0].message}`;
+    render();
+    return;
+  }
+  editingSummary = null;
+  $("#summary-dialog").close();
+  render();
+}
+function startUpgradeToDetail() {
+  const original = editingSummary;
+  if (!original) return;
+  readSummaryBlocks();
+  $("#summary-dialog").close();
+  editingSummary = null;
+  editingReceipt = original;
+  upgradeFrom = original;
+  expenseDraft = { id: original.id, purchaseDate: Number(original.purchaseDate), note: original.note || "", enteredByUid: original.enteredByUid || "", enteredByName: original.enteredByName || "",
+    items: [{ id: uuid(), materialName: "", materialCode: "", expenseGroup: "", qty: 1, unit: "kg", unitPrice: 0 }] };
+  $("#expense-title").textContent = "Chi tiết hóa đơn cũ";
+  $("#expense-submit").textContent = "LƯU CHI TIẾT";
+  $("#expense-error").textContent = "";
+  renderExpenseDraft();
+  $("#expense-dialog").showModal();
+}
+function updateGapNote() {
+  const note = $("#expense-gap");
+  if (!note) return;
+  if (!upgradeFrom || !expenseDraft) { note.hidden = true; return; }
+  const gap = detailGap(upgradeFrom.total, calculateReceiptTotal(expenseDraft.items));
+  note.hidden = false;
+  note.className = gap.matches ? "rule-hint" : "rule-hint warn";
+  note.textContent = gap.matches ? `✓ Khớp tổng phiếu tổng gốc (${money(upgradeFrom.total)}).` : `Tổng phiếu tổng gốc ${money(upgradeFrom.total)}; chi tiết đang ${gap.difference > 0 ? "vượt" : "thiếu"} ${money(Math.abs(gap.difference))}.`;
+}
+
+/* ---------- Mốc bắt buộc chi tiết (để trống = không bắt buộc) ---------- */
+function renderDetailLevel() {
+  const note = $("#detail-level-note");
+  if (!note) return;
+  const d = detailLevelSummary(state.expenseReceipts);
+  note.textContent = d.total ? `Phiếu tổng: ${d.summaryCount} (${money(d.summaryAmount)}) · Phiếu chi tiết: ${d.itemizedCount} (${money(d.itemizedAmount)}) trong các phiếu đang tải.` : "";
+  $("#cutoff-note").textContent = state.detailCutoff ? `Từ ${new Date(state.detailCutoff).toLocaleDateString("vi-VN")} trở đi chỉ được nhập phiếu chi tiết.` : "Chưa đặt mốc: được phép nhập phiếu tổng cho mọi ngày.";
+  const input = $("#cutoff-date");
+  if (document.activeElement !== input) input.value = state.detailCutoff ? localDateInput(new Date(state.detailCutoff)) : "";
+}
+async function saveCutoff(clear) {
+  if (!state.user) return;
+  const value = $("#cutoff-date").value;
+  if (!clear && !value) { $("#cutoff-note").textContent = "Chọn ngày mốc trước."; return; }
+  const cutoffAt = clear ? null : new Date(`${value}T00:00:00`).getTime();
+  try {
+    await setDoc(doc(db, ...root, "config", "expenseDetail"), { cutoffAt, updatedAt: Date.now(), updatedBy: state.user.email || "" });
+    state.detailCutoff = cutoffAt;
+    renderDetailLevel();
+  } catch (error) { $("#cutoff-note").textContent = error.code === "permission-denied" ? "Không có quyền ghi mốc (cần mở quy tắc Firestore cho config/expenseDetail)." : `Không lưu được mốc: ${error.message}`; }
+}
+
+/* ---------- Tải phiếu cũ hơn 7 ngày khi chọn kỳ xem xa hơn (tối đa 500 phiếu) ---------- */
+async function ensureReceiptsLoaded() {
+  const range = rangeForPeriod();
+  const from = Number.isFinite(range.from) ? Math.max(range.from, 0) : 0;
+  if (!state.user || from >= state.receiptsFrom) return;
+  try {
+    const snap = await getDocs(query(collection(db, ...root, "expenseReceipts"), where("purchaseDate", ">=", from), orderBy("purchaseDate", "desc"), limit(500)));
+    const fetched = rows(snap);
+    const ids = new Set(fetched.map((r) => r.id));
+    state.expenseReceipts = [...fetched, ...state.expenseReceipts.filter((r) => !ids.has(r.id))];
+    state.receiptsFrom = from;
+    render();
+  } catch (error) { $("#sync-status").textContent = `Không tải được phiếu cũ: ${error.message}`; }
+}
 
 /* ---------- Chia tab: mỗi tab là một trang riêng theo #hash, nút Back của trình duyệt hoạt động ---------- */
 const TABS = ["ban", "doanhthu", "bill", "thanhtoan", "taichinh"];

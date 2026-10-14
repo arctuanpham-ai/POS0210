@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20261014-7" />
+    <link rel="stylesheet" href="styles.css?v=20261014-8" />
     <title>0210 · Manager</title>
   </head>
   <body>
@@ -17,7 +17,7 @@
         <p class="eyebrow">0210 · BREAKFAST · COFFEE · DRINKS</p>
         <h1 id="login-title">Manager realtime</h1>
         <p class="muted">Theo dõi quán và nhập phiếu tài chính từ xa.</p>
-        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.14.7 · Rà soát phân loại</p>
+        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.14.8 · Phiếu tổng</p>
         <label>Email Firebase<input id="email" type="email" autocomplete="username" inputmode="email" /></label>
         <label>Mật khẩu<input id="password" type="password" autocomplete="current-password" /></label>
         <label class="show-password"><input id="show-password" type="checkbox" /> Hiện mật khẩu để kiểm tra khi gõ</label>
@@ -34,7 +34,7 @@
           <div class="heading-actions"><button id="refresh-dashboard" class="secondary">Làm mới</button><button id="request-sync" class="secondary" title="Yêu cầu máy POS ở quán đồng bộ ngay">Yêu cầu đồng bộ</button><button id="logout-button" class="text-button">Đăng xuất</button></div>
         </header>
 
-        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.14.7 · Rà soát phân loại</p>
+        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.14.8 · Phiếu tổng</p>
 
         <nav class="tabbar" id="tabbar" aria-label="Các trang">
           <a href="#ban" data-tab="ban">Bàn</a>
@@ -103,7 +103,7 @@
         <div class="page" data-page="taichinh" hidden>
         <section class="section-heading report-heading">
           <div><p class="eyebrow">TÀI CHÍNH</p><h2>Tình hình quán</h2></div>
-          <div class="heading-actions"><button id="open-expense" class="secondary">+ CHI PHÍ MUA HÀNG</button><button id="open-entry" class="text-button">Giao dịch khác</button></div>
+          <div class="heading-actions"><button id="open-expense" class="secondary">+ CHI PHÍ MUA HÀNG</button><button id="open-summary" class="secondary">+ PHIẾU TỔNG (hóa đơn cũ)</button><button id="open-entry" class="text-button">Giao dịch khác</button></div>
         </section>
 
         <div class="filter-row" id="period-filters">
@@ -136,6 +136,9 @@
           <div><p class="eyebrow">RÀ SOÁT PHÂN LOẠI</p><h2>Phân nhóm vật tư đã đúng chưa</h2></div>
         </section>
         <p class="muted">So nhóm đã ghi với quy tắc từ khoá và quy tắc nhóm đã học. Dòng khác gợi ý hoặc mơ hồ hiện ở dưới để bạn mở phiếu sửa.</p>
+        <div class="payer-filter-block"><span>Ngày mốc bắt buộc chi tiết</span><input id="cutoff-date" type="date" /><button id="save-cutoff" type="button" class="secondary">Lưu mốc</button><button id="clear-cutoff" type="button" class="text-button">Bỏ mốc</button></div>
+        <p id="cutoff-note" class="muted"></p>
+        <p id="detail-level-note" class="muted"></p>
         <section id="review-summary" class="summary-grid" aria-label="Tổng kết rà soát phân loại"></section>
         <section id="review-list" class="review-list" aria-live="polite"></section>
 
@@ -169,6 +172,22 @@
       </article>
     </dialog>
 
+    <dialog id="summary-dialog">
+      <article>
+        <div class="dialog-header"><div><p class="eyebrow">HÓA ĐƠN CHƯA CÓ CHI TIẾT</p><h2 id="summary-title">Phiếu tổng</h2></div><button id="close-summary" class="text-button">Đóng</button></div>
+        <p class="muted">Mỗi khối là một hóa đơn: chỉ cần ngày, nhóm và số tiền. Phiếu tổng được cộng vào chi phí và báo cáo theo nhóm, nhưng không vào thống kê giá hay khối lượng theo vật tư.</p>
+        <form id="summary-form" class="entry-form">
+          <datalist id="summary-groups"></datalist>
+          <section id="summary-blocks" class="summary-blocks"></section>
+          <button id="add-summary-block" type="button" class="secondary">+ Thêm hóa đơn</button>
+          <button id="summary-to-detail" type="button" class="text-button" hidden>Nhập chi tiết thay thế phiếu này</button>
+          <p class="entry-total">Tổng nhập: <strong id="summary-total">0đ</strong> · <span id="summary-count">0</span> hóa đơn</p>
+          <p id="summary-error" class="error" role="alert"></p>
+          <button id="summary-submit" type="submit" class="primary">LƯU TẤT CẢ</button>
+        </form>
+      </article>
+    </dialog>
+
     <dialog id="expense-dialog">
       <article>
         <div class="dialog-header"><div><p class="eyebrow">CHI PHÍ MUA HÀNG</p><h2 id="expense-title">Phiếu nhiều vật tư</h2></div><button id="close-expense" class="text-button">Đóng</button></div>
@@ -178,6 +197,7 @@
           <section id="expense-lines" class="expense-lines"></section>
           <button id="add-expense-line" type="button" class="secondary">+ Thêm vật tư</button>
           <p class="entry-total">Tổng phiếu: <strong id="expense-total">0đ</strong></p>
+          <p id="expense-gap" class="rule-hint warn" hidden></p>
           <p id="expense-error" class="error"></p>
           <button id="expense-submit" type="submit" class="primary">LƯU VÀ ĐỒNG BỘ</button>
         </form>
@@ -276,6 +296,6 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261014-7"></script>
+    <script type="module" src="app.js?v=20261014-8"></script>
   </body>
 </html>

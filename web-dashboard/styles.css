@@ -144,3 +144,12 @@ dialog article { padding: 6px; }
 .review-row small { display: block; color: #796758; font-size: 12px; margin-top: 2px; }
 .review-actions { display: grid; justify-items: end; gap: 4px; flex: 0 0 auto; }
 .summary-grid + .review-list { margin-top: 12px; }
+
+/* Phiếu tổng */
+.summary-blocks { display: grid; gap: 12px; margin: 12px 0; }
+.summary-block { padding: 12px; border: 1px solid #dfcfb8; border-radius: 14px; background: #fff9f0; }
+.summary-block label { margin: 0 0 8px; }
+.summary-line { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: end; }
+.summary-line .text-button { margin-bottom: 8px; }
+.summary-block-actions { display: flex; justify-content: space-between; gap: 12px; }
+#summary-to-detail { margin: 4px 0; }

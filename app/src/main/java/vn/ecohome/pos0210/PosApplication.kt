@@ -19,6 +19,7 @@ class PosApplication : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         FirebaseCloudSync.schedule(this)
+        vn.ecohome.pos0210.cloud.RemoteSyncCommand.start(this,appScope)
         val db=PosDatabase.get(this)
         val settingMutex=Mutex()
         var lastBusinessSettings:Map<String,String>?=null

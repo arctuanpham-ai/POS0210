@@ -12,6 +12,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import vn.ecohome.pos0210.cloud.*
 import vn.ecohome.pos0210.data.*
 import vn.ecohome.pos0210.printing.PrinterText
@@ -1351,15 +1352,23 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
   else{val msg=result.exceptionOrNull()?.message?:"UNKNOWN";dao.markPrintFailed(job.id,msg);audit("PRINT",b.id,"KITCHEN_PRINT_FAILED","prepaid,job=${job.id}");msg}
  }
  val kitchenPrint=MutableStateFlow<KitchenPrintUi?>(null)
+ /** Cảnh báo phiếu bếp in lỗi: không chặn order tiếp, nhân viên bấm đóng hoặc vào Đơn chờ giao để in lại. */
+ val kitchenWarning=MutableStateFlow<String?>(null)
+ @Volatile private var kitchenOverlayOn=false
+ fun dismissKitchenWarning(){kitchenWarning.value=null}
  /** In phiếu bếp cho các món đã thu tiền và cập nhật màn "đang in". Trả về true nếu in xong. */
  private suspend fun runPaidKitchenPrint(sessionId:String,tableName:String,orderer:String):Boolean{
   val batches=dao.batches(sessionId).first().filter{it.status=="WAITING"}
-  kitchenPrint.value=KitchenPrintUi("PRINTING",0,0,"",tableName)
+  fun ui(v:KitchenPrintUi?){if(kitchenOverlayOn)kitchenPrint.value=v}
+  ui(KitchenPrintUi("PRINTING",0,0,"",tableName))
   for(b in batches){
-   val err=printPaidKitchenTicket(b,tableName,orderer){d,t->kitchenPrint.value=KitchenPrintUi("PRINTING",d,t,"",tableName)}
-   if(err!=null){kitchenPrint.value=KitchenPrintUi("FAILED",0,0,err,tableName);return false}
+   val err=printPaidKitchenTicket(b,tableName,orderer){d,t->ui(KitchenPrintUi("PRINTING",d,t,"",tableName))}
+   if(err!=null){
+    kitchenWarning.value="⚠ PHIẾU BẾP CHƯA IN · $tableName ${PaymentFlowRules.orderNoLabel(b.serviceNo)} · $err. Vào Đơn chờ giao để IN LẠI hoặc NHẮC BẾP."
+    return false
+   }
   }
-  kitchenPrint.value=null
+  kitchenWarning.value=null
   return true
  }
  private fun leavePaidOrder(){prepaidCartBackup=null;kitchenPrint.value=null;printedCheckoutKey.value=null;currentSession.value=null;currentTable.value=null;screen.value="TABLES"}
@@ -1926,13 +1935,11 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
   printerMessage.value="BILL TEST · KHÔNG IN THẬT · Có thể kiểm thử bước xác nhận thanh toán"
  }
 
- fun printCheckoutBill(preview:PricingPreview,qrInfo:String,customerName:String=""){
+ fun printCheckoutBill(preview:PricingPreview,qrInfo:String,customerName:String="",print:Boolean=true){
   val session=currentSession.value?:return
   val table=currentTable.value?:return
   val printKey=CheckoutPrintPolicy.key(session.id,preview.total,qrInfo)
-  printedCheckoutKey.value=null
-  checkoutPrintAttemptedKey.value=printKey
-  checkoutPrinting.value=true
+  if(print){printedCheckoutKey.value=null;checkoutPrintAttemptedKey.value=printKey;checkoutPrinting.value=true}
   viewModelScope.launch(Dispatchers.IO){
    try {
    val batches=dao.batches(session.id).first().filter{it.status!="CANCELLED"}
@@ -1952,6 +1959,7 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
    val orderTag=if(session.flow==PaymentFlowRules.PREPAID)batches.firstOrNull()?.let{"ĐƠN "+PaymentFlowRules.orderNoLabel(it.serviceNo)} else null
    val bitmap=ReceiptRenderer.bill(table.name,period,lines,preview.subtotal,preview.surcharge,preview.discount,preview.total,adjustments,customerName.ifBlank{"KHÁCH LẠ"},null,0,0,0,"CHƯA XÁC NHẬN",qr,profile,orderTag)
    checkoutBillImage.value=printKey to bitmap
+   if(!print){checkoutPrintAttemptedKey.value=printKey;return@launch}
    if(printerMode()!="BLUETOOTH"||receiptPrinterMac().isBlank()){printerMessage.value="IN BILL LỖI · Chưa cấu hình máy in. Bill vẫn hiện trên màn hình để khách quét QR";return@launch}
    val job=PrintJobEntity(UUID.randomUUID().toString(),null,null,"BILL_PREPAY",createdAt=now)
    dao.insertPrintJob(job)
@@ -1963,7 +1971,7 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
      printerMessage.value="ĐÃ IN BILL · Chờ khách kiểm tra và thanh toán"
     }else{dao.markPrintFailed(job.id,result.exceptionOrNull()?.message?:"UNKNOWN");printerMessage.value="IN BILL LỖI · ${result.exceptionOrNull()?.message?:"Thử in lại"}"}
    }
-   } finally { checkoutPrinting.value=false }
+   } finally { if(print)checkoutPrinting.value=false }
   }
  }
  fun reprintPaidBill(billId:String){
@@ -2120,7 +2128,11 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
    }
    if(session.flow==PaymentFlowRules.PREPAID){
     // Đơn đã ghi. Giữ màn hình ở lại cho tới khi in xong; lỗi thì để nhân viên chọn in lại hoặc tự báo bếp.
-    if(!runPaidKitchenPrint(session.id,table?.name?:"Trả trước",employee.name))return@launch
+    // Chỉ chặn màn hình tối đa 5 giây. Máy in chậm hoặc lỗi thì đơn vẫn xong, app báo cảnh báo và cho order khách tiếp theo.
+    kitchenOverlayOn=true
+    val kitchenJob=kotlinx.coroutines.CoroutineScope(Dispatchers.IO).async(Dispatchers.IO){runPaidKitchenPrint(session.id,table?.name?:"Trả trước",employee.name)}
+    kotlinx.coroutines.withTimeoutOrNull(5000L){kitchenJob.await()}
+    kitchenOverlayOn=false
    }
    withContext(Dispatchers.Main){leavePaidOrder()}
   }

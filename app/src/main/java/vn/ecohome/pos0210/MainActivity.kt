@@ -291,6 +291,7 @@ fun Tables(vm: PosViewModel) {
         Header()
         Operator(vm)
         run { val fr by vm.refunds.collectAsState(); FrozenRefundBanner(fr.filter { it.status == "FROZEN" }) }
+        KitchenWarningBanner(vm)
         if(testMode) Surface(Modifier.fillMaxWidth(),color=Color(0xFFFFD8D8)){Text("TEST MODE · KHÔNG TÍNH DOANH THU",Modifier.fillMaxWidth().padding(8.dp),textAlign=TextAlign.Center,fontWeight=FontWeight.Black,color=Color.Red)}
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp),
@@ -859,7 +860,7 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
     Column {
         var confirmEdit by remember { mutableStateOf(false) }
         Header(if (isPrepaid) "Thanh toán trước" else "Thanh toán") {
-            if (isPrepaid) { if (billPrinted || shownBill != null) confirmEdit = true else vm.editPrepaidOrder() } else vm.screen.value = "SENT"
+            if (isPrepaid) { if (billPrinted) confirmEdit = true else vm.editPrepaidOrder() } else vm.screen.value = "SENT"
         }
         if (confirmEdit) AlertDialog(
             onDismissRequest = { confirmEdit = false },
@@ -1032,6 +1033,11 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                 }else if(ambiguousEvent!=null){
                     Text("Đã phát hiện giao dịch cùng số tiền nhưng chưa xác định được bill.",Modifier.padding(top=8.dp),color=Color(0xFF9A5B28),fontSize=12.sp,fontWeight=FontWeight.Bold)
                 }else Text("Đang chờ thông báo ngân hàng · vẫn có thể xác nhận thủ công",Modifier.padding(top=8.dp),fontSize=11.sp)
+            }
+        }
+        if (isPrepaid) {
+            LaunchedEffect(checkoutKey, preview.total, validPaymentSession != null) {
+                if (shownBill == null && !billPrinted && preview.total > 0 && validPaymentSession != null) vm.printCheckoutBill(preview, qrInfo, matchedCustomer?.name ?: customerName, print = false)
             }
         }
         Column(Modifier.fillMaxWidth().padding(18.dp)) {

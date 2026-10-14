@@ -349,3 +349,19 @@ fun FrozenRefundBanner(frozen: List<vn.ecohome.pos0210.data.RefundEntity>) {
             Modifier.padding(10.dp), color = Color.White, fontWeight = FontWeight.Black, fontSize = 13.sp)
     }
 }
+
+/** Cảnh báo phiếu bếp in lỗi sau khi thu tiền. Không chặn thao tác, chỉ nhắc xử lý. */
+@Composable
+fun KitchenWarningBanner(vm: PosViewModel) {
+    val w by vm.kitchenWarning.collectAsState()
+    val msg = w ?: return
+    Surface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), color = Color(0xFFB3261E), shape = RoundedCornerShape(8.dp)) {
+        Column(Modifier.padding(10.dp)) {
+            Text(msg, color = Color.White, fontWeight = FontWeight.Black, fontSize = 13.sp)
+            Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { vm.screen.value = "DELIVERY" }, colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)) { Text("ĐƠN CHỜ GIAO / IN LẠI") }
+                TextButton(onClick = { vm.dismissKitchenWarning() }, colors = ButtonDefaults.textButtonColors(contentColor = Color.White)) { Text("ĐÓNG") }
+            }
+        }
+    }
+}

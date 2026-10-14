@@ -932,7 +932,7 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                 Text(
                     if (last == null) "Chưa nhận thông báo ngân hàng nào · kiểm tra quyền đọc thông báo (Quản lý → Thanh toán chuyển khoản)"
                     else "TB ngân hàng gần nhất $hhmm" + (last.amount?.let { " · ${if (last.direction == "DEBIT") "-" else "+"}${money(it)}" } ?: "") +
-                        " · " + (if (last.parserResult == "PARSE_FAILED") "KHÔNG ĐỌC ĐƯỢC" else if (last.matchStatus.startsWith("MATCHED")) "KHỚP BILL" else "CHƯA KHỚP BILL"),
+                        " · " + (if (last.parserResult == "PARSE_FAILED") "KHÔNG ĐỌC ĐƯỢC · nội dung: " + last.body.replace(Regex("\\s+"), " ").take(110) else if (last.matchStatus.startsWith("MATCHED")) "KHỚP BILL" else "CHƯA KHỚP BILL"),
                     Modifier.padding(horizontal = 16.dp, vertical = 2.dp), fontSize = 11.sp,
                     color = if (last?.parserResult == "PARSE_FAILED") Color(0xFF9A2B1F) else Color(0xFF655C55)
                 )

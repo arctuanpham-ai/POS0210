@@ -67,10 +67,21 @@ class TechcombankNotificationParser:BankNotificationParser {
   val content=if(balance!=null)body.substring(balance.range.last+1).trim() else body.substring(m.range.last+1).trim()
   return BankTransaction("TECHCOMBANK",account,amount,direction,null,receivedAt,content,balance?.groupValues?.get(1),fingerprint("TECHCOMBANK",account,amount,null,balance?.groupValues?.get(1),full))
  }
+ /** Phương án cuối: thông báo Techcombank có dấu cộng + số tiền (VND/đ) nhưng khác mẫu đã biết. Chỉ nhận tiền VÀO, bỏ qua dòng "Số dư". */
+ private fun parseLoose(rawTitle:String,rawBody:String,receivedAt:Long):BankTransaction? {
+  fun clean(v:String)=java.text.Normalizer.normalize(v,java.text.Normalizer.Form.NFC).replace(Regex("[\\u00A0\\u2007\\u202F\\u200B]")," ")
+  val body=clean(rawBody);val full=clean("$rawTitle\n$rawBody")
+  val withoutBalance=body.replace(Regex("""(?:Số dư|So du|SD)\s*:?\s*(?:VND|VNĐ)?\s*[\d.,]+\s*(?:VND|VNĐ|đ)?""",RegexOption.IGNORE_CASE),"")
+  val m=Regex("""[+＋]\s*(?:VND|VNĐ)?\s*([\d][\d.,]*)""",RegexOption.IGNORE_CASE).find(withoutBalance)?:return null
+  val amount=digitsAmount(m.groupValues[1])?.takeIf{it>0L}?:return null
+  val account=Regex("""(?:Tài khoản|Tai khoan|TK)\s*:?\s*([0-9xX*]{4,24})""",RegexOption.IGNORE_CASE).find(body)?.groupValues?.get(1).orEmpty()
+  val content=withoutBalance.substring(m.range.last+1).replace(Regex("""(?:Tài khoản|Tai khoan)\s*:?\s*[0-9xX*]{4,24}""",RegexOption.IGNORE_CASE),"").trim()
+  return BankTransaction("TECHCOMBANK",account,amount,TransactionDirection.CREDIT,null,receivedAt,content,null,fingerprint("TECHCOMBANK",account,amount,null,null,full))
+ }
  override fun parse(title:String,body:String,receivedAt:Long):BankTransaction? {
   val full="$title\n$body"
   parseAppFormat(title,body,full,receivedAt)?.let{return it}
-  val match=structured.find(full)?:return null
+  val match=structured.find(full)?:return parseLoose(title,body,receivedAt)
   val account=match.groupValues[1]
   val rawTime=match.groupValues[2]
   val direction=if(match.groupValues[3]=="+")TransactionDirection.CREDIT else TransactionDirection.DEBIT

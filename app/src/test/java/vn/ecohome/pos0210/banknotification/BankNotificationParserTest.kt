@@ -53,4 +53,11 @@ ND:CT DEN:164T2690PJ300DB4 MBVCB.16065678956.848811.PHAM ANH TUAN chuyen tien.CT
   val tx=TechcombankNotificationParser().parse("Techcombank",body,1)!!
   assertEquals(4_500L,tx.amount);assertEquals("3906091984",tx.account);assertTrue(tx.content.contains("A4YX"))
  }
+ @Test fun techcombankLooseFormatStillDetectsCredit(){
+  val tx=TechcombankNotificationParser().parse("Techcombank","Biến động +4,500 VND. Số dư: 14,854,499 VND. ND: QR - 0210 N01 PSQM",3)!!
+  assertEquals(4_500L,tx.amount);assertEquals(TransactionDirection.CREDIT,tx.direction);assertTrue(tx.content.contains("PSQM"))
+ }
+ @Test fun techcombankLooseIgnoresBalanceOnly(){
+  assertNull(TechcombankNotificationParser().parse("Techcombank","Số dư: VND 14,854,499",1))
+ }
 }

@@ -135,3 +135,33 @@ dialog article { padding: 6px; }
 .page[hidden] { display: none; }
 @media (min-width: 720px) { .tabbar { margin: 0 -28px 6px; padding: 12px 28px; } }
 .summary-grid + .bill-list { margin-top: 12px; }
+
+/* Gợi ý quy tắc phân nhóm và màn rà soát */
+.rule-hint { margin: 6px 0 4px; font-size: 12px; line-height: 1.4; color: #3f6b3a; min-height: 1.2em; }
+.rule-hint.warn { color: #9a5a12; }
+.review-list { display: grid; gap: 8px; margin-bottom: 8px; }
+.review-row { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; padding: 12px 14px; border: 1px solid #dfcfb8; background: #fffcf7; border-radius: 14px; }
+.review-row small { display: block; color: #796758; font-size: 12px; margin-top: 2px; }
+.review-actions { display: grid; justify-items: end; gap: 4px; flex: 0 0 auto; }
+.summary-grid + .review-list { margin-top: 12px; }
+
+/* Phiếu tổng */
+.summary-blocks { display: grid; gap: 12px; margin: 12px 0; }
+.summary-block { padding: 12px; border: 1px solid #dfcfb8; border-radius: 14px; background: #fff9f0; }
+.summary-block label { margin: 0 0 8px; }
+.summary-line { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: end; }
+.summary-line .text-button { margin-bottom: 8px; }
+.summary-block-actions { display: flex; justify-content: space-between; gap: 12px; }
+#summary-to-detail { margin: 4px 0; }
+
+.month-list { display: grid; gap: 10px; }
+.month-card { border: 1px solid var(--line, #d9d9d9); border-radius: 12px; padding: 12px 14px; background: var(--card, #fff); }
+.month-card h3 { margin: 0 0 8px; font-size: 1rem; }
+.month-card dl { margin: 0; display: grid; gap: 6px; }
+.month-card dl div { display: flex; justify-content: space-between; gap: 12px; }
+.month-card dt { color: var(--muted, #666); }
+.month-card dd { margin: 0; font-weight: 600; text-align: right; }
+
+.sim-banner { margin: 8px 0; padding: 10px 12px; border-radius: 10px; font-weight: 600; background: #fff3cd; color: #664d03; border: 1px solid #ffda6a; }
+body.simulating #taichinh-page, body.simulating [data-page="taichinh"] { outline: 3px dashed #ffc107; outline-offset: -3px; }
+@media (prefers-color-scheme: dark) { .sim-banner { background: #3d3000; color: #ffe08a; border-color: #8a6d00; } }

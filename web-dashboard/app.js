@@ -15,14 +15,19 @@ import {
   where,
   orderBy,
   limit,
-  setDoc,
-  writeBatch,
+  setDoc as rawSetDoc,
+  writeBatch as rawWriteBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261012-3";
 import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261013-2";
 import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261012-3";
 import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261012-3";
 import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261014-3";
+import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261014-8";
+import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261014-7";
+import { buildSimulation } from "./sim-data.js?v=20261014-10";
+import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261014-9";
+import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261014-9";
 import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261014-6";
 import { buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261014-4";
 import { aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261013-2";
@@ -48,7 +53,7 @@ const state = {
   purchaseCategories: [], profitPartners: [], assetCategories: [], suppliers: [],
   unsubs: [], paymentFlowDoc: null, refunds: [], frozenRefundDocs: [], flowError: "", dailyDocs: {}, dailyError: "", salesLoaded: false, salesDays: 7, itemMode: "combined", period: "today", customFrom: null, customTo: null,
   transactionKind: "ALL", payerFilter: "ALL", user: null,
-  historyDay: "today", historyDocs: {}, historyTables: null, historyError: "", historyLoading: false, billDetailCache: {},
+  expenseRules: [], rulesError: "", simulation: null, monthlyDocs: {}, monthlyError: "", reportFrom: 0, receiptsNote: "", detailCutoff: null, receiptsFrom: 0, summaryBlocks: [], historyDay: "today", historyDocs: {}, historyTables: null, historyError: "", historyLoading: false, billDetailCache: {},
 };
 let expenseDraft = null;
 let editingReceipt = null;
@@ -60,7 +65,13 @@ const expenseRows = () => state.expenseReceipts.map((receipt) => ({
   expenseCategory: receipt.expenseCategory || receipt.items?.[0]?.expenseGroup || "OTHER_EXPENSE",
   paidByName: receipt.enteredByName || "",
   note: receipt.note || "",
+  summary: isSummaryReceipt(receipt),
 }));
+
+// Chế độ mô phỏng không bao giờ được ghi Firestore: mọi đường ghi đi qua hai hàm này.
+const SIM_BLOCKED = "Đang ở chế độ mô phỏng: không ghi dữ liệu thật. Tắt mô phỏng để lưu.";
+const setDoc = (...args) => { if (state.simulation) throw new Error(SIM_BLOCKED); return rawSetDoc(...args); };
+const writeBatch = (...args) => { if (state.simulation) throw new Error(SIM_BLOCKED); return rawWriteBatch(...args); };
 
 const $ = (selector) => document.querySelector(selector);
 const money = (value) => `${new Intl.NumberFormat("vi-VN").format(Number(value || 0))}đ`;
@@ -483,7 +494,7 @@ function renderTransactions() {
   const purchases = expenseRows()
     .filter((p) => p.status !== "DELETED" && inRange(p.purchasedAt, range))
     .filter((p) => matchesPayer(state.payerFilter, p.paidByName))
-    .map((p) => ({ kind: "EXPENSE", at: Number(p.purchasedAt || 0), id: p.id, amount: Number(p.total || 0), title: EXPENSE_LABELS[p.expenseCategory] || "Phiếu chi", person: p.paidByName || "", note: p.note || "" }));
+    .map((p) => ({ kind: "EXPENSE", at: Number(p.purchasedAt || 0), id: p.id, amount: Number(p.total || 0), title: `${p.summary ? "Phiếu tổng · " : ""}${EXPENSE_LABELS[p.expenseCategory] || p.expenseCategory || "Phiếu chi"}`, person: p.paidByName || "", note: p.note || "" }));
   const movements = state.movements
     .filter((m) => inRange(m.occurredAt, range) && matchesPayer(state.payerFilter, m.counterpartyName))
     .map((m) => ({ kind: "MOVEMENT", at: Number(m.occurredAt || 0), id: m.id, amount: Number(m.amount || 0), title: MOVEMENT_LABELS[m.type] || m.type || "Dòng tiền", person: m.counterpartyName || "", note: m.note || "" }));
@@ -569,8 +580,51 @@ function nextMaterialCode(group) {
 function expenseLineMarkup(item) {
   const safe = (value) => escapeHtml(String(value ?? "")).replace(/"/g, "&quot;");
   const id = safe(item.id);
-  const group = groupLabel(item.expenseGroup);
-  return `<article class="expense-line" data-line-id="${id}"><label>Tên vật tư<input data-field="materialName" list="materials-${id}" maxlength="120" value="${safe(item.materialName)}" required autocomplete="off" /><datalist id="materials-${id}"></datalist></label><div class="two-col"><label>Mã vật tư<input data-field="materialCode" maxlength="40" value="${safe(item.materialCode)}" readonly /></label><label>Nhóm vật tư<input data-field="expenseGroup" list="groups-${id}" value="${safe(group)}" required autocomplete="off" /><datalist id="groups-${id}"></datalist></label></div><div class="two-col"><label>Số lượng<input data-field="qty" type="number" min="0.001" step="0.001" value="${Number(item.qty || 0)}" /></label><label>Đơn vị tính<input data-field="unit" list="units-${id}" maxlength="20" value="${safe(item.unit || "kg")}" required autocomplete="off" /><datalist id="units-${id}"></datalist></label></div><label>Đơn giá<input data-field="unitPrice" type="number" min="0" step="1" value="${Number(item.unitPrice || 0)}" /></label><button type="button" class="text-button" data-remove-line="${id}">Bỏ dòng</button></article>`;
+  const group = item.expenseGroup ? groupLabel(item.expenseGroup) : "";
+  return `<article class="expense-line" data-line-id="${id}" data-group-touched="${item.groupTouched ? 1 : 0}"><label>Tên vật tư<input data-field="materialName" list="materials-${id}" maxlength="120" value="${safe(item.materialName)}" required autocomplete="off" /><datalist id="materials-${id}"></datalist></label><div class="two-col"><label>Mã vật tư<input data-field="materialCode" maxlength="40" value="${safe(item.materialCode)}" readonly /></label><label>Nhóm vật tư<input data-field="expenseGroup" list="groups-${id}" value="${safe(group)}" required autocomplete="off" /><datalist id="groups-${id}"></datalist></label></div><p class="rule-hint" data-hint aria-live="polite"></p><div class="two-col"><label>Số lượng<input data-field="qty" type="number" min="0.001" step="0.001" value="${Number(item.qty || 0)}" /></label><label>Đơn vị tính<input data-field="unit" list="units-${id}" maxlength="20" value="${safe(item.unit || "kg")}" required autocomplete="off" /><datalist id="units-${id}"></datalist></label></div><label>Đơn giá<input data-field="unitPrice" type="number" min="0" step="1" value="${Number(item.unitPrice || 0)}" /></label><button type="button" class="text-button" data-remove-line="${id}">Bỏ dòng</button></article>`;
+}
+function refreshRuleHint(line) {
+  const hint = line.querySelector("[data-hint]");
+  if (!hint) return;
+  const name = line.querySelector("[data-field=materialName]").value;
+  if (!name.trim()) { hint.textContent = ""; hint.className = "rule-hint"; return; }
+  const s = classifyMaterial(name, state.expenseRules);
+  const chosen = groupCodeOrNull(line.querySelector("[data-field=expenseGroup]").value);
+  let text, warn = false;
+  if (s.status === "learned" || s.status === "matched") {
+    const label = groupLabelOf(s.group);
+    if (!chosen) text = `Gợi ý: ${label}`;
+    else if (chosen === s.group) text = `✓ Khớp quy tắc${s.status === "matched" ? ` (từ khoá “${s.matched}”)` : " đã học"}: ${label}`;
+    else { text = `Khác gợi ý (${label}). Lựa chọn của bạn sẽ được ghi nhớ cho lần sau.`; warn = true; }
+  } else if (s.status === "ambiguous") { text = `Tên này có thể thuộc: ${s.groups.map(groupLabelOf).join(" hoặc ")}. Hãy chọn đúng nhóm.`; warn = true; }
+  else { text = chosen ? "Chưa có quy tắc cho tên này; lựa chọn của bạn sẽ được ghi nhớ." : "Chưa khớp quy tắc nào, hãy chọn nhóm vật tư."; warn = true; }
+  hint.textContent = text;
+  hint.className = warn ? "rule-hint warn" : "rule-hint";
+}
+function renderClassificationReview() {
+  const host = $("#review-list");
+  const summaryHost = $("#review-summary");
+  if (!host) return;
+  const data = reviewItems(state.expenseReceipts, state.expenseRules);
+  const s = summarizeReview(data);
+  const tiles = [
+    ["Số dòng vật tư (phiếu đã tải)", String(s.total)],
+    ["Khớp quy tắc", s.okRate == null ? "—" : `${Math.round(s.okRate * 100)}% (${s.ok})`],
+    ["Khác gợi ý", String(s.mismatch)],
+    ["Mơ hồ / chưa khớp", `${s.ambiguous} / ${s.unmatched}`],
+  ];
+  summaryHost.replaceChildren(...tiles.map(([label, value]) => {
+    const node = $("#metric-template").content.firstElementChild.cloneNode(true);
+    node.querySelector("p").textContent = label;
+    node.querySelector("strong").textContent = value;
+    return node;
+  }));
+  const labelOf = { mismatch: "Khác gợi ý", ambiguous: "Mơ hồ", unmatched: "Chưa có quy tắc" };
+  const issues = data.filter((r) => r.status !== "ok").slice(0, 100);
+  const note = state.rulesError ? `<p class="error">${escapeHtml(state.rulesError)}</p>` : "";
+  host.innerHTML = note + (issues.length
+    ? issues.map((r) => `<article class="review-row"><div><strong>${escapeHtml(r.name || "—")}</strong><small>${dateTime(r.date)} · ${money(r.amount)}</small><small>Đang ở: ${escapeHtml(r.stored ? groupLabelOf(r.stored) : "chưa rõ")}${r.status === "mismatch" ? ` · gợi ý: ${escapeHtml(groupLabelOf(r.suggested))}` : r.status === "ambiguous" ? ` · có thể: ${escapeHtml(r.candidates.map(groupLabelOf).join(" / "))}` : ""}</small></div><div class="review-actions"><span class="bill-tag warn">${labelOf[r.status]}</span><button type="button" class="text-button" data-edit-receipt="${escapeHtml(r.receiptId)}">Sửa phiếu</button></div></article>`).join("")
+    : (s.total ? '<p class="muted empty-state">Mọi dòng trong 7 ngày đều khớp quy tắc.</p>' : '<p class="muted empty-state">Chưa có phiếu chi trong 7 ngày.</p>'));
 }
 function renderExpenseDraft() {
   if (!expenseDraft) return;
@@ -578,7 +632,9 @@ function renderExpenseDraft() {
   $("#expense-note").value = expenseDraft.note || "";
   $("#expense-lines").innerHTML = expenseDraft.items.map(expenseLineMarkup).join("");
   setupMaterialSuggestions();
+  document.querySelectorAll("#expense-lines .expense-line").forEach(refreshRuleHint);
   $("#expense-total").textContent = money(calculateReceiptTotal(expenseDraft.items));
+  updateGapNote();
   if (!editingReceipt) localStorage.setItem(`pos0210.expense-draft.${state.user.uid}`, JSON.stringify(expenseDraft));
 }
 function applyExpenseInputs() {
@@ -589,34 +645,48 @@ function applyExpenseInputs() {
   expenseDraft.items = [...$("#expense-lines").querySelectorAll(".expense-line")].map((node) => {
     const existing = expenseDraft.items.find((x) => x.id === node.dataset.lineId) || { id: node.dataset.lineId };
     const read = (field) => node.querySelector(`[data-field="${field}"]`).value;
-    const group = groupLabel(read("expenseGroup"));
+    const rawGroup = read("expenseGroup");
+    const group = groupCodeOrNull(rawGroup) ? groupLabel(rawGroup) : "";
     let code = read("materialCode");
     if (!read("materialName").trim()) code = "";
     else {
       if (existing.materialName && normalizeMaterial(existing.materialName) !== normalizeMaterial(read("materialName"))) code = "";
-      if (!code) {
-      const known = savedMaterials().find((item) => normalizeMaterial(item.materialName) === normalizeMaterial(read("materialName")));
-      code = known?.materialCode || nextMaterialCode(group);
-      while (allocated.has(code) && !known) code = nextMaterialCode(group);
-      allocated.add(code);
-      }
+      // Mã vật tư sinh cố định từ tên + nhóm: cùng tên luôn ra cùng mã trên mọi thiết bị. Dòng đã có mã và chưa đổi tên/nhóm giữ nguyên mã cũ.
+      if (!code && group) code = materialCodeFor(groupCode(group), read("materialName"));
+      if (code) allocated.add(code);
     }
     node.querySelector("[data-field=materialCode]").value = code;
-    return { ...existing, materialName: read("materialName"), materialCode: code, expenseGroup: group, qty: Number(read("qty")), unit: read("unit"), unitPrice: Number(read("unitPrice")) };
+    return { ...existing, materialName: read("materialName"), materialCode: code, expenseGroup: group, groupTouched: node.dataset.groupTouched === "1", qty: Number(read("qty")), unit: read("unit"), unitPrice: Number(read("unitPrice")) };
   });
   if (state.user && !editingReceipt) localStorage.setItem(`pos0210.expense-draft.${state.user.uid}`, JSON.stringify(expenseDraft));
 }
 async function saveExpenseReceipt(event) {
   event.preventDefault(); applyExpenseInputs(); const error = $("#expense-error"); error.textContent = "";
   const check = validateReceipt(expenseDraft); if (!check.ok) { error.textContent = check.error; return; }
+  const missingGroup = expenseDraft.items.findIndex((item) => !groupCodeOrNull(item.expenseGroup));
+  if (missingGroup >= 0) { error.textContent = `Dòng ${missingGroup + 1}: hãy chọn nhóm vật tư.`; return; }
+  const learnList = rulesToLearn(expenseDraft.items, state.expenseRules);
+  expenseDraft.items = expenseDraft.items.map(({ groupTouched, ...item }) => {
+    const suggestion = classifyMaterial(item.materialName, state.expenseRules);
+    const chosen = groupCodeOrNull(item.expenseGroup);
+    const source = suggestion.group && suggestion.group === chosen ? (suggestion.status === "learned" ? "LEARNED_RULE" : "KEYWORD_RULE") : "MANUAL";
+    return { ...item, ...normalizeQuantity(item.qty, item.unit), classification: { source, suggestedGroup: suggestion.group, status: suggestion.status } };
+  });
   const now = Date.now();
   const payload = editingReceipt
-    ? buildEditedReceipt(editingReceipt, expenseDraft, { now, uid: state.user.uid })
+    ? { ...buildEditedReceipt(editingReceipt, expenseDraft, { now, uid: state.user.uid }), ...(upgradeFrom ? { detailLevel: DETAIL_ITEMIZED } : {}) }
     : { ...expenseDraft, total: check.total, status: "ACTIVE", updatedAt: now, updatedByUid: state.user.uid, source: "WEB_MANAGER", items: expenseDraft.items.map((item) => ({ ...item, materialGroup: item.expenseGroup, amount: Math.round(item.qty * item.unitPrice) })) };
   try {
     await setDoc(doc(db, ...root, "expenseReceipts", expenseDraft.id), payload);
     rememberMaterials(expenseDraft.items);
-    if (editingReceipt) { replaceLocalReceipt(payload); editingReceipt = null; render(); }
+    for (const rule of learnList) {
+      try {
+        const learned = { id: rule.id, name: rule.name, group: rule.group, updatedAt: now, updatedByName: state.user.displayName || state.user.email || "" };
+        await setDoc(doc(db, ...root, "expenseRules", rule.id), learned);
+        state.expenseRules = [...state.expenseRules.filter((x) => x.id !== rule.id), learned];
+      } catch { /* học quy tắc là phụ: phiếu đã lưu, lần sau sẽ thử lại khi người nhập chọn nhóm khác gợi ý */ }
+    }
+    if (editingReceipt) { replaceLocalReceipt(payload); editingReceipt = null; upgradeFrom = null; render(); }
     else localStorage.removeItem(`pos0210.expense-draft.${state.user.uid}`);
     expenseDraft = null; $("#expense-dialog").close();
   }
@@ -631,6 +701,8 @@ function replaceLocalReceipt(receipt) {
 function openReceiptEditor(id) {
   const receipt = state.expenseReceipts.find((item) => item.id === id);
   if (!receipt || !state.user) return;
+  if (isSummaryReceipt(receipt)) { openSummaryDialog(receipt); return; }
+  upgradeFrom = null;
   editingReceipt = receipt;
   expenseDraft = receiptToDraft(receipt, MATERIAL_GROUPS);
   $("#expense-title").textContent = "Sửa phiếu";
@@ -657,11 +729,15 @@ function render() {
   renderSalesSnapshots();
   renderPaymentFlow();
   renderBillHistory();
+  renderClassificationReview();
+  renderDetailLevel();
+  renderMonthlyReport();
   renderFinanceMetadata();
   renderTransactions();
 }
 async function refreshDashboard() {
   if (!state.user) return;
+  if (state.simulation) { $("#sync-status").textContent = "Đang ở chế độ mô phỏng. Tắt mô phỏng để đọc dữ liệu thật."; return; }
   $("#sync-status").textContent = "Đang đọc snapshot…";
   try {
     const dashboardDoc = await getDoc(doc(db, ...root, "dashboard", "current"));
@@ -676,11 +752,16 @@ async function refreshDashboard() {
     await Promise.all([
       hasLiveTables ? Promise.resolve() : read("tableStatus", "tables"),
       loadDailyDocs(),
-      read("expenseReceipts", "expenseReceipts", query(collection(db, ...root, "expenseReceipts"), where("purchaseDate", ">=", sevenDays), orderBy("purchaseDate", "desc"), limit(300))),
+      loadReceiptsCached(),
+      loadMonthlyDocs(),
       read("financialMovements", "movements", query(collection(db, ...root, "financialMovements"), where("occurredAt", ">=", sevenDays), orderBy("occurredAt", "desc"), limit(300))),
       read("costCodes", "costCodes"), read("purchaseCategories", "purchaseCategories"), read("profitPartners", "profitPartners"), read("assetCategories", "assetCategories"), read("suppliers", "suppliers"),
     ]);
     state.flowError = "";
+    try {
+      const cutoffDoc = await getDoc(doc(db, ...root, "config", "expenseDetail"));
+      state.detailCutoff = cutoffDoc.exists() && Number(cutoffDoc.data().cutoffAt) > 0 ? Number(cutoffDoc.data().cutoffAt) : null;
+    } catch { state.detailCutoff = null; }
     try {
       const flowDoc = await getDoc(doc(db, ...root, "config", "paymentFlow"));
       state.paymentFlowDoc = flowDoc.exists() ? flowDoc.data() : null;
@@ -691,6 +772,10 @@ async function refreshDashboard() {
         state.frozenRefundDocs = rows(frozenSnap);
       } catch { state.frozenRefundDocs = []; }
     } catch (error) { state.flowError = error.message; state.paymentFlowDoc = null; state.refunds = []; }
+    try {
+      state.expenseRules = rows(await getDocs(query(collection(db, ...root, "expenseRules"), limit(2000))));
+      state.rulesError = "";
+    } catch (error) { state.expenseRules = []; state.rulesError = error.code === "permission-denied" ? "Chưa có quyền đọc quy tắc đã học (expenseRules)." : (error.message || "lỗi không rõ"); }
     state.salesLoaded = true;
     const stale = shouldMarkSnapshotStale(state.dashboard.lastUpdatedAt);
     $("#sync-status").textContent = state.dashboard.lastUpdatedAt ? `Snapshot POS: ${dateTime(state.dashboard.lastUpdatedAt)}${stale ? " · cần kiểm tra máy POS" : ""}` : "POS chưa gửi snapshot.";
@@ -843,6 +928,24 @@ $("#bill-history-list").addEventListener("click", (event) => {
   const button = event.target.closest("[data-bill-id]");
   if (button) openBillDetail(button.dataset.billId);
 });
+$("#review-list").addEventListener("click", (event) => { const edit = event.target.closest("[data-edit-receipt]"); if (edit) openReceiptEditor(edit.dataset.editReceipt); });
+$("#open-summary").addEventListener("click", () => openSummaryDialog(null));
+$("#close-summary").addEventListener("click", () => { editingSummary = null; $("#summary-dialog").close(); });
+$("#add-summary-block").addEventListener("click", () => { readSummaryBlocks(); const last = state.summaryBlocks[state.summaryBlocks.length - 1]; state.summaryBlocks.push(blockDefaults(last?.date)); renderSummaryBlocks(); });
+$("#summary-blocks").addEventListener("input", () => { readSummaryBlocks(); updateSummaryTotals(); });
+$("#summary-blocks").addEventListener("click", (event) => {
+  const t = event.target;
+  if (t.dataset.addLine) { readSummaryBlocks(); const b = state.summaryBlocks.find((x) => x.id === t.dataset.addLine); if (b) b.lines.push({ id: uuid(), group: "", amount: "" }); renderSummaryBlocks(); }
+  else if (t.dataset.removeLine) { readSummaryBlocks(); state.summaryBlocks.forEach((b) => { if (b.lines.length > 1) b.lines = b.lines.filter((l) => l.id !== t.dataset.removeLine); }); renderSummaryBlocks(); }
+  else if (t.dataset.removeBlock) { readSummaryBlocks(); state.summaryBlocks = state.summaryBlocks.filter((b) => b.id !== t.dataset.removeBlock); renderSummaryBlocks(); }
+});
+$("#summary-form").addEventListener("submit", saveSummaryBlocks);
+$("#summary-to-detail").addEventListener("click", startUpgradeToDetail);
+$("#sim-toggle").addEventListener("click", () => setSimulation(!state.simulation));
+$("#export-monthly-csv").addEventListener("click", () => exportMonthly("csv"));
+$("#export-monthly-json").addEventListener("click", () => exportMonthly("json"));
+$("#save-cutoff").addEventListener("click", () => saveCutoff(false));
+$("#clear-cutoff").addEventListener("click", () => saveCutoff(true));
 $("#close-bill-detail").addEventListener("click", () => $("#bill-detail").close());
 
 $("#open-entry").addEventListener("click", () => {
@@ -858,29 +961,51 @@ $("#close-entry").addEventListener("click", () => $("#entry-dialog").close());
 $("#open-expense").addEventListener("click", () => {
   if (!state.user) return;
   editingReceipt = null;
+  upgradeFrom = null;
   $("#expense-title").textContent = "Phiếu nhiều vật tư";
   $("#expense-submit").textContent = "LƯU VÀ ĐỒNG BỘ";
   expenseDraft = createStableDraft(localStorage, state.user, uuid);
-  expenseDraft.items = expenseDraft.items.map(item => ({ ...item, expenseGroup: groupLabel(item.expenseGroup) }));
+  expenseDraft.items = expenseDraft.items.map(item => ({ ...item, expenseGroup: item.materialName ? groupLabel(item.expenseGroup) : "" }));
   $("#expense-error").textContent = "";
   renderExpenseDraft();
   $("#expense-dialog").showModal();
 });
 $("#close-expense").addEventListener("click", () => {
-  if (editingReceipt) { editingReceipt = null; expenseDraft = null; $("#expense-dialog").close(); return; }
+  if (editingReceipt) { editingReceipt = null; upgradeFrom = null; expenseDraft = null; $("#expense-dialog").close(); updateGapNote(); return; }
   applyExpenseInputs(); renderExpenseDraft(); $("#expense-dialog").close();
 });
-$("#expense-dialog").addEventListener("close", () => { if (editingReceipt) { editingReceipt = null; expenseDraft = null; } });
+$("#expense-dialog").addEventListener("close", () => { if (editingReceipt) { editingReceipt = null; upgradeFrom = null; expenseDraft = null; } updateGapNote(); });
 $("#transactions").addEventListener("click", (event) => {
   const edit = event.target.closest?.("[data-edit-receipt]");
   if (edit) { openReceiptEditor(edit.dataset.editReceipt); return; }
   const cancel = event.target.closest?.("[data-cancel-receipt]");
   if (cancel) cancelReceipt(cancel.dataset.cancelReceipt);
 });
-$("#add-expense-line").addEventListener("click", () => { applyExpenseInputs(); expenseDraft.items.push({ id: uuid(), materialName: "", materialCode: "", expenseGroup: "Thịt, gia cầm", qty: 1, unit: "kg", unitPrice: 0 }); renderExpenseDraft(); });
+$("#add-expense-line").addEventListener("click", () => { applyExpenseInputs(); expenseDraft.items.push({ id: uuid(), materialName: "", materialCode: "", expenseGroup: "", qty: 1, unit: "kg", unitPrice: 0 }); renderExpenseDraft(); });
 $("#expense-lines").addEventListener("click", (event) => { const id = event.target.dataset.removeLine; if (!id || expenseDraft.items.length < 2) return; applyExpenseInputs(); expenseDraft.items = expenseDraft.items.filter((item) => item.id !== id); renderExpenseDraft(); });
-$("#expense-lines").addEventListener("input", (event) => { applyExpenseInputs(); if (event.target.matches("input[list]")) updateMaterialSuggestions(event.target); $("#expense-total").textContent = money(calculateReceiptTotal(expenseDraft.items)); });
-$("#expense-lines").addEventListener("change", (event) => { const input = event.target; if (input.matches("[data-field=materialName]")) { const found = savedMaterials().find((item) => normalizeMaterial(item.materialName) === normalizeMaterial(input.value)); if (found) { const line = input.closest(".expense-line"); for (const [field, value] of [["materialCode", found.materialCode], ["expenseGroup", found.expenseGroup], ["unit", found.unit]]) line.querySelector(`[data-field="${field}"]`).value = value; applyExpenseInputs(); } return; } if (!input.matches("[data-field=expenseGroup]")) return; const line = input.closest(".expense-line"); if (!MATERIAL_GROUPS.some(([, name]) => name === input.value)) { input.setCustomValidity("Chọn nhóm vật tư trong danh sách"); return; } input.setCustomValidity(""); const code = line.querySelector("[data-field=materialCode]"); if (line.querySelector("[data-field=materialName]").value.trim()) { const known = savedMaterials().find((item) => normalizeMaterial(item.materialName) === normalizeMaterial(line.querySelector("[data-field=materialName]").value)); if (!known) code.value = nextMaterialCode(input.value); } applyExpenseInputs(); });
+$("#expense-lines").addEventListener("input", (event) => { applyExpenseInputs(); if (event.target.matches("input[list]")) updateMaterialSuggestions(event.target); $("#expense-total").textContent = money(calculateReceiptTotal(expenseDraft.items)); updateGapNote(); });
+$("#expense-lines").addEventListener("change", (event) => {
+  const input = event.target;
+  const line = input.closest(".expense-line");
+  if (!line) return;
+  if (input.matches("[data-field=materialName]")) {
+    const suggestion = classifyMaterial(input.value, state.expenseRules);
+    // Nhóm tự điền không được sót lại khi đổi tên: gợi ý rõ thì điền, mơ hồ hoặc chưa khớp thì xoá để buộc người nhập chọn.
+    if (line.dataset.groupTouched !== "1") line.querySelector("[data-field=expenseGroup]").value = suggestion.group ? groupLabelOf(suggestion.group) : "";
+    const known = savedMaterials().find((item) => normalizeMaterial(item.materialName) === normalizeMaterial(input.value));
+    if (known?.unit) line.querySelector("[data-field=unit]").value = known.unit;
+    line.querySelector("[data-field=materialCode]").value = "";
+    applyExpenseInputs(); refreshRuleHint(line);
+    return;
+  }
+  if (input.matches("[data-field=expenseGroup]")) {
+    if (!MATERIAL_GROUPS.some(([, name]) => name === input.value)) { input.setCustomValidity("Chọn nhóm vật tư trong danh sách"); return; }
+    input.setCustomValidity("");
+    line.dataset.groupTouched = "1";
+    line.querySelector("[data-field=materialCode]").value = "";
+    applyExpenseInputs(); refreshRuleHint(line);
+  }
+});
 $("#expense-date").addEventListener("change", applyExpenseInputs);
 $("#expense-note").addEventListener("input", applyExpenseInputs);
 $("#expense-form").addEventListener("submit", saveExpenseReceipt);
@@ -919,6 +1044,7 @@ $("#period-filters").addEventListener("click", (event) => {
   $("#period-filters").querySelectorAll(".filter").forEach((b) => b.classList.toggle("active", b === button));
   $("#custom-range").hidden = state.period !== "custom";
   render();
+  ensureReceiptsLoaded();
 });
 $("#apply-range").addEventListener("click", () => {
   const from = $("#from-date").value;
@@ -927,6 +1053,7 @@ $("#apply-range").addEventListener("click", () => {
   state.customFrom = startOfDay(new Date(`${from}T00:00:00`));
   state.customTo = endOfDay(new Date(`${to}T00:00:00`));
   render();
+  ensureReceiptsLoaded();
 });
 $("#transaction-filters").addEventListener("click", (event) => {
   const button = event.target.closest("[data-kind]");
@@ -975,6 +1102,253 @@ async function requestRemoteSync() {
   }, 6000);
 }
 $("#request-sync").addEventListener("click", requestRemoteSync);
+
+/* ---------- Phiếu tổng: nhập hóa đơn cũ chưa có chi tiết ---------- */
+let editingSummary = null;
+let upgradeFrom = null;
+const summaryDateMs = (value) => new Date(`${value}T12:00:00`).getTime();
+const blockDefaults = (date) => ({ id: uuid(), date: date || localDateInput(new Date()), place: "", payer: "", lines: [{ id: uuid(), group: "", amount: "" }] });
+
+function renderSummaryBlocks() {
+  const host = $("#summary-blocks");
+  const safe = (v) => escapeHtml(String(v ?? "")).replace(/"/g, "&quot;");
+  host.innerHTML = state.summaryBlocks.map((block, bi) => `<article class="summary-block" data-block="${safe(block.id)}">
+    <div class="two-col"><label>Ngày hóa đơn<input data-field="date" type="date" value="${safe(block.date)}" required /></label><label>Nơi mua / ghi chú<input data-field="place" type="text" maxlength="120" value="${safe(block.place)}" placeholder="vd: chợ, đại lý" /></label></div>
+    <label>Người chi (để trống = bạn)<input data-field="payer" type="text" maxlength="60" value="${safe(block.payer)}" /></label>
+    ${block.lines.map((line) => `<div class="summary-line" data-line="${safe(line.id)}"><label>Nhóm<input data-field="group" list="summary-groups" value="${safe(line.group)}" autocomplete="off" required /></label><label>Số tiền<input data-field="amount" type="number" min="1" step="1" inputmode="numeric" value="${safe(line.amount)}" required /></label>${block.lines.length > 1 ? `<button type="button" class="text-button danger" data-remove-line="${safe(line.id)}">Bỏ</button>` : ""}</div>`).join("")}
+    <div class="summary-block-actions"><button type="button" class="text-button" data-add-line="${safe(block.id)}">+ Thêm nhóm</button>${state.summaryBlocks.length > 1 && !editingSummary ? `<button type="button" class="text-button danger" data-remove-block="${safe(block.id)}">Bỏ hóa đơn ${bi + 1}</button>` : ""}</div>
+  </article>`).join("");
+  updateSummaryTotals();
+}
+function readSummaryBlocks() {
+  state.summaryBlocks = [...document.querySelectorAll("#summary-blocks .summary-block")].map((node) => {
+    const prev = state.summaryBlocks.find((b) => b.id === node.dataset.block) || { id: node.dataset.block };
+    const field = (root0, name) => root0.querySelector(`[data-field="${name}"]`)?.value ?? "";
+    return { ...prev, date: field(node, "date"), place: field(node, "place").trim(), payer: field(node, "payer").trim(),
+      lines: [...node.querySelectorAll(".summary-line")].map((ln) => ({ id: ln.dataset.line, group: field(ln, "group").trim(), amount: field(ln, "amount") })) };
+  });
+}
+function updateSummaryTotals() {
+  const total = state.summaryBlocks.reduce((s, b) => s + b.lines.reduce((x, l) => x + (Number(l.amount) || 0), 0), 0);
+  $("#summary-total").textContent = money(total);
+  $("#summary-count").textContent = String(state.summaryBlocks.length);
+}
+function openSummaryDialog(receipt = null) {
+  if (!state.user) return;
+  editingSummary = receipt;
+  $("#summary-groups").replaceChildren(...MATERIAL_GROUPS.map(([, name]) => new Option(name, name)));
+  if (receipt) {
+    state.summaryBlocks = [{ id: receipt.id, date: localDateInput(new Date(Number(receipt.purchaseDate))), place: receipt.note || "", payer: receipt.enteredByName || "",
+      lines: (receipt.items || []).map((item) => ({ id: item.id, group: item.materialGroup || item.expenseGroup || "", amount: String(item.amount ?? "") })) }];
+  } else state.summaryBlocks = [blockDefaults()];
+  $("#summary-title").textContent = receipt ? "Sửa phiếu tổng" : "Phiếu tổng";
+  $("#summary-submit").textContent = receipt ? "LƯU THAY ĐỔI" : "LƯU TẤT CẢ";
+  $("#add-summary-block").hidden = Boolean(receipt);
+  $("#summary-to-detail").hidden = !receipt;
+  $("#summary-error").textContent = "";
+  renderSummaryBlocks();
+  $("#summary-dialog").showModal();
+}
+async function saveSummaryBlocks(event) {
+  event.preventDefault();
+  readSummaryBlocks();
+  const error = $("#summary-error");
+  error.textContent = "";
+  if (!state.user) { error.textContent = "Phiên đăng nhập đã hết."; return; }
+  // Kiểm tra toàn bộ trước khi ghi để không lưu dở dang.
+  const prepared = [];
+  for (const [index, block] of state.summaryBlocks.entries()) {
+    const where = state.summaryBlocks.length > 1 ? `Hóa đơn ${index + 1}: ` : "";
+    const purchaseDate = summaryDateMs(block.date);
+    const check = validateSummaryReceipt({ purchaseDate, lines: block.lines });
+    if (!check.ok) { error.textContent = where + check.error; return; }
+    if (detailRequired(purchaseDate, state.detailCutoff)) { error.textContent = `${where}từ ngày ${new Date(state.detailCutoff).toLocaleDateString("vi-VN")} trở đi phải nhập chi tiết vật tư, không dùng phiếu tổng.`; return; }
+    prepared.push({ block, purchaseDate, total: check.total });
+  }
+  const now = Date.now();
+  const button = $("#summary-submit");
+  button.disabled = true;
+  const failed = [];
+  let saved = 0;
+  for (const { block, purchaseDate, total } of prepared) {
+    const items = buildSummaryLines(block.lines, () => uuid());
+    const base = editingSummary ? { ...editingSummary } : { id: block.id, createdAt: now, source: "WEB_MANAGER" };
+    const payload = { ...base, purchaseDate, note: block.place, enteredByUid: state.user.uid, enteredByName: block.payer || state.user.displayName || state.user.email || "Quản lý",
+      items, total, status: "ACTIVE", detailLevel: "SUMMARY", updatedAt: Math.max(now, Number(editingSummary?.updatedAt || 0) + 1), updatedByUid: state.user.uid };
+    try { await setDoc(doc(db, ...root, "expenseReceipts", payload.id), payload); replaceLocalReceipt(payload); saved += 1; }
+    catch (e) { failed.push({ block, message: e.message || String(e) }); }
+  }
+  button.disabled = false;
+  if (failed.length) {
+    state.summaryBlocks = failed.map((f) => f.block);
+    renderSummaryBlocks();
+    error.textContent = `Đã lưu ${saved}/${prepared.length}. Còn ${failed.length} hóa đơn chưa lưu được: ${failed[0].message}`;
+    render();
+    return;
+  }
+  editingSummary = null;
+  $("#summary-dialog").close();
+  render();
+}
+function startUpgradeToDetail() {
+  const original = editingSummary;
+  if (!original) return;
+  readSummaryBlocks();
+  $("#summary-dialog").close();
+  editingSummary = null;
+  editingReceipt = original;
+  upgradeFrom = original;
+  expenseDraft = { id: original.id, purchaseDate: Number(original.purchaseDate), note: original.note || "", enteredByUid: original.enteredByUid || "", enteredByName: original.enteredByName || "",
+    items: [{ id: uuid(), materialName: "", materialCode: "", expenseGroup: "", qty: 1, unit: "kg", unitPrice: 0 }] };
+  $("#expense-title").textContent = "Chi tiết hóa đơn cũ";
+  $("#expense-submit").textContent = "LƯU CHI TIẾT";
+  $("#expense-error").textContent = "";
+  renderExpenseDraft();
+  $("#expense-dialog").showModal();
+}
+function updateGapNote() {
+  const note = $("#expense-gap");
+  if (!note) return;
+  if (!upgradeFrom || !expenseDraft) { note.hidden = true; return; }
+  const gap = detailGap(upgradeFrom.total, calculateReceiptTotal(expenseDraft.items));
+  note.hidden = false;
+  note.className = gap.matches ? "rule-hint" : "rule-hint warn";
+  note.textContent = gap.matches ? `✓ Khớp tổng phiếu tổng gốc (${money(upgradeFrom.total)}).` : `Tổng phiếu tổng gốc ${money(upgradeFrom.total)}; chi tiết đang ${gap.difference > 0 ? "vượt" : "thiếu"} ${money(Math.abs(gap.difference))}.`;
+}
+
+/* ---------- Mốc bắt buộc chi tiết (để trống = không bắt buộc) ---------- */
+function renderDetailLevel() {
+  const note = $("#detail-level-note");
+  if (!note) return;
+  const d = detailLevelSummary(state.expenseReceipts);
+  note.textContent = d.total ? `Phiếu tổng: ${d.summaryCount} (${money(d.summaryAmount)}) · Phiếu chi tiết: ${d.itemizedCount} (${money(d.itemizedAmount)}) trong các phiếu đang tải.` : "";
+  $("#cutoff-note").textContent = state.detailCutoff ? `Từ ${new Date(state.detailCutoff).toLocaleDateString("vi-VN")} trở đi chỉ được nhập phiếu chi tiết.` : "Chưa đặt mốc: được phép nhập phiếu tổng cho mọi ngày.";
+  const input = $("#cutoff-date");
+  if (document.activeElement !== input) input.value = state.detailCutoff ? localDateInput(new Date(state.detailCutoff)) : "";
+}
+async function saveCutoff(clear) {
+  if (!state.user) return;
+  const value = $("#cutoff-date").value;
+  if (!clear && !value) { $("#cutoff-note").textContent = "Chọn ngày mốc trước."; return; }
+  const cutoffAt = clear ? null : new Date(`${value}T00:00:00`).getTime();
+  try {
+    await setDoc(doc(db, ...root, "config", "expenseDetail"), { cutoffAt, updatedAt: Date.now(), updatedBy: state.user.email || "" });
+    state.detailCutoff = cutoffAt;
+    renderDetailLevel();
+  } catch (error) { $("#cutoff-note").textContent = error.code === "permission-denied" ? "Không có quyền ghi mốc (cần mở quy tắc Firestore cho config/expenseDetail)." : `Không lưu được mốc: ${error.message}`; }
+}
+
+/* ---------- Phiếu chi: giữ ≥ từ đầu tháng trước, đọc tăng dần theo updatedAt, đệm trong trình duyệt ---------- */
+const RECEIPT_CACHE_KEY = "pos0210.receipts.v1";
+function readReceiptCache() { try { return JSON.parse(localStorage.getItem(RECEIPT_CACHE_KEY) || "null"); } catch { return null; } }
+function writeReceiptCache(cache) { try { localStorage.setItem(RECEIPT_CACHE_KEY, JSON.stringify(cache)); } catch { /* đầy hoặc bị chặn: bỏ qua, lần sau đọc đủ */ } }
+async function loadReceiptsCached() {
+  const uid = state.user?.uid;
+  const from = startOfPreviousMonth();
+  const cache = readReceiptCache();
+  const plan = planLoad(cache, { uid, from });
+  try {
+    const q = plan.mode === "incremental"
+      ? query(collection(db, ...root, "expenseReceipts"), where("updatedAt", ">", plan.cursor), orderBy("updatedAt", "asc"), limit(500))
+      : query(collection(db, ...root, "expenseReceipts"), where("purchaseDate", ">=", from), orderBy("purchaseDate", "desc"), limit(1000));
+    const fetched = rows(await getDocs(q));
+    const merged = mergeReceipts(plan.mode === "incremental" ? cache : null, fetched, { uid, from });
+    writeReceiptCache(merged);
+    state.expenseReceipts = merged.receipts;
+    state.receiptsFrom = merged.from;
+    state.reportFrom = merged.from;
+    state.receiptsNote = plan.mode === "incremental" ? `Đọc thêm ${fetched.length} phiếu đổi` : `Đọc ${fetched.length} phiếu từ đầu tháng trước`;
+  } catch (error) {
+    // Lỗi mạng/quyền: dùng cache nếu có, nhưng nói rõ dữ liệu có thể cũ.
+    if (cache?.uid === uid && Array.isArray(cache.receipts)) { state.expenseReceipts = cache.receipts; state.receiptsFrom = cache.from; state.reportFrom = cache.from; state.receiptsNote = `Không cập nhật được phiếu (${error.code || error.message}); đang dùng bản đã lưu`; }
+    else { state.expenseReceipts = []; state.receiptsFrom = Date.now(); state.reportFrom = Date.now(); state.receiptsNote = `Không đọc được phiếu: ${error.code || error.message}`; }
+  }
+}
+
+/* ---------- Doanh thu theo tháng (dashboardMonthly) cho so sánh nhập hàng/doanh thu ---------- */
+const MONTHLY_REPORT_MONTHS = 13;
+async function loadMonthlyDocs() {
+  state.monthlyError = "";
+  const keys = lastMonthKeys(MONTHLY_REPORT_MONTHS);
+  const current = keys[keys.length - 1];
+  await Promise.all(keys.map(async (key) => {
+    if (key !== current && state.monthlyDocs[key]) return; // tháng đã chốt không đọc lại
+    try {
+      const snap = await getDoc(doc(db, ...root, "dashboardMonthly", key));
+      state.monthlyDocs[key] = snap.exists() ? snap.data() : null;
+    } catch (error) { state.monthlyDocs[key] = null; state.monthlyError = error.code === "permission-denied" ? "Chưa có quyền đọc dashboardMonthly (cần mở quy tắc Firestore)." : (error.code || error.message); }
+  }));
+}
+/** Tháng đầu tiên web có đủ phiếu: tháng của mốc nếu mốc là đầu tháng, ngược lại tháng kế tiếp. */
+const reportSinceKey = () => {
+  const from = new Date(state.reportFrom || Date.now());
+  const startsMonth = from.getDate() === 1 && from.getHours() === 0 && from.getMinutes() === 0;
+  return monthKeyOf(startsMonth ? from.getTime() : new Date(from.getFullYear(), from.getMonth() + 1, 1).getTime());
+};
+const currentMonthReport = () => {
+  const keys = lastMonthKeys(MONTHLY_REPORT_MONTHS);
+  const current = keys[keys.length - 1];
+  const fallback = state.dashboard?.monthRevenue;
+  return buildMonthlyReport({ receipts: state.expenseReceipts, monthlyDocs: state.monthlyDocs, monthKeys: keys, currentMonthKey: current, revenueFallback: fallback === undefined ? null : fallback });
+};
+function renderMonthlyReport() {
+  const target = $("#monthly-report");
+  if (!target) return;
+  const all = currentMonthReport();
+  const since = reportSinceKey();
+  // Chỉ hiện các tháng web đã đọc đủ phiếu (từ đầu tháng của mốc đệm); tháng cũ hơn chỉ có doanh thu nên không so sánh được.
+  const report = all.filter((r) => r.monthKey >= since);
+  const note = [state.receiptsNote, state.monthlyError].filter(Boolean).join(" · ");
+  $("#monthly-note").textContent = note;
+  target.innerHTML = report.slice().reverse().map((r) => `<article class="month-card"><h3>${r.monthKey}${r.monthKey === report[report.length - 1].monthKey ? " · đang chạy" : ""}</h3><dl>
+    <div><dt>Nhập hàng</dt><dd>${money(r.purchases)}</dd></div>
+    <div><dt>Doanh thu</dt><dd>${r.revenue === null ? "chưa có dữ liệu" : money(r.revenue)}</dd></div>
+    <div><dt>Nhập / doanh thu</dt><dd>${r.ratio === null ? "—" : `${(r.ratio * 100).toFixed(1)}%`}</dd></div>
+    <div><dt>Phiếu</dt><dd>${r.receiptCount} · tổng ${money(r.summaryAmount)} · chi tiết ${money(r.itemizedAmount)}</dd></div></dl></article>`).join("") || '<p class="muted">Chưa có phiếu trong khoảng đã tải.</p>';
+}
+function downloadFile(name, mime, text) {
+  const url = URL.createObjectURL(new Blob([text], { type: mime }));
+  const a = Object.assign(document.createElement("a"), { href: url, download: name });
+  document.body.append(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
+function exportMonthly(kind) {
+  const since = reportSinceKey();
+  const report = currentMonthReport().filter((r) => r.monthKey >= since);
+  const stamp = new Date().toISOString().slice(0, 10);
+  if (kind === "csv") downloadFile(`${state.simulation ? "MOPHONG-" : ""}nhap-hang-theo-thang-${stamp}.csv`, "text/csv;charset=utf-8", monthlyCsv(report));
+  else downloadFile(`${state.simulation ? "MOPHONG-" : ""}nhap-hang-theo-thang-${stamp}.json`, "application/json", monthlyJson(report, { rules: state.expenseRules }));
+}
+
+/* ---------- Chế độ mô phỏng: dữ liệu giả hoàn toàn trong trình duyệt, không đọc/ghi Firestore, không đụng bộ đệm ---------- */
+function setSimulation(on) {
+  if (on === !!state.simulation) return;
+  if (on) {
+    const sim = buildSimulation({ months: 6 });
+    state.simulation = { stash: { expenseReceipts: state.expenseReceipts, monthlyDocs: state.monthlyDocs, receiptsFrom: state.receiptsFrom, reportFrom: state.reportFrom, receiptsNote: state.receiptsNote, monthlyError: state.monthlyError, expenseRules: state.expenseRules } };
+    Object.assign(state, { expenseReceipts: sim.receipts, monthlyDocs: sim.monthlyDocs, receiptsFrom: sim.from, reportFrom: sim.from, receiptsNote: "MÔ PHỎNG 6 tháng: phiếu tổng 2 tháng đầu, sau đó phiếu chi tiết; có dòng sai nhóm, tên mơ hồ, 1 tháng thiếu doanh thu, 1 phiếu huỷ", monthlyError: "", expenseRules: [] });
+  } else {
+    Object.assign(state, state.simulation.stash, { simulation: null });
+  }
+  document.body.classList.toggle("simulating", !!state.simulation);
+  $("#sim-banner").hidden = !state.simulation;
+  $("#sim-toggle").textContent = state.simulation ? "Tắt mô phỏng" : "Chạy mô phỏng (không ghi dữ liệu)";
+  render();
+}
+
+/* ---------- Tải phiếu cũ hơn 7 ngày khi chọn kỳ xem xa hơn (tối đa 500 phiếu) ---------- */
+async function ensureReceiptsLoaded() {
+  const range = rangeForPeriod();
+  const from = Number.isFinite(range.from) ? Math.max(range.from, 0) : 0;
+  if (!state.user || state.simulation || from >= state.receiptsFrom) return;
+  try {
+    const snap = await getDocs(query(collection(db, ...root, "expenseReceipts"), where("purchaseDate", ">=", from), orderBy("purchaseDate", "desc"), limit(500)));
+    const fetched = rows(snap);
+    const ids = new Set(fetched.map((r) => r.id));
+    state.expenseReceipts = [...fetched, ...state.expenseReceipts.filter((r) => !ids.has(r.id))];
+    state.receiptsFrom = from;
+    render();
+  } catch (error) { $("#sync-status").textContent = `Không tải được phiếu cũ: ${error.message}`; }
+}
 
 /* ---------- Chia tab: mỗi tab là một trang riêng theo #hash, nút Back của trình duyệt hoạt động ---------- */
 const TABS = ["ban", "doanhthu", "bill", "thanhtoan", "taichinh"];

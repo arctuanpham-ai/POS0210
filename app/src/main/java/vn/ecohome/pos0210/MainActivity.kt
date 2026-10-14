@@ -869,6 +869,42 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
             confirmButton = { TextButton(onClick = { confirmEdit = false; vm.editPrepaidOrder() }) { Text("SỬA ĐƠN") } },
             dismissButton = { TextButton(onClick = { confirmEdit = false }) { Text("Ở LẠI") } }
         )
+        var showBigQr by remember { mutableStateOf(false) }
+        if (isPrepaid) {
+            val detected = validPaymentSession?.takeIf { it.status == "PAYMENT_DETECTED" }
+            if (detected != null) {
+                Surface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), color = Color(0xFF2E7D32), shape = RoundedCornerShape(10.dp)) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text("✓ ĐÃ NHẬN ${money(detected.detectedAmount ?: preview.total)} · ${detected.detectedBank.orEmpty()}", color = Color.White, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                        Text("Kiểm tra rồi bấm XÁC NHẬN CK bên dưới (app không tự xác nhận).", color = Color.White, fontSize = 12.sp)
+                    }
+                }
+            } else if (ambiguousEvent != null) {
+                Text("Có giao dịch cùng số tiền nhưng chưa chắc của bill này · kiểm tra app ngân hàng", Modifier.padding(horizontal = 16.dp, vertical = 4.dp), color = Color(0xFF9A5B28), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            } else if (!soundboxStatic) {
+                Text("Đang chờ tiền về… (app tự báo khi nhận thông báo ngân hàng)", Modifier.padding(horizontal = 16.dp, vertical = 2.dp), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+            Button(onClick = { showBigQr = true }, modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).height(52.dp), enabled = preview.total > 0) { Text("HIỆN QR TO CHO KHÁCH QUÉT", fontWeight = FontWeight.Black) }
+        }
+        if (showBigQr) androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showBigQr = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false)
+        ) {
+            Surface(Modifier.fillMaxSize(), color = Color.White) {
+                Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("${t.name.uppercase()}${sessionBatches.firstOrNull { it.status != "CANCELLED" }?.serviceNo?.let { " · ĐƠN " + PaymentFlowRules.orderNoLabel(it) } ?: ""}", fontSize = 22.sp, fontWeight = FontWeight.Black, color = Coffee)
+                    Text(money(preview.total), fontSize = 44.sp, fontWeight = FontWeight.Black)
+                    if (soundboxStatic) Text("Khách nhập đúng số tiền trên · chờ loa báo", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    else Text("Quét mã bằng app ngân hàng · số tiền đã nhúng sẵn", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    PaymentQrImage(qrMode, setting("bank_name"), setting("bank_account"), setting("bank_holder"), preview.total, qrInfo, Modifier.fillMaxWidth().aspectRatio(1f).padding(vertical = 12.dp))
+                    if (!soundboxStatic) Text("${setting("bank_holder")} · ${setting("bank_name")} · ${setting("bank_account")}", fontSize = 13.sp)
+                    val det = validPaymentSession?.takeIf { it.status == "PAYMENT_DETECTED" }
+                    if (det != null) Text("✓ ĐÃ NHẬN ${money(det.detectedAmount ?: preview.total)}", fontSize = 28.sp, fontWeight = FontWeight.Black, color = Color(0xFF2E7D32), modifier = Modifier.padding(top = 8.dp))
+                    else if (!soundboxStatic) Text("Đang chờ tiền về…", fontSize = 16.sp, modifier = Modifier.padding(top = 8.dp))
+                    Button(onClick = { showBigQr = false }, modifier = Modifier.fillMaxWidth().padding(top = 16.dp).height(54.dp)) { Text("ĐÓNG", fontWeight = FontWeight.Black) }
+                }
+            }
+        }
         Column(Modifier.weight(1f).padding(18.dp).verticalScroll(rememberScrollState())) {
             if (pendingDelivery.isNotEmpty()) {
                 Card(

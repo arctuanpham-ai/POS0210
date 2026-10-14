@@ -33,4 +33,19 @@ ND:CT DEN:164T2690PJ300DB4 MBVCB.16065678956.848811.PHAM ANH TUAN chuyen tien.CT
  @Test fun techcombankBalanceOnlyIsNotTransaction(){
   assertNull(TechcombankNotificationParser().parse("TCB","TCB SD: 15,230,000 VND",1))
  }
+ @Test fun parsesTechcombankAppNotification(){
+  val body="+ VND 180,000\nTài khoản: 3906091984\nSố dư: VND 14,750,999\nMS00P0000001284119,HO KINH DOANH NGUYEN MANH TIEN 84,LE THI VAN ANH chuyen tien"
+  val tx=TechcombankNotificationParser().parse("Techcombank",body,5)!!
+  assertEquals("TECHCOMBANK",tx.bank)
+  assertEquals("3906091984",tx.account)
+  assertEquals(180_000L,tx.amount)
+  assertEquals(TransactionDirection.CREDIT,tx.direction)
+  assertTrue(tx.content.contains("chuyen tien"))
+  assertFalse(tx.content.contains("14,750,999"))
+  assertEquals(tx.rawHash,TechcombankNotificationParser().parse("Techcombank",body,9)!!.rawHash)
+ }
+ @Test fun techcombankAppDebitIsNotCredit(){
+  val tx=TechcombankNotificationParser().parse("Techcombank","- VND 50,000\nTài khoản: 3906091984\nSố dư: VND 14,700,999\nTra tien",1)!!
+  assertEquals(TransactionDirection.DEBIT,tx.direction)
+ }
 }

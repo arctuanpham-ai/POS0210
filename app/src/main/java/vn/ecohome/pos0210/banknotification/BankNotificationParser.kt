@@ -53,8 +53,20 @@ class VietinbankNotificationParser:BankNotificationParser {
 
 class TechcombankNotificationParser:BankNotificationParser {
  private val structured=Regex("""(?:TCB|Techcombank)\s+TK\s+([0-9xX*]{4,24})\s+lúc\s+(\d{2}/\d{2}/\d{2,4}\s+\d{2}:\d{2})(?:\s*:\s*|\s+)([+-])\s*([\d.,]+)\s*(?:VND|VNĐ|đồng|đ)\b""",RegexOption.IGNORE_CASE)
+ /** Mẫu thông báo app Techcombank (Mobile): "+ VND 180,000 / Tài khoản: 390… / Số dư: VND … / <nội dung>". */
+ private val appMain=Regex("""([+-])\s*VND\s*([\d.,]+)""",RegexOption.IGNORE_CASE)
+ private fun parseAppFormat(title:String,body:String,full:String,receivedAt:Long):BankTransaction? {
+  val m=appMain.find(body)?:return null
+  val account=Regex("""Tài khoản\s*:\s*([0-9xX*]{4,24})""",RegexOption.IGNORE_CASE).find(body)?.groupValues?.get(1)?:return null
+  val amount=digitsAmount(m.groupValues[2])?.takeIf{it>0L}?:return null
+  val direction=if(m.groupValues[1]=="+")TransactionDirection.CREDIT else TransactionDirection.DEBIT
+  val balance=Regex("""Số dư\s*:\s*VND\s*([\d.,]+)""",RegexOption.IGNORE_CASE).find(body)
+  val content=if(balance!=null)body.substring(balance.range.last+1).trim() else body.substring(m.range.last+1).trim()
+  return BankTransaction("TECHCOMBANK",account,amount,direction,null,receivedAt,content,balance?.groupValues?.get(1),fingerprint("TECHCOMBANK",account,amount,null,balance?.groupValues?.get(1),full))
+ }
  override fun parse(title:String,body:String,receivedAt:Long):BankTransaction? {
   val full="$title\n$body"
+  parseAppFormat(title,body,full,receivedAt)?.let{return it}
   val match=structured.find(full)?:return null
   val account=match.groupValues[1]
   val rawTime=match.groupValues[2]

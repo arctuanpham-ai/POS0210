@@ -17,7 +17,7 @@
         <p class="eyebrow">0210 · BREAKFAST · COFFEE · DRINKS</p>
         <h1 id="login-title">Manager realtime</h1>
         <p class="muted">Theo dõi quán và nhập phiếu tài chính từ xa.</p>
-        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.14.5 · Chia tab</p>
+        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.14.6 · Yêu cầu đồng bộ</p>
         <label>Email Firebase<input id="email" type="email" autocomplete="username" inputmode="email" /></label>
         <label>Mật khẩu<input id="password" type="password" autocomplete="current-password" /></label>
         <label class="show-password"><input id="show-password" type="checkbox" /> Hiện mật khẩu để kiểm tra khi gõ</label>
@@ -31,10 +31,10 @@
             <p class="eyebrow">0210 · MANAGER</p>
             <h1>Quản lý realtime</h1>
           </div>
-          <div class="heading-actions"><button id="refresh-dashboard" class="secondary">Làm mới</button><button id="logout-button" class="text-button">Đăng xuất</button></div>
+          <div class="heading-actions"><button id="refresh-dashboard" class="secondary">Làm mới</button><button id="request-sync" class="secondary" title="Yêu cầu máy POS ở quán đồng bộ ngay">Yêu cầu đồng bộ</button><button id="logout-button" class="text-button">Đăng xuất</button></div>
         </header>
 
-        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.14.5 · Chia tab</p>
+        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.14.6 · Yêu cầu đồng bộ</p>
 
         <nav class="tabbar" id="tabbar" aria-label="Các trang">
           <a href="#ban" data-tab="ban">Bàn</a>
@@ -269,6 +269,6 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261014-5"></script>
+    <script type="module" src="app.js?v=20261014-6"></script>
   </body>
 </html>

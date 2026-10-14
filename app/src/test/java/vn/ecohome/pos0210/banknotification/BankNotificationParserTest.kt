@@ -60,4 +60,12 @@ ND:CT DEN:164T2690PJ300DB4 MBVCB.16065678956.848811.PHAM ANH TUAN chuyen tien.CT
  @Test fun techcombankLooseIgnoresBalanceOnly(){
   assertNull(TechcombankNotificationParser().parse("Techcombank","Số dư: VND 14,854,499",1))
  }
+ @Test fun techcombankAmountInTitleOnly(){
+  val tx=TechcombankNotificationParser().parse("+ VND 4,500","Tài khoản: 3906091984\nSố dư: VND 15,205,499\nMS00P00000001284119,HO KINH DOANH NGUYEN MANH TIEN 84,QR - 0210 N01 VHML",5)!!
+  assertEquals(4_500L,tx.amount);assertEquals(TransactionDirection.CREDIT,tx.direction);assertEquals("3906091984",tx.account);assertTrue(tx.content.contains("VHML"))
+ }
+ @Test fun techcombankTitleDebitIsNotCredit(){
+  val tx=TechcombankNotificationParser().parse("- VND 4,500","Tài khoản: 3906091984\nSố dư: VND 15,205,499\nrut tien",6)!!
+  assertEquals(TransactionDirection.DEBIT,tx.direction)
+ }
 }

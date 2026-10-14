@@ -78,8 +78,10 @@ class TechcombankNotificationParser:BankNotificationParser {
   val content=withoutBalance.substring(m.range.last+1).replace(Regex("""(?:Tài khoản|Tai khoan)\s*:?\s*[0-9xX*]{4,24}""",RegexOption.IGNORE_CASE),"").trim()
   return BankTransaction("TECHCOMBANK",account,amount,TransactionDirection.CREDIT,null,receivedAt,content,null,fingerprint("TECHCOMBANK",account,amount,null,null,full))
  }
- override fun parse(title:String,body:String,receivedAt:Long):BankTransaction? {
-  val full="$title\n$body"
+ override fun parse(title:String,rawBodyIn:String,receivedAt:Long):BankTransaction? {
+  // App Techcombank đặt "+ VND 4,500" ở TIÊU ĐỀ thông báo, các dòng còn lại ở thân: ghép tiêu đề vào thân khi tiêu đề có số tiền.
+  val body=if(title.isNotBlank()&&Regex("""[+-]\s*(?:VND|VNĐ)?\s*\d""",RegexOption.IGNORE_CASE).containsMatchIn(title)&&!rawBodyIn.contains(title))"$title\n$rawBodyIn" else rawBodyIn
+  val full="$title\n$rawBodyIn"
   parseAppFormat(title,body,full,receivedAt)?.let{return it}
   val match=structured.find(full)?:return parseLoose(title,body,receivedAt)
   val account=match.groupValues[1]

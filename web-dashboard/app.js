@@ -23,6 +23,7 @@ import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, creat
 import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261012-3";
 import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261012-3";
 import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261014-3";
+import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261014-6";
 import { buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261014-4";
 import { aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261013-2";
 
@@ -941,6 +942,39 @@ $("#to-date").value = todayInput;
 $("#entry-datetime").value = localDateTimeInput(new Date());
 $("#entry-type").value = "OPERATING_EXPENSE";
 renderEntryType();
+
+/* ---------- Yêu cầu máy POS ở quán đồng bộ ngay (ghi commands/sync, app nhận khi đang chạy) ---------- */
+let lastSyncRequestAt = NaN;
+let syncPollTimer = null;
+async function requestRemoteSync() {
+  const status = $("#sync-command-status");
+  const now = Date.now();
+  if (!state.user) return;
+  if (!canRequestSync(lastSyncRequestAt, now)) { status.textContent = "Vừa gửi lệnh, chờ khoảng 30 giây rồi thử lại."; return; }
+  lastSyncRequestAt = now;
+  const ref = doc(db, ...root, "commands", "sync");
+  try {
+    await setDoc(ref, { requestedAt: now, requestedBy: state.user.email || "" }, { merge: true });
+  } catch (error) {
+    lastSyncRequestAt = NaN;
+    status.textContent = error.code === "permission-denied" ? "Không có quyền ghi lệnh (cần mở quy tắc Firestore cho commands)." : `Không gửi được lệnh: ${error.message}`;
+    return;
+  }
+  status.textContent = syncCommandStatus(null, now, Date.now()).text;
+  clearInterval(syncPollTimer);
+  let refreshed = false;
+  syncPollTimer = setInterval(async () => {
+    try {
+      const snap = await getDoc(ref);
+      const result = syncCommandStatus(snap.exists() ? snap.data() : null, now, Date.now());
+      status.textContent = result.text;
+      if (result.state === "received" && !refreshed) { refreshed = true; clearInterval(syncPollTimer); setTimeout(refreshDashboard, 12000); }
+      if (result.state === "timeout") clearInterval(syncPollTimer);
+    } catch (error) { status.textContent = `Không đọc được trạng thái lệnh: ${error.message}`; clearInterval(syncPollTimer); }
+    if (Date.now() - now > ACK_TIMEOUT_MS + 5000) clearInterval(syncPollTimer);
+  }, 6000);
+}
+$("#request-sync").addEventListener("click", requestRemoteSync);
 
 /* ---------- Chia tab: mỗi tab là một trang riêng theo #hash, nút Back của trình duyệt hoạt động ---------- */
 const TABS = ["ban", "doanhthu", "bill", "thanhtoan", "taichinh"];

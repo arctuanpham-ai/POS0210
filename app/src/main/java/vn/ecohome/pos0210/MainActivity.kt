@@ -1504,8 +1504,8 @@ fun Manage(vm: PosViewModel) {
                 Rowx("Nhập đầu vào", "Lương · vật tư cố định · vật tư sản xuất") { vm.screen.value = "PURCHASE" }
             }
             if (employee?.role == "ADMIN" || employee?.role == "MANAGER") {
-                Rowx("VietQR", "Lưu tài khoản · tạo QR") { vm.screen.value = "VIETQR" }
-                Rowx("Thanh toán chuyển khoản", "QR tĩnh Techcombank Soundbox · đối chiếu thủ công") { vm.screen.value = "VIETQR" }
+                Rowx("VietQR", "Chọn QR động theo bill hoặc QR tĩnh · lưu tài khoản") { vm.screen.value = "VIETQR" }
+                Rowx("Thanh toán chuyển khoản", "Quyền đọc thông báo app ngân hàng · đối soát tiền về") { vm.screen.value = "BANK_PAYMENT_SETTINGS" }
             }
             Rowx("Máy in", "58/80mm · Bluetooth · ESC/POS") { vm.screen.value = "PRINTER" }
             if (employee?.role == "ADMIN" || employee?.canManageSystem == true) {
@@ -3242,26 +3242,56 @@ fun VietQr(vm: PosViewModel) {
     var bank by remember(sets) { mutableStateOf(valueFor("bank_name")) }
     var acc by remember(sets) { mutableStateOf(valueFor("bank_account")) }
     var holder by remember(sets) { mutableStateOf(valueFor("bank_holder")) }
+    var dynamic by remember(sets) { mutableStateOf(!PaymentQrMode.usesStaticSoundboxQr(valueFor("payment_qr_mode"))) }
     var saved by remember { mutableStateOf(false) }
+    val bin = remember(bank) { vn.ecohome.pos0210.payment.VietQrPayload.resolveBin(bank) }
+    val canSave = !dynamic || (bin != null && acc.isNotBlank() && holder.isNotBlank())
     Column {
         Header("VietQR") { vm.screen.value = "MANAGE" }
-        Column(Modifier.padding(16.dp)) {
-            OutlinedTextField(bank, { bank = it }, label = { Text("Ngân hàng / BANK_ID") })
-            OutlinedTextField(acc, { acc = it.filter(Char::isDigit) }, label = { Text("Số tài khoản") })
-            OutlinedTextField(holder, { holder = it }, label = { Text("Chủ tài khoản") })
-            Button(onClick = {
-                vm.saveSetting("bank_name", bank)
+        Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
+            Text("KIỂU QR THANH TOÁN", fontWeight = FontWeight.Black)
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { dynamic = true; saved = false }) {
+                RadioButton(selected = dynamic, onClick = { dynamic = true; saved = false })
+                Column {
+                    Text("VietQR ĐỘNG theo bill", fontWeight = FontWeight.Bold)
+                    Text("QR nhúng đúng số tiền và nội dung của từng bill. Nhân viên theo dõi tiền về ngay trên app ngân hàng của máy order, không cần loa.", fontSize = 12.sp)
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { dynamic = false; saved = false }) {
+                RadioButton(selected = !dynamic, onClick = { dynamic = false; saved = false })
+                Column {
+                    Text("QR tĩnh Techcombank Soundbox", fontWeight = FontWeight.Bold)
+                    Text("QR merchant cố định, khách tự nhập số tiền; cần loa Soundbox báo tiền.", fontSize = 12.sp)
+                }
+            }
+            OutlinedTextField(bank, { bank = it; saved = false }, label = { Text("Ngân hàng / BANK_ID (VD: TCB, VCB, MB hoặc BIN 6 số)") }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+            if (dynamic) Text(
+                if (bin != null) "✓ Nhận diện ngân hàng · BIN $bin" else "Chưa nhận diện được ngân hàng. Nhập tên viết tắt (TCB, VCB, MB, BIDV, ACB…) hoặc BIN 6 số bắt đầu bằng 970.",
+                fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (bin != null) Color(0xFF41633A) else Color(0xFF9A2B1F)
+            )
+            OutlinedTextField(acc, { acc = it.filter(Char::isDigit); saved = false }, label = { Text("Số tài khoản") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(holder, { holder = it; saved = false }, label = { Text("Chủ tài khoản") }, modifier = Modifier.fillMaxWidth())
+            Button(enabled = canSave, onClick = {
+                vm.saveSetting("bank_name", bank.trim())
                 vm.saveSetting("bank_account", acc)
-                vm.saveSetting("bank_holder", holder)
+                vm.saveSetting("bank_holder", holder.trim())
                 vm.saveSetting("qr_prefix", "0210")
-                vm.saveSetting("payment_qr_mode", PaymentQrMode.TECHCOMBANK_SOUNDBOX_STATIC)
-                vm.saveSetting("bank_notification_enabled", "false")
+                vm.saveSetting("payment_qr_mode", if (dynamic) PaymentQrMode.VIETQR_ACCOUNT_DYNAMIC else PaymentQrMode.TECHCOMBANK_SOUNDBOX_STATIC)
+                vm.saveSetting("bank_notification_enabled", dynamic.toString())
                 saved = true
-            }) { Text("LƯU") }
-            if (saved) Text("Đã lưu cấu hình QR tĩnh Soundbox", Modifier.padding(top = 8.dp))
-            Text("TECHCOMBANK SOUNDBOX · QR TĨNH", Modifier.padding(top = 14.dp), fontWeight = FontWeight.Black)
-            Text("Dùng đúng QR merchant do Techcombank cấp để loa Soundbox nhận giao dịch. QR không nhúng số tiền; khách nhập đúng số tiền bill hiển thị khi thanh toán.", fontSize = 12.sp)
-            PaymentQrImage(PaymentQrMode.TECHCOMBANK_SOUNDBOX_STATIC, bank, acc, holder, 0, "", Modifier.size(240.dp).padding(top = 8.dp))
+            }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("LƯU") }
+            if (saved) Text(
+                if (dynamic) "Đã lưu: QR ĐỘNG theo số tiền bill. Đã bật theo dõi thông báo ngân hàng; nếu chưa cấp quyền đọc thông báo, vào Quản lý → Thanh toán chuyển khoản để cấp." else "Đã lưu cấu hình QR tĩnh Soundbox",
+                Modifier.padding(top = 8.dp), fontWeight = FontWeight.Bold
+            )
+            if (dynamic) {
+                Text("QR MẪU · 10.000đ · nội dung 0210 TEST", Modifier.padding(top = 14.dp), fontWeight = FontWeight.Black)
+                Text("Quét thử bằng app ngân hàng: phải ra đúng tên chủ tài khoản, số tiền 10.000đ. Không cần chuyển.", fontSize = 12.sp)
+                if (bin != null && acc.isNotBlank()) PaymentQrImage(PaymentQrMode.VIETQR_ACCOUNT_DYNAMIC, bank, acc, holder, 10_000L, "0210 TEST", Modifier.size(240.dp).padding(top = 8.dp))
+            } else {
+                Text("TECHCOMBANK SOUNDBOX · QR TĨNH", Modifier.padding(top = 14.dp), fontWeight = FontWeight.Black)
+                PaymentQrImage(PaymentQrMode.TECHCOMBANK_SOUNDBOX_STATIC, bank, acc, holder, 0, "", Modifier.size(240.dp).padding(top = 8.dp))
+            }
         }
     }
 }

@@ -23,6 +23,7 @@ import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, creat
 import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261012-3";
 import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261012-3";
 import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261014-3";
+import { buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261014-4";
 import { aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261013-2";
 
 const firebaseConfig = {
@@ -46,6 +47,7 @@ const state = {
   purchaseCategories: [], profitPartners: [], assetCategories: [], suppliers: [],
   unsubs: [], paymentFlowDoc: null, refunds: [], frozenRefundDocs: [], flowError: "", dailyDocs: {}, dailyError: "", salesLoaded: false, salesDays: 7, itemMode: "combined", period: "today", customFrom: null, customTo: null,
   transactionKind: "ALL", payerFilter: "ALL", user: null,
+  historyDay: "today", historyDocs: {}, historyTables: null, historyError: "", historyLoading: false, billDetailCache: {},
 };
 let expenseDraft = null;
 let editingReceipt = null;
@@ -352,6 +354,103 @@ async function loadDailyDocs() {
   }));
 }
 
+/* ---------- Lịch sử bill trong ngày (chỉ Hôm nay / Hôm qua) ---------- */
+const historyKey = (which) => keyOfTime(which === "yesterday" ? Date.now() - 86400000 : Date.now());
+
+async function loadBillHistory(which, force = false) {
+  const key = historyKey(which);
+  if (!force && state.historyDocs[key]) return;
+  const range = dayRange(key);
+  if (!range) return;
+  state.historyLoading = true;
+  state.historyError = "";
+  renderBillHistory();
+  try {
+    const q = (name, field, from, to, max) => getDocs(query(collection(db, ...root, name), where(field, ">=", from), where(field, "<", to), orderBy(field, "desc"), limit(max)));
+    const [billSnap, paySnap, sessSnap] = await Promise.all([
+      q("bills", "closedAt", range.from, range.to, 400),
+      q("payments", "paidAt", range.from, range.to, 400),
+      q("sessions", "openedAt", range.from - 86400000, range.to, 600),
+    ]);
+    if (!state.historyTables) state.historyTables = rows(await getDocs(collection(db, ...root, "tableStatus")));
+    state.historyDocs[key] = { bills: rows(billSnap), payments: rows(paySnap), sessions: rows(sessSnap), loadedAt: Date.now() };
+  } catch (error) {
+    state.historyError = error.code === "permission-denied" ? "Không có quyền đọc bill (cần mở quy tắc Firestore cho bills, payments, sessions)." : (error.message || "lỗi không rõ");
+  }
+  state.historyLoading = false;
+  renderBillHistory();
+}
+
+function billHistoryRows() {
+  const key = historyKey(state.historyDay);
+  const data = state.historyDocs[key];
+  if (!data) return null;
+  const refunds = [...state.refunds, ...state.frozenRefundDocs.filter((r) => !state.refunds.some((x) => x.id === r.id))];
+  return buildBillRows({ ...data, tables: state.historyTables || [], refunds, range: dayRange(key) });
+}
+
+function renderBillHistory() {
+  const notice = $("#bill-history-notice");
+  const summaryHost = $("#bill-history-summary");
+  const list = $("#bill-history-list");
+  if (!list) return;
+  notice.textContent = state.historyLoading ? "Đang đọc bill…" : state.historyError ? `Không đọc được lịch sử bill: ${state.historyError}` : "";
+  const data = billHistoryRows();
+  if (!data) { summaryHost.replaceChildren(); list.innerHTML = state.historyLoading || state.historyError ? "" : '<p class="muted empty-state">Bấm Làm mới để đọc bill.</p>'; return; }
+  const s = summarizeBillRows(data);
+  const tiles = [
+    ["Số bill", String(s.count)],
+    ["Doanh thu", money(s.total)],
+    ["Tiền mặt", money(s.cash)],
+    ["Chuyển khoản", money(s.transfer)],
+  ];
+  if (s.refundedCount) tiles.push([`Hoàn tiền (${s.refundedCount} bill)`, `−${money(s.refunded)}`], ["Thực thu sau hoàn", money(s.net)]);
+  summaryHost.replaceChildren(...tiles.map(([label, value]) => {
+    const node = $("#metric-template").content.firstElementChild.cloneNode(true);
+    node.querySelector("p").textContent = label;
+    node.querySelector("strong").textContent = value;
+    return node;
+  }));
+  if (s.missingPayment) notice.textContent = `${s.missingPayment} bill chưa có dữ liệu thanh toán (POS chưa đồng bộ xong).`;
+  list.innerHTML = data.length
+    ? data.map((r) => {
+      const method = r.paymentMissing ? "Chưa rõ" : methodLabel(r.method);
+      const tags = `${r.flow === "prepaid" ? '<span class="bill-tag">Trả trước</span>' : ""}${r.refund ? `<span class="bill-tag warn">${r.refund.status === "FROZEN" ? "Hoàn CK · đóng băng" : "Đã hoàn"}</span>` : ""}`;
+      return `<button type="button" class="bill-row" data-bill-id="${escapeHtml(r.id)}"><time>${timeLabel(r.closedAt)}</time><span class="bill-main"><strong>${escapeHtml(r.tableName)} · #${escapeHtml(r.billNo)}${tags}</strong><small>${escapeHtml(method)}${r.reference ? ` · ${escapeHtml(r.reference)}` : ""}</small></span><span class="bill-amount">${money(r.total)}<small>Xem chi tiết</small></span></button>`;
+    }).join("")
+    : '<p class="muted empty-state">Chưa có bill đã thanh toán trong ngày này.</p>';
+}
+
+async function openBillDetail(billId) {
+  const row = (billHistoryRows() || []).find((r) => r.id === billId);
+  if (!row) return;
+  $("#bill-detail-title").textContent = `${row.tableName} · #${row.billNo}`;
+  $("#bill-detail-meta").textContent = `Mở ${timeLabel(row.openedAt)} · thanh toán ${timeLabel(row.closedAt)}${row.flow === "prepaid" ? " · trả trước" : row.flow === "postpaid" ? " · trả sau" : ""}`;
+  const body = $("#bill-detail-body");
+  body.innerHTML = '<p class="muted">Đang đọc món…</p>';
+  $("#bill-detail").showModal();
+  try {
+    if (!state.billDetailCache[row.id]) {
+      const batches = rows(await getDocs(query(collection(db, ...root, "orderBatches"), where("sessionId", "==", row.sessionId), limit(60))));
+      const ids = batches.map((b) => b.id);
+      const items = (await Promise.all(chunk(ids, 30).map((part) => getDocs(query(collection(db, ...root, "orderItems"), where("batchId", "in", part)))))).flatMap((snap) => rows(snap));
+      state.billDetailCache[row.id] = { batches, items };
+    }
+    const detail = buildBillDetail({ row, ...state.billDetailCache[row.id] });
+    const groups = detail.hasItems
+      ? detail.groups.filter((g) => g.lines.length).map((g) => `<div class="bill-group"><h3>Lần gọi ${g.sequence}${g.serviceNo ? ` · phiếu #${g.serviceNo}` : ""} · ${timeLabel(g.createdAt)}</h3>${g.lines.map((l) => `<div class="bill-line"><span>${l.qty}× ${escapeHtml(l.name)}${l.note ? `<small>${escapeHtml(l.note)}</small>` : ""}${l.combo ? `<small>${escapeHtml(l.combo)}</small>` : ""}</span><b>${money(l.amount)}</b></div>`).join("")}</div>`).join("")
+      : '<p class="muted">Chưa có món đồng bộ cho bill này.</p>';
+    const diff = detail.hasItems && detail.difference !== 0 ? `<div><span>${detail.difference < 0 ? "Giảm giá / điều chỉnh" : "Chênh lệch"}</span><b>${detail.difference < 0 ? "−" : "+"}${money(Math.abs(detail.difference))}</b></div>` : "";
+    const pay = row.paymentMissing
+      ? '<div class="bill-pay">Chưa có dữ liệu thanh toán.</div>'
+      : `<div class="bill-pay"><div><span>Phương thức</span><b>${escapeHtml(methodLabel(row.method))}</b></div><div><span>Giờ thanh toán</span><b>${timeLabel(row.paidAt)}</b></div>${detail.hasItems ? `<div><span>Tạm tính món</span><b>${money(detail.itemsTotal)}</b></div>` : ""}${diff}<div><span>Tổng bill</span><b>${money(row.total)}</b></div><div><span>Đã thanh toán</span><b>${money(row.amountPaid)}</b></div>${row.method === "CASH" && row.cashReceived != null ? `<div><span>Khách đưa</span><b>${money(row.cashReceived)}</b></div><div><span>Trả lại</span><b>${money(row.change || 0)}</b></div>` : ""}${row.reference ? `<div><span>Mã tham chiếu</span><b>${escapeHtml(row.reference)}</b></div>` : ""}</div>`;
+    const refund = row.refund ? `<div class="bill-pay"><div><span>Hoàn tiền</span><b>−${money(row.refund.amount)} · ${row.refund.method === "CASH" ? "tiền mặt" : "chuyển khoản"}</b></div><div><span>Trạng thái</span><b>${row.refund.status === "FROZEN" ? "Đóng băng, chờ hoàn CK" : "Đã hoàn xong"}</b></div>${row.refund.reason ? `<div><span>Lý do</span><b>${escapeHtml(row.refund.reason)}</b></div>` : ""}</div>` : "";
+    body.innerHTML = groups + pay + refund;
+  } catch (error) {
+    body.innerHTML = `<p class="error">Không đọc được món: ${escapeHtml(error.code === "permission-denied" ? "thiếu quyền đọc orderBatches/orderItems" : error.message || "lỗi không rõ")}</p>`;
+  }
+}
+
 function renderFinanceMetadata() {
   const keep = (select, options, fallback = "") => {
     const current = select.value;
@@ -556,6 +655,7 @@ function render() {
   renderTables();
   renderSalesSnapshots();
   renderPaymentFlow();
+  renderBillHistory();
   renderFinanceMetadata();
   renderTransactions();
 }
@@ -566,6 +666,8 @@ async function refreshDashboard() {
     const dashboardDoc = await getDoc(doc(db, ...root, "dashboard", "current"));
     state.dashboard = dashboardDoc.exists() ? dashboardDoc.data() : {};
     state.dailyDocs = {};
+    state.historyDocs = {};
+    state.billDetailCache = {};
     const hasLiveTables = Array.isArray(state.dashboard.liveTables);
     if (hasLiveTables) state.tables = [];
     const sevenDays = startOfDay(new Date(Date.now() - 6 * 86400000));
@@ -592,6 +694,7 @@ async function refreshDashboard() {
     const stale = shouldMarkSnapshotStale(state.dashboard.lastUpdatedAt);
     $("#sync-status").textContent = state.dashboard.lastUpdatedAt ? `Snapshot POS: ${dateTime(state.dashboard.lastUpdatedAt)}${stale ? " · cần kiểm tra máy POS" : ""}` : "POS chưa gửi snapshot.";
     render();
+    loadBillHistory(state.historyDay, true);
   } catch (error) { $("#sync-status").textContent = `Không đọc được dữ liệu: ${error.message}`; }
 }
 
@@ -727,6 +830,20 @@ $("#sales-item-modes").addEventListener("click", (event) => {
   renderSalesSnapshots();
 });
 $("#close-detail").addEventListener("click", () => $("#table-detail").close());
+$("#bill-history-days").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-history-day]");
+  if (!button) return;
+  state.historyDay = button.dataset.historyDay === "yesterday" ? "yesterday" : "today";
+  $("#bill-history-days").querySelectorAll(".filter").forEach((b) => b.classList.toggle("active", b === button));
+  renderBillHistory();
+  loadBillHistory(state.historyDay);
+});
+$("#bill-history-list").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-bill-id]");
+  if (button) openBillDetail(button.dataset.billId);
+});
+$("#close-bill-detail").addEventListener("click", () => $("#bill-detail").close());
+
 $("#open-entry").addEventListener("click", () => {
   $("#entry-error").textContent = "";
   $("#entry-datetime").value = localDateTimeInput(new Date());

@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20261014-4" />
+    <link rel="stylesheet" href="styles.css?v=20261014-5" />
     <title>0210 · Manager</title>
   </head>
   <body>
@@ -17,7 +17,7 @@
         <p class="eyebrow">0210 · BREAKFAST · COFFEE · DRINKS</p>
         <h1 id="login-title">Manager realtime</h1>
         <p class="muted">Theo dõi quán và nhập phiếu tài chính từ xa.</p>
-        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.14.4 · Lịch sử bill trong ngày</p>
+        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.14.5 · Chia tab</p>
         <label>Email Firebase<input id="email" type="email" autocomplete="username" inputmode="email" /></label>
         <label>Mật khẩu<input id="password" type="password" autocomplete="current-password" /></label>
         <label class="show-password"><input id="show-password" type="checkbox" /> Hiện mật khẩu để kiểm tra khi gõ</label>
@@ -34,8 +34,17 @@
           <div class="heading-actions"><button id="refresh-dashboard" class="secondary">Làm mới</button><button id="logout-button" class="text-button">Đăng xuất</button></div>
         </header>
 
-        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.14.4 · Lịch sử bill trong ngày</p>
+        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.14.5 · Chia tab</p>
 
+        <nav class="tabbar" id="tabbar" aria-label="Các trang">
+          <a href="#ban" data-tab="ban">Bàn</a>
+          <a href="#doanhthu" data-tab="doanhthu">Doanh thu</a>
+          <a href="#bill" data-tab="bill">Lịch sử bill</a>
+          <a href="#thanhtoan" data-tab="thanhtoan">Thanh toán</a>
+          <a href="#taichinh" data-tab="taichinh">Tài chính</a>
+        </nav>
+
+        <div class="page" data-page="ban" hidden>
         <section class="section-heading first-section">
           <div><p class="eyebrow">SƠ ĐỒ BÀN</p><h2>Trạng thái phục vụ realtime</h2></div>
         </section>
@@ -46,7 +55,9 @@
           <article class="closed"><span>Bill hôm nay đã thanh toán</span><strong id="live-paid-bills">—</strong></article>
         </section>
         <section id="tables" class="table-grid" aria-live="polite"></section>
+        </div>
 
+        <div class="page" data-page="doanhthu" hidden>
         <section class="section-heading compact">
           <div><p class="eyebrow">DOANH THU ĐÃ CHỐT</p><h2>Kết quả 3 ngày / 7 ngày</h2></div>
         </section>
@@ -67,7 +78,9 @@
         </div>
         <section id="sales-items" class="sales-items"></section>
         <p class="muted">Doanh thu món là tổng giá bán các món đã thanh toán, tính trước giảm giá nên có thể cao hơn doanh thu bill.</p>
+        </div>
 
+        <div class="page" data-page="bill" hidden>
         <section class="section-heading compact">
           <div><p class="eyebrow">LỊCH SỬ BILL</p><h2>Bill đã thanh toán trong ngày</h2></div>
         </section>
@@ -78,12 +91,16 @@
         <p id="bill-history-notice" class="sales-notice" role="status"></p>
         <section id="bill-history-summary" class="summary-grid" aria-label="Tổng kết bill trong ngày"></section>
         <section id="bill-history-list" class="bill-list" aria-live="polite"></section>
+        </div>
 
+        <div class="page" data-page="thanhtoan" hidden>
         <section class="section-heading compact">
           <div><p class="eyebrow">QUY TRÌNH THANH TOÁN</p><h2>Chế độ, lịch sử đổi và hoàn tiền</h2></div>
         </section>
         <section id="payment-flow" class="payment-flow" aria-live="polite"></section>
+        </div>
 
+        <div class="page" data-page="taichinh" hidden>
         <section class="section-heading report-heading">
           <div><p class="eyebrow">TÀI CHÍNH</p><h2>Tình hình quán</h2></div>
           <div class="heading-actions"><button id="open-expense" class="secondary">+ CHI PHÍ MUA HÀNG</button><button id="open-entry" class="text-button">Giao dịch khác</button></div>
@@ -124,6 +141,7 @@
           <button data-kind="MOVEMENT" class="filter">Thu / vốn / hoàn ứng</button>
         </div>
         <section id="transactions" class="transaction-list"></section>
+        </div>
       </section>
     </main>
 
@@ -251,6 +269,6 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261014-4"></script>
+    <script type="module" src="app.js?v=20261014-5"></script>
   </body>
 </html>

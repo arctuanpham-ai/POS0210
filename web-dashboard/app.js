@@ -942,6 +942,17 @@ $("#entry-datetime").value = localDateTimeInput(new Date());
 $("#entry-type").value = "OPERATING_EXPENSE";
 renderEntryType();
 
+/* ---------- Chia tab: mỗi tab là một trang riêng theo #hash, nút Back của trình duyệt hoạt động ---------- */
+const TABS = ["ban", "doanhthu", "bill", "thanhtoan", "taichinh"];
+function showTab() {
+  const name = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "ban";
+  document.querySelectorAll(".page").forEach((page) => { page.hidden = page.dataset.page !== name; });
+  document.querySelectorAll("#tabbar [data-tab]").forEach((link) => link.classList.toggle("active", link.dataset.tab === name));
+  window.scrollTo(0, 0);
+}
+window.addEventListener("hashchange", showTab);
+showTab();
+
 onAuthStateChanged(auth, (user) => {
   state.user = user || null;
   $("#login-view").hidden = Boolean(user);

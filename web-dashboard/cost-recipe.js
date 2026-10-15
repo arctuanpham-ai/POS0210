@@ -191,3 +191,30 @@ export const DRAFT_RECIPES = {
 };
 export const draftRecipeFor = (menuName) => (DRAFT_RECIPES[normalizeText(menuName)] || []).map((l) => ({ ...l }));
 export const groupLabelForMaterial = (m) => groupLabelOf(m.group);
+
+/**
+ * Nhập so với định mức trong [from, to): lượng mua (đổi ra đơn vị định lượng, chỉ phiếu chi tiết)
+ * so với lượng lẽ ra phải dùng = định mức mỗi ngày × số ngày. ratio > 1 là mua nhiều hơn định mức (hao hụt, tồn kho tăng);
+ * < 1 là mua ít hơn (dùng tồn kho cũ, hoặc định mức đang đặt cao). Đồ khô mua theo tuần cần khoảng dài mới đúng.
+ */
+export const usageVsPurchase = ({ receipts, usagePerDay, from, to }) => {
+  const days = Math.max(1, Math.round((to - from) / 86400000));
+  const bought = {};
+  for (const r of Array.isArray(receipts) ? receipts : []) {
+    if (!r || r.status === "DELETED" || r.status === "CANCELLED" || isSummaryReceipt(r)) continue;
+    const at = Number(r.purchaseDate || 0);
+    if (at < from || at >= to) continue;
+    for (const l of r.items || []) {
+      const m = matchMaterial(l);
+      const f = m && unitFactor(m, l.unit);
+      if (!m || !f) continue;
+      bought[m.id] = (bought[m.id] || 0) + Number(l.qty || 0) * f;
+    }
+  }
+  const ids = new Set([...Object.keys(bought), ...Object.keys(usagePerDay || {}).filter((k) => usagePerDay[k] > 0)]);
+  return [...ids].filter((id) => materialById.has(id)).map((id) => {
+    const expected = (usagePerDay?.[id] || 0) * days;
+    const got = bought[id] || 0;
+    return { materialId: id, name: materialById.get(id).name, base: materialById.get(id).base, expected, bought: got, ratio: expected > 0 ? got / expected : null };
+  }).sort((a, b) => (a.ratio === null) - (b.ratio === null) || Math.abs((b.ratio ?? 1) - 1) - Math.abs((a.ratio ?? 1) - 1) || a.name.localeCompare(b.name));
+};

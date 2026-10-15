@@ -17,7 +17,7 @@
         <p class="eyebrow">0210 · BREAKFAST · COFFEE · DRINKS</p>
         <h1 id="login-title">Manager realtime</h1>
         <p class="muted">Theo dõi quán và nhập phiếu tài chính từ xa.</p>
-        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.15.2 · Giá vốn</p>
+        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.16.1 · Demo phiếu chi</p>
         <label>Email Firebase<input id="email" type="email" autocomplete="username" inputmode="email" /></label>
         <label>Mật khẩu<input id="password" type="password" autocomplete="current-password" /></label>
         <label class="show-password"><input id="show-password" type="checkbox" /> Hiện mật khẩu để kiểm tra khi gõ</label>
@@ -34,7 +34,7 @@
           <div class="heading-actions"><button id="refresh-dashboard" class="secondary">Làm mới</button><button id="request-sync" class="secondary" title="Yêu cầu máy POS ở quán đồng bộ ngay">Yêu cầu đồng bộ</button><button id="logout-button" class="text-button">Đăng xuất</button></div>
         </header>
 
-        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.15.2 · Giá vốn</p>
+        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.16.1 · Demo phiếu chi</p>
 
         <nav class="tabbar" id="tabbar" aria-label="Các trang">
           <a href="#ban" data-tab="ban">Bàn</a>
@@ -110,6 +110,11 @@
         <p id="recipe-note" class="muted" role="status"></p>
         <section id="recipe-list" class="recipe-list" aria-live="polite"></section>
         <section class="section-heading compact">
+          <div><p class="eyebrow">NHẬP SO VỚI ĐỊNH MỨC · 7 NGÀY</p><h2>Mua vào có khớp lượng bán không</h2></div>
+        </section>
+        <p id="usage-note" class="muted"></p>
+        <section id="usage-check"></section>
+        <section class="section-heading compact">
           <div><p class="eyebrow">GIÁ VẬT TƯ</p><h2>Từ phiếu chi đã nhập</h2></div>
         </section>
         <section id="material-costs" class="material-costs"></section>
@@ -147,6 +152,13 @@
         </section>
         <section id="summary" class="summary-grid cumulative-grid" aria-label="Chỉ số tích lũy"></section>
 
+        <section class="section-heading compact">
+          <div><p class="eyebrow">DỮ LIỆU DEMO</p><h2>Phiếu chi thử trước khi nhập thật</h2></div>
+        </section>
+        <p class="muted">Bộ phiếu chi demo 30 ngày, sinh từ menu, công thức và lượng bán. Phiếu demo nằm ở mục riêng, máy POS không đọc, mỗi phiếu đều mang dấu DEMO và xoá được hết một lần. Khi đang xem demo, phiếu nhập tay cũng đi vào mục demo.</p>
+        <div class="payer-filter-block"><button id="demo-toggle" type="button" class="secondary">Xem dữ liệu demo</button><button id="demo-create" type="button" class="secondary">Tạo bộ phiếu demo 30 ngày</button><button id="demo-delete" type="button" class="text-button">Xoá toàn bộ phiếu demo</button></div>
+        <p id="demo-note" class="muted" role="status"></p>
+        <p id="demo-banner" class="sim-banner" role="status" hidden>ĐANG XEM DỮ LIỆU DEMO: số liệu phiếu chi ở tab Tài chính và Giá vốn là phiếu demo. Bấm "Tắt xem demo" để quay về dữ liệu thật.</p>
         <div class="payer-filter-block"><button id="sim-toggle" type="button" class="secondary">Chạy mô phỏng (không ghi dữ liệu)</button></div>
         <p id="sim-banner" class="sim-banner" role="status" hidden>ĐANG MÔ PHỎNG: mọi số liệu trong tab này là dữ liệu giả, chỉ nằm trong trình duyệt. Không có gì được ghi lên Firestore. Tải lại trang hoặc bấm "Tắt mô phỏng" để quay về dữ liệu thật.</p>
 
@@ -334,6 +346,6 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261015-2"></script>
+    <script type="module" src="app.js?v=20261016-1"></script>
   </body>
 </html>

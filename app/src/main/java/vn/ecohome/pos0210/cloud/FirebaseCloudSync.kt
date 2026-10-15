@@ -532,6 +532,9 @@ object FirebaseCloudSync {
      * Chỉ ghi ngày có dữ liệu đổi (dấu vân tay bỏ updatedAt); ngày hôm nay tối đa 10 phút/lần,
      * ngày đã chốt ghi ngay một lần khi khác. Lỗi ở đây không làm hỏng phần còn lại của lượt sync.
      */
+    @Volatile private var dailyAckVerified=false
+    @Volatile private var monthlyAckVerified=false
+
     private suspend fun publishDailySnapshots(fs:FirebaseFirestore,root:com.google.firebase.firestore.DocumentReference,bills:List<vn.ecohome.pos0210.data.BillEntity>,batches:List<vn.ecohome.pos0210.data.OrderBatchEntity>,items:List<vn.ecohome.pos0210.data.OrderItemEntity>,now:Long,operation:String){
         try{
             val prefs=fs.app.applicationContext.getSharedPreferences("pos0210_cloud_ack_v1",Context.MODE_PRIVATE)
@@ -539,11 +542,14 @@ object FirebaseCloudSync {
             val zone=java.time.ZoneId.systemDefault()
             val todayKey=DashboardSalesSnapshot.dateKey(now,zone)
             val gateKey="$project/${root.path}/dashboardDaily/lastWriteAt"
-            val gateOpen=now-prefs.getLong(gateKey,0L)>=DASHBOARD_DAILY_MIN_INTERVAL_MS
+            // Lần đầu sau khi tiến trình khởi động: không tin dấu vân tay đã lưu, ghi lại cả 7 ngày từ DB Local.
+            // Nếu máy khác từng ghi đè document trên cloud thì lần này tự sửa lại, vì dấu vân tay cục bộ không thấy được việc đó.
+            val trustAck=dailyAckVerified
+            val gateOpen=!trustAck||now-prefs.getLong(gateKey,0L)>=DASHBOARD_DAILY_MIN_INTERVAL_MS
             val changed=DashboardSalesSnapshot.lastDateKeys(todayKey).mapNotNull{key->
                 val snapshot=DashboardSalesSnapshot.composeDaily(key,todayKey,bills,batches,items,zone)
                 val fingerprint=DashboardSalesSnapshot.fingerprint(snapshot)
-                if(prefs.getString("$project/${root.path}/dashboardDaily/$key",null)==fingerprint)null else Triple(key,snapshot,fingerprint)
+                if(trustAck&&prefs.getString("$project/${root.path}/dashboardDaily/$key",null)==fingerprint)null else Triple(key,snapshot,fingerprint)
             }
             val due=changed.filter{it.second.finalized||gateOpen}
             if(due.isEmpty())return
@@ -553,6 +559,7 @@ object FirebaseCloudSync {
             val editor=prefs.edit()
             due.forEach{(key,_,fingerprint)->editor.putString("$project/${root.path}/dashboardDaily/$key",fingerprint)}
             editor.putLong(gateKey,now).commit()
+            dailyAckVerified=true
             CloudExecution.trace("DASHBOARD_DAILY written=${due.size}")
         }catch(e:CancellationException){throw e
         }catch(e:CloudQuotaDeferred){CloudExecution.trace("DASHBOARD_DAILY DEFERRED ${e.message}")
@@ -567,11 +574,12 @@ object FirebaseCloudSync {
             val zone=java.time.ZoneId.systemDefault()
             val currentKey=DashboardSalesSnapshot.monthKey(now,zone)
             val gateKey="$project/${root.path}/dashboardMonthly/lastWriteAt"
-            val gateOpen=now-prefs.getLong(gateKey,0L)>=DASHBOARD_DAILY_MIN_INTERVAL_MS
+            val trustAck=monthlyAckVerified
+            val gateOpen=!trustAck||now-prefs.getLong(gateKey,0L)>=DASHBOARD_DAILY_MIN_INTERVAL_MS
             val changed=DashboardSalesSnapshot.lastMonthKeys(currentKey).mapNotNull{key->
                 val snapshot=DashboardSalesSnapshot.composeMonthly(key,currentKey,bills,zone)
                 val fingerprint=DashboardSalesSnapshot.fingerprint(snapshot)
-                if(prefs.getString("$project/${root.path}/dashboardMonthly/$key",null)==fingerprint)null else Triple(key,snapshot,fingerprint)
+                if(trustAck&&prefs.getString("$project/${root.path}/dashboardMonthly/$key",null)==fingerprint)null else Triple(key,snapshot,fingerprint)
             }
             val due=changed.filter{it.second.finalized||gateOpen}
             if(due.isEmpty())return
@@ -581,6 +589,7 @@ object FirebaseCloudSync {
             val editor=prefs.edit()
             due.forEach{(key,_,fingerprint)->editor.putString("$project/${root.path}/dashboardMonthly/$key",fingerprint)}
             editor.putLong(gateKey,now).commit()
+            monthlyAckVerified=true
             CloudExecution.trace("DASHBOARD_MONTHLY written=${due.size}")
         }catch(e:CancellationException){throw e
         }catch(e:CloudQuotaDeferred){CloudExecution.trace("DASHBOARD_MONTHLY DEFERRED ${e.message}")

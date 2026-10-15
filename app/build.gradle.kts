@@ -12,8 +12,8 @@ android {
         applicationId = "vn.ecohome.pos0210"
         minSdk = 26
         targetSdk = 35
-        versionCode = 147
-        versionName = "1.0.0-alpha114-monthly"
+        versionCode = 148
+        versionName = "1.0.0-alpha115-daily-heal"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {

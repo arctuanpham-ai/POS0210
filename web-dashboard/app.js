@@ -27,6 +27,7 @@ import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, deta
 import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261014-7";
 import { buildSimulation } from "./sim-data.js?v=20261014-10";
 import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261014-9";
+import { menuCsv } from "./menu-export.js?v=20261015-1";
 import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261014-9";
 import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261014-6";
 import { buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261014-4";
@@ -945,6 +946,7 @@ $("#summary-blocks").addEventListener("click", (event) => {
 $("#summary-form").addEventListener("submit", saveSummaryBlocks);
 $("#summary-to-detail").addEventListener("click", startUpgradeToDetail);
 $("#sim-toggle").addEventListener("click", () => setSimulation(!state.simulation));
+$("#export-menu").addEventListener("click", exportMenu);
 $("#export-monthly-csv").addEventListener("click", () => exportMonthly("csv"));
 $("#export-monthly-json").addEventListener("click", () => exportMonthly("json"));
 $("#save-cutoff").addEventListener("click", () => saveCutoff(false));
@@ -1336,6 +1338,17 @@ function setSimulation(on) {
   $("#sim-banner").hidden = !state.simulation;
   $("#sim-toggle").textContent = state.simulation ? "Tắt mô phỏng" : "Chạy mô phỏng (không ghi dữ liệu)";
   render();
+}
+
+/* ---------- Tải menu (đọc menu + nhóm món từ Firestore) để phân tích vật tư, định lượng ---------- */
+async function exportMenu() {
+  const note = $("#monthly-note");
+  try {
+    const [items, cats] = await Promise.all([getDocs(collection(db, ...root, "menu")), getDocs(collection(db, ...root, "menuCategories"))]);
+    const list = rows(items);
+    downloadFile(`menu-0210-${new Date().toISOString().slice(0, 10)}.csv`, "text/csv;charset=utf-8", menuCsv(list, rows(cats)));
+    note.textContent = `Đã tải menu: ${list.length} món.`;
+  } catch (error) { note.textContent = error.code === "permission-denied" ? "Không có quyền đọc menu (menu, menuCategories)." : `Không tải được menu: ${error.message}`; }
 }
 
 /* ---------- Tải phiếu cũ hơn 7 ngày khi chọn kỳ xem xa hơn (tối đa 500 phiếu) ---------- */

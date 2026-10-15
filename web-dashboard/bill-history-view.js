@@ -30,7 +30,7 @@ const byId = (list) => new Map((Array.isArray(list) ? list : []).map((x) => [Str
 
 /**
  * Danh sách bill đã thanh toán trong ngày, mới nhất trước.
- * - Chỉ bill PAID có closedAt trong ngày.
+ * - Chỉ bill PAID, thuộc ngày MỞ bill (openedAt): bill trả chậm qua hôm sau vẫn nằm đúng ngày bán.
  * - Bill có payment dataScope khác LIVE (chế độ thử) bị loại, để không lẫn doanh thu thật.
  * - Thiếu payment vẫn hiện, đánh dấu paymentMissing để người xem biết dữ liệu chưa đủ.
  */
@@ -41,7 +41,7 @@ export const buildBillRows = ({ bills, payments, sessions, tables, refunds, rang
   const refundByBill = new Map();
   (Array.isArray(refunds) ? refunds : []).forEach((r) => { if (r.billId) refundByBill.set(String(r.billId), r); });
   const rows = (Array.isArray(bills) ? bills : [])
-    .filter((b) => b.status === "PAID" && Number(b.closedAt || 0) >= range.from && Number(b.closedAt || 0) < range.to)
+    .filter((b) => b.status === "PAID" && Number(b.closedAt || 0) > 0 && Number(b.openedAt || 0) >= range.from && Number(b.openedAt || 0) < range.to)
     .map((b) => {
       const payment = paymentByBill.get(String(b.id)) || null;
       const session = sessionMap.get(String(b.sessionId)) || null;

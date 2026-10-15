@@ -11,7 +11,7 @@ const bills = [
   { id: "b2", sessionId: "s2", billNo: "0002", openedAt: at(9, 0), closedAt: at(9, 30), subtotal: 30000, total: 30000, status: "PAID" },
   { id: "b3", sessionId: "s3", billNo: "0003", openedAt: at(10, 0), closedAt: at(10, 2), subtotal: 20000, total: 20000, status: "PAID" },
   { id: "b4", sessionId: "s1", billNo: "0004", openedAt: at(11, 0), closedAt: null, subtotal: 1, total: 1, status: "OPEN" },
-  { id: "b5", sessionId: "s1", billNo: "0005", openedAt: at(1, 0), closedAt: new Date(2026, 9, 13, 23, 0).getTime(), subtotal: 9, total: 9, status: "PAID" },
+  { id: "b5", sessionId: "s1", billNo: "0005", openedAt: new Date(2026, 9, 13, 22, 0).getTime(), closedAt: new Date(2026, 9, 13, 23, 0).getTime(), subtotal: 9, total: 9, status: "PAID" },
 ];
 const payments = [
   { id: "p1", billId: "b1", method: "CASH", amount: 45000, paidAt: at(8, 5), cashReceived: 50000, change: 5000, dataScope: "LIVE", cashierId: "u1" },
@@ -98,4 +98,11 @@ test("nhãn và chia nhóm", () => {
   assert.equal(timeLabel(at(8, 5)), "08:05");
   assert.equal(timeLabel(0), "—");
   assert.deepEqual(chunk([1, 2, 3, 4, 5], 2), [[1, 2], [3, 4], [5]]);
+});
+
+test("bill trả chậm qua hôm sau vẫn thuộc ngày mở bill", () => {
+  const late = { id: "late", sessionId: "s2", billNo: "0009", openedAt: at(21, 0), closedAt: new Date(2026, 9, 15, 9, 0).getTime(), subtotal: 90000, total: 90000, status: "PAID" };
+  const pay = { id: "pl", billId: "late", method: "CASH", amount: 90000, paidAt: late.closedAt, dataScope: "LIVE" };
+  assert.deepEqual(buildBillRows({ bills: [late], payments: [pay], sessions, tables, refunds: [], range }).map((r) => r.id), ["late"]);
+  assert.equal(buildBillRows({ bills: [late], payments: [pay], sessions, tables, refunds: [], range: dayRange("2026-10-15") }).length, 0);
 });

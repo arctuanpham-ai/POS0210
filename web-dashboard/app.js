@@ -176,7 +176,7 @@ function renderCumulativeSummary() {
 
 function renderPeriodSummary() {
   const range = rangeForPeriod();
-  const bills = state.bills.filter((b) => b.status === "PAID" && inRange(b.closedAt, range));
+  const bills = state.bills.filter((b) => b.status === "PAID" && b.closedAt && inRange(b.openedAt, range));
   const allPurchases = expenseRows().filter((p) => p.status !== "DELETED" && inRange(p.purchasedAt, range));
   const purchases = allPurchases.filter((p) => matchesPayer(state.payerFilter, p.paidByName));
   const movements = state.movements.filter((m) => inRange(m.occurredAt, range) && matchesPayer(state.payerFilter, m.counterpartyName));
@@ -379,11 +379,14 @@ async function loadBillHistory(which, force = false) {
   renderBillHistory();
   try {
     const q = (name, field, from, to, max) => getDocs(query(collection(db, ...root, name), where(field, ">=", from), where(field, "<", to), orderBy(field, "desc"), limit(max)));
-    const [billSnap, paySnap, sessSnap] = await Promise.all([
-      q("bills", "closedAt", range.from, range.to, 400),
-      q("payments", "paidAt", range.from, range.to, 400),
+    // Bill thuộc ngày MỞ bill (khách quen trả chậm qua hôm sau vẫn nằm đúng ngày bán); thanh toán đọc theo billId.
+    const [billSnap, sessSnap] = await Promise.all([
+      q("bills", "openedAt", range.from, range.to, 400),
       q("sessions", "openedAt", range.from - 86400000, range.to, 600),
     ]);
+    const billIds = rows(billSnap).filter((b) => b.status === "PAID").map((b) => String(b.id));
+    const paySnaps = await Promise.all(chunk(billIds, 30).map((ids) => getDocs(query(collection(db, ...root, "payments"), where("billId", "in", ids)))));
+    const paySnap = { docs: paySnaps.flatMap((x) => x.docs) };
     if (!state.historyTables) state.historyTables = rows(await getDocs(collection(db, ...root, "tableStatus")));
     state.historyDocs[key] = { bills: rows(billSnap), payments: rows(paySnap), sessions: rows(sessSnap), loadedAt: Date.now() };
   } catch (error) {

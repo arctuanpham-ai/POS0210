@@ -1526,6 +1526,23 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
   val people=dao.allEmployeesSnapshot().associate{it.id to it.name}
   FrozenRefundInfo(batch?.let{PaymentFlowRules.orderNoLabel(it.serviceNo)}?:"—",table?:"Trả trước",bill?.billNo?:"—",items.ifBlank{"(không đọc được món)"},people[r.actorId]?:r.actorId,r.approvedBy?.let{people[it]?:it},payment?.paidAt,payment?.reference)
  }
+ /** Sửa hình thức thanh toán ghi nhầm (tiền mặt ↔ chuyển khoản). Giữ nguyên bill, món, số tiền; ghi audit kèm lý do. */
+ fun changePaymentMethod(bill:BillEntity,newMethod:String,reason:String,onDone:(String?)->Unit){
+  val e=currentEmployee.value
+  viewModelScope.launch(Dispatchers.IO){
+   fun done(m:String?){viewModelScope.launch(Dispatchers.Main){onDone(m)}}
+   if(e==null||(e.role!="ADMIN"&&e.role!="MANAGER")){done("Chỉ quản lý được sửa hình thức thanh toán");return@launch}
+   if(newMethod!="CASH"&&newMethod!="TRANSFER"){done("Hình thức không hợp lệ");return@launch}
+   if(reason.isBlank()){done("Bắt buộc ghi lý do");return@launch}
+   val old=dao.paymentByBillId(bill.id)?.method
+   val n=db.withTransaction{
+    val changed=dao.changePaymentMethod(bill.id,newMethod)
+    if(changed==1)audit("PAYMENT",bill.id,"PAYMENT_METHOD_CHANGED","billNo=${bill.billNo},from=$old,to=$newMethod,amount=${bill.total},reason=${reason.trim()},operator=${e.name}")
+    changed
+   }
+   if(n==1){dao.markCloudDirty();autoBackup();done(null)} else done("Không sửa được: bill chưa thanh toán, đã hoàn tiền hoặc đã đúng hình thức này")
+  }
+ }
  fun settleFrozenRefund(id:String,note:String,onDone:(String?)->Unit){
   val e=currentEmployee.value
   viewModelScope.launch(Dispatchers.IO){

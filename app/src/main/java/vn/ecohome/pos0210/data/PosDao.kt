@@ -174,6 +174,8 @@ WHERE s.dataScope='LIVE' AND ob.status!='CANCELLED' AND EXISTS(SELECT 1 FROM Bil
 @Insert(onConflict=OnConflictStrategy.ABORT) suspend fun insertItems(v:List<OrderItemEntity>)
 @Insert(onConflict=OnConflictStrategy.ABORT) suspend fun insertBill(v:BillEntity)
 @Insert(onConflict=OnConflictStrategy.ABORT) suspend fun insertPayment(v:PaymentEntity)
+/** Sửa hình thức thanh toán ghi nhầm của bill đã thanh toán. Không đổi số tiền; bỏ tiền khách đưa/thối vì không còn đúng. */
+@Query("UPDATE PaymentEntity SET method=:method,cashReceived=NULL,change=NULL WHERE billId=:billId AND method<>:method AND EXISTS(SELECT 1 FROM BillEntity b WHERE b.id=:billId AND b.status='PAID')") suspend fun changePaymentMethod(billId:String,method:String):Int
 @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun saveCustomer(v:CustomerEntity)
 @Insert(onConflict=OnConflictStrategy.ABORT) suspend fun insertCustomerPoint(v:CustomerPointTransactionEntity)
 @Insert(onConflict=OnConflictStrategy.ABORT) suspend fun insertPrintJob(v:PrintJobEntity)

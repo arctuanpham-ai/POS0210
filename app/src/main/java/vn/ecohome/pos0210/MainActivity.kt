@@ -4479,6 +4479,9 @@ fun BillDetailDialog(vm: PosViewModel, bill: BillEntity, onDismiss: () -> Unit) 
     val current by vm.currentEmployee.collectAsState()
     var showDelete by remember { mutableStateOf(false) }
     var deleteReason by remember { mutableStateOf("") }
+    var showMethod by remember { mutableStateOf(false) }
+    var methodReason by remember { mutableStateOf("") }
+    var methodMsg by remember { mutableStateOf("") }
 
     val payment = payments.firstOrNull { it.billId == bill.id }
     val tableName = tables.firstOrNull { it.id == session?.tableId }?.name ?: session?.tableId ?: "?"
@@ -4500,6 +4503,11 @@ fun BillDetailDialog(vm: PosViewModel, bill: BillEntity, onDismiss: () -> Unit) 
                     Text("Mở: ${time(bill.openedAt)}")
                     Text("Đóng: ${bill.closedAt?.let { time(it) } ?: "--"}")
                     Text("Thanh toán: $methodText")
+                    if (payment != null && bill.status == "PAID" && (current?.role == "ADMIN" || current?.role == "MANAGER")) {
+                        TextButton(onClick = { methodReason = ""; methodMsg = ""; showMethod = true }) {
+                            Text(if (payment.method == "TRANSFER") "ĐỔI SANG TIỀN MẶT (ghi nhầm)" else "ĐỔI SANG CHUYỂN KHOẢN (ghi nhầm)")
+                        }
+                    }
                     Text("Thu tiền: $cashier")
                     Text("Tổng bill: ${money(bill.total)}", fontWeight = FontWeight.Black)
                     Spacer(Modifier.height(8.dp))
@@ -4510,6 +4518,28 @@ fun BillDetailDialog(vm: PosViewModel, bill: BillEntity, onDismiss: () -> Unit) 
             }
         }
     )
+
+    if (showMethod && payment != null) {
+        val target = if (payment.method == "TRANSFER") "CASH" else "TRANSFER"
+        val targetText = if (target == "CASH") "Tiền mặt" else "Chuyển khoản"
+        AlertDialog(
+            onDismissRequest = { showMethod = false },
+            title = { Text("Đổi ${bill.billNo} sang $targetText?") },
+            text = {
+                Column {
+                    Text("Chỉ sửa hình thức thanh toán. Bill, món và tổng ${money(bill.total)} giữ nguyên, vẫn tính doanh thu. Báo cáo tiền mặt / chuyển khoản và đối soát ca sẽ tính lại theo hình thức mới.", fontSize = 13.sp)
+                    OutlinedTextField(methodReason, { methodReason = it.take(120) }, modifier = Modifier.fillMaxWidth().padding(top = 10.dp), label = { Text("Lý do bắt buộc (VD: khách trả tiền mặt, bấm nhầm CK)") })
+                    if (methodMsg.isNotBlank()) Text(methodMsg, color = Color(0xFFB3261E), fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
+                }
+            },
+            confirmButton = {
+                Button(enabled = methodReason.isNotBlank(), onClick = {
+                    vm.changePaymentMethod(bill, target, methodReason) { err -> if (err == null) showMethod = false else methodMsg = err }
+                }) { Text("XÁC NHẬN ĐỔI") }
+            },
+            dismissButton = { TextButton(onClick = { showMethod = false }) { Text("KHÔNG ĐỔI") } }
+        )
+    }
 
     if (showDelete) {
         AlertDialog(

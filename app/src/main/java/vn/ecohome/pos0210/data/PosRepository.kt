@@ -40,6 +40,13 @@ class PosRepository(private val db:PosDatabase){
             if(!v.imageUri.isNullOrBlank()) dao.enqueueSync(SyncQueueEntity(UUID.randomUUID().toString(),"MEDIA","menu_"+v.id,"UPSERT",v.imageUri,now,now))
         }
     }
+    /** Xoá hẳn món chưa từng bán và báo Cloud xoá theo (tombstone), để máy khác không kéo món này về lại. */
+    suspend fun deleteUnusedMenuItem(id:String):Boolean = db.withTransaction {
+        val now=System.currentTimeMillis()
+        val n=dao.deleteUnusedMenuItem(id)
+        if(n==1) dao.enqueueSync(SyncQueueEntity(UUID.randomUUID().toString(),"MENU_ITEM",id,"DELETE","",now,now))
+        n==1
+    }
     suspend fun saveEmployee(v:EmployeeEntity)=dao.saveEmployee(v)
     suspend fun saveSupplier(v:SupplierEntity)=dao.saveSupplier(v)
     suspend fun savePurchaseCategory(v:PurchaseCategoryEntity)=dao.savePurchaseCategory(v)

@@ -2777,6 +2777,11 @@ fun MenuManager(vm: PosViewModel) {
     var editTarget by remember { mutableStateOf<MenuItemEntity?>(null) }
     var deleteTarget by remember { mutableStateOf<MenuItemEntity?>(null) }
     var imageTarget by remember { mutableStateOf<MenuItemEntity?>(null) }
+    var codeTarget by remember { mutableStateOf<MenuItemEntity?>(null) }
+    var codeText by remember { mutableStateOf("") }
+    var purgeTarget by remember { mutableStateOf<MenuItemEntity?>(null) }
+    var menuMsg by remember { mutableStateOf("") }
+    val menuUser by vm.currentEmployee.collectAsState()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             runCatching {
@@ -2798,6 +2803,7 @@ fun MenuManager(vm: PosViewModel) {
             Button(onClick = { showAdd = true }, modifier = Modifier.weight(1f)) { Text("＋ THÊM MÓN") }
             OutlinedButton(onClick = { showCategoryManager = true }, modifier = Modifier.weight(1f)) { Text("NHÓM MÓN") }
         }
+        if (menuMsg.isNotBlank()) Text(menuMsg, Modifier.padding(horizontal = 16.dp), fontWeight = FontWeight.Bold, color = Color(0xFF9A3412))
         LazyColumn {
             items(menu) { m ->
                 Card(Modifier.fillMaxWidth().padding(6.dp)) {
@@ -2830,6 +2836,8 @@ fun MenuManager(vm: PosViewModel) {
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         TextButton(onClick = { editTarget = m }) { Text("SỬA") }
+                        TextButton(onClick = { codeTarget = m; codeText = m.productCode; menuMsg = "" }) { Text("MÃ") }
+                        if (!m.active && menuUser?.role == "ADMIN") TextButton(onClick = { purgeTarget = m; menuMsg = "" }) { Text("XOÁ HẲN", color = Color(0xFFB3261E)) }
                         TextButton(onClick = {
                             imageTarget = m
                             picker.launch(arrayOf("image/*"))
@@ -2852,6 +2860,28 @@ fun MenuManager(vm: PosViewModel) {
             vm.updateMenu(original, name, price, cat, description, imageUri, active)
             editTarget = null
         }
+    }
+    codeTarget?.let { m ->
+        AlertDialog(
+            onDismissRequest = { codeTarget = null },
+            title = { Text("Sửa mã · ${m.name}") },
+            text = { Column {
+                Text("Mã hiện tại: ${m.productCode}. Lịch sử bill cũ không đổi.", fontSize = 12.sp)
+                OutlinedTextField(codeText, { codeText = it.uppercase().take(20) }, label = { Text("Mã mới (VD: AS-016)") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                if (menuMsg.isNotBlank()) Text(menuMsg, color = Color(0xFFB3261E), fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+            } },
+            confirmButton = { Button(onClick = { vm.updateMenuCode(m, codeText) { err -> if (err == null) { codeTarget = null; menuMsg = "Đã đổi mã ${m.name}" } else menuMsg = err } }) { Text("LƯU MÃ") } },
+            dismissButton = { TextButton(onClick = { codeTarget = null }) { Text("ĐÓNG") } }
+        )
+    }
+    purgeTarget?.let { m ->
+        AlertDialog(
+            onDismissRequest = { purgeTarget = null },
+            title = { Text("Xoá hẳn ${m.name}?") },
+            text = { Text("Chỉ xoá được món CHƯA TỪNG BÁN. Món sẽ biến mất khỏi menu trên mọi máy và web. Không hoàn tác được.") },
+            confirmButton = { Button(onClick = { vm.deleteMenuPermanently(m) { err -> purgeTarget = null; menuMsg = err ?: "Đã xoá hẳn ${m.name}" } }) { Text("XOÁ HẲN") } },
+            dismissButton = { TextButton(onClick = { purgeTarget = null }) { Text("GIỮ LẠI") } }
+        )
     }
     if (showCategoryManager) {
         CategoryManagerDialog(

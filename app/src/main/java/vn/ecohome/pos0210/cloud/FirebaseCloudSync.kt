@@ -281,6 +281,8 @@ object FirebaseCloudSync {
                 for(q in claimed.distinctBy{it.entityType to it.entityId}) {
                 if(q.entityType=="MENU_ITEM"){
                     val item=dao.menuItemById(q.entityId)
+                    // Món đã bị xoá hẳn trên máy: ghi dấu xoá để máy khác và web bỏ món này.
+                    if(item==null)writes.add(root.collection("menu").document(q.entityId).path to mapOf("id" to q.entityId,"deleted" to true,"active" to false,"updatedAt" to System.currentTimeMillis()))
                     if(item!=null)writes.add(root.collection("menu").document(item.id).path to mapOf(
                         "id" to item.id,"categoryId" to item.categoryId,"name" to item.name,
                         "price" to item.price,"sortOrder" to item.sortOrder,"active" to item.active,
@@ -323,6 +325,7 @@ object FirebaseCloudSync {
         for(doc in itemDocs){
             val id=doc.getString("id")?:doc.id
             if(id in unsentItems)continue
+            if(doc.getBoolean("deleted")==true){ if(local[id]!=null)dao.deleteUnusedMenuItem(id); continue }
             val name=doc.getString("name")?:continue
             val categoryId=doc.getString("categoryId")?:continue
             val old=local[id]

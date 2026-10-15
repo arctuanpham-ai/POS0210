@@ -22,6 +22,9 @@ data class TableServiceTimingRow(val sessionId:String,val firstOrderAt:Long?,val
 @Query("SELECT * FROM ComboEntity ORDER BY sortOrder,name") fun combos():Flow<List<ComboEntity>>
 @Query("SELECT * FROM ComboItemEntity WHERE comboId=:comboId") fun comboItems(comboId:String):Flow<List<ComboItemEntity>>
 @Query("SELECT * FROM ComboItemEntity") suspend fun allComboItemsSnapshot():List<ComboItemEntity>
+/** Xoá hẳn món CHƯA từng bán, không nằm trong combo hay khuyến mãi mua-tặng. Món đã bán thì không xoá được (trả 0). */
+@Query("DELETE FROM MenuItemEntity WHERE id=:id AND NOT EXISTS(SELECT 1 FROM OrderItemEntity WHERE menuItemId=:id) AND NOT EXISTS(SELECT 1 FROM ComboItemEntity WHERE menuItemId=:id) AND NOT EXISTS(SELECT 1 FROM BuyGetPromotionEntity WHERE buyMenuItemId=:id OR giftMenuItemId=:id)") suspend fun deleteUnusedMenuItem(id:String):Int
+@Query("SELECT COUNT(*) FROM OrderItemEntity WHERE menuItemId=:id") suspend fun orderCountForMenuItem(id:String):Int
 @Query("SELECT * FROM ComboItemEntity") fun comboItemsAll():Flow<List<ComboItemEntity>>
 @Query("SELECT menuItemId AS id, SUM(qty) AS n FROM OrderItemEntity WHERE menuItemId LIKE 'combo:%' AND qty>0 GROUP BY menuItemId") fun comboOrderCounts():Flow<List<ComboOrderCount>>
 @Query("SELECT * FROM ComboEntity") suspend fun allCombosSnapshot():List<ComboEntity>

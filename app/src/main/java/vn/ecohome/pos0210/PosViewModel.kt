@@ -381,6 +381,34 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
    audit("MENU",id,"CREATE","$code | ${name.trim()} | price=$price | category=$categoryName");autoBackup();autoBackupMedia();scheduleMediaUpload();autoMasterConfig();publishCatalogChange()
   }
  }
+ /** Sửa mã món: chữ in hoa, số và gạch ngang, không trùng món khác. */
+ fun updateMenuCode(original:MenuItemEntity,raw:String,onDone:(String?)->Unit){
+  viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO){
+   fun done(m:String?){viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main){onDone(m)}}
+   if(!canManageMenu()){done("Không có quyền sửa menu");return@launch}
+   val code=raw.trim().uppercase()
+   if(!Regex("^[A-Z0-9]+(-[A-Z0-9]+)*$").matches(code)||code.length>20){done("Mã chỉ gồm chữ in hoa, số và gạch ngang, tối đa 20 ký tự (VD: AS-016)");return@launch}
+   if(code==original.productCode){done(null);return@launch}
+   if(dao.allMenuSnapshot().any{it.id!=original.id&&it.productCode.equals(code,true)}){done("Mã $code đã có món khác dùng");return@launch}
+   runCatching{repo.saveMenuItem(original.copy(productCode=code))}.onFailure{done("Không lưu được mã: ${it.message}");return@launch}
+   audit("MENU",original.id,"CODE_CHANGED","${original.productCode}->$code | ${original.name} | actor:${currentEmployee.value?.id}")
+   autoBackup();autoMasterConfig();publishCatalogChange()
+   done(null)
+  }
+ }
+ /** Xoá hẳn món rác chưa từng bán. Món đã bán chỉ được tạm ngưng để giữ lịch sử. */
+ fun deleteMenuPermanently(m:MenuItemEntity,onDone:(String?)->Unit){
+  viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO){
+   fun done(x:String?){viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main){onDone(x)}}
+   if(currentEmployee.value?.role!="ADMIN"){done("Chỉ ADMIN được xoá hẳn món");return@launch}
+   val sold=dao.orderCountForMenuItem(m.id)
+   if(sold>0){done("Món đã bán $sold lần nên không xoá hẳn được, chỉ tạm ngưng để giữ lịch sử");return@launch}
+   if(!repo.deleteUnusedMenuItem(m.id)){done("Món đang nằm trong combo hoặc khuyến mãi mua-tặng, gỡ ra trước rồi xoá");return@launch}
+   audit("MENU",m.id,"DELETED","${m.productCode} | ${m.name} | price=${m.price} | actor:${currentEmployee.value?.id}")
+   autoBackup();autoMasterConfig();publishCatalogChange()
+   done(null)
+  }
+ }
  fun updateMenu(original:MenuItemEntity,name:String,price:Long,cat:String,description:String,imageUri:String?,active:Boolean){
   if(!canManageMenu())return
   viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO){

@@ -314,6 +314,7 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
   if(!e.canOrder&&e.role!="ADMIN")return
   viewModelScope.launch{
    val existing=dao.openSessionForTable(t.id)
+   if(existing!=null&&existing.flow==PaymentFlowRules.PREPAID&&dao.billBySessionId(existing.id)==null){resumePrepaid(existing);return@launch}
    val tap=PaymentFlowRules.tableTap(paymentFlow(),postpaidException,existing!=null&&existing.flow!=PaymentFlowRules.PREPAID)
    if(tap==PaymentFlowRules.TableTap.START_PREPAID){startPrepaidOrder(t);return@launch}
    // Đơn trả sau (kể cả ngoại lệ khi đang ở chế độ Trả trước): phiên sẽ được mở với flow trả sau.
@@ -1133,6 +1134,8 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
     if(sh==null){shiftMessage.value="KHÔNG CÓ CA ĐANG MỞ";withContext(Dispatchers.Main){onDone(false)};return@withLock}
     val who=dao.employeeByPin(pin)
     if(who==null||!ShiftRules.canCloseShift(sh.staffId,who.id,who.role)){shiftMessage.value="PIN KHÔNG ĐÚNG HOẶC KHÔNG PHẢI CHỦ CA";withContext(Dispatchers.Main){onDone(false)};return@withLock}
+    val unpaid=dao.unpaidPrepaidCount()
+    if(unpaid>0){shiftMessage.value="CÒN $unpaid ĐƠN CHƯA XÁC NHẬN THU TIỀN · thu tiền hoặc huỷ có lý do trước khi ra ca";withContext(Dispatchers.Main){onDone(false)};return@withLock}
     val cashExpected=dao.shiftPaymentTotalUntil(sh.id,"CASH",Long.MAX_VALUE)
     val diff=ShiftRules.diff(counted,cashExpected)
     if(!ShiftRules.canConfirm(diff,note)){shiftMessage.value="CHÊNH LỆCH LỚN · CẦN GHI CHÚ";withContext(Dispatchers.Main){onDone(false)};return@withLock}
@@ -1389,7 +1392,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
   kitchenWarning.value=null
   return true
  }
- private fun leavePaidOrder(){prepaidCartBackup=null;kitchenPrint.value=null;printedCheckoutKey.value=null;currentSession.value=null;currentTable.value=null;screen.value="TABLES"}
+ private fun leavePaidOrder(){resumedPrepaid.value=false;skipKitchenPrint.value=false;prepaidCartBackup=null;kitchenPrint.value=null;printedCheckoutKey.value=null;currentSession.value=null;currentTable.value=null;screen.value="TABLES"}
  /** Bấm "IN LẠI" khi phiếu bếp lỗi: in lại các phiếu của đơn vừa thu tiền. */
  fun retryPaidKitchenPrint(){
   val s=currentSession.value?:return
@@ -1469,6 +1472,49 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
  }
  /** Rời màn thanh toán mà chưa thu tiền: huỷ đơn nháp, không để lại đơn chưa thu. */
  private var prepaidCartBackup:Pair<Map<String,Int>,Map<String,String>>?=null
+ /** Đơn trả trước chưa xác nhận thu tiền (đã hiện bill/QR rồi rời màn hình). */
+ val unpaidPrepaid=dao.unpaidPrepaidSessions().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
+ /** Đang thu tiền một đơn mở lại từ danh sách chưa thu: cho phép bỏ in phiếu bếp vì bếp có thể đã làm theo lời. */
+ val resumedPrepaid=MutableStateFlow(false)
+ val skipKitchenPrint=MutableStateFlow(false)
+ /** Rời màn thanh toán nhưng GIỮ đơn để xử lý sau (không huỷ). */
+ fun parkPrepaid(){
+  val s=currentSession.value
+  viewModelScope.launch{
+   if(s!=null)withContext(Dispatchers.IO){audit("SESSION",s.id,"PREPAID_PARKED","unpaid,by=${currentEmployee.value?.name.orEmpty()}")}
+   prepaidCartBackup=null;printedCheckoutKey.value=null;checkoutBillImage.value=null
+   resumedPrepaid.value=false;skipKitchenPrint.value=false
+   currentSession.value=null;currentTable.value=null;cart.value=emptyMap();cartNotes.value=emptyMap()
+   screen.value="TABLES"
+  }
+ }
+ /** Mở lại đơn chưa thu tiền để xác nhận thanh toán. */
+ fun resumePrepaid(s:TableSessionEntity){
+  val e=currentEmployee.value?:return
+  if(!e.canOrder&&e.role!="ADMIN")return
+  viewModelScope.launch{
+   val t=withContext(Dispatchers.IO){dao.allTablesSnapshot().firstOrNull{it.id==s.tableId}}?:prepaidTable
+   prepaidCartBackup=null;printedCheckoutKey.value=null;checkoutBillImage.value=null
+   cart.value=emptyMap();cartNotes.value=emptyMap()
+   currentTable.value=t;currentSession.value=s
+   resumedPrepaid.value=true;skipKitchenPrint.value=false
+   screen.value="PAY"
+  }
+ }
+ /** Khách không lấy / không trả: huỷ đơn chưa thu tiền, bắt buộc lý do. */
+ fun cancelUnpaidPrepaid(s:TableSessionEntity,reason:String,onDone:(String?)->Unit){
+  val e=currentEmployee.value
+  viewModelScope.launch(Dispatchers.IO){
+   fun done(m:String?){viewModelScope.launch(Dispatchers.Main){onDone(m)}}
+   if(e==null||!canCancelOrder()){done("Không có quyền huỷ đơn");return@launch}
+   if(reason.isBlank()){done("Bắt buộc ghi lý do");return@launch}
+   if(dao.billBySessionId(s.id)!=null){done("Đơn này đã thu tiền rồi");return@launch}
+   audit("SESSION",s.id,"PREPAID_UNPAID_CANCELLED","reason=${reason.trim()},operator=${e.name}")
+   cancelPrepaidSession(s,e.id,true)
+   autoBackup()
+   done(null)
+  }
+ }
  /** Bước soát đơn trước khi tạo đơn/in bill (chưa tạo đơn nên không tốn số thứ tự). */
  fun reviewPrepaid(){
   if(cart.value.isEmpty())return
@@ -1484,7 +1530,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
   viewModelScope.launch(Dispatchers.IO){
    if(s!=null&&s.flow==PaymentFlowRules.PREPAID&&e!=null&&dao.billBySessionId(s.id)==null)cancelPrepaidSession(s,e.id,billShown)
    withContext(Dispatchers.Main){
-    printedCheckoutKey.value=null;checkoutBillImage.value=null
+    printedCheckoutKey.value=null;checkoutBillImage.value=null;resumedPrepaid.value=false;skipKitchenPrint.value=false
     currentSession.value=null
     cart.value=backup?.first?:emptyMap();cartNotes.value=backup?.second?:emptyMap()
     screen.value="REVIEW"
@@ -1510,7 +1556,9 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
  /** Dọn các đơn trả trước còn dở (app bị tắt ở màn thanh toán): chưa có bill thì huỷ. */
  suspend fun cleanupAbandonedPrepaid(){
   val actor=currentEmployee.value?.id?:"system"
-  dao.openPrepaidSessions().forEach{ s-> if(dao.billBySessionId(s.id)==null&&s.id!=currentSession.value?.id)cancelPrepaidSession(s,actor) }
+  // Không còn tự huỷ: đơn đã lên màn thanh toán có thể khách đã trả tiền (bếp làm theo lời, tiền đã vào TK).
+  // Những đơn này nằm trong danh sách "Chưa xác nhận thu tiền" để người phụ trách thu tiền hoặc huỷ có lý do.
+  if(actor.isBlank())return
  }
  /** Huỷ đơn trả trước đã thu: bắt buộc lý do, ghi khoản hoàn, không xoá đơn. */
  val refunds=dao.refundsFlow().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
@@ -2083,6 +2131,7 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
   if(checkoutPrinting.value){printerMessage.value="ĐANG IN BILL · Vui lòng chờ in hoàn tất";return}
   val prepaidCash=session.flow==PaymentFlowRules.PREPAID&&method=="CASH"
   if(prepaidCash&&!PaymentFlowRules.canConfirmCash(session.flow,preview.total,cashReceived)){printerMessage.value="KHÁCH ĐƯA CHƯA ĐỦ TIỀN";return}
+  val skipKitchen=resumedPrepaid.value&&skipKitchenPrint.value
   val checkoutKey=CheckoutPrintPolicy.key(session.id,preview.total,qrInfo)
   if(!CheckoutPrintPolicy.canConfirm(checkoutKey,printedCheckoutKey.value,checkoutPrintAttemptedKey.value)){printerMessage.value="BILL/QR ĐÃ THAY ĐỔI · VUI LÒNG IN LẠI TRƯỚC KHI XÁC NHẬN";return}
   viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO){
@@ -2174,7 +2223,11 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
      }
     }
    }
-   if(session.flow==PaymentFlowRules.PREPAID){
+   if(session.flow==PaymentFlowRules.PREPAID&&skipKitchen){
+    // Đơn mở lại từ danh sách chưa thu tiền và bếp đã làm theo lời: không in phiếu bếp, đánh dấu đã giao.
+    dao.batches(session.id).first().filter{it.status=="WAITING"}.forEach{repo.markDeliveredAudited(it,employee.id,employee.name,"DELIVERED")}
+    audit("SESSION",session.id,"KITCHEN_SKIPPED_VERBAL","operator=${employee.name}")
+   } else if(session.flow==PaymentFlowRules.PREPAID){
     // Đơn đã ghi. Giữ màn hình ở lại cho tới khi in xong; lỗi thì để nhân viên chọn in lại hoặc tự báo bếp.
     // Chỉ chặn màn hình tối đa 5 giây. Máy in chậm hoặc lỗi thì đơn vẫn xong, app báo cảnh báo và cho order khách tiếp theo.
     kitchenOverlayOn=true

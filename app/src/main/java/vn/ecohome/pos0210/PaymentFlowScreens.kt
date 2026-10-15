@@ -457,3 +457,53 @@ fun BankReceivedBanner(vm: PosViewModel) {
         }
     }
 }
+
+
+/** Đơn trả trước đã hiện bill/QR nhưng chưa xác nhận thu tiền. Thu tiền (mở lại màn thanh toán) hoặc huỷ có lý do. */
+@Composable
+fun UnpaidPrepaidScreen(vm: PosViewModel) {
+    val list by vm.unpaidPrepaid.collectAsState()
+    val tables by vm.tables.collectAsState()
+    val employees by vm.employees.collectAsState()
+    val fmt = remember { SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()) }
+    var cancelTarget by remember { mutableStateOf<vn.ecohome.pos0210.data.TableSessionEntity?>(null) }
+    var reason by remember { mutableStateOf("") }
+    var msg by remember { mutableStateOf("") }
+    Column {
+        Header("Chưa xác nhận thu tiền · ${list.size}") { vm.screen.value = "TABLES" }
+        Text("Khách có thể đã trả tiền (CK đã vào TK hoặc đã đưa tiền mặt) và bếp đã làm. Kiểm tra rồi THU TIỀN để ghi doanh thu, hoặc HUỶ nếu khách không lấy.", Modifier.padding(horizontal = 16.dp), fontSize = 12.sp)
+        if (msg.isNotBlank()) Text(msg, Modifier.padding(horizontal = 16.dp, vertical = 4.dp), fontWeight = FontWeight.Bold, color = Color(0xFF9A2B1F))
+        if (list.isEmpty()) Text("Không còn đơn nào.", Modifier.padding(20.dp))
+        LazyColumn(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            items(list, key = { it.id }) { s ->
+                val items by vm.sessionItems(s.id).collectAsState(initial = emptyList())
+                val total by vm.total(s.id).collectAsState(initial = 0L)
+                val tableName = tables.firstOrNull { it.id == s.tableId }?.name ?: "Trả trước"
+                val who = employees.firstOrNull { it.id == s.openedBy }?.name ?: s.openedBy
+                Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), border = BorderStroke(2.dp, Color(0xFFB3261E))) {
+                    Column(Modifier.padding(14.dp)) {
+                        Text("${tableName.uppercase()} · ${vnd(total)}${if (s.dataScope != "LIVE") " · TEST" else ""}", fontSize = 22.sp, fontWeight = FontWeight.Black, color = Color(0xFF9A2B1F))
+                        Text("Lên thanh toán lúc ${fmt.format(Date(s.openedAt))} · $who", fontSize = 12.sp)
+                        items.filter { it.qty > 0 }.forEach { Text("${it.qty} × ${it.itemNameSnapshot}", fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+                        Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { vm.resumePrepaid(s) }, Modifier.weight(1f)) { Text("THU TIỀN", fontWeight = FontWeight.Black) }
+                            OutlinedButton(onClick = { reason = ""; msg = ""; cancelTarget = s }, Modifier.weight(1f)) { Text("KHÁCH KHÔNG LẤY · HUỶ") }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    cancelTarget?.let { s ->
+        AlertDialog(
+            onDismissRequest = { cancelTarget = null },
+            title = { Text("Huỷ đơn chưa thu tiền?") },
+            text = { Column {
+                Text("Chỉ huỷ khi chắc chắn khách KHÔNG trả tiền. Nếu khách đã CK hoặc đưa tiền thì bấm THU TIỀN.", fontSize = 12.sp)
+                OutlinedTextField(reason, { reason = it.take(120) }, label = { Text("Lý do bắt buộc") }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+            } },
+            confirmButton = { TextButton(enabled = reason.isNotBlank(), onClick = { vm.cancelUnpaidPrepaid(s, reason) { err -> msg = err ?: ""; if (err == null) cancelTarget = null } }) { Text("XÁC NHẬN HUỶ") } },
+            dismissButton = { TextButton(onClick = { cancelTarget = null }) { Text("ĐÓNG") } }
+        )
+    }
+}

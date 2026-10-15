@@ -176,6 +176,7 @@ fun App(vm: PosViewModel = viewModel()) {
         "DELIVERY" -> DeliveryQueue(vm)
         "PREPAID_ORDERS" -> PrepaidOrders(vm)
         "FROZEN_REFUNDS" -> FrozenRefundsScreen(vm)
+        "UNPAID_PREPAID" -> UnpaidPrepaidScreen(vm)
         "REVIEW" -> t?.let { PrepaidReview(vm, it) }
         "PAYMENT_FLOW" -> PaymentFlowSettings(vm)
         "CUSTOMERS" -> Customers(vm)
@@ -293,6 +294,15 @@ fun Tables(vm: PosViewModel) {
         Header()
         Operator(vm)
         run { val fr by vm.refunds.collectAsState(); FrozenRefundBanner(fr.filter { it.status == "FROZEN" }) { vm.screen.value = "FROZEN_REFUNDS" } }
+        val unpaidAll by vm.unpaidPrepaid.collectAsState()
+        val curSession by vm.currentSession.collectAsState()
+        val unpaidList = unpaidAll.filter { it.id != curSession?.id }
+        if (unpaidList.isNotEmpty()) Surface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).clickable { vm.screen.value = "UNPAID_PREPAID" }, color = Color(0xFFB3261E), shape = RoundedCornerShape(8.dp)) {
+            Column(Modifier.padding(10.dp)) {
+                Text("⚠ ${unpaidList.size} ĐƠN CHƯA XÁC NHẬN THU TIỀN", color = Color.White, fontWeight = FontWeight.Black, fontSize = 14.sp)
+                Text("Bấm để thu tiền hoặc huỷ có lý do. Không ra ca được khi còn đơn này.", color = Color.White, fontSize = 12.sp)
+            }
+        }
         KitchenWarningBanner(vm)
         if(testMode) Surface(Modifier.fillMaxWidth(),color=Color(0xFFFFD8D8)){Text("TEST MODE · KHÔNG TÍNH DOANH THU",Modifier.fillMaxWidth().padding(8.dp),textAlign=TextAlign.Center,fontWeight=FontWeight.Black,color=Color.Red)}
         Row(
@@ -326,6 +336,7 @@ fun Tables(vm: PosViewModel) {
         val shownCards = if (!prepaidMode) tableCards else ts.mapIndexed { index, tb ->
             val openPostpaid = ss.firstOrNull { it.tableId == tb.id && it.flow != PaymentFlowRules.PREPAID }
             if (openPostpaid != null) return@mapIndexed tableCards[index].copy(busyLabel = "● TRẢ SAU · ĐANG DÙNG")
+            if (unpaidList.any { it.tableId == tb.id }) return@mapIndexed TableCardUi(tb.id, tb.name, areas.firstOrNull { it.id == tb.areaId }?.name ?: tb.areaId, true, null, null, null, "● CHƯA THU TIỀN")
             val mine = waitingOrders.filter { it.tableId == tb.id }.minByOrNull { it.serviceNo }
             val rank = mine?.let { m -> waitingOrders.sortedBy { it.serviceNo }.indexOfFirst { it.batchId == m.batchId } }
             TableCardUi(tb.id, tb.name, areas.firstOrNull { it.id == tb.areaId }?.name ?: tb.areaId, mine != null, mine?.serviceNo, rank, null, "● ĐANG CHỜ MÓN")
@@ -938,9 +949,22 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
     }
     Column {
         var confirmEdit by remember { mutableStateOf(false) }
+        var confirmLeave by remember { mutableStateOf(false) }
         Header(if (isPrepaid) "Thanh toán trước" else "Thanh toán") {
-            if (isPrepaid) { if (billPrinted) confirmEdit = true else vm.editPrepaidOrder() } else vm.screen.value = "SENT"
+            if (isPrepaid) confirmLeave = true else vm.screen.value = "SENT"
         }
+        if (confirmLeave) AlertDialog(
+            onDismissRequest = { confirmLeave = false },
+            title = { Text("Khách đã trả tiền chưa?") },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Nếu khách ĐÃ trả (tiền mặt hoặc CK), hãy ở lại và bấm XÁC NHẬN. Rời màn hình mà không xác nhận thì đơn nằm trong danh sách CHƯA THU TIỀN, không bị mất.", fontSize = 13.sp)
+                Button(onClick = { confirmLeave = false }, Modifier.fillMaxWidth()) { Text("Ở LẠI · XÁC NHẬN THU TIỀN") }
+                OutlinedButton(onClick = { confirmLeave = false; if (billPrinted) confirmEdit = true else vm.editPrepaidOrder() }, Modifier.fillMaxWidth()) { Text("CHƯA TRẢ · SỬA ĐƠN") }
+                OutlinedButton(onClick = { confirmLeave = false; vm.parkPrepaid() }, Modifier.fillMaxWidth()) { Text("ĐỂ ĐÓ · XỬ LÝ SAU") }
+            } },
+            confirmButton = {},
+            dismissButton = {}
+        )
         if (confirmEdit) AlertDialog(
             onDismissRequest = { confirmEdit = false },
             title = { Text("Sửa đơn sau khi đã in bill?") },
@@ -1176,6 +1200,19 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                 }else if(ambiguousEvent!=null){
                     Text("Đã phát hiện giao dịch cùng số tiền nhưng chưa xác định được bill.",Modifier.padding(top=8.dp),color=Color(0xFF9A5B28),fontSize=12.sp,fontWeight=FontWeight.Bold)
                 }else Text("Đang chờ thông báo ngân hàng · vẫn có thể xác nhận thủ công",Modifier.padding(top=8.dp),fontSize=11.sp)
+            }
+            if (isPrepaid) {
+                val resumed by vm.resumedPrepaid.collectAsState()
+                val skipK by vm.skipKitchenPrint.collectAsState()
+                if (resumed) Surface(Modifier.fillMaxWidth().padding(bottom = 6.dp), color = Color(0xFFFFF1D6), shape = RoundedCornerShape(8.dp)) {
+                    Column(Modifier.padding(10.dp)) {
+                        Text("ĐƠN MỞ LẠI · chưa xác nhận thu tiền trước đó", fontWeight = FontWeight.Black)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(skipK, { vm.skipKitchenPrint.value = it })
+                            Text("Bếp đã làm theo lời gọi: KHÔNG in phiếu bếp, đánh dấu đã giao", fontSize = 13.sp)
+                        }
+                    }
+                }
             }
             if (isPrepaid) payControls()
         }

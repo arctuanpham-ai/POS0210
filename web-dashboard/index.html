@@ -17,7 +17,7 @@
         <p class="eyebrow">0210 · BREAKFAST · COFFEE · DRINKS</p>
         <h1 id="login-title">Manager realtime</h1>
         <p class="muted">Theo dõi quán và nhập phiếu tài chính từ xa.</p>
-        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.15.1 · Tải menu</p>
+        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.15.2 · Giá vốn</p>
         <label>Email Firebase<input id="email" type="email" autocomplete="username" inputmode="email" /></label>
         <label>Mật khẩu<input id="password" type="password" autocomplete="current-password" /></label>
         <label class="show-password"><input id="show-password" type="checkbox" /> Hiện mật khẩu để kiểm tra khi gõ</label>
@@ -34,7 +34,7 @@
           <div class="heading-actions"><button id="refresh-dashboard" class="secondary">Làm mới</button><button id="request-sync" class="secondary" title="Yêu cầu máy POS ở quán đồng bộ ngay">Yêu cầu đồng bộ</button><button id="logout-button" class="text-button">Đăng xuất</button></div>
         </header>
 
-        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.15.1 · Tải menu</p>
+        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.15.2 · Giá vốn</p>
 
         <nav class="tabbar" id="tabbar" aria-label="Các trang">
           <a href="#ban" data-tab="ban">Bàn</a>
@@ -42,6 +42,7 @@
           <a href="#bill" data-tab="bill">Lịch sử bill</a>
           <a href="#thanhtoan" data-tab="thanhtoan">Thanh toán</a>
           <a href="#taichinh" data-tab="taichinh">Tài chính</a>
+          <a href="#giavon" data-tab="giavon">Giá vốn</a>
         </nav>
 
         <div class="page" data-page="ban" hidden>
@@ -98,6 +99,20 @@
           <div><p class="eyebrow">QUY TRÌNH THANH TOÁN</p><h2>Chế độ, lịch sử đổi và hoàn tiền</h2></div>
         </section>
         <section id="payment-flow" class="payment-flow" aria-live="polite"></section>
+        </div>
+
+        <div class="page" data-page="giavon" hidden>
+        <section class="section-heading first-section">
+          <div><p class="eyebrow">GIÁ VỐN MÓN</p><h2>Công thức và cost theo giá nhập</h2></div>
+          <div class="heading-actions"><button id="reload-recipes" type="button" class="secondary">Tải lại</button></div>
+        </section>
+        <p class="muted">Giá vật tư lấy từ phiếu chi CHI TIẾT chưa huỷ (bình quân 30 ngày, không có thì lấy lần mua gần nhất). Phiếu tổng không cho ra giá vật tư. Bấm một món để kéo tăng giảm định lượng rồi lưu.</p>
+        <p id="recipe-note" class="muted" role="status"></p>
+        <section id="recipe-list" class="recipe-list" aria-live="polite"></section>
+        <section class="section-heading compact">
+          <div><p class="eyebrow">GIÁ VẬT TƯ</p><h2>Từ phiếu chi đã nhập</h2></div>
+        </section>
+        <section id="material-costs" class="material-costs"></section>
         </div>
 
         <div class="page" data-page="taichinh" hidden>
@@ -172,6 +187,18 @@
         <p id="detail-meta" class="muted"></p>
         <ul id="detail-items" class="order-list"></ul>
         <footer id="detail-total" class="detail-total"></footer>
+      </article>
+    </dialog>
+
+    <dialog id="recipe-dialog">
+      <article>
+        <div class="dialog-header"><div><p class="eyebrow">CÔNG THỨC</p><h2 id="recipe-title"></h2></div><button id="close-recipe" type="button" class="text-button">Đóng</button></div>
+        <p id="recipe-meta" class="muted"></p>
+        <div id="recipe-lines" class="recipe-lines"></div>
+        <div class="recipe-add"><select id="recipe-add-select" aria-label="Thêm vật tư"></select><button id="recipe-add" type="button" class="secondary">+ Thêm</button></div>
+        <p class="entry-total">Giá vốn: <strong id="recipe-total">—</strong> · <span id="recipe-percent">—</span></p>
+        <p id="recipe-error" class="error" role="alert"></p>
+        <div class="recipe-actions"><button id="recipe-draft" type="button" class="text-button">Dùng bản nháp gợi ý</button><button id="recipe-save" type="button" class="primary">LƯU CÔNG THỨC</button></div>
       </article>
     </dialog>
 
@@ -307,6 +334,6 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261015-1"></script>
+    <script type="module" src="app.js?v=20261015-2"></script>
   </body>
 </html>

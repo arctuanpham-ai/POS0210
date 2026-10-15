@@ -12,8 +12,8 @@ android {
         applicationId = "vn.ecohome.pos0210"
         minSdk = 26
         targetSdk = 35
-        versionCode = 148
-        versionName = "1.0.0-alpha115-daily-heal"
+        versionCode = 149
+        versionName = "1.0.0-alpha116-postpaid-exception"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {

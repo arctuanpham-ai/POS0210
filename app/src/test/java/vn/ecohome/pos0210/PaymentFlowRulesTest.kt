@@ -46,4 +46,18 @@ class PaymentFlowRulesTest {
         assertEquals("ĐÃ GIAO", PaymentFlowRules.statusLabel("PAID", "DELIVERED"))
         assertEquals("ĐÃ HUỶ · HOÀN TIỀN", PaymentFlowRules.statusLabel("REFUNDED", "CANCELLED"))
     }
+
+    @Test fun tapRoutesEachOrderByItsOwnFlowWithoutPerTableSwitch() {
+        val pre = PaymentFlowRules.PREPAID
+        val post = PaymentFlowRules.POSTPAID
+        assertEquals(PaymentFlowRules.TableTap.START_PREPAID, PaymentFlowRules.tableTap(pre, false, false))
+        assertEquals(PaymentFlowRules.TableTap.START_POSTPAID, PaymentFlowRules.tableTap(pre, true, false))
+        assertEquals(PaymentFlowRules.TableTap.START_POSTPAID, PaymentFlowRules.tableTap(post, false, false))
+        // bàn đã có phiên trả sau chưa thanh toán: luôn mở lại phiên đó, dù chế độ chung là gì và có bấm ngoại lệ hay không
+        assertEquals(PaymentFlowRules.TableTap.OPEN_EXISTING, PaymentFlowRules.tableTap(pre, false, true))
+        assertEquals(PaymentFlowRules.TableTap.OPEN_EXISTING, PaymentFlowRules.tableTap(post, false, true))
+        assertEquals(PaymentFlowRules.TableTap.OPEN_EXISTING, PaymentFlowRules.tableTap(pre, true, true))
+        // giá trị lạ được coi là Trả sau (normalize)
+        assertEquals(PaymentFlowRules.TableTap.START_POSTPAID, PaymentFlowRules.tableTap("garbage", false, false))
+    }
 }

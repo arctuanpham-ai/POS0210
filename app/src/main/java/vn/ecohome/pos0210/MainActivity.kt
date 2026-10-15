@@ -321,13 +321,24 @@ fun Tables(vm: PosViewModel) {
                     TableCardUi(tb.id,tb.name,areaName,open!=null,nextService?.serviceNo,priorityRank,serviceTimer)
         }
         val waitingOrders by vm.waitingOrders.collectAsState()
-        val shownCards = if (!prepaidMode) tableCards else ts.map { tb ->
+        var postpaidException by remember { mutableStateOf(false) }
+        val shownCards = if (!prepaidMode) tableCards else ts.mapIndexed { index, tb ->
+            val openPostpaid = ss.firstOrNull { it.tableId == tb.id && it.flow != PaymentFlowRules.PREPAID }
+            if (openPostpaid != null) return@mapIndexed tableCards[index].copy(busyLabel = "● TRẢ SAU · ĐANG DÙNG")
             val mine = waitingOrders.filter { it.tableId == tb.id }.minByOrNull { it.serviceNo }
             val rank = mine?.let { m -> waitingOrders.sortedBy { it.serviceNo }.indexOfFirst { it.batchId == m.batchId } }
             TableCardUi(tb.id, tb.name, areas.firstOrNull { it.id == tb.areaId }?.name ?: tb.areaId, mine != null, mine?.serviceNo, rank, null, "● ĐANG CHỜ MÓN")
         }
-        if (prepaidMode) Text("TRẢ TRƯỚC · Chọn số thẻ bàn của khách", Modifier.padding(horizontal = 14.dp), fontWeight = FontWeight.Black, color = Coffee)
-        ResponsiveTableGrid(shownCards,Modifier.weight(1f).fillMaxWidth().padding(horizontal=12.dp,vertical=8.dp)){id->ts.firstOrNull{it.id==id}?.let(vm::selectTable)}
+        if (prepaidMode) {
+            Row(Modifier.padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (postpaidException) "TRẢ SAU · Chọn bàn của khách (gọi món, vào bếp, trả tiền sau)" else "TRẢ TRƯỚC · Chọn số thẻ bàn của khách",
+                    Modifier.weight(1f), fontWeight = FontWeight.Black, color = Coffee
+                )
+                FilterChip(postpaidException, { postpaidException = !postpaidException }, { Text("TRẢ SAU", maxLines = 1, softWrap = false) })
+            }
+        }
+        ResponsiveTableGrid(shownCards,Modifier.weight(1f).fillMaxWidth().padding(horizontal=12.dp,vertical=8.dp)){id->ts.firstOrNull{it.id==id}?.let{vm.selectTable(it,postpaidException)};postpaidException=false}
 
         if (waiting.isNotEmpty()) {
             Button(
@@ -351,7 +362,8 @@ fun Order(vm: PosViewModel, t: DiningTableEntity) {
     val orderTest by vm.businessTestMode.collectAsState()
     val orderSession by vm.currentSession.collectAsState()
     val orderFlowSettings by vm.settings.collectAsState()
-    val orderIsPrepaid = orderSession?.flow == PaymentFlowRules.PREPAID || (orderSession == null && PaymentFlowRules.normalize(orderFlowSettings.firstOrNull { it.key == PaymentFlowRules.SETTING_KEY }?.value) == PaymentFlowRules.PREPAID)
+    val orderFlowOverride by vm.orderFlowOverride.collectAsState()
+    val orderIsPrepaid = orderSession?.flow == PaymentFlowRules.PREPAID || (orderSession == null && PaymentFlowRules.normalize(orderFlowOverride ?: orderFlowSettings.firstOrNull { it.key == PaymentFlowRules.SETTING_KEY }?.value) == PaymentFlowRules.PREPAID)
     val orderBlocked = (orderSession?.dataScope ?: if (orderTest) "TEST" else "LIVE") == "LIVE" && !ShiftRules.canPay(orderShift?.staffId, orderUser?.id ?: "")
     val ms by vm.menu.collectAsState()
     val combos by vm.combos.collectAsState()

@@ -21,6 +21,21 @@ object PaymentFlowRules {
         else -> null
     }
 
+    /** Chạm vào một bàn/thẻ bàn sẽ làm gì. */
+    enum class TableTap { START_PREPAID, START_POSTPAID, OPEN_EXISTING }
+
+    /**
+     * Quy trình của một đơn do từng đơn quyết định, không cần công tắc theo bàn:
+     * - bàn đang có phiên trả sau chưa thanh toán: mở lại phiên đó (thêm món, thanh toán), dù đang ở chế độ nào;
+     * - chế độ Trả trước và không chọn ngoại lệ: tạo đơn trả trước như thường;
+     * - còn lại (chế độ Trả sau, hoặc Trả trước nhưng nhân viên chọn ngoại lệ): mở phiên trả sau trên bàn.
+     */
+    fun tableTap(globalFlow: String, postpaidException: Boolean, hasOpenPostpaidSession: Boolean): TableTap = when {
+        hasOpenPostpaidSession -> TableTap.OPEN_EXISTING
+        normalize(globalFlow) == PREPAID && !postpaidException -> TableTap.START_PREPAID
+        else -> TableTap.START_POSTPAID
+    }
+
     /** Tiền thối; null nếu khách đưa chưa đủ. */
     fun change(total: Long, received: Long): Long? = if (received >= total) received - total else null
 

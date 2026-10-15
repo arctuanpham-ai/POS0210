@@ -294,13 +294,19 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
  }
  fun setCartNote(key:String,note:String){cartNotes.value=cartNotes.value.toMutableMap().apply{if(note.isBlank())remove(key) else put(key,note.take(120))}}
  fun add(i:MenuItemEntity){cart.value=cart.value.toMutableMap().apply{put(i.id,(get(i.id)?:0)+1)}};fun sub(i:MenuItemEntity){cart.value=cart.value.toMutableMap().apply{val q=get(i.id)?:0;if(q<=1){remove(i.id);setCartNote(i.id,"")}else put(i.id,q-1)}};fun addCombo(i:ComboEntity){val k="combo:"+i.id;cart.value=cart.value.toMutableMap().apply{put(k,(get(k)?:0)+1)}};fun subCombo(i:ComboEntity){val k="combo:"+i.id;cart.value=cart.value.toMutableMap().apply{val q=get(k)?:0;if(q<=1){remove(k);setCartNote(k,"")}else put(k,q-1)}}
- fun selectTable(t:DiningTableEntity){
+ /** Quy trình riêng của đơn đang soạn khi chưa có phiên. null = theo chế độ chung. */
+ val orderFlowOverride=MutableStateFlow<String?>(null)
+ fun orderFlow():String=orderFlowOverride.value?:paymentFlow()
+ fun selectTable(t:DiningTableEntity,postpaidException:Boolean=false){
   val e=currentEmployee.value?:return
   if(!e.canOrder&&e.role!="ADMIN")return
-  if(paymentFlow()==PaymentFlowRules.PREPAID){startPrepaidOrder(t);return}
   viewModelScope.launch{
-   currentTable.value=t
    val existing=dao.openSessionForTable(t.id)
+   val tap=PaymentFlowRules.tableTap(paymentFlow(),postpaidException,existing!=null&&existing.flow!=PaymentFlowRules.PREPAID)
+   if(tap==PaymentFlowRules.TableTap.START_PREPAID){startPrepaidOrder(t);return@launch}
+   // Đơn trả sau (kể cả ngoại lệ khi đang ở chế độ Trả trước): phiên sẽ được mở với flow trả sau.
+   orderFlowOverride.value=PaymentFlowRules.POSTPAID
+   currentTable.value=t
    cart.value=emptyMap();cartNotes.value=emptyMap()
    if(existing!=null){
     currentSession.value=existing
@@ -1444,6 +1450,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
   viewModelScope.launch{
    val shift=dao.activeShift()
    if(!ShiftRules.canCreateOrder(shift!=null,businessTestMode.value)){orderMessage.value="CHƯA VÀO CA · Bắt đầu ca trước";screen.value="SHIFT_START";return@launch}
+   orderFlowOverride.value=null
    cart.value=emptyMap();cartNotes.value=emptyMap();currentSession.value=null;currentTable.value=t
    screen.value="ORDER"
   }
@@ -1534,7 +1541,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    val sessionScope=currentSession.value?.dataScope?:if(businessTestMode.value)"TEST" else "LIVE"
    if(sessionScope=="LIVE"&&!ShiftRules.canPay(runningShift?.staffId,e.id)){orderMessage.value="ĐANG TRONG CA CỦA ${runningShift?.staffName} · CHỈ ${runningShift?.staffName} ĐƯỢC ORDER";return@launch}
    if(!ShiftRules.canCreateOrder(dao.activeShift()!=null,businessTestMode.value)){orderMessage.value="CHƯA VÀO CA · Bắt đầu ca trước khi gửi order";screen.value="SHIFT_START";return@launch}
-   val s=currentSession.value ?: repo.openSession(t.id,e.id,if(businessTestMode.value)"TEST" else "LIVE",paymentFlow()).also{currentSession.value=it}
+   val s=currentSession.value ?: repo.openSession(t.id,e.id,if(businessTestMode.value)"TEST" else "LIVE",orderFlow()).also{currentSession.value=it}
    val bs=dao.batches(s.id).first()
    val historical=bs.filter{it.status!="CANCELLED"}.flatMap{dao.batchItems(it.id).first()}
    val its=mutableListOf<OrderItemEntity>()

@@ -5,10 +5,10 @@ const cell = (v) => {
   return /[",\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
 };
 
-/** Một dòng mỗi món, xếp theo thứ tự nhóm rồi thứ tự món. Món tắt vẫn xuất, cột dang_ban = false. */
+/** Món đã xoá hẳn (dấu xoá từ máy POS) bị bỏ qua. Một dòng mỗi món, xếp theo thứ tự nhóm rồi thứ tự món. Món tắt vẫn xuất, cột dang_ban = false. */
 export const menuCsv = (items, categories) => {
   const cats = new Map((categories || []).map((c) => [String(c.id), c]));
-  const rows = (items || []).slice().sort((a, b) => {
+  const rows = (items || []).filter((m) => m.deleted !== true && m.name).sort((a, b) => {
     const ca = cats.get(String(a.categoryId)), cb = cats.get(String(b.categoryId));
     return Number(ca?.sortOrder ?? 9999) - Number(cb?.sortOrder ?? 9999) || Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0) || String(a.name).localeCompare(String(b.name));
   });

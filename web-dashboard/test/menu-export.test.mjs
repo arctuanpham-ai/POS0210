@@ -13,3 +13,9 @@ test("menu CSV: theo thứ tự nhóm, giữ món tắt, bọc ký tự đặc b
   assert.equal(lines[1], 'Đồ ăn,"Cơm gà, xé",59000,false,,"gà ""ta"""');
   assert.equal(lines[2], "Đồ uống,Cà phê sữa,29000,true,,");
 });
+
+test("bỏ món đã xoá hẳn trên máy POS", () => {
+  const lines = menuCsv([{ id: "x", deleted: true, active: false }, { id: "a", name: "Trà đá", price: 5000, categoryId: "c" }], [{ id: "c", name: "Trà" }]).trim().split("\r\n");
+  assert.equal(lines.length, 2);
+  assert.match(lines[1], /^Trà,Trà đá,5000/);
+});

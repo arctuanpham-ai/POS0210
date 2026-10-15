@@ -28,6 +28,7 @@ import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, norma
 import { buildSimulation } from "./sim-data.js?v=20261014-10";
 import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261014-9";
 import { menuCsv } from "./menu-export.js?v=20261015-1";
+import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, materialById, materialCosts, recipeCost, sliderSpec } from "./cost-recipe.js?v=20261015-2";
 import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261014-9";
 import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261014-6";
 import { buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261014-4";
@@ -54,7 +55,7 @@ const state = {
   purchaseCategories: [], profitPartners: [], assetCategories: [], suppliers: [],
   unsubs: [], paymentFlowDoc: null, refunds: [], frozenRefundDocs: [], flowError: "", dailyDocs: {}, dailyError: "", salesLoaded: false, salesDays: 7, itemMode: "combined", period: "today", customFrom: null, customTo: null,
   transactionKind: "ALL", payerFilter: "ALL", user: null,
-  expenseRules: [], rulesError: "", simulation: null, monthlyDocs: {}, monthlyError: "", reportFrom: 0, receiptsNote: "", detailCutoff: null, receiptsFrom: 0, summaryBlocks: [], historyDay: "today", historyDocs: {}, historyTables: null, historyError: "", historyLoading: false, billDetailCache: {},
+  expenseRules: [], rulesError: "", simulation: null, menuItems: [], menuCats: [], recipes: {}, recipesLoaded: false, recipeError: "", monthlyDocs: {}, monthlyError: "", reportFrom: 0, receiptsNote: "", detailCutoff: null, receiptsFrom: 0, summaryBlocks: [], historyDay: "today", historyDocs: {}, historyTables: null, historyError: "", historyLoading: false, billDetailCache: {},
 };
 let expenseDraft = null;
 let editingReceipt = null;
@@ -74,6 +75,8 @@ const SIM_BLOCKED = "Đang ở chế độ mô phỏng: không ghi dữ liệu t
 const setDoc = (...args) => { if (state.simulation) throw new Error(SIM_BLOCKED); return rawSetDoc(...args); };
 const writeBatch = (...args) => { if (state.simulation) throw new Error(SIM_BLOCKED); return rawWriteBatch(...args); };
 
+/** Quy tắc đã học của quán trước, rồi tên vật tư chuẩn trong danh mục. */
+const allRules = () => [...state.expenseRules, ...catalogRules];
 const $ = (selector) => document.querySelector(selector);
 const money = (value) => `${new Intl.NumberFormat("vi-VN").format(Number(value || 0))}đ`;
 const dateTime = (value) => value ? new Intl.DateTimeFormat("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }).format(new Date(value)) : "—";
@@ -564,7 +567,7 @@ const MATERIAL_UNITS = ["kg","gam","lít","ml","con","quả","bó","túi","hộp
 function savedMaterials() { try { return JSON.parse(localStorage.getItem(`pos0210.materials.${state.user?.uid}`) || "[]"); } catch { return []; } }
 function rememberMaterials(items) { const records = savedMaterials(); for (const item of items) { const name = String(item.materialName || "").trim(); if (!name) continue; const index = records.findIndex((r) => normalizeMaterial(r.materialName) === normalizeMaterial(name)); const record = { materialName: name, materialCode: item.materialCode, expenseGroup: item.expenseGroup, unit: item.unit }; if (index >= 0) records[index] = record; else records.push(record); } localStorage.setItem(`pos0210.materials.${state.user?.uid}`, JSON.stringify(records.slice(-500))); }
 function materialOptions(field, search) {
-  const values = field === "expenseGroup" ? MATERIAL_GROUPS.map(([, name]) => name) : field === "unit" ? MATERIAL_UNITS : [...new Set([...savedMaterials().map((x) => x.materialName), ...(expenseDraft?.items || []).map((x) => x.materialName)].filter(Boolean))];
+  const values = field === "expenseGroup" ? MATERIAL_GROUPS.map(([, name]) => name) : field === "unit" ? MATERIAL_UNITS : [...new Set([...savedMaterials().map((x) => x.materialName), ...MATERIALS.map((m) => m.name), ...(expenseDraft?.items || []).map((x) => x.materialName)].filter(Boolean))];
   return filterMaterialOptions(values, search);
 }
 function updateMaterialSuggestions(input) {
@@ -592,7 +595,7 @@ function refreshRuleHint(line) {
   if (!hint) return;
   const name = line.querySelector("[data-field=materialName]").value;
   if (!name.trim()) { hint.textContent = ""; hint.className = "rule-hint"; return; }
-  const s = classifyMaterial(name, state.expenseRules);
+  const s = classifyMaterial(name, allRules());
   const chosen = groupCodeOrNull(line.querySelector("[data-field=expenseGroup]").value);
   let text, warn = false;
   if (s.status === "learned" || s.status === "matched") {
@@ -671,7 +674,7 @@ async function saveExpenseReceipt(event) {
   if (missingGroup >= 0) { error.textContent = `Dòng ${missingGroup + 1}: hãy chọn nhóm vật tư.`; return; }
   const learnList = rulesToLearn(expenseDraft.items, state.expenseRules);
   expenseDraft.items = expenseDraft.items.map(({ groupTouched, ...item }) => {
-    const suggestion = classifyMaterial(item.materialName, state.expenseRules);
+    const suggestion = classifyMaterial(item.materialName, allRules());
     const chosen = groupCodeOrNull(item.expenseGroup);
     const source = suggestion.group && suggestion.group === chosen ? (suggestion.status === "learned" ? "LEARNED_RULE" : "KEYWORD_RULE") : "MANUAL";
     return { ...item, ...normalizeQuantity(item.qty, item.unit), classification: { source, suggestedGroup: suggestion.group, status: suggestion.status } };
@@ -736,6 +739,7 @@ function render() {
   renderClassificationReview();
   renderDetailLevel();
   renderMonthlyReport();
+  if (state.recipesLoaded) renderRecipes();
   renderFinanceMetadata();
   renderTransactions();
 }
@@ -994,7 +998,7 @@ $("#expense-lines").addEventListener("change", (event) => {
   const line = input.closest(".expense-line");
   if (!line) return;
   if (input.matches("[data-field=materialName]")) {
-    const suggestion = classifyMaterial(input.value, state.expenseRules);
+    const suggestion = classifyMaterial(input.value, allRules());
     // Nhóm tự điền không được sót lại khi đổi tên: gợi ý rõ thì điền, mơ hồ hoặc chưa khớp thì xoá để buộc người nhập chọn.
     if (line.dataset.groupTouched !== "1") line.querySelector("[data-field=expenseGroup]").value = suggestion.group ? groupLabelOf(suggestion.group) : "";
     const known = savedMaterials().find((item) => normalizeMaterial(item.materialName) === normalizeMaterial(input.value));
@@ -1351,6 +1355,121 @@ async function exportMenu() {
   } catch (error) { note.textContent = error.code === "permission-denied" ? "Không có quyền đọc menu (menu, menuCategories)." : `Không tải được menu: ${error.message}`; }
 }
 
+/* ---------- Giá vốn món: menu + công thức (recipes/{menuId}) + giá vật tư từ phiếu chi ---------- */
+const isFoodCategory = (name) => /an sang|com|bun|do an|an vat/.test(String(name || "").toLocaleLowerCase("vi").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d"));
+const fmtQty = (q) => (Math.round(Number(q) * 100) / 100).toLocaleString("vi-VN");
+const unitPriceLabel = (m, unitCost) => (m.base === "g" || m.base === "ml") ? `${money(Math.round(unitCost * 1000))}/${m.base === "g" ? "kg" : "lít"}` : `${money(Math.round(unitCost))}/${m.base}`;
+let recipeEdit = null;
+async function loadRecipes() {
+  $("#recipe-note").textContent = "Đang đọc menu và công thức…";
+  try {
+    const [items, cats, recs] = await Promise.all([getDocs(collection(db, ...root, "menu")), getDocs(collection(db, ...root, "menuCategories")), getDocs(collection(db, ...root, "recipes"))]);
+    state.menuItems = rows(items).filter((m) => m.deleted !== true && m.name);
+    state.menuCats = rows(cats);
+    state.recipes = Object.fromEntries(rows(recs).map((r) => [r.id, r]));
+    state.recipesLoaded = true;
+    state.recipeError = "";
+  } catch (error) { state.recipeError = error.code === "permission-denied" ? "Không có quyền đọc menu hoặc công thức (cần mở quy tắc Firestore cho recipes)." : (error.message || "lỗi không rõ"); }
+  renderRecipes();
+}
+function currentCosts() { return materialCosts(state.expenseReceipts); }
+function recipeLinesFor(item) { return state.recipes[item.id]?.lines?.map((l) => ({ ...l })) ?? draftRecipeFor(item.name); }
+function renderRecipes() {
+  const host = $("#recipe-list");
+  if (!host) return;
+  const { costs, unconvertible } = currentCosts();
+  const priced = MATERIALS.filter((m) => costs[m.id]).length;
+  $("#recipe-note").textContent = state.recipeError || `${priced}/${MATERIALS.length} vật tư đã có giá từ phiếu chi${unconvertible.length ? ` · ${unconvertible.length} dòng phiếu không quy đổi được đơn vị` : ""}${state.simulation ? " · ĐANG MÔ PHỎNG" : ""}.`;
+  const cats = new Map(state.menuCats.map((c) => [String(c.id), c]));
+  const items = state.menuItems.filter((m) => m.active !== false).sort((a, b) => Number(cats.get(String(a.categoryId))?.sortOrder ?? 99) - Number(cats.get(String(b.categoryId))?.sortOrder ?? 99) || Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0));
+  host.innerHTML = items.map((item) => {
+    const catName = cats.get(String(item.categoryId))?.name ?? "";
+    const lines = recipeLinesFor(item);
+    const saved = Boolean(state.recipes[item.id]);
+    const r = recipeCost(lines, costs, item.price);
+    // Thiếu giá vật tư nào thì không kết luận %: chỉ hiện phần đã tính được (≥).
+    const level = lines.length && !r.missing.length ? costLevel(r.percent, isFoodCategory(catName)) : "unknown";
+    const pct = r.percent === null || !lines.length || r.missing.length ? "—" : `${Math.round(r.percent * 100)}%`;
+    const costText = !lines.length ? "—" : r.missing.length ? (r.total > 0 ? `≥ ${money(r.total)}` : "chưa đủ giá") : money(r.total);
+    const status = !lines.length ? "chưa có công thức" : saved ? "đã lưu" : "bản nháp";
+    return `<button type="button" class="recipe-row" data-menu-id="${escapeHtml(item.id)}"><span class="recipe-name"><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(catName)} · ${status}${r.missing.length ? ` · thiếu giá: ${escapeHtml(r.missing.join(", "))}` : ""}</small></span><span class="recipe-num">${money(item.price)}</span><span class="recipe-num">${costText}</span><span class="cost-chip ${level}">${pct}</span></button>`;
+  }).join("") || '<p class="muted">Chưa có món nào.</p>';
+  host.querySelectorAll("[data-menu-id]").forEach((b) => b.addEventListener("click", () => openRecipe(b.dataset.menuId)));
+  $("#material-costs").innerHTML = `<div class="table-wrap"><table class="mat-table"><thead><tr><th>Vật tư</th><th>Loại</th><th>Giá</th><th>Nguồn</th></tr></thead><tbody>${MATERIALS.map((m) => {
+    const c = costs[m.id];
+    return `<tr class="${c ? "" : "dim"}"><td>${escapeHtml(m.name)}</td><td>${KIND_LABELS[m.kind]}</td><td>${c ? unitPriceLabel(m, c.unitCost) : "chưa có"}</td><td>${c ? `${c.source} · ${c.buys} lần` : ""}</td></tr>`;
+  }).join("")}</tbody></table></div>`;
+}
+function openRecipe(menuId) {
+  const item = state.menuItems.find((m) => m.id === menuId);
+  if (!item) return;
+  recipeEdit = { item, lines: recipeLinesFor(item) };
+  $("#recipe-title").textContent = `${item.name} · ${money(item.price)}`;
+  $("#recipe-meta").textContent = state.recipes[item.id] ? "Công thức đã lưu. Kéo thanh để tăng giảm định lượng." : "Bản nháp gợi ý, chưa lưu. Kéo thanh cho đúng định lượng của quán rồi bấm Lưu.";
+  $("#recipe-error").textContent = "";
+  $("#recipe-add-select").innerHTML = `<option value="">Chọn vật tư…</option>${MATERIALS.filter((m) => m.kind !== "VH").map((m) => `<option value="${m.id}">${escapeHtml(m.name)} (${m.base})</option>`).join("")}`;
+  renderRecipeLines();
+  $("#recipe-dialog").showModal();
+}
+function renderRecipeLines() {
+  const { costs } = currentCosts();
+  const host = $("#recipe-lines");
+  host.innerHTML = recipeEdit.lines.map((l, i) => {
+    const m = materialById.get(l.materialId);
+    const spec = sliderSpec(m?.base, l.qty);
+    const c = costs[l.materialId];
+    return `<div class="recipe-line" data-i="${i}"><div class="recipe-line-head"><strong>${escapeHtml(m?.name ?? l.materialId)}</strong><span data-cost>${c ? money(Math.round(l.qty * c.unitCost)) : "chưa có giá"}</span><button type="button" class="text-button" data-remove="${i}" aria-label="Bỏ ${escapeHtml(m?.name ?? "")}">Bỏ</button></div><div class="recipe-line-ctl"><input type="range" id="rq-${i}" min="${spec.min}" max="${spec.max}" step="${spec.step}" value="${l.qty}" aria-label="Định lượng ${escapeHtml(m?.name ?? "")}" /><input type="number" id="rn-${i}" min="0" step="${spec.step}" value="${l.qty}" aria-label="Số lượng" /><span class="unit">${escapeHtml(m?.base ?? "")}</span></div></div>`;
+  }).join("") || '<p class="muted">Chưa có vật tư. Chọn vật tư bên dưới để thêm.</p>';
+  host.querySelectorAll(".recipe-line").forEach((row) => {
+    const i = Number(row.dataset.i);
+    const range = row.querySelector('input[type="range"]');
+    const num = row.querySelector('input[type="number"]');
+    const set = (v) => {
+      const q = Math.max(0, Number(v) || 0);
+      recipeEdit.lines[i].qty = q;
+      range.value = q; num.value = q;
+      const c = costs[recipeEdit.lines[i].materialId];
+      row.querySelector("[data-cost]").textContent = c ? money(Math.round(q * c.unitCost)) : "chưa có giá";
+      updateRecipeTotal();
+    };
+    range.addEventListener("input", () => set(range.value));
+    num.addEventListener("input", () => set(num.value));
+    num.addEventListener("change", () => { if (Number(num.value) > Number(range.max)) renderRecipeLines(); });
+  });
+  host.querySelectorAll("[data-remove]").forEach((b) => b.addEventListener("click", () => { recipeEdit.lines.splice(Number(b.dataset.remove), 1); renderRecipeLines(); }));
+  updateRecipeTotal();
+}
+function updateRecipeTotal() {
+  const { costs } = currentCosts();
+  const r = recipeCost(recipeEdit.lines, costs, recipeEdit.item.price);
+  const cat = state.menuCats.find((c) => String(c.id) === String(recipeEdit.item.categoryId))?.name;
+  $("#recipe-total").textContent = `${money(r.total)}${r.missing.length ? ` (thiếu giá ${r.missing.length} vật tư)` : ""}`;
+  const pctEl = $("#recipe-percent");
+  pctEl.textContent = r.missing.length ? "chưa đủ giá để tính %" : r.percent === null ? "—" : `${Math.round(r.percent * 100)}% giá bán`;
+  pctEl.className = `cost-chip ${r.missing.length ? "unknown" : costLevel(r.percent, isFoodCategory(cat))}`;
+}
+async function saveRecipe() {
+  const lines = recipeEdit.lines.filter((l) => Number(l.qty) > 0).map((l) => ({ materialId: l.materialId, qty: Math.round(Number(l.qty) * 100) / 100 }));
+  const payload = { id: recipeEdit.item.id, menuItemId: recipeEdit.item.id, menuName: recipeEdit.item.name, lines, updatedAt: Date.now(), updatedBy: state.user?.email || "" };
+  try {
+    await setDoc(doc(db, ...root, "recipes", recipeEdit.item.id), payload);
+    state.recipes[recipeEdit.item.id] = payload;
+    $("#recipe-dialog").close();
+    renderRecipes();
+  } catch (error) { $("#recipe-error").textContent = error.code === "permission-denied" ? "Không có quyền lưu công thức (cần mở quy tắc Firestore cho recipes)." : error.message; }
+}
+$("#reload-recipes").addEventListener("click", () => { state.recipesLoaded = false; loadRecipes(); });
+$("#close-recipe").addEventListener("click", () => $("#recipe-dialog").close());
+$("#recipe-save").addEventListener("click", saveRecipe);
+$("#recipe-draft").addEventListener("click", () => { recipeEdit.lines = draftRecipeFor(recipeEdit.item.name); renderRecipeLines(); });
+$("#recipe-add").addEventListener("click", () => {
+  const id = $("#recipe-add-select").value;
+  if (!id) return;
+  const m = materialById.get(id);
+  recipeEdit.lines.push({ materialId: id, qty: m.base === "g" || m.base === "ml" ? 10 : 1 });
+  renderRecipeLines();
+});
+
 /* ---------- Tải phiếu cũ hơn 7 ngày khi chọn kỳ xem xa hơn (tối đa 500 phiếu) ---------- */
 async function ensureReceiptsLoaded() {
   const range = rangeForPeriod();
@@ -1367,12 +1486,13 @@ async function ensureReceiptsLoaded() {
 }
 
 /* ---------- Chia tab: mỗi tab là một trang riêng theo #hash, nút Back của trình duyệt hoạt động ---------- */
-const TABS = ["ban", "doanhthu", "bill", "thanhtoan", "taichinh"];
+const TABS = ["ban", "doanhthu", "bill", "thanhtoan", "taichinh", "giavon"];
 function showTab() {
   const name = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "ban";
   document.querySelectorAll(".page").forEach((page) => { page.hidden = page.dataset.page !== name; });
   document.querySelectorAll("#tabbar [data-tab]").forEach((link) => link.classList.toggle("active", link.dataset.tab === name));
   window.scrollTo(0, 0);
+  if (name === "giavon" && state.user && !state.recipesLoaded) loadRecipes();
 }
 window.addEventListener("hashchange", showTab);
 showTab();

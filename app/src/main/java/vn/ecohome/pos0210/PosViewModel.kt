@@ -1504,6 +1504,18 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
  }
  /** Huỷ đơn trả trước đã thu: bắt buộc lý do, ghi khoản hoàn, không xoá đơn. */
  val refunds=dao.refundsFlow().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
+ /** Thông tin để quản lý nhìn ra khoản đóng băng này là của đơn nào. */
+ data class FrozenRefundInfo(val orderNo:String,val tableName:String,val billNo:String,val items:String,val actor:String,val approver:String?,val paidAt:Long?,val reference:String?)
+ suspend fun frozenRefundInfo(r:vn.ecohome.pos0210.data.RefundEntity):FrozenRefundInfo = withContext(Dispatchers.IO){
+  val batch=r.batchId?.let{dao.orderBatchById(it)}
+  val session=dao.sessionSnapshotById(r.sessionId)
+  val table=session?.let{s->dao.allTablesSnapshot().firstOrNull{it.id==s.tableId}?.name}
+  val bill=dao.billBySessionId(r.sessionId)
+  val payment=bill?.let{dao.paymentByBillId(it.id)}
+  val items=r.batchId?.let{dao.batchItems(it).first()}.orEmpty().filter{it.qty>0}.joinToString("\n"){"${it.qty} × ${it.itemNameSnapshot.removePrefix("🎁").trim()}"}
+  val people=dao.allEmployeesSnapshot().associate{it.id to it.name}
+  FrozenRefundInfo(batch?.let{PaymentFlowRules.orderNoLabel(it.serviceNo)}?:"—",table?:"Trả trước",bill?.billNo?:"—",items.ifBlank{"(không đọc được món)"},people[r.actorId]?:r.actorId,r.approvedBy?.let{people[it]?:it},payment?.paidAt,payment?.reference)
+ }
  fun settleFrozenRefund(id:String,note:String,onDone:(String?)->Unit){
   val e=currentEmployee.value
   viewModelScope.launch(Dispatchers.IO){

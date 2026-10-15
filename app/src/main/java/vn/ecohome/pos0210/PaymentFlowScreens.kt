@@ -42,7 +42,7 @@ fun PrepaidOrders(vm: PosViewModel) {
     Column {
         Header("Đơn hôm nay") { vm.screen.value = "TABLES" }
         if (msg.isNotBlank()) Text(msg, Modifier.padding(horizontal = 16.dp), fontWeight = FontWeight.Bold, color = Color(0xFF9A2B1F))
-        FrozenRefundBanner(frozen)
+        FrozenRefundBanner(frozen) { vm.screen.value = "FROZEN_REFUNDS" }
         if (orders.isEmpty()) {
             Text("Chưa có đơn trả trước nào hôm nay.", Modifier.padding(20.dp))
         } else {
@@ -347,11 +347,62 @@ fun PrepaidReview(vm: PosViewModel, t: vn.ecohome.pos0210.data.DiningTableEntity
 
 /** Dải đỏ báo các khoản chuyển khoản đã đóng băng, chưa hoàn cho khách. */
 @Composable
-fun FrozenRefundBanner(frozen: List<vn.ecohome.pos0210.data.RefundEntity>) {
+fun FrozenRefundBanner(frozen: List<vn.ecohome.pos0210.data.RefundEntity>, onOpen: (() -> Unit)? = null) {
     if (frozen.isEmpty()) return
-    Surface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), color = Color(0xFF9A2B1F), shape = RoundedCornerShape(8.dp)) {
-        Text("⚠ ${frozen.size} khoản CK ĐÓNG BĂNG · ${vnd(frozen.sumOf { it.amount })} chờ quản lý hoàn cho khách (không tính doanh thu)",
-            Modifier.padding(10.dp), color = Color.White, fontWeight = FontWeight.Black, fontSize = 13.sp)
+    Surface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).then(if (onOpen != null) Modifier.clickable { onOpen() } else Modifier), color = Color(0xFF9A2B1F), shape = RoundedCornerShape(8.dp)) {
+        Column(Modifier.padding(10.dp)) {
+            Text("⚠ ${frozen.size} khoản CK ĐÓNG BĂNG · ${vnd(frozen.sumOf { it.amount })} chờ quản lý hoàn cho khách (không tính doanh thu)",
+                color = Color.White, fontWeight = FontWeight.Black, fontSize = 13.sp)
+            if (onOpen != null) Text("Bấm để xem chi tiết từng khoản", color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
+        }
+    }
+}
+
+/** Chi tiết các khoản chuyển khoản đóng băng: đơn nào, bàn nào, lúc nào, vì sao, ai làm. Quản lý xác nhận đã hoàn ở đây. */
+@Composable
+fun FrozenRefundsScreen(vm: PosViewModel) {
+    val refunds by vm.refunds.collectAsState()
+    val frozen = refunds.filter { it.status == "FROZEN" }.sortedByDescending { it.createdAt }
+    val fmt = remember { SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()) }
+    var settleTarget by remember { mutableStateOf<vn.ecohome.pos0210.data.RefundEntity?>(null) }
+    var settleNote by remember { mutableStateOf("") }
+    var msg by remember { mutableStateOf("") }
+    Column {
+        Header("Khoản CK đóng băng · ${frozen.size}") { vm.screen.value = "TABLES" }
+        Text("Khoản chuyển khoản của đơn trả trước đã bị huỷ: tiền khách đã chuyển, không tính doanh thu, chờ quản lý hoàn lại cho khách.", Modifier.padding(horizontal = 16.dp), fontSize = 12.sp)
+        if (msg.isNotBlank()) Text(msg, Modifier.padding(horizontal = 16.dp, vertical = 4.dp), fontWeight = FontWeight.Bold, color = Color(0xFF9A2B1F))
+        if (frozen.isEmpty()) Text("Không còn khoản nào đóng băng.", Modifier.padding(20.dp))
+        LazyColumn(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            items(frozen, key = { it.id }) { r ->
+                var info by remember(r.id) { mutableStateOf<PosViewModel.FrozenRefundInfo?>(null) }
+                LaunchedEffect(r.id) { info = runCatching { vm.frozenRefundInfo(r) }.getOrNull() }
+                Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), border = BorderStroke(2.dp, Color(0xFF9A2B1F))) {
+                    Column(Modifier.padding(14.dp)) {
+                        Text("${vnd(r.amount)} · huỷ lúc ${fmt.format(Date(r.createdAt))}${if (r.dataScope != "LIVE") " · ${r.dataScope} (không phải bán thật)" else ""}", fontWeight = FontWeight.Black, fontSize = 18.sp, color = Color(0xFF9A2B1F))
+                        info?.let { i ->
+                            Text("${i.tableName.uppercase()} · đơn ${i.orderNo} · bill ${i.billNo}", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
+                            i.paidAt?.let { Text("Khách chuyển lúc ${fmt.format(Date(it))}${i.reference?.takeIf { x -> x.isNotBlank() }?.let { x -> " · mã $x" } ?: ""}", fontSize = 12.sp) }
+                            Text(i.items, Modifier.padding(top = 4.dp), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Text("Người huỷ: ${i.actor}${i.approver?.let { a -> " · quản lý duyệt: $a" } ?: " · tự huỷ trong 90 giây đầu"}", Modifier.padding(top = 4.dp), fontSize = 12.sp)
+                        } ?: Text("Đang đọc chi tiết…", fontSize = 12.sp)
+                        Text("Lý do: ${r.reason}", Modifier.padding(top = 2.dp), fontSize = 13.sp)
+                        OutlinedButton(onClick = { settleNote = ""; msg = ""; settleTarget = r }, Modifier.padding(top = 8.dp)) { Text("ĐÃ HOÀN CK (quản lý)") }
+                    }
+                }
+            }
+        }
+    }
+    settleTarget?.let { fr ->
+        AlertDialog(
+            onDismissRequest = { settleTarget = null },
+            title = { Text("Đã hoàn CK ${vnd(fr.amount)}?") },
+            text = { Column {
+                Text("Ghi cách đã hoàn để đối soát.", fontSize = 12.sp)
+                OutlinedTextField(settleNote, { settleNote = it.take(120) }, label = { Text("VD: CK lại 14h20 qua VCB") }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+            } },
+            confirmButton = { TextButton(enabled = settleNote.isNotBlank(), onClick = { vm.settleFrozenRefund(fr.id, settleNote) { err -> msg = err ?: ""; if (err == null) settleTarget = null } }) { Text("XÁC NHẬN") } },
+            dismissButton = { TextButton(onClick = { settleTarget = null }) { Text("ĐÓNG") } }
+        )
     }
 }
 

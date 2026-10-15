@@ -12,8 +12,8 @@ android {
         applicationId = "vn.ecohome.pos0210"
         minSdk = 26
         targetSdk = 35
-        versionCode = 150
-        versionName = "1.0.0-alpha117-postpaid-open-table"
+        versionCode = 151
+        versionName = "1.0.0-alpha118-frozen-detail"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {

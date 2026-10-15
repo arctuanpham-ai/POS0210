@@ -175,6 +175,7 @@ fun App(vm: PosViewModel = viewModel()) {
         "BUY_GET" -> BuyGetManager(vm)
         "DELIVERY" -> DeliveryQueue(vm)
         "PREPAID_ORDERS" -> PrepaidOrders(vm)
+        "FROZEN_REFUNDS" -> FrozenRefundsScreen(vm)
         "REVIEW" -> t?.let { PrepaidReview(vm, it) }
         "PAYMENT_FLOW" -> PaymentFlowSettings(vm)
         "CUSTOMERS" -> Customers(vm)
@@ -291,7 +292,7 @@ fun Tables(vm: PosViewModel) {
     Column {
         Header()
         Operator(vm)
-        run { val fr by vm.refunds.collectAsState(); FrozenRefundBanner(fr.filter { it.status == "FROZEN" }) }
+        run { val fr by vm.refunds.collectAsState(); FrozenRefundBanner(fr.filter { it.status == "FROZEN" }) { vm.screen.value = "FROZEN_REFUNDS" } }
         KitchenWarningBanner(vm)
         if(testMode) Surface(Modifier.fillMaxWidth(),color=Color(0xFFFFD8D8)){Text("TEST MODE · KHÔNG TÍNH DOANH THU",Modifier.fillMaxWidth().padding(8.dp),textAlign=TextAlign.Center,fontWeight=FontWeight.Black,color=Color.Red)}
         Row(

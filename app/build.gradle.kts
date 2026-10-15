@@ -12,8 +12,8 @@ android {
         applicationId = "vn.ecohome.pos0210"
         minSdk = 26
         targetSdk = 35
-        versionCode = 154
-        versionName = "1.0.0-alpha121-unpaid-prepaid-guard"
+        versionCode = 155
+        versionName = "1.0.0-alpha122-revenue-by-open-day"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {

@@ -24,8 +24,8 @@ class DashboardSalesSnapshotTest {
         OrderBatchEntity(id, sessionId, 1, "staff", at(2026, 10, 13, 9, 5), at(2026, 10, 13, 9, 6), status)
     private fun item(id: String, batchId: String, menuId: String?, name: String, price: Long, qty: Int) =
         OrderItemEntity(id, batchId, menuId, name, price, qty)
-    private fun bill(id: String, sessionId: String, total: Long, closedAt: Long?, status: String = "PAID", scope: String = "LIVE") =
-        BillEntity(id, sessionId, "HD-$id", at(2026, 10, 13, 9, 0), closedAt, total, total, status, null, scope)
+    private fun bill(id: String, sessionId: String, total: Long, closedAt: Long?, status: String = "PAID", scope: String = "LIVE", openedAt: Long? = null) =
+        BillEntity(id, sessionId, "HD-$id", openedAt ?: closedAt ?: at(2026, 10, 13, 9, 0), closedAt, total, total, status, null, scope)
 
     @Test fun openTableAddsOnlyProvisionalTotalNeverRevenue() {
         val sessions = listOf(session("s1"))
@@ -184,5 +184,16 @@ class DashboardSalesSnapshotTest {
         val a = MonthlySalesSnapshot("2026-09", 150_000L, 2, true)
         assertEquals(DashboardSalesSnapshot.fingerprint(a), DashboardSalesSnapshot.fingerprint(a.copy()))
         assertNotEquals(DashboardSalesSnapshot.fingerprint(a), DashboardSalesSnapshot.fingerprint(a.copy(revenue = 150_001L)))
+    }
+
+    @Test fun lateBillCountsOnTheDayItWasOpened() {
+        // Khách quen ăn 15/10 lúc 21:00, trả 16/10 lúc 09:00: doanh thu và món thuộc ngày 15/10.
+        val late = bill("late", "s1", 90_000L, at(2026, 10, 16, 9, 0), openedAt = at(2026, 10, 15, 21, 0))
+        val d15 = DashboardSalesSnapshot.composeDaily("2026-10-15", "2026-10-16", listOf(late), emptyList(), emptyList(), zone)
+        val d16 = DashboardSalesSnapshot.composeDaily("2026-10-16", "2026-10-16", listOf(late), emptyList(), emptyList(), zone)
+        assertEquals(90_000L, d15.revenue)
+        assertEquals(0L, d16.revenue)
+        val oct = DashboardSalesSnapshot.composeMonthly("2026-10", "2026-11", listOf(bill("m", "s1", 50_000L, at(2026, 11, 1, 8, 0), openedAt = at(2026, 10, 31, 22, 0))), zone)
+        assertEquals(50_000L, oct.revenue)
     }
 }

@@ -42,7 +42,7 @@ object AiBusinessExport {
             JSONObject().put("hour",hour).put("bills",rows.size).put("revenue",rows.sumOf{it.total})
                 .put("average_bill",if(rows.isEmpty())0 else rows.sumOf{it.total}/rows.size)
         }.sortedBy{it.getString("hour")}
-        val salesByWeekday=bills.groupBy{weekdayFmt.format(Date(it.closedAt?:it.openedAt))}.map{(d,rows)->
+        val salesByWeekday=bills.groupBy{weekdayFmt.format(Date(it.openedAt))}.map{(d,rows)->
             JSONObject().put("weekday",d).put("bills",rows.size).put("revenue",rows.sumOf{it.total})
                 .put("average_bill",if(rows.isEmpty())0 else rows.sumOf{it.total}/rows.size)
         }

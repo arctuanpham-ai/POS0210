@@ -18,8 +18,9 @@ object SalesReport {
 
     fun period(bills:List<BillEntity>,from:Long?,until:Long?):List<BillEntity> = bills.filter {
         it.status=="PAID" && it.dataScope=="LIVE" &&
+            // Doanh thu thuộc ngày MỞ bill: bill trả chậm qua hôm sau vẫn tính vào ngày bán.
             ((from==null&&until==null) || (it.closedAt!=null &&
-            (from==null || it.closedAt>=from) && (until==null || it.closedAt<until)))
+            (from==null || it.openedAt>=from) && (until==null || it.openedAt<until)))
     }
     fun relativeDayRange(today:LocalDate,daysAgo:Int,zone:ZoneId):Pair<Long,Long> {
         val day=today.minusDays(daysAgo.toLong())
@@ -28,7 +29,7 @@ object SalesReport {
     fun activity(bills:List<BillEntity>,zone:ZoneId):Activity {
         val paid=bills.filter{it.status=="PAID"&&it.dataScope=="LIVE"&&it.closedAt!=null}
         val dated=paid.map{it to Instant.ofEpochMilli(it.closedAt!!).atZone(zone)}
-        val daily=dated.groupBy{it.second.toLocalDate()}.mapValues{(_,rs)->rs.sumOf{it.first.total}}
+        val daily=paid.groupBy{Instant.ofEpochMilli(it.openedAt).atZone(zone).toLocalDate()}.mapValues{(_,rs)->rs.sumOf{it.total}}
         val hourly=(0..23).associateWith{hour->dated.count{it.second.hour==hour}}
         val peakHour=hourly.maxByOrNull{it.value}?.takeIf{it.value>0}?.key
         return Activity(daily,hourly,daily.maxWithOrNull(compareBy<Map.Entry<LocalDate,Long>>{it.value}.thenBy{it.key})?.takeIf{it.value>0}?.key,peakHour)

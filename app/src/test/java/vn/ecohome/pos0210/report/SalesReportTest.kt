@@ -74,7 +74,7 @@ class SalesReportTest {
         val z=ZoneId.of("Asia/Ho_Chi_Minh")
         val start=ZonedDateTime.of(2026,10,10,0,0,0,0,z).toInstant().toEpochMilli()
         val end=ZonedDateTime.of(2026,10,11,0,0,0,0,z).toInstant().toEpochMilli()
-        val bs=listOf(bill("before").copy(closedAt=start-1),bill("start").copy(closedAt=start),bill("last").copy(closedAt=end-1),bill("next").copy(closedAt=end),bill("test").copy(closedAt=start,dataScope="TEST"))
+        val bs=listOf(bill("before").copy(openedAt=start-1),bill("start").copy(openedAt=start),bill("last").copy(openedAt=end-1,closedAt=end+5),bill("next").copy(openedAt=end),bill("test").copy(openedAt=start,dataScope="TEST"))
         assertEquals(listOf("start","last"),SalesReport.period(bs,start,end).map{it.id})
     }
     @Test fun malformedComboIsFlaggedEvenWhenMoneyMatches() {
@@ -105,7 +105,9 @@ class SalesReportTest {
         assertEquals(11,activity.peakHour)
         assertEquals(java.time.LocalDate.of(2026,10,9),activity.peakDay)
         assertEquals(2,activity.hourlyBills.getValue(11))
-        assertEquals(220000L,activity.dailyRevenue.getValue(java.time.LocalDate.of(2026,10,10)))
+        // doanh thu theo ngày MỞ bill: a, b mở 9/10 dù trả 10/10
+        assertEquals(520000L,activity.dailyRevenue.getValue(java.time.LocalDate.of(2026,10,9)))
+        assertEquals(null,activity.dailyRevenue[java.time.LocalDate.of(2026,10,10)])
     }
 
 }

@@ -50,7 +50,7 @@ data class DailySalesSnapshot(
     )
 }
 
-/** Doanh thu một tháng đã chốt. Chỉ bill PAID, dataScope LIVE, tính theo closedAt. Doanh thu bill (sau giảm giá), không phải giá món. */
+/** Doanh thu một tháng đã chốt. Chỉ bill PAID, dataScope LIVE, tính theo ngày mở bill (openedAt). Doanh thu bill (sau giảm giá), không phải giá món. */
 data class MonthlySalesSnapshot(val monthKey: String, val revenue: Long, val paidBills: Int, val finalized: Boolean) {
     fun toMap(updatedAt: Long): Map<String, Any?> = mapOf(
         "monthKey" to monthKey,
@@ -104,7 +104,7 @@ object DashboardSalesSnapshot {
     }
 
     /**
-     * Doanh thu một ngày. Chỉ bill PAID, dataScope LIVE; ngày tính theo closedAt trong múi giờ [zone].
+     * Doanh thu một ngày. Chỉ bill PAID, dataScope LIVE; ngày tính theo ngày MỞ bill (openedAt) trong múi giờ [zone]: bill trả chậm qua hôm sau vẫn về đúng ngày bán.
      * Món lấy từ các lô không huỷ của phiên có bill đó, nên tổng món là trước giảm giá.
      */
     fun composeDaily(
@@ -119,7 +119,7 @@ object DashboardSalesSnapshot {
         val day = LocalDate.parse(dateKey)
         val from = day.atStartOfDay(zone).toInstant().toEpochMilli()
         val to = day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
-        val paid = bills.filter { it.status == "PAID" && it.dataScope == "LIVE" && (it.closedAt ?: Long.MIN_VALUE) in from until to }
+        val paid = bills.filter { it.status == "PAID" && it.dataScope == "LIVE" && it.closedAt != null && it.openedAt in from until to }
         val revenue = paid.sumOf { it.total }
         // Một phiên chỉ được tính món một lần dù có nhiều bill.
         val sessionIds = paid.map { it.sessionId }.toSet()
@@ -167,7 +167,7 @@ object DashboardSalesSnapshot {
         val month = YearMonth.parse(monthKey)
         val from = month.atDay(1).atStartOfDay(zone).toInstant().toEpochMilli()
         val to = month.plusMonths(1).atDay(1).atStartOfDay(zone).toInstant().toEpochMilli()
-        val paid = bills.filter { it.status == "PAID" && it.dataScope == "LIVE" && (it.closedAt ?: Long.MIN_VALUE) in from until to }
+        val paid = bills.filter { it.status == "PAID" && it.dataScope == "LIVE" && it.closedAt != null && it.openedAt in from until to }
         return MonthlySalesSnapshot(monthKey, paid.sumOf { it.total }, paid.size, monthKey < currentMonthKey)
     }
 

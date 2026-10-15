@@ -221,6 +221,11 @@ fun DeliveryQueue(vm: PosViewModel) {
                                 }
                                 Button(onClick = { vm.markDelivered(stub) }, Modifier.weight(1f)) { Text("ĐÃ GIAO ĐỦ", fontWeight = FontWeight.Black) }
                             }
+                            if (o.flow != PaymentFlowRules.PREPAID) {
+                                OutlinedButton(onClick = { vm.openPostpaidTable(o.tableId) }, Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                                    Text("MỞ BÀN · SỬA / HỦY MÓN / THANH TOÁN", fontWeight = FontWeight.Bold)
+                                }
+                            }
                             TextButton(onClick = { vm.reprintKitchenBatch(stub) }) { Text("IN LẠI PHIẾU BẾP", fontSize = 12.sp) }
                         }
                     }

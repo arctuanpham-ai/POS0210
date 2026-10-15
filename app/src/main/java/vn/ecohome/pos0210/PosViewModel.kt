@@ -297,6 +297,8 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
  /** Quy trình riêng của đơn đang soạn khi chưa có phiên. null = theo chế độ chung. */
  val orderFlowOverride=MutableStateFlow<String?>(null)
  fun orderFlow():String=orderFlowOverride.value?:paymentFlow()
+ /** Từ danh sách chờ giao: mở thẳng bàn trả sau để sửa/hủy món hoặc thanh toán. */
+ fun openPostpaidTable(tableId:String){viewModelScope.launch{val t=dao.tables().first().firstOrNull{it.id==tableId}?:return@launch;selectTable(t)}}
  fun selectTable(t:DiningTableEntity,postpaidException:Boolean=false){
   val e=currentEmployee.value?:return
   if(!e.canOrder&&e.role!="ADMIN")return

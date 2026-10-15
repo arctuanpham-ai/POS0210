@@ -28,7 +28,8 @@ import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, norma
 import { buildSimulation } from "./sim-data.js?v=20261014-10";
 import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261014-9";
 import { menuCsv } from "./menu-export.js?v=20261015-1";
-import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, materialById, materialCosts, recipeCost, sliderSpec } from "./cost-recipe.js?v=20261015-2";
+import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, materialById, materialCosts, recipeCost, sliderSpec, usageVsPurchase } from "./cost-recipe.js?v=20261016-1";
+import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-1";
 import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261014-9";
 import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261014-6";
 import { buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261014-4";
@@ -55,7 +56,7 @@ const state = {
   purchaseCategories: [], profitPartners: [], assetCategories: [], suppliers: [],
   unsubs: [], paymentFlowDoc: null, refunds: [], frozenRefundDocs: [], flowError: "", dailyDocs: {}, dailyError: "", salesLoaded: false, salesDays: 7, itemMode: "combined", period: "today", customFrom: null, customTo: null,
   transactionKind: "ALL", payerFilter: "ALL", user: null,
-  expenseRules: [], rulesError: "", simulation: null, menuItems: [], menuCats: [], recipes: {}, recipesLoaded: false, recipeError: "", monthlyDocs: {}, monthlyError: "", reportFrom: 0, receiptsNote: "", detailCutoff: null, receiptsFrom: 0, summaryBlocks: [], historyDay: "today", historyDocs: {}, historyTables: null, historyError: "", historyLoading: false, billDetailCache: {},
+  expenseRules: [], rulesError: "", simulation: null, demo: null, menuItems: [], menuCats: [], recipes: {}, recipesLoaded: false, recipeError: "", monthlyDocs: {}, monthlyError: "", reportFrom: 0, receiptsNote: "", detailCutoff: null, receiptsFrom: 0, summaryBlocks: [], historyDay: "today", historyDocs: {}, historyTables: null, historyError: "", historyLoading: false, billDetailCache: {},
 };
 let expenseDraft = null;
 let editingReceipt = null;
@@ -77,6 +78,9 @@ const writeBatch = (...args) => { if (state.simulation) throw new Error(SIM_BLOC
 
 /** Quy tắc đã học của quán trước, rồi tên vật tư chuẩn trong danh mục. */
 const allRules = () => [...state.expenseRules, ...catalogRules];
+/** Đang xem demo thì mọi phiếu nhập, sửa, huỷ đi vào collection demo và mang cờ demo; dữ liệu thật không bị đụng. */
+const receiptCollection = () => (state.demo ? DEMO_COLLECTION : "expenseReceipts");
+const withDemoFlags = (payload) => (state.demo ? { ...payload, demo: true, demoBatch: payload.demoBatch || "manual", source: payload.source === "DEMO" ? "DEMO" : "DEMO_MANUAL" } : payload);
 const $ = (selector) => document.querySelector(selector);
 const money = (value) => `${new Intl.NumberFormat("vi-VN").format(Number(value || 0))}đ`;
 const dateTime = (value) => value ? new Intl.DateTimeFormat("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }).format(new Date(value)) : "—";
@@ -612,7 +616,7 @@ function renderClassificationReview() {
   const host = $("#review-list");
   const summaryHost = $("#review-summary");
   if (!host) return;
-  const data = reviewItems(state.expenseReceipts, state.expenseRules);
+  const data = reviewItems(state.expenseReceipts, allRules());
   const s = summarizeReview(data);
   const tiles = [
     ["Số dòng vật tư (phiếu đã tải)", String(s.total)],
@@ -684,9 +688,9 @@ async function saveExpenseReceipt(event) {
     ? { ...buildEditedReceipt(editingReceipt, expenseDraft, { now, uid: state.user.uid }), ...(upgradeFrom ? { detailLevel: DETAIL_ITEMIZED } : {}) }
     : { ...expenseDraft, total: check.total, status: "ACTIVE", updatedAt: now, updatedByUid: state.user.uid, source: "WEB_MANAGER", items: expenseDraft.items.map((item) => ({ ...item, materialGroup: item.expenseGroup, amount: Math.round(item.qty * item.unitPrice) })) };
   try {
-    await setDoc(doc(db, ...root, "expenseReceipts", expenseDraft.id), payload);
+    await setDoc(doc(db, ...root, receiptCollection(), expenseDraft.id), withDemoFlags(payload));
     rememberMaterials(expenseDraft.items);
-    for (const rule of learnList) {
+    for (const rule of state.demo ? [] : learnList) { // đang xem demo: không học quy tắc từ phiếu demo
       try {
         const learned = { id: rule.id, name: rule.name, group: rule.group, updatedAt: now, updatedByName: state.user.displayName || state.user.email || "" };
         await setDoc(doc(db, ...root, "expenseRules", rule.id), learned);
@@ -725,7 +729,7 @@ async function cancelReceipt(id) {
   const label = `${dateTime(receipt.purchaseDate)} · ${money(receipt.total)}`;
   if (!window.confirm(`Huỷ phiếu chi ${label}? Phiếu sẽ không còn tính vào chi phí. Dữ liệu vẫn được giữ lại.`)) return;
   const payload = buildCancelledReceipt(receipt, { now: Date.now(), uid: state.user.uid });
-  try { await setDoc(doc(db, ...root, "expenseReceipts", id), payload); replaceLocalReceipt(payload); render(); }
+  try { await setDoc(doc(db, ...root, receiptCollection(), id), withDemoFlags(payload)); replaceLocalReceipt(payload); render(); }
   catch (e) { window.alert(`Chưa huỷ được phiếu: ${e.message || e}`); }
 }
 
@@ -739,13 +743,14 @@ function render() {
   renderClassificationReview();
   renderDetailLevel();
   renderMonthlyReport();
-  if (state.recipesLoaded) renderRecipes();
+  if (state.recipesLoaded) { renderRecipes(); renderUsageCheck(); }
   renderFinanceMetadata();
   renderTransactions();
 }
 async function refreshDashboard() {
   if (!state.user) return;
   if (state.simulation) { $("#sync-status").textContent = "Đang ở chế độ mô phỏng. Tắt mô phỏng để đọc dữ liệu thật."; return; }
+  if (state.demo) { $("#sync-status").textContent = "Đang xem dữ liệu DEMO. Tắt xem demo để đọc dữ liệu thật."; return; }
   $("#sync-status").textContent = "Đang đọc snapshot…";
   try {
     const dashboardDoc = await getDoc(doc(db, ...root, "dashboard", "current"));
@@ -1184,7 +1189,7 @@ async function saveSummaryBlocks(event) {
     const base = editingSummary ? { ...editingSummary } : { id: block.id, createdAt: now, source: "WEB_MANAGER" };
     const payload = { ...base, purchaseDate, note: block.place, enteredByUid: state.user.uid, enteredByName: block.payer || state.user.displayName || state.user.email || "Quản lý",
       items, total, status: "ACTIVE", detailLevel: "SUMMARY", updatedAt: Math.max(now, Number(editingSummary?.updatedAt || 0) + 1), updatedByUid: state.user.uid };
-    try { await setDoc(doc(db, ...root, "expenseReceipts", payload.id), payload); replaceLocalReceipt(payload); saved += 1; }
+    try { await setDoc(doc(db, ...root, receiptCollection(), payload.id), withDemoFlags(payload)); replaceLocalReceipt(withDemoFlags(payload)); saved += 1; }
     catch (e) { failed.push({ block, message: e.message || String(e) }); }
   }
   button.disabled = false;
@@ -1331,6 +1336,7 @@ function exportMonthly(kind) {
 /* ---------- Chế độ mô phỏng: dữ liệu giả hoàn toàn trong trình duyệt, không đọc/ghi Firestore, không đụng bộ đệm ---------- */
 function setSimulation(on) {
   if (on === !!state.simulation) return;
+  if (on && state.demo) { $("#demo-note").textContent = "Tắt xem demo trước khi chạy mô phỏng."; return; }
   if (on) {
     const sim = buildSimulation({ months: 6 });
     state.simulation = { stash: { expenseReceipts: state.expenseReceipts, monthlyDocs: state.monthlyDocs, receiptsFrom: state.receiptsFrom, reportFrom: state.reportFrom, receiptsNote: state.receiptsNote, monthlyError: state.monthlyError, expenseRules: state.expenseRules } };
@@ -1369,6 +1375,7 @@ async function loadRecipes() {
     state.recipes = Object.fromEntries(rows(recs).map((r) => [r.id, r]));
     state.recipesLoaded = true;
     state.recipeError = "";
+    renderUsageCheck();
   } catch (error) { state.recipeError = error.code === "permission-denied" ? "Không có quyền đọc menu hoặc công thức (cần mở quy tắc Firestore cho recipes)." : (error.message || "lỗi không rõ"); }
   renderRecipes();
 }
@@ -1379,7 +1386,7 @@ function renderRecipes() {
   if (!host) return;
   const { costs, unconvertible } = currentCosts();
   const priced = MATERIALS.filter((m) => costs[m.id]).length;
-  $("#recipe-note").textContent = state.recipeError || `${priced}/${MATERIALS.length} vật tư đã có giá từ phiếu chi${unconvertible.length ? ` · ${unconvertible.length} dòng phiếu không quy đổi được đơn vị` : ""}${state.simulation ? " · ĐANG MÔ PHỎNG" : ""}.`;
+  $("#recipe-note").textContent = state.recipeError || `${priced}/${MATERIALS.length} vật tư đã có giá từ phiếu chi${unconvertible.length ? ` · ${unconvertible.length} dòng phiếu không quy đổi được đơn vị` : ""}${state.simulation ? " · ĐANG MÔ PHỎNG" : ""}${state.demo ? " · ĐANG XEM DỮ LIỆU DEMO" : ""}.`;
   const cats = new Map(state.menuCats.map((c) => [String(c.id), c]));
   const items = state.menuItems.filter((m) => m.active !== false).sort((a, b) => Number(cats.get(String(a.categoryId))?.sortOrder ?? 99) - Number(cats.get(String(b.categoryId))?.sortOrder ?? 99) || Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0));
   host.innerHTML = items.map((item) => {
@@ -1470,11 +1477,104 @@ $("#recipe-add").addEventListener("click", () => {
   renderRecipeLines();
 });
 
+/* ---------- Dữ liệu DEMO: phiếu chi thử lưu ở collection riêng (máy POS không đọc), xoá hết được sau khi thử ---------- */
+function salesForDemo() {
+  const avg = averageDailySales(state.dailyDocs, dailyKeys(7));
+  return Object.keys(avg).length ? { sales: avg, source: "bán thật 7 ngày gần nhất" } : { sales: DEFAULT_DAILY_SALES, source: "lượng bán giả định" };
+}
+/** Công thức theo tên món: bản đã lưu của món cùng tên (không dấu), không có thì bản nháp. */
+function recipeByName(name) {
+  const key = name.toLocaleLowerCase("vi").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/[^a-z0-9]+/g, " ").trim();
+  const item = state.menuItems.find((m) => m.name.toLocaleLowerCase("vi").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/[^a-z0-9]+/g, " ").trim() === key);
+  return (item && state.recipes[item.id]?.lines) || draftRecipeFor(name);
+}
+async function readDemoReceipts() { return rows(await getDocs(query(collection(db, ...root, DEMO_COLLECTION), limit(3000)))); }
+function demoError(error) { return error.code === "permission-denied" ? "Không có quyền với collection demoExpenseReceipts (cần mở quy tắc Firestore)." : (error.message || "lỗi không rõ"); }
+async function setDemo(on) {
+  const note = $("#demo-note");
+  if (on === !!state.demo) return;
+  if (on && state.simulation) { note.textContent = "Tắt mô phỏng trước khi xem demo."; return; }
+  if (on) {
+    note.textContent = "Đang đọc phiếu demo…";
+    try {
+      const list = await readDemoReceipts();
+      state.demo = { stash: { expenseReceipts: state.expenseReceipts, receiptsFrom: state.receiptsFrom, reportFrom: state.reportFrom, receiptsNote: state.receiptsNote } };
+      const from = list.length ? Math.min(...list.map((r) => Number(r.purchaseDate || Date.now()))) : Date.now();
+      const firstOfMonth = new Date(new Date(from).getFullYear(), new Date(from).getMonth(), 1).getTime();
+      Object.assign(state, { expenseReceipts: list.sort((a, b) => b.purchaseDate - a.purchaseDate), receiptsFrom: firstOfMonth, reportFrom: firstOfMonth, receiptsNote: `DEMO: ${list.length} phiếu` });
+      note.textContent = list.length ? `Đang xem ${list.length} phiếu demo.` : "Chưa có phiếu demo. Bấm Tạo bộ phiếu demo.";
+    } catch (error) { note.textContent = demoError(error); return; }
+  } else {
+    Object.assign(state, state.demo.stash, { demo: null });
+    note.textContent = "Đã quay về dữ liệu thật.";
+  }
+  document.body.classList.toggle("demo-view", !!state.demo);
+  $("#demo-banner").hidden = !state.demo;
+  $("#demo-toggle").textContent = state.demo ? "Tắt xem demo" : "Xem dữ liệu demo";
+  render();
+}
+async function createDemo() {
+  const note = $("#demo-note");
+  if (!state.user || state.simulation) return;
+  try {
+    const existing = await readDemoReceipts();
+    if (existing.length) { note.textContent = `Đã có ${existing.length} phiếu demo. Xoá bộ cũ trước khi tạo bộ mới để không bị cộng trùng.`; return; }
+    if (!state.recipesLoaded) await loadRecipes();
+    const { sales, source } = salesForDemo();
+    const d = new Date();
+    const batch = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}-${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}`;
+    const list = buildDemoReceipts({ now: Date.now(), days: 30, dailySales: sales, recipeFor: recipeByName, batch, uid: state.user.uid, seed: Date.now() % 100000 });
+    if (!window.confirm(`Tạo ${list.length} phiếu chi DEMO trong 30 ngày (theo ${source})? Phiếu demo nằm riêng, không vào máy POS, xoá được hết.`)) return;
+    note.textContent = `Đang ghi ${list.length} phiếu demo…`;
+    for (let i = 0; i < list.length; i += 400) {
+      const batchWrite = writeBatch(db);
+      list.slice(i, i + 400).forEach((r) => batchWrite.set(doc(db, ...root, DEMO_COLLECTION, r.id), r));
+      await batchWrite.commit();
+    }
+    note.textContent = `Đã tạo ${list.length} phiếu demo (đợt ${batch}, theo ${source}).`;
+    if (state.demo) { state.demo.stash && Object.assign(state, { expenseReceipts: list }); render(); } else await setDemo(true);
+  } catch (error) { note.textContent = demoError(error); }
+}
+async function deleteDemo() {
+  const note = $("#demo-note");
+  try {
+    const list = await readDemoReceipts();
+    if (!list.length) { note.textContent = "Không có phiếu demo nào."; return; }
+    if (!window.confirm(`Xoá hẳn ${list.length} phiếu demo? Chỉ xoá phiếu trong mục demo, phiếu chi thật không bị đụng.`)) return;
+    note.textContent = `Đang xoá ${list.length} phiếu demo…`;
+    for (let i = 0; i < list.length; i += 400) {
+      const batchWrite = writeBatch(db);
+      list.slice(i, i + 400).forEach((r) => batchWrite.delete(doc(db, ...root, DEMO_COLLECTION, r.id)));
+      await batchWrite.commit();
+    }
+    note.textContent = `Đã xoá ${list.length} phiếu demo.`;
+    if (state.demo) { state.expenseReceipts = []; render(); }
+  } catch (error) { note.textContent = demoError(error); }
+}
+$("#demo-toggle").addEventListener("click", () => setDemo(!state.demo));
+$("#demo-create").addEventListener("click", createDemo);
+$("#demo-delete").addEventListener("click", deleteDemo);
+
+/* ---------- Nhập so với định mức (7 ngày): lượng mua thực tế so với lượng lẽ ra phải dùng theo công thức ---------- */
+function renderUsageCheck() {
+  const host = $("#usage-check");
+  if (!host) return;
+  const { sales, source } = state.demo && !Object.keys(averageDailySales(state.dailyDocs, dailyKeys(7))).length ? { sales: DEFAULT_DAILY_SALES, source: "lượng bán giả định của bộ demo" } : salesForDemo();
+  const usage = dailyMaterialUsage(sales, recipeByName);
+  const to = new Date(); const toMs = new Date(to.getFullYear(), to.getMonth(), to.getDate() + 1).getTime();
+  const fromMs = toMs - 7 * 86400000;
+  const rowsUsage = usageVsPurchase({ receipts: state.expenseReceipts, usagePerDay: usage, from: fromMs, to: toMs });
+  const fmt = (q, base) => (base === "g" || base === "ml") ? `${(q / 1000).toLocaleString("vi-VN", { maximumFractionDigits: 1 })} ${base === "g" ? "kg" : "lít"}` : `${Math.round(q * 10) / 10} ${base}`;
+  const chip = (r) => r.ratio === null ? '<span class="cost-chip unknown">không có định mức</span>' : `<span class="cost-chip ${r.ratio > 1.25 || r.ratio < 0.6 ? "bad" : r.ratio > 1.1 || r.ratio < 0.85 ? "warn" : "ok"}">${Math.round(r.ratio * 100)}%</span>`;
+  $("#usage-note").textContent = `Định mức tính từ ${source} × công thức. Đồ khô mua theo tuần (cà phê, sữa, gia vị) cần xem khoảng dài hơn mới đúng; đồ tươi (thịt, rau, bánh mì) xem 7 ngày là được.`;
+  host.innerHTML = rowsUsage.length ? `<div class="table-wrap"><table class="mat-table"><thead><tr><th>Vật tư</th><th>Định mức 7 ngày</th><th>Thực nhập</th><th>Nhập / định mức</th></tr></thead><tbody>${rowsUsage.map((r) => `<tr><td>${escapeHtml(r.name)}</td><td>${r.expected ? fmt(r.expected, r.base) : "—"}</td><td>${r.bought ? fmt(r.bought, r.base) : "chưa nhập"}</td><td>${chip(r)}</td></tr>`).join("")}</tbody></table></div>` : '<p class="muted">Chưa có phiếu chi chi tiết trong 7 ngày.</p>';
+}
+
 /* ---------- Tải phiếu cũ hơn 7 ngày khi chọn kỳ xem xa hơn (tối đa 500 phiếu) ---------- */
 async function ensureReceiptsLoaded() {
   const range = rangeForPeriod();
   const from = Number.isFinite(range.from) ? Math.max(range.from, 0) : 0;
-  if (!state.user || state.simulation || from >= state.receiptsFrom) return;
+  if (!state.user || state.simulation || state.demo || from >= state.receiptsFrom) return;
   try {
     const snap = await getDocs(query(collection(db, ...root, "expenseReceipts"), where("purchaseDate", ">=", from), orderBy("purchaseDate", "desc"), limit(500)));
     const fetched = rows(snap);

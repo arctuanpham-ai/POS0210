@@ -299,6 +299,16 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
  fun orderFlow():String=orderFlowOverride.value?:paymentFlow()
  /** Từ danh sách chờ giao: mở thẳng bàn trả sau để sửa/hủy món hoặc thanh toán. */
  fun openPostpaidTable(tableId:String){viewModelScope.launch{val t=dao.tables().first().firstOrNull{it.id==tableId}?:return@launch;selectTable(t)}}
+ val comboPartsAll=dao.comboItemsAll().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
+ val comboOrderCounts=dao.comboOrderCounts().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
+ /** Áp dụng gợi ý combo vào giỏ (chỉ khi nhân viên bấm). Ghi chú của món lẻ đã đổi sang combo được bỏ. */
+ fun applyComboSuggestion(s:ComboSuggestion,combo:ComboDef){
+  val before=cart.value
+  val after=ComboSuggestions.apply(before,s,combo)
+  if(after==before)return
+  cart.value=after
+  cartNotes.value=cartNotes.value.filterKeys{k->k in after}
+ }
  fun selectTable(t:DiningTableEntity,postpaidException:Boolean=false){
   val e=currentEmployee.value?:return
   if(!e.canOrder&&e.role!="ADMIN")return

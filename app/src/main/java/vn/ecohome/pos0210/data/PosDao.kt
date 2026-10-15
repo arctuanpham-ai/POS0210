@@ -22,6 +22,8 @@ data class TableServiceTimingRow(val sessionId:String,val firstOrderAt:Long?,val
 @Query("SELECT * FROM ComboEntity ORDER BY sortOrder,name") fun combos():Flow<List<ComboEntity>>
 @Query("SELECT * FROM ComboItemEntity WHERE comboId=:comboId") fun comboItems(comboId:String):Flow<List<ComboItemEntity>>
 @Query("SELECT * FROM ComboItemEntity") suspend fun allComboItemsSnapshot():List<ComboItemEntity>
+@Query("SELECT * FROM ComboItemEntity") fun comboItemsAll():Flow<List<ComboItemEntity>>
+@Query("SELECT menuItemId AS id, SUM(qty) AS n FROM OrderItemEntity WHERE menuItemId LIKE 'combo:%' AND qty>0 GROUP BY menuItemId") fun comboOrderCounts():Flow<List<ComboOrderCount>>
 @Query("SELECT * FROM ComboEntity") suspend fun allCombosSnapshot():List<ComboEntity>
 @Query("SELECT * FROM EmployeeEntity ORDER BY name") fun employees():Flow<List<EmployeeEntity>>
 @Query("SELECT * FROM SupplierEntity ORDER BY name") fun suppliers():Flow<List<SupplierEntity>>

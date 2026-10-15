@@ -482,6 +482,30 @@ fun Order(vm: PosViewModel, t: DiningTableEntity) {
                 }
             }
         }
+        val comboParts by vm.comboPartsAll.collectAsState()
+        val comboCounts by vm.comboOrderCounts.collectAsState()
+        val comboDefs = remember(activeCombos, comboParts) {
+            activeCombos.map { c -> ComboDef(c.id, c.name, c.price, comboParts.filter { it.comboId == c.id }.associate { it.menuItemId to it.qty }) }
+        }
+        val comboSuggestions = remember(cart, comboDefs, ms, comboCounts) {
+            ComboSuggestions.suggest(cart, comboDefs, ms.associate { it.id to it.price }, comboCounts.associate { it.id to it.n })
+        }
+        comboSuggestions.forEach { sug ->
+            val def = comboDefs.first { it.id == sug.comboId }
+            val missingText = sug.missing.entries.joinToString(" + ") { (id, q) -> "${q}×${ms.firstOrNull { it.id == id }?.name ?: "?"}" }
+            Surface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp), color = Tint, shape = RoundedCornerShape(10.dp)) {
+                Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            if (sug.kind == ComboSuggestion.Kind.FULL) "GỢI Ý COMBO · ${sug.comboName}${if (sug.times > 1) " ×${sug.times}" else ""}" else "THÊM $missingText → COMBO ${sug.comboName}",
+                            fontWeight = FontWeight.Black, fontSize = 13.sp
+                        )
+                        Text("Rẻ hơn gọi lẻ ${money(sug.saving)}", fontSize = 12.sp)
+                    }
+                    Button(onClick = { vm.applyComboSuggestion(sug, def) }) { Text(if (sug.kind == ComboSuggestion.Kind.FULL) "ĐỔI" else "THÊM", fontWeight = FontWeight.Bold) }
+                }
+            }
+        }
         Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("$itemCount món", fontWeight = FontWeight.Bold)
             Spacer(Modifier.weight(1f))

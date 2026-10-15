@@ -86,3 +86,6 @@ data class PaymentCommitResult(val bill:BillEntity,val customer:CustomerEntity?,
 /** Một dòng trong danh sách đơn trả trước (kết quả join, không phải bảng). */
 data class PrepaidOrderRow(val sessionId:String,val batchId:String,val serviceNo:Int,val batchStatus:String,val billId:String?,val total:Long?,val method:String?,val cashReceived:Long?,val change:Long?,val paidAt:Long?,val billStatus:String?,val openedAt:Long,val tableName:String="",val itemsText:String?=null)
 data class WaitingOrderRow(val batchId:String,val sessionId:String,val serviceNo:Int,val sequence:Int,val createdAt:Long,val sentAt:Long?,val tableId:String,val tableName:String,val flow:String,val itemsText:String?)
+
+/** Số lần mỗi combo đã được gọi (kết quả truy vấn, không phải bảng). */
+data class ComboOrderCount(val id:String,val n:Int)

@@ -39,3 +39,16 @@ test("gộp ưu tiên món đang bán dù món ngừng bán bán nhiều hơn", 
   const p = mergePlan([{ id: "a", name: "X", active: false }, { id: "b", name: "X", active: true }], { a: 100 });
   assert.equal(p.keep.id, "b");
 });
+import { nextProductCode, menuEditProblem } from "../menu-view.js";
+test("mã món mới theo tiền tố nhóm, không trùng", () => {
+  const items = [{ id: "1", categoryId: "c", productCode: "CF-001" }, { id: "2", categoryId: "c", productCode: "CF-007" }, { id: "3", categoryId: "t", productCode: "TR-002" }];
+  assert.equal(nextProductCode(items, "c"), "CF-008");
+  assert.equal(nextProductCode(items, "new"), "MN-001");
+});
+test("kiểm tra món sửa trên web", () => {
+  const items = [{ id: "1", name: "Bạc xỉu", productCode: "CF-001", active: true }];
+  assert.match(menuEditProblem({ id: "2", name: " bạc  xỉu", price: 30000, categoryId: "c" }, items), /Đã có món/);
+  assert.match(menuEditProblem({ id: "2", name: "Mới", price: 30000, categoryId: "c", productCode: "CF-001" }, items), /đã thuộc/);
+  assert.match(menuEditProblem({ id: "2", name: "Mới", price: 30200, categoryId: "c" }, items), /tròn 500/);
+  assert.equal(menuEditProblem({ id: "1", name: "Bạc xỉu", price: 32000, categoryId: "c", productCode: "CF-001" }, items), "");
+});

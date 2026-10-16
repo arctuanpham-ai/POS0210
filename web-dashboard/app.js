@@ -19,35 +19,36 @@ import {
   setDoc as rawSetDoc,
   writeBatch as rawWriteBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261017-06";
-import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261017-06";
-import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261017-06";
-import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261017-06";
-import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261017-06";
-import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261017-06";
-import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261017-06";
-import { buildSimulation } from "./sim-data.js?v=20261017-06";
-import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261017-06";
-import { menuCsv } from "./menu-export.js?v=20261017-06";
-import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261017-06";
-import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261017-06";
-import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261017-06";
-import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261017-06";
-import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261017-06";
-import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261017-06";
-import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261017-06";
-import { otherCostRows } from "./other-costs.js?v=20261017-06";
-import { paybackStatus } from "./payback.js?v=20261017-06";
-import { topSellers } from "./top-banner.js?v=20261017-06";
-import { reconcileRevenue } from "./revenue-check.js?v=20261017-06";
-import { menuGroups, mergePlan, nameIssues, normName, soldNotInMenu } from "./menu-view.js?v=20261017-06";
-import { POS_CEILING, SPARK, dayUsage, lastPacificDays, nextReset, pacificDay, usageTrend } from "./usage.js?v=20261017-06";
-import { AI_SCOPES, buildAiPack, scopeRange } from "./ai-export.js?v=20261017-06";
-import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261017-06";
-import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261017-06";
-import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261017-06";
-import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261017-06";
-import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261017-06";
+import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261017-09";
+import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261017-09";
+import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261017-09";
+import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261017-09";
+import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261017-09";
+import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261017-09";
+import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261017-09";
+import { buildSimulation } from "./sim-data.js?v=20261017-09";
+import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261017-09";
+import { menuCsv } from "./menu-export.js?v=20261017-09";
+import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261017-09";
+import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261017-09";
+import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261017-09";
+import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261017-09";
+import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261017-09";
+import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261017-09";
+import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261017-09";
+import { otherCostRows } from "./other-costs.js?v=20261017-09";
+import { paybackStatus } from "./payback.js?v=20261017-09";
+import { topSellers } from "./top-banner.js?v=20261017-09";
+import { reconcileRevenue } from "./revenue-check.js?v=20261017-09";
+import { prepList, profitRanking, tomorrowSales } from "./plan-profit.js?v=20261017-09";
+import { menuEditProblem, menuGroups, mergePlan, nameIssues, nextProductCode, normName, soldNotInMenu } from "./menu-view.js?v=20261017-09";
+import { POS_CEILING, SPARK, dayUsage, lastPacificDays, nextReset, pacificDay, usageTrend } from "./usage.js?v=20261017-09";
+import { AI_SCOPES, buildAiPack, scopeRange } from "./ai-export.js?v=20261017-09";
+import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261017-09";
+import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261017-09";
+import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261017-09";
+import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261017-09";
+import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261017-09";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",
@@ -1075,7 +1076,17 @@ function render() {
 }
 /** Tháng đã chốt chia cổ đông (máy POS v160+ đẩy lên). */
 async function loadClosedMonths() {
-  try { state.closedMonths = rows(await getDocs(collection(db, ...root, "shareholderCloses"))).map((x) => x.monthKey || x.id); state.closedLoaded = true; }
+  // Tháng đã chốt = chốt trên máy POS cũ (shareholderCloses) + tháng đã lưu đối soát chia cổ đông trên web và đã kết thúc.
+  // Từ app 166 chỉ chốt trên web; lưu đối soát giữa tháng đang chạy chưa tính là chốt.
+  try {
+    const current = monthKeyOf(Date.now());
+    const [sh, fc] = await Promise.all([
+      getDocs(collection(db, ...root, "shareholderCloses")).then(rows),
+      getDocs(collection(db, ...root, "fundClosings")).then(rows).catch(() => []),
+    ]);
+    state.closedMonths = [...new Set([...sh.map((x) => x.monthKey || x.id), ...fc.map((x) => x.monthKey || x.id).filter((k) => k < current)])];
+    state.closedLoaded = true;
+  }
   catch { state.closedLoaded = false; }
 }
 async function refreshDashboard() {
@@ -2727,12 +2738,12 @@ function renderMenuView() {
   const { costs } = currentCosts();
   if (!menuView.cat || (menuView.cat !== "all" && !groups.some((g) => g.id === menuView.cat))) menuView.cat = groups[0]?.id || "all";
   const shown = groups.filter((g) => menuView.cat === "all" || g.id === menuView.cat);
-  $("#menu-grid").innerHTML = shown.map((g) => `<h3 class="menu-group">${escapeHtml(g.name)} <small class="muted">${g.items.length} món${g.active ? "" : " · nhóm đang tắt"}</small></h3><div class="menu-list">${g.items.map((m) => {
+  $("#menu-grid").innerHTML = shown.map((g) => `<h3 class="menu-group">${escapeHtml(g.name)} <small class="muted">${g.items.length} món${g.active ? "" : " · nhóm đang tắt"}</small>${canEditMenu() && g.id !== "_other" ? `<button type="button" class="text-button" data-add-menu="${escapeHtml(g.id)}">+ Thêm món</button>` : ""}</h3><div class="menu-list">${g.items.map((m) => {
     const img = thumbFor(m.id);
     const lines = recipeLinesFor(m);
     const r = lines.length ? recipeCost(lines, costs, m.price) : null;
     const cost = r && !r.missing.length && m.price ? `vốn ${Math.round((r.total / m.price) * 100)}%` : "";
-    return `<article class="menu-row${m.active === false ? " off" : ""}">${img ? `<img src="${img}" alt="" loading="lazy" />` : `<span class="menu-initial">${escapeHtml(m.name.trim().charAt(0).toUpperCase())}</span>`}<div class="menu-info"><strong>${escapeHtml(m.name.trim())}</strong><b class="menu-price">${money(m.price)}</b><small>${[m.productCode, cost, m.active === false ? "ngừng bán" : ""].filter(Boolean).join(" · ")}</small></div></article>`;
+    return `<article class="menu-row${m.active === false ? " off" : ""}"${canEditMenu() ? ` data-edit-menu="${escapeHtml(m.id)}" role="button" tabindex="0"` : ""}>${img ? `<img src="${img}" alt="" loading="lazy" />` : `<span class="menu-initial">${escapeHtml(m.name.trim().charAt(0).toUpperCase())}</span>`}<div class="menu-info"><strong>${escapeHtml(m.name.trim())}</strong><b class="menu-price">${money(m.price)}</b><small>${[m.productCode, cost, m.active === false ? "ngừng bán" : ""].filter(Boolean).join(" · ")}</small></div></article>`;
   }).join("")}</div>`).join("") || '<p class="muted">Chưa có menu trên cloud.</p>';
   const issues = nameIssues(state.menuItems);
   const sold = soldNotInMenu(state.dailyDocs, state.menuItems);
@@ -2764,6 +2775,7 @@ $("#menu-issues").addEventListener("click", async (e) => {
     const now = Date.now();
     const batch = writeBatch(db);
     for (const w of plan.writes) batch.set(doc(db, ...root, "menu", w.id), { ...w.data, updatedAt: now, editedBy: `WEB:${myName()}` }, { merge: true });
+    await bumpMenuVersion(batch);
     await batch.commit();
     for (const w of plan.writes) { const m = state.menuItems.find((x) => x.id === w.id); if (m) Object.assign(m, w.data, { updatedAt: now }); }
     try { await setDoc(doc(db, ...root, "commands", "sync"), { requestedAt: now, requestedBy: myName(), scope: "" }, { merge: true }); } catch { /* máy POS vẫn tự đồng bộ theo chu kỳ */ }
@@ -2837,6 +2849,133 @@ $("#menu-remote").addEventListener("click", async () => {
   }, 5000);
 });
 $("#menu-cats").addEventListener("click", (e) => { const k = e.target.closest("[data-menu-cat]")?.dataset.menuCat; if (!k) return; menuView.cat = k; renderMenuView(); });
+
+/* ---------- Sửa / thêm món trên web: ghi menu cloud + tăng config/menuVersion, máy POS (app 167+) tự kéo về ---------- */
+const canEditMenu = () => state.role === ROLE_OWNER || state.role === ROLE_TREASURER;
+const menuEdit = { item: null, photo: null };
+async function bumpMenuVersion(batch) { batch.set(doc(db, ...root, "config", "menuVersion"), { v: Date.now(), by: `WEB:${myName()}` }, { merge: true }); }
+function openMenuEdit(item, categoryId = "") {
+  const isNew = !item;
+  const cat = item?.categoryId || categoryId;
+  menuEdit.item = item || { id: (crypto.randomUUID?.() || `web-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`), categoryId: cat, name: "", price: 0, active: true, sortOrder: Math.max(0, ...state.menuItems.filter((m) => m.categoryId === cat).map((m) => Number(m.sortOrder || 0))) + 1, productCode: nextProductCode(state.menuItems, cat), description: "", isNew: true };
+  menuEdit.photo = null;
+  const m = menuEdit.item;
+  $("#menu-edit-title").textContent = isNew ? "Thêm món mới" : "Sửa món";
+  $("#menu-edit-name").value = (m.name || "").trim(); $("#menu-edit-price").value = m.price || ""; $("#menu-edit-code").value = m.productCode || "";
+  $("#menu-edit-cat").innerHTML = (state.menuCats || []).slice().sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0)).map((c) => `<option value="${escapeHtml(c.id)}"${String(c.id) === String(m.categoryId) ? " selected" : ""}>${escapeHtml(c.name)}</option>`).join("") + (m.categoryId && !(state.menuCats || []).some((c) => String(c.id) === String(m.categoryId)) ? `<option value="${escapeHtml(m.categoryId)}" selected>(nhóm hiện tại)</option>` : "");
+  $("#menu-edit-active").checked = m.active !== false;
+  const img = thumbFor(m.id); $("#menu-edit-img").hidden = !img; $("#menu-edit-img").src = img || ""; $("#menu-edit-noimg").hidden = Boolean(img);
+  $("#menu-edit-error").textContent = ""; $("#menu-edit-file").value = "";
+  $("#menu-edit-dialog").showModal();
+}
+/** Ảnh gốc ≤ 1280px, JPEG ≤ 450 KB (cùng chuẩn app), kèm sha256 để máy POS kiểm tra khi tải về. */
+async function prepareMenuPhoto(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => bad(new Error("Không đọc được ảnh")); i.src = url; });
+    const scale = Math.min(1, 1280 / Math.max(img.width, img.height));
+    const c = document.createElement("canvas"); c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    let dataUrl = "";
+    for (const q of [0.82, 0.72, 0.6, 0.45, 0.3]) { dataUrl = c.toDataURL("image/jpeg", q); if (dataUrl.length * 0.75 <= 450000) break; }
+    const payload = dataUrl.split(",")[1];
+    const bytes = Uint8Array.from(atob(payload), (ch) => ch.charCodeAt(0));
+    if (bytes.length > 450000) throw new Error("Ảnh quá lớn sau khi nén");
+    const sha = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((b) => b.toString(16).padStart(2, "0")).join("");
+    const thumb = await shrinkImage(dataUrl);
+    return { payload, sha, bytes: bytes.length, thumb };
+  } finally { URL.revokeObjectURL(url); }
+}
+$("#menu-grid").addEventListener("click", (e) => {
+  const add = e.target.closest("[data-add-menu]")?.dataset.addMenu;
+  if (add && canEditMenu()) { openMenuEdit(null, add); return; }
+  const id = e.target.closest("[data-edit-menu]")?.dataset.editMenu;
+  if (id && canEditMenu()) openMenuEdit(state.menuItems.find((m) => m.id === id));
+});
+$("#menu-edit-close").addEventListener("click", () => $("#menu-edit-dialog").close());
+$("#menu-edit-file").addEventListener("change", async (e) => {
+  const file = e.target.files?.[0]; if (!file) return;
+  $("#menu-edit-error").textContent = "Đang nén ảnh…";
+  try { menuEdit.photo = await prepareMenuPhoto(file); $("#menu-edit-img").src = menuEdit.photo.thumb; $("#menu-edit-img").hidden = false; $("#menu-edit-noimg").hidden = true; $("#menu-edit-error").textContent = ""; }
+  catch (error) { menuEdit.photo = null; $("#menu-edit-error").textContent = error.message || String(error); }
+});
+$("#menu-edit-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!canEditMenu() || !menuEdit.item) return;
+  if (state.demo || state.simulation) { $("#menu-edit-error").textContent = "Tắt demo / mô phỏng để sửa menu thật."; return; }
+  const m = menuEdit.item;
+  const draft = { ...m, name: $("#menu-edit-name").value.replace(/\s+/g, " ").trim(), price: Math.round(Number($("#menu-edit-price").value)), categoryId: $("#menu-edit-cat").value, active: $("#menu-edit-active").checked };
+  const problem = menuEditProblem(draft, state.menuItems);
+  if (problem) { $("#menu-edit-error").textContent = problem; return; }
+  if (!m.isNew && m.price !== draft.price && !window.confirm(`Đổi giá "${draft.name}" từ ${money(m.price)} thành ${money(draft.price)}? Bill đã bán giữ giá cũ.`)) return;
+  $("#menu-edit-save").disabled = true;
+  try {
+    const now = Date.now();
+    const data = { id: m.id, categoryId: draft.categoryId, name: draft.name, price: draft.price, sortOrder: Number(m.sortOrder || 0), active: draft.active, productCode: m.productCode || "", description: m.description || "", updatedAt: now, editedBy: `WEB:${myName()}` };
+    const batch = writeBatch(db);
+    if (menuEdit.photo) {
+      const p = menuEdit.photo;
+      batch.set(doc(db, ...root, "media", `menu_${m.id}`), { mediaId: `menu_${m.id}`, entityType: "menu", entityId: m.id, encoding: "jpeg-base64-v1", payload: p.payload, sha256: p.sha, sourceSha256: p.sha, bytes: p.bytes, version: now, updatedAt: now, source: "WEB" });
+      batch.set(doc(db, ...root, "menuThumbs", `menu_${m.id}`), { id: `menu_${m.id}`, entityType: "menu", entityId: m.id, sourceSha256: p.sha, thumb: p.thumb, bytes: Math.round(p.thumb.length * 0.75), updatedAt: now, source: "WEB" });
+      data.imageSha = p.sha;
+    }
+    batch.set(doc(db, ...root, "menu", m.id), data, { merge: true });
+    await bumpMenuVersion(batch);
+    await batch.commit();
+    const local = state.menuItems.find((x) => x.id === m.id);
+    if (local) Object.assign(local, data); else state.menuItems.push(data);
+    if (menuEdit.photo) { cachedThumbs()[`menu_${m.id}`] = { thumb: menuEdit.photo.thumb, sha: menuEdit.photo.sha, updatedAt: now }; try { usageStore?.setItem(THUMB_CACHE, JSON.stringify({ at: Date.now(), map: cachedThumbs() })); menuView.cachedAt = Date.now(); } catch { /* bỏ qua */ } }
+    $("#menu-edit-dialog").close();
+    renderMenuView();
+    flashNote(`Đã lưu "${draft.name}". Máy POS nhận ở lần đồng bộ tới.`);
+  } catch (error) { $("#menu-edit-error").textContent = `Chưa lưu được: ${error.message || error}`; }
+  $("#menu-edit-save").disabled = false;
+});
+
+/* ---------- Dự báo nguyên liệu ngày mai + xếp hạng món theo lãi gộp (dữ liệu: snapshot ngày, công thức, giá nhập) ---------- */
+const planState = { loadedFrom: "", period: 7 };
+async function ensurePlanData() {
+  if (!state.recipesLoaded) await loadRecipes();
+  const d = new Date(); const from = dateKeyOf(new Date(d.getFullYear(), d.getMonth(), d.getDate() - 29));
+  if (planState.loadedFrom && planState.loadedFrom <= from) return;
+  try {
+    const got = rows(await getDocs(query(collection(db, ...root, "dashboardDaily"), where("dateKey", ">=", from), where("dateKey", "<=", dateKeyOf(d)), limit(40))));
+    for (const x of got) state.dailyDocs[x.dateKey || x.id] = x;
+    planState.loadedFrom = from;
+  } catch { /* dùng dữ liệu đã có */ }
+}
+const recipeForMenu = (name, m) => (m && state.recipes[m.id]?.lines) || recipeByName(name);
+async function renderPrep() {
+  await ensurePlanData();
+  const t = tomorrowSales(state.dailyDocs);
+  const list = prepList(t.sales, (name) => recipeByName(name));
+  const totalDishes = Object.values(t.sales).reduce((a, b) => a + b, 0);
+  $("#prep-badge").textContent = t.days ? `· ${new Date(`${t.date}T12:00:00`).toLocaleDateString("vi-VN", { weekday: "long", day: "2-digit", month: "2-digit" })}` : "· chưa đủ dữ liệu";
+  if (!t.days) { $("#prep-view").innerHTML = '<p class="muted">Chưa có số bán các ngày trước để ước lượng.</p>'; return; }
+  const plain = (x) => String(x).toLocaleLowerCase("vi").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/[^a-z0-9]+/g, " ").trim();
+  const display = (k) => state.menuItems.find((m) => plain(m.name) === plain(k))?.name.trim() || k;
+  const top = Object.entries(t.sales).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([n, q]) => `${escapeHtml(display(n))} ~${Math.round(q)}`).join(" · ");
+  $("#prep-view").innerHTML = `<p class="muted">Dự kiến ~${Math.round(totalDishes)} phần (${escapeHtml(t.basis)}): ${top}${Object.keys(t.sales).length > 8 ? " …" : ""}</p>
+    ${list.length ? `<div class="prep-list">${list.map((x) => `<div class="prep-row"><span>${escapeHtml(x.name)}${x.kind === "BB" ? ' <small class="muted">bao bì</small>' : ""}</span><b>${escapeHtml(x.label)}</b></div>`).join("")}</div>` : '<p class="muted">Các món bán chưa có công thức: vào từng món ở mục Công thức bên dưới để đặt định lượng.</p>'}
+    <p class="muted">Món chưa có công thức sẽ không được tính nguyên liệu. Định lượng chỉnh ở danh sách công thức bên dưới.</p>`;
+}
+async function renderProfit() {
+  await ensurePlanData();
+  const d = new Date();
+  const keys = Array.from({ length: planState.period }, (_, i) => dateKeyOf(new Date(d.getFullYear(), d.getMonth(), d.getDate() - i)));
+  const items = aggregateItems(state.dailyDocs, keys, "combined");
+  const { costs } = currentCosts();
+  const ranked = profitRanking(items, state.menuItems, recipeForMenu, costs);
+  $("#profit-period").innerHTML = [[7, "7 ngày"], [30, "30 ngày"]].map(([n, l]) => `<button type="button" class="filter${planState.period === n ? " active" : ""}" data-profit-period="${n}">${l}</button>`).join("");
+  const known = ranked.filter((r) => r.gross !== null);
+  const totalGross = known.reduce((t, r) => t + r.gross, 0);
+  $("#profit-badge").textContent = known.length ? `· lãi gộp ~${money(totalGross)} / ${planState.period} ngày` : "";
+  $("#profit-view").innerHTML = ranked.length ? `<div class="table-wrap"><table class="profit-table"><thead><tr><th>#</th><th>Món</th><th>SL</th><th>Giá vốn / giá bán</th><th>Lãi gộp</th></tr></thead><tbody>${ranked.map((r, i) => `<tr class="${r.margin !== null && r.margin < 0.5 ? "low" : ""}"><td>${i + 1}</td><td>${escapeHtml(r.name)}</td><td>${Math.round(r.qty)}</td><td>${r.unitCost === null ? `<small class="muted">${r.missing[0] === "chưa có công thức" ? "chưa có công thức" : `thiếu giá ${escapeHtml(r.missing.slice(0, 2).join(", "))}`}</small>` : `${money(r.unitCost)} / ${money(r.price)} <small class="muted">(${Math.round((1 - r.margin) * 100)}%)</small>`}</td><td><b>${r.gross === null ? "—" : money(r.gross)}</b></td></tr>`).join("")}</tbody></table></div>
+    <p class="muted">Lãi gộp = (giá bán bình quân − giá vốn công thức theo giá nhập 30 ngày) × số lượng; chưa trừ giảm giá theo bill, lương, mặt bằng. Dòng tô nhạt: giá vốn ≥ 50% giá bán.</p>` : '<p class="muted">Chưa có số bán trong kỳ.</p>';
+}
+$("#prep-panel").addEventListener("toggle", (e) => { if (e.target.open) renderPrep(); });
+$("#profit-panel").addEventListener("toggle", (e) => { if (e.target.open) renderProfit(); });
+$("#profit-period").addEventListener("click", (e) => { const n = Number(e.target.closest("[data-profit-period]")?.dataset.profitPeriod); if (n) { planState.period = n; renderProfit(); } });
 /* ---------- Bảng mức dùng Firebase (Tài khoản) ---------- */
 async function loadUsage() {
   if (!state.user || !state.role) return;

@@ -252,7 +252,8 @@ body.simulating #taichinh-page, body.simulating [data-page="taichinh"] { outline
 .reimb-pick { display: grid; gap: 6px; margin: 10px 0; }
 .reimb-check { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; margin: 0; font-size: 14px; }
 .reimb-qr { display: grid; justify-items: center; gap: 8px; margin: 10px 0; text-align: center; }
-.qr-box { width: min(260px, 70vw); aspect-ratio: 1; background: #fff; padding: 6px; border-radius: 12px; }
+.qr-box { width: min(240px, 64vw); aspect-ratio: 1; background: #fff; padding: 6px; border-radius: 12px; }
+.qr-box img { display: block; width: 100%; height: auto; image-rendering: pixelated; }
 .qr-box svg { width: 100%; height: 100%; }
 .qr-meta { margin: 0; font-size: 14px; }
 #share-text { width: 100%; font: inherit; padding: 10px; border-radius: 12px; border: 1px solid #dfcfb8; background: #fffaf3; }
@@ -269,3 +270,11 @@ input[readonly] { background: #f3ece2; color: #5b4b3e; }
 
 /* Phiếu chi không phải vật tư: ẩn mã và nhóm vật tư */
 .non-material .material-only { display: none !important; }
+
+.expense-line .kind-row select { font-weight: 700; }
+.reimb-actions-qr { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.receipt-view table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.receipt-view td, .receipt-view th { padding: 6px 4px; border-bottom: 1px solid #efe4d6; text-align: left; }
+.receipt-view td:last-child, .receipt-view th:last-child { text-align: right; }
+.paylist { display: grid; gap: 6px; }
+.paylist-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid #dfcfb8; border-radius: 12px; background: #fffcf7; }

@@ -266,3 +266,6 @@ body.simulating #taichinh-page, body.simulating [data-page="taichinh"] { outline
 .my-alerts li.info a { color: #5b4b3e; }
 .my-alerts .alert-flash { margin: 0 0 6px; color: #1f6b3a; font-weight: 700; }
 input[readonly] { background: #f3ece2; color: #5b4b3e; }
+
+/* Phiếu chi không phải vật tư: ẩn mã và nhóm vật tư */
+.non-material .material-only { display: none !important; }

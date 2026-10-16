@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20261016-6" />
+    <link rel="stylesheet" href="styles.css?v=20261016-11" />
     <title>0210 · Manager</title>
   </head>
   <body>
@@ -17,7 +17,7 @@
         <p class="eyebrow">0210 · BREAKFAST · COFFEE · DRINKS</p>
         <h1 id="login-title">Manager realtime</h1>
         <p class="muted">Theo dõi quán và nhập phiếu tài chính từ xa.</p>
-        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.16.10 · Không ghi vào tháng đã chốt</p>
+        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.16.11 · Một chỗ nhập phiếu chi</p>
         <p class="muted">Đăng nhập tài khoản quán một lần trên mỗi máy, sau đó mỗi người vào bằng PIN riêng.</p>
         <label>Email tài khoản quán<input id="email" type="email" autocomplete="username" inputmode="email" /></label>
         <label>Mật khẩu<input id="password" type="password" autocomplete="current-password" /></label>
@@ -47,7 +47,7 @@
           <div class="heading-actions"><button id="refresh-dashboard" class="btn">Làm mới</button><button id="request-sync" class="btn" title="Yêu cầu máy POS ở quán đồng bộ ngay">Yêu cầu đồng bộ</button><button id="switch-person" class="btn">Đổi người</button><button id="logout-button" class="btn ghost">Đăng xuất</button></div>
         </header>
 
-        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><section id="my-alerts" class="my-alerts" aria-live="polite" hidden></section><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.16.10 · Không ghi vào tháng đã chốt</p>
+        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><section id="my-alerts" class="my-alerts" aria-live="polite" hidden></section><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.16.11 · Một chỗ nhập phiếu chi</p>
 
         <nav class="tabbar" id="tabbar" aria-label="Các trang">
           <a href="#ban" data-tab="ban">Bàn</a>
@@ -56,7 +56,7 @@
           <a href="#thanhtoan" data-tab="thanhtoan">Thanh toán</a>
           <a href="#taichinh" data-tab="taichinh">Tài chính</a>
           <a href="#giavon" data-tab="giavon">Giá vốn</a>
-          <a href="#hoanung" data-tab="hoanung">Hoàn ứng<span id="hoanung-badge" class="tab-badge" hidden></span></a>
+          <a href="#hoanung" data-tab="hoanung">Phiếu chi<span id="hoanung-badge" class="tab-badge" hidden></span></a>
           <a href="#taikhoan" data-tab="taikhoan">Tài khoản<span id="taikhoan-badge" class="tab-badge" hidden></span></a>
         </nav>
 
@@ -159,10 +159,15 @@
 
         <div class="page" data-page="hoanung" hidden>
         <section class="section-heading first-section">
-          <div><p class="eyebrow">HOÀN ỨNG</p><h2>Phiếu chi ứng tiền và hoàn tiền</h2></div>
-          <div class="heading-actions"><button id="reimb-new-receipt" type="button" class="btn strong">+ Phiếu chi</button><button id="reload-reimb" type="button" class="btn">Tải lại</button></div>
+          <div><p class="eyebrow">PHIẾU CHI</p><h2>Nhập chi và hoàn ứng</h2></div>
+          <div class="heading-actions"><button id="reload-reimb" type="button" class="btn">Tải lại</button></div>
         </section>
-        <p class="muted">Người mua nhập phiếu bằng tài khoản của mình (nguồn tiền "Tiền cá nhân") → thủ quỹ thấy cảnh báo, <strong>Duyệt</strong> → <strong>Hoàn tiền</strong> bằng QR động tạo từ tài khoản ngân hàng người mua đã nhập, nội dung CK là mã đợt hoàn → người mua thấy cảnh báo, kiểm tra tài khoản và bấm <strong>Tôi đã nhận tiền</strong> (xác nhận chậm cũng được).</p>
+        <div class="action-grid">
+          <button id="open-expense" type="button" class="action-btn main"><strong>+ Phiếu chi</strong><small>Mua hàng, sửa chữa, thi công, thiết bị</small></button>
+          <button id="open-summary" type="button" class="action-btn"><strong>+ Phiếu tổng</strong><small>Hoá đơn cũ không nhớ chi tiết</small></button>
+          <button id="open-entry" type="button" class="action-btn"><strong>+ Thu chi khác</strong><small>Lương, góp vốn, rút tiền, tài sản</small></button>
+        </div>
+        <p class="muted">Ai trả tiền thì ghi đúng <strong>Nguồn tiền</strong>: tiền túi mình → "Tiền cá nhân" (cần hoàn); tiền mặt quỹ hay tài khoản quán → không cần hoàn. Phiếu tiền cá nhân: người mua nhập bằng PIN của mình → thủ quỹ thấy cảnh báo, <strong>Duyệt</strong> → <strong>Hoàn tiền</strong> bằng QR động tạo từ tài khoản ngân hàng người mua đã nhập, nội dung CK là mã đợt hoàn → người mua thấy cảnh báo, kiểm tra tài khoản và bấm <strong>Tôi đã nhận tiền</strong> (xác nhận chậm cũng được).</p>
         <p id="reimb-note" class="panel-total" role="status"></p>
         <section class="section-heading compact"><div><p class="eyebrow">CỦA TÔI</p><h2>Phiếu tôi đã ứng tiền</h2></div></section>
         <section id="reimb-mine" class="reimb-list"></section>
@@ -217,11 +222,7 @@
         <section class="section-heading first-section">
           <div><p class="eyebrow">TÀI CHÍNH</p><h2>Tình hình quán</h2></div>
         </section>
-        <div class="action-grid">
-          <button id="open-expense" type="button" class="action-btn main"><strong>+ Phiếu mua hàng</strong><small>Nguyên liệu, bao bì, vật tư</small></button>
-          <button id="open-summary" type="button" class="action-btn"><strong>+ Phiếu tổng</strong><small>Hoá đơn cũ không nhớ chi tiết</small></button>
-          <button id="open-entry" type="button" class="action-btn"><strong>+ Thu chi khác</strong><small>Lương, điện, nước, vốn, rút tiền</small></button>
-        </div>
+        <p class="panel muted">Trang này chỉ để <strong>xem, theo dõi và phân tích</strong>. Mọi phiếu chi, phiếu tổng, thu chi khác nhập ở tab <a href="#hoanung"><strong>Phiếu chi</strong></a>.</p>
 
         <div class="panel">
           <div class="filter-row" id="period-filters">
@@ -368,11 +369,14 @@
 
     <dialog id="expense-dialog">
       <article>
-        <div class="dialog-header"><div><p class="eyebrow">CHI PHÍ MUA HÀNG</p><h2 id="expense-title">Phiếu nhiều vật tư</h2></div><button id="close-expense" class="text-button">Đóng</button></div>
+        <div class="dialog-header"><div><p class="eyebrow">CHI PHÍ MUA HÀNG</p><h2 id="expense-title">Phiếu chi</h2></div><button id="close-expense" class="text-button">Đóng</button></div>
         <form id="expense-form" class="entry-form">
           <label>Ngày mua<input id="expense-date" type="datetime-local" required /></label>
           <div class="two-col"><label>Người mua (ứng tiền)<input id="expense-payer" list="payee-names" maxlength="60" required /></label>
           <label>Nguồn tiền<select id="expense-fund" required><option value="">— chọn nguồn tiền —</option><option value="PERSONAL">Tiền cá nhân · cần hoàn</option><option value="SHOP_CASH">Tiền mặt quỹ quán</option><option value="SHOP_BANK">CK từ tài khoản quán</option></select></label></div>
+          <p id="expense-fund-hint" class="muted" hidden>Bạn giữ tiền quán: nếu đã trả bằng tài khoản hoặc quỹ quán thì chọn nguồn tiền của quán, không cần hoàn. Chọn "Tiền cá nhân" thì phiếu sẽ do người khác duyệt và hoàn.</p>
+          <label>Loại chi<select id="expense-kind"></select></label>
+          <p id="expense-kind-hint" class="muted"></p>
           <label>Ghi chú<input id="expense-note" type="text" maxlength="240" /></label>
           <section id="expense-lines" class="expense-lines"></section>
           <button id="add-expense-line" type="button" class="secondary">+ Thêm vật tư</button>
@@ -476,6 +480,6 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261016-10"></script>
+    <script type="module" src="app.js?v=20261016-11"></script>
   </body>
 </html>

@@ -598,6 +598,17 @@ function recalcEntryTotal() {
   const price = Number($("#entry-unit-price").value || 0);
   $("#entry-total").textContent = money(Math.round(qty * price));
 }
+/** Loại phiếu chi: mua hàng theo vật tư (vào giá vốn) hay các khoản chi khác không phải vật tư. */
+const EXPENSE_KINDS = [
+  ["MATERIAL", "Mua hàng · nguyên liệu, bao bì, vật tư"],
+  ["MAINTENANCE", "Sửa chữa, bảo trì (chi vận hành)"],
+  ["ADDITIONAL_INVESTMENT", "Đầu tư, nâng cấp quán · thi công, thiết bị"],
+  ["OTHER_EXPENSE", "Chi vận hành khác · điện, nước, ga, dịch vụ"],
+];
+const NON_MATERIAL = new Set(EXPENSE_KINDS.slice(1).map(([k]) => k));
+const kindOf = (receipt) => (NON_MATERIAL.has(receipt?.expenseCategory) ? receipt.expenseCategory : "MATERIAL");
+/** Phiếu vật tư: dùng cho giá vốn, giá nguyên liệu, soát phân nhóm (không lẫn thi công, sửa chữa...). */
+const materialReceipts = () => state.expenseReceipts.filter((r) => kindOf(r) === "MATERIAL");
 const MATERIAL_GROUPS = [["THIT","Thịt, gia cầm"],["RAU","Rau, củ, quả"],["BUN","Bún, bánh đa, tinh bột"],["BANH","Bánh mì, nguyên liệu bánh"],["SUA","Trứng, sữa, bơ"],["GIAVI","Gia vị, nước dùng"],["CAPHE","Cà phê"],["TRA","Trà, nguyên liệu pha trà"],["MUT","Siro, mứt, nguyên liệu bổ sung"],["NUOC","Đồ uống đóng chai"],["DA","Đá, nước tinh khiết"],["BAOBI","Bao bì, vật tư phục vụ"],["VESINH","Vệ sinh, vật tư tiêu hao"],["KHAC","Vật tư khác"]];
 // Cùng bộ đơn vị với danh mục vật tư chuẩn (giá vốn quy đổi theo đúng các đơn vị này).
 const MATERIAL_UNITS = ["kg","g","lít","ml","hộp","thùng","chai","can","quả","vỉ","khay","bó","túi","gói","cái","ổ","cây","bao","bình","con","lon","suất"];
@@ -625,7 +636,7 @@ function expenseLineMarkup(item) {
   const safe = (value) => escapeHtml(String(value ?? "")).replace(/"/g, "&quot;");
   const id = safe(item.id);
   const group = item.expenseGroup ? groupLabel(item.expenseGroup) : "";
-  return `<article class="expense-line" data-line-id="${id}" data-group-touched="${item.groupTouched ? 1 : 0}"><label>Tên vật tư<input data-field="materialName" list="materials-${id}" maxlength="120" value="${safe(item.materialName)}" required autocomplete="off" /><datalist id="materials-${id}"></datalist></label><div class="two-col"><label>Mã vật tư<input data-field="materialCode" maxlength="40" value="${safe(item.materialCode)}" readonly /></label><label>Nhóm vật tư<input data-field="expenseGroup" list="groups-${id}" value="${safe(group)}" required autocomplete="off" /><datalist id="groups-${id}"></datalist></label></div><p class="rule-hint" data-hint aria-live="polite"></p><div class="two-col"><label>Số lượng<input data-field="qty" type="number" min="0.001" step="0.001" value="${Number(item.qty || 0)}" /></label><label>Đơn vị tính<input data-field="unit" list="units-${id}" maxlength="20" value="${safe(item.unit || "kg")}" required autocomplete="off" /><datalist id="units-${id}"></datalist></label></div><label>Đơn giá<input data-field="unitPrice" type="number" min="0" step="1" value="${Number(item.unitPrice || 0)}" /></label><button type="button" class="text-button" data-remove-line="${id}">Bỏ dòng</button></article>`;
+  return `<article class="expense-line" data-line-id="${id}" data-group-touched="${item.groupTouched ? 1 : 0}"><label><span data-name-label>Tên vật tư</span><input data-field="materialName" list="materials-${id}" maxlength="120" value="${safe(item.materialName)}" required autocomplete="off" /><datalist id="materials-${id}"></datalist></label><div class="two-col material-only"><label>Mã vật tư<input data-field="materialCode" maxlength="40" value="${safe(item.materialCode)}" readonly /></label><label>Nhóm vật tư<input data-field="expenseGroup" list="groups-${id}" value="${safe(group)}" required autocomplete="off" /><datalist id="groups-${id}"></datalist></label></div><p class="rule-hint material-only" data-hint aria-live="polite"></p><div class="two-col"><label>Số lượng<input data-field="qty" type="number" min="0.001" step="0.001" value="${Number(item.qty || 0)}" /></label><label>Đơn vị tính<input data-field="unit" list="units-${id}" maxlength="20" value="${safe(item.unit || "kg")}" required autocomplete="off" /><datalist id="units-${id}"></datalist></label></div><label>Đơn giá<input data-field="unitPrice" type="number" min="0" step="1" value="${Number(item.unitPrice || 0)}" /></label><button type="button" class="text-button" data-remove-line="${id}">Bỏ dòng</button></article>`;
 }
 function refreshRuleHint(line) {
   const hint = line.querySelector("[data-hint]");
@@ -653,7 +664,7 @@ function renderClassificationReview() {
   const host = $("#review-list");
   const summaryHost = $("#review-summary");
   if (!host) return;
-  const data = reviewItems(state.expenseReceipts, allRules());
+  const data = reviewItems(materialReceipts(), allRules());
   const s = summarizeReview(data);
   const tiles = [
     ["Số dòng vật tư (phiếu đã tải)", String(s.total)],
@@ -682,15 +693,29 @@ function renderExpenseDraft() {
   $("#expense-payer").value = expenseDraft.enteredByName || myName();
   $("#expense-payer").readOnly = isBuyer();
   $("#expense-fund").value = expenseDraft.fundSource ?? FUND_PERSONAL;
+  $("#expense-kind").value = expenseDraft.kind || "MATERIAL";
   $("#expense-lines").innerHTML = expenseDraft.items.map(expenseLineMarkup).join("");
+  applyKindUi();
   setupMaterialSuggestions();
   document.querySelectorAll("#expense-lines .expense-line").forEach(refreshRuleHint);
   $("#expense-total").textContent = money(calculateReceiptTotal(expenseDraft.items));
   updateGapNote();
   if (!editingReceipt) localStorage.setItem(`pos0210.expense-draft.${state.user.uid}`, JSON.stringify(expenseDraft));
 }
+/** Phiếu không phải vật tư: ẩn mã / nhóm vật tư, ô tên thành "Nội dung". */
+function applyKindUi() {
+  const nonMaterial = NON_MATERIAL.has($("#expense-kind").value);
+  $("#expense-lines").classList.toggle("non-material", nonMaterial);
+  document.querySelectorAll("#expense-lines [data-field=expenseGroup]").forEach((el) => { el.required = !nonMaterial; });
+  document.querySelectorAll("#expense-lines [data-name-label]").forEach((el) => { el.textContent = nonMaterial ? "Nội dung (VD: mái bạt, thợ điện, máy xay)" : "Tên vật tư"; });
+  $("#add-expense-line").textContent = nonMaterial ? "+ Thêm dòng" : "+ Thêm vật tư";
+  $("#expense-fund-hint").hidden = !(canTreasure(state.role) && $("#expense-fund").value === FUND_PERSONAL);
+  const hint = $("#expense-kind-hint");
+  if (hint) hint.textContent = { MAINTENANCE: "Tính vào chi vận hành của tháng.", ADDITIONAL_INVESTMENT: "Ghi riêng dòng Đầu tư bổ sung (không lẫn chi vận hành) nhưng VẪN TRỪ vào tiền chia cổ đông của tháng.", OTHER_EXPENSE: "Tính vào chi vận hành của tháng." }[$("#expense-kind").value] || "Vào giá vốn: chọn đúng nhóm vật tư cho từng dòng.";
+}
 function applyExpenseInputs() {
   if (!expenseDraft) return;
+  expenseDraft.kind = $("#expense-kind").value || "MATERIAL";
   expenseDraft.purchaseDate = new Date($("#expense-date").value).getTime();
   expenseDraft.note = $("#expense-note").value.trim();
   expenseDraft.enteredByName = $("#expense-payer").value.trim();
@@ -725,10 +750,14 @@ async function saveExpenseReceipt(event) {
   if (!confirmBooking([shift])) return;
   if (!expenseDraft.enteredByName) { error.textContent = "Ghi tên người mua (người ứng tiền)."; return; }
   if (!expenseDraft.fundSource) { error.textContent = "Chọn nguồn tiền: tiền cá nhân (cần hoàn) hay tiền quán."; return; }
-  const missingGroup = expenseDraft.items.findIndex((item) => !groupCodeOrNull(item.expenseGroup));
+  const kind = expenseDraft.kind || "MATERIAL";
+  const material = kind === "MATERIAL";
+  const missingGroup = material ? expenseDraft.items.findIndex((item) => !groupCodeOrNull(item.expenseGroup)) : -1;
   if (missingGroup >= 0) { error.textContent = `Dòng ${missingGroup + 1}: hãy chọn nhóm vật tư.`; return; }
-  const learnList = rulesToLearn(expenseDraft.items, state.expenseRules);
+  const learnList = material ? rulesToLearn(expenseDraft.items, state.expenseRules) : [];
   expenseDraft.items = expenseDraft.items.map(({ groupTouched, ...item }) => {
+    // Không phải vật tư: nhóm của dòng là mã loại chi (máy POS đọc mã này để xếp đúng khoản mục).
+    if (!material) return { ...item, expenseGroup: kind, materialCode: "", ...normalizeQuantity(item.qty, item.unit), classification: { source: "KIND", suggestedGroup: null, status: "kind" } };
     const suggestion = classifyMaterial(item.materialName, allRules());
     const chosen = groupCodeOrNull(item.expenseGroup);
     const source = suggestion.group && suggestion.group === chosen ? (suggestion.status === "learned" ? "LEARNED_RULE" : "KEYWORD_RULE") : "MANUAL";
@@ -741,10 +770,11 @@ async function saveExpenseReceipt(event) {
   const { payerChosen: _pc, ...payload1 } = { ...payload0, payerId: payerIdFor(expenseDraft.enteredByName, editingReceipt),
     // Tháng đã chốt chia cổ đông: ghi sổ vào tháng chưa chốt gần nhất, giữ ngày mua thật và mã phiếu theo ngày thật.
     ...(shift.shifted ? { purchaseDate: shift.ts, originalPurchaseDate: shift.original, note: withShiftNote(payload0.note, shift), code: payload0.code || receiptCode({ ...payload0, purchaseDate: shift.original }) } : {}) };
-  const payload = withReimbursement(payload1, editingReceipt, now);
+  const payloadKind = material ? (() => { const { expenseCategory: _ec, ...rest } = payload1; return rest; })() : { ...payload1, expenseCategory: kind };
+  const payload = withReimbursement(payloadKind, editingReceipt, now);
   try {
     await setDoc(doc(db, ...root, receiptCollection(), expenseDraft.id), withDemoFlags(payload));
-    rememberMaterials(expenseDraft.items);
+    if (material) rememberMaterials(expenseDraft.items);
     for (const rule of state.demo || isBuyer() ? [] : learnList) { // đang xem demo: không học quy tắc từ phiếu demo
       try {
         const learned = { id: rule.id, name: rule.name, group: rule.group, updatedAt: now, updatedByName: myName() };
@@ -773,7 +803,7 @@ function openReceiptEditor(id) {
   if (isSummaryReceipt(receipt)) { openSummaryDialog(receipt); return; }
   upgradeFrom = null;
   editingReceipt = receipt;
-  expenseDraft = { ...receiptToDraft(receipt, MATERIAL_GROUPS), fundSource: receipt.fundSource || "", payerChosen: true };
+  expenseDraft = { ...receiptToDraft(receipt, MATERIAL_GROUPS), fundSource: receipt.fundSource || "", payerChosen: true, kind: kindOf(receipt) };
   $("#expense-title").textContent = "Sửa phiếu";
   $("#expense-submit").textContent = "LƯU THAY ĐỔI";
   $("#expense-error").textContent = "";
@@ -1054,7 +1084,7 @@ function openNewExpense() {
   if (!state.user) return;
   editingReceipt = null;
   upgradeFrom = null;
-  $("#expense-title").textContent = "Phiếu nhiều vật tư";
+  $("#expense-title").textContent = "Phiếu chi";
   $("#expense-submit").textContent = "LƯU VÀ ĐỒNG BỘ";
   expenseDraft = createStableDraft(localStorage, state.user, uuid);
   // Mỗi người đăng nhập tài khoản riêng: bản nháp mới mặc định người mua là chính mình.
@@ -1065,7 +1095,9 @@ function openNewExpense() {
   $("#expense-dialog").showModal();
 }
 $("#open-expense").addEventListener("click", openNewExpense);
-$("#reimb-new-receipt").addEventListener("click", () => { if (state.demo) { window.alert("Đang xem DEMO: phiếu sẽ vào dữ liệu demo."); } openNewExpense(); });
+$("#expense-kind").replaceChildren(...EXPENSE_KINDS.map(([k, label]) => new Option(label, k)));
+$("#expense-fund").addEventListener("change", applyKindUi);
+$("#expense-kind").addEventListener("change", () => { applyKindUi(); if (expenseDraft) expenseDraft.kind = $("#expense-kind").value; });
 $("#close-expense").addEventListener("click", () => {
   if (editingReceipt) { editingReceipt = null; upgradeFrom = null; expenseDraft = null; $("#expense-dialog").close(); updateGapNote(); return; }
   applyExpenseInputs(); renderExpenseDraft(); $("#expense-dialog").close();
@@ -1489,7 +1521,7 @@ async function loadRecipes() {
   } catch (error) { state.recipeError = error.code === "permission-denied" ? "Không có quyền đọc menu hoặc công thức (cần mở quy tắc Firestore cho recipes)." : (error.message || "lỗi không rõ"); }
   renderRecipes();
 }
-function currentCosts() { return materialCosts(state.expenseReceipts); }
+function currentCosts() { return materialCosts(materialReceipts()); }
 function recipeLinesFor(item) { return state.recipes[item.id]?.lines?.map((l) => ({ ...l })) ?? draftRecipeFor(item.name); }
 function renderRecipes() {
   const host = $("#recipe-list");
@@ -1683,7 +1715,7 @@ function renderUsageCheck() {
   const usage = dailyMaterialUsage(sales, recipeByName);
   const to = new Date(); const toMs = new Date(to.getFullYear(), to.getMonth(), to.getDate() + 1).getTime();
   const fromMs = toMs - 7 * 86400000;
-  const rowsUsage = usageVsPurchase({ receipts: state.expenseReceipts, usagePerDay: usage, from: fromMs, to: toMs });
+  const rowsUsage = usageVsPurchase({ receipts: materialReceipts(), usagePerDay: usage, from: fromMs, to: toMs });
   const fmt = (q, base) => (base === "g" || base === "ml") ? `${(q / 1000).toLocaleString("vi-VN", { maximumFractionDigits: 1 })} ${base === "g" ? "kg" : "lít"}` : `${Math.round(q * 10) / 10} ${base}`;
   const chip = (r) => r.ratio === null ? '<span class="cost-chip unknown">không có định mức</span>' : `<span class="cost-chip ${r.ratio > 1.25 || r.ratio < 0.6 ? "bad" : r.ratio > 1.1 || r.ratio < 0.85 ? "warn" : "ok"}">${Math.round(r.ratio * 100)}%</span>`;
   $("#usage-note").textContent = `Định mức tính từ ${source} × công thức. Đồ khô mua theo tuần (cà phê, sữa, gia vị) cần xem khoảng dài hơn mới đúng; đồ tươi (thịt, rau, bánh mì) xem 7 ngày là được.`;
@@ -1879,6 +1911,9 @@ function applyRoleUi() {
   $("#request-sync").hidden = buyer;
   $("#logout-button").hidden = state.role !== ROLE_OWNER;
   $("#reimb-treasurer-zone").hidden = !canTreasure(state.role);
+  // Người mua chỉ nhập phiếu chi; phiếu tổng và thu chi khác (lương, vốn, rút tiền) dành cho thủ quỹ / chủ quán.
+  $("#open-summary").hidden = buyer;
+  $("#open-entry").hidden = buyer;
   $("#members-zone").hidden = state.role !== ROLE_OWNER;
   $("#me-title").textContent = myName();
   $("#me-role").textContent = `${ROLE_LABELS[state.role] || ""} · vào web bằng PIN riêng`;

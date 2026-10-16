@@ -19,32 +19,32 @@ import {
   setDoc as rawSetDoc,
   writeBatch as rawWriteBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261016-30";
-import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261016-30";
-import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261016-30";
-import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261016-30";
-import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261016-30";
-import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261016-30";
-import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261016-30";
-import { buildSimulation } from "./sim-data.js?v=20261016-30";
-import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261016-30";
-import { menuCsv } from "./menu-export.js?v=20261016-30";
-import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-30";
-import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-30";
-import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261016-30";
-import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261016-30";
-import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261016-30";
-import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261016-30";
-import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261016-30";
-import { otherCostRows } from "./other-costs.js?v=20261016-30";
-import { paybackStatus } from "./payback.js?v=20261016-30";
-import { topSellers } from "./top-banner.js?v=20261016-30";
-import { AI_SCOPES, buildAiPack, scopeRange } from "./ai-export.js?v=20261016-30";
-import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-30";
-import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261016-30";
-import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261016-30";
-import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261016-30";
-import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261016-30";
+import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261016-32";
+import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261016-32";
+import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261016-32";
+import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261016-32";
+import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261016-32";
+import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261016-32";
+import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261016-32";
+import { buildSimulation } from "./sim-data.js?v=20261016-32";
+import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261016-32";
+import { menuCsv } from "./menu-export.js?v=20261016-32";
+import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-32";
+import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-32";
+import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261016-32";
+import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261016-32";
+import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261016-32";
+import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261016-32";
+import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261016-32";
+import { otherCostRows } from "./other-costs.js?v=20261016-32";
+import { paybackStatus } from "./payback.js?v=20261016-32";
+import { topSellers } from "./top-banner.js?v=20261016-32";
+import { AI_SCOPES, buildAiPack, scopeRange } from "./ai-export.js?v=20261016-32";
+import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-32";
+import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261016-32";
+import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261016-32";
+import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261016-32";
+import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261016-32";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",
@@ -75,7 +75,10 @@ let editingReceipt = null;
 // Ghi chép đầu tư ban đầu (phiếu lẻ trước khai trương) chỉ để tham khảo: không cộng vào chi phí, đầu tư trong kỳ hay báo cáo.
 // Vốn ban đầu dùng MỘT con số chủ quán nhập ở "Vốn đầu tư ban đầu & hoàn vốn" (config/investment).
 const receiptCategory = (r) => r?.expenseCategory || r?.items?.[0]?.expenseGroup || "";
-const isInitialReceipt = (r) => INITIAL_CATEGORIES.has(receiptCategory(r));
+// Khoản chi trước tháng khai trương (chủ quán nhập ở mục Vốn đầu tư ban đầu) cũng là ghi chép ban đầu: đã nằm trong con số vốn.
+const openingStart = () => { const m = state.investment?.openingMonth; return /^\d{4}-\d{2}$/.test(m || "") ? new Date(Number(m.slice(0, 4)), Number(m.slice(5)) - 1, 1).getTime() : 0; };
+const beforeOpening = (ms) => { const o = openingStart(); return o > 0 && Number(ms || 0) > 0 && Number(ms) < o; };
+const isInitialReceipt = (r) => INITIAL_CATEGORIES.has(receiptCategory(r)) || beforeOpening(r?.purchaseDate);
 const costReceipts = () => state.expenseReceipts.filter(countsAsCost).filter((r) => !isInitialReceipt(r));
 const expenseRows = () => costReceipts().map((receipt) => ({
   id: receipt.id,
@@ -669,7 +672,7 @@ function renderTransactions() {
   const pendingTotal = people.reduce((t, x) => t + x.pending, 0);
   $("#payer-breakdown").innerHTML = spend.length ? `<p class="reimb-sub">${spend.length} phiếu chi · đã duyệt ${money(approvedTotal)}${pendingTotal ? ` · chờ duyệt / trả lại ${money(pendingTotal)} (chưa tính)` : ""}</p>${people.map((x) => `<button type="button" class="paylist-row" data-pick-payer="${escapeHtml(x.name)}"><span><strong>${escapeHtml(x.name)}</strong> · ${x.count} phiếu</span><span><b>${money(x.total)}</b>${x.pending ? `<small class="warn-text"> +${money(x.pending)} chờ</small>` : ""}</span></button>`).join("")}` : "";
   if (reimbHint) $("#payer-breakdown").insertAdjacentHTML("beforeend", reimbHint);
-  if (iniRows.length) $("#payer-breakdown").insertAdjacentHTML("beforeend", `<p class="muted">${iniRows.length} ghi chép đầu tư ban đầu cũ · ${money(iniTotal)} · <b>không tính</b> vào chi phí hay đầu tư (vốn ban đầu dùng một con số ở mục Vốn đầu tư ban đầu & hoàn vốn). <button type="button" class="text-button" data-toggle-initial>${state.showInitial ? "Ẩn" : "Xem"}</button></p>`);
+  if (iniRows.length) $("#payer-breakdown").insertAdjacentHTML("beforeend", `<p class="muted">${iniRows.length} ghi chép đầu tư ban đầu / chi trước tháng khai trương · ${money(iniTotal)} · <b>không tính</b> vào chi phí hay đầu tư (vốn ban đầu dùng một con số ở mục Vốn đầu tư ban đầu & hoàn vốn). <button type="button" class="text-button" data-toggle-initial>${state.showInitial ? "Ẩn" : "Xem"}</button></p>`);
   const host = $("#transactions");
   if (!rows0.length) {
     host.innerHTML = '<p class="muted empty-state">Không có phiếu nào khớp kỳ / người chi / từ khoá đã chọn.</p>';
@@ -1385,6 +1388,21 @@ $("#period-filters").addEventListener("click", (event) => {
   render();
   ensureReceiptsLoaded();
 });
+/** Bấm "Xem từng khoản" ở thẻ tháng: lọc danh sách phiếu đúng tháng đó và cuộn tới. */
+$("#monthly-report").addEventListener("click", (e) => {
+  const key = e.target.closest("[data-month-detail]")?.dataset.monthDetail;
+  if (!key) return;
+  const y = Number(key.slice(0, 4)), m = Number(key.slice(5));
+  const last = new Date(y, m, 0).getDate();
+  $("#from-date").value = `${key}-01`; $("#to-date").value = `${key}-${String(last).padStart(2, "0")}`;
+  state.period = "custom"; state.customFrom = startOfDay(new Date(y, m - 1, 1)); state.customTo = endOfDay(new Date(y, m - 1, last));
+  $("#period-filters").querySelectorAll(".filter").forEach((b) => b.classList.toggle("active", b.dataset.period === "custom"));
+  $("#custom-range").hidden = false;
+  state.transactionKind = "EXPENSE";
+  $("#transaction-filters").querySelectorAll("[data-kind]").forEach((b) => b.classList.toggle("active", b.dataset.kind === "EXPENSE"));
+  render(); ensureReceiptsLoaded();
+  $("#payer-breakdown").scrollIntoView({ behavior: "smooth", block: "start" });
+});
 $("#apply-range").addEventListener("click", () => {
   const from = $("#from-date").value;
   const to = $("#to-date").value;
@@ -1664,7 +1682,8 @@ function renderMonthlyReport() {
   const all = currentMonthReport();
   const since = reportSinceKey();
   // Chỉ hiện các tháng web đã đọc đủ phiếu (từ đầu tháng của mốc đệm); tháng cũ hơn chỉ có doanh thu nên không so sánh được.
-  const report = all.filter((r) => r.monthKey >= since);
+  const opening = state.investment?.openingMonth || "";
+  const report = all.filter((r) => r.monthKey >= since && (!opening || r.monthKey >= opening));
   const note = [state.receiptsNote, state.monthlyError].filter(Boolean).join(" · ");
   $("#monthly-note").textContent = note;
   target.innerHTML = report.slice().reverse().map((r) => {
@@ -1678,7 +1697,8 @@ function renderMonthlyReport() {
     <div><dt>− Chi vận hành khác</dt><dd>${ops ? money(ops) : "—"}${ops ? pct(ops) : ""}</dd></div>
     <div><dt>− Đầu tư bổ sung</dt><dd>${inv ? money(inv) : "—"}</dd></div>
     <div class="month-net"><dt>= Còn lại (dòng tiền ròng)</dt><dd>${net === null ? "—" : money(net)}</dd></div>
-    <div class="month-sub"><dt>Số phiếu mua hàng</dt><dd>${r.receiptCount} phiếu${r.summaryAmount ? ` · ${money(r.summaryAmount)} nhập theo phiếu tổng (không có từng món)` : ""}</dd></div></dl></article>`;
+    <div class="month-sub"><dt>Số phiếu mua hàng</dt><dd>${r.receiptCount} phiếu${r.summaryAmount ? ` · ${money(r.summaryAmount)} nhập theo phiếu tổng (không có từng món)` : ""}</dd></div></dl>
+    <button type="button" class="text-button" data-month-detail="${r.monthKey}">Xem từng khoản của tháng này ›</button></article>`;
   }).join("") || '<p class="muted">Chưa có phiếu trong khoảng đã tải.</p>';
 }
 function downloadFile(name, mime, text) {
@@ -1954,12 +1974,13 @@ function allOtherCosts() {
   if (state.demo || state.simulation) return [];
   return otherCostRows(state.otherPurchases, new Set(state.expenseReceipts.map((r) => String(r.id))));
 }
-function otherCosts() { return allOtherCosts().filter((c) => !INITIAL_CATEGORIES.has(c.category)); }
+const isInitialCost = (c) => INITIAL_CATEGORIES.has(c.category) || beforeOpening(c.at);
+function otherCosts() { return allOtherCosts().filter((c) => !isInitialCost(c)); }
 /** Ghi chép đầu tư ban đầu cũ: hiện khi bấm xem, gắn nhãn "không tính". */
 function initialRecords() {
   return {
     receipts: state.expenseReceipts.filter((r) => reviewStatus(r) !== "NONE" && isInitialReceipt(r)),
-    others: allOtherCosts().filter((c) => INITIAL_CATEGORIES.has(c.category)),
+    others: allOtherCosts().filter(isInitialCost),
   };
 }
 
@@ -2627,9 +2648,18 @@ const ai = { scope: "month", text: "", busy: false };
 function renderAiScopes() {
   $("#ai-scope").innerHTML = AI_SCOPES.map(([k, label]) => `<button type="button" class="filter${ai.scope === k ? " active" : ""}" data-ai-scope="${k}">${label}</button>`).join("");
 }
-$("#ai-scope").addEventListener("click", (e) => { const k = e.target.closest("[data-ai-scope]")?.dataset.aiScope; if (!k) return; ai.scope = k; ai.text = ""; renderAiScopes(); $("#ai-status").textContent = ""; });
-$("#ai-bills").addEventListener("change", () => { ai.text = ""; });
-$("#ai-export").addEventListener("toggle", (e) => { if (e.target.open) renderAiScopes(); });
+// Điện thoại chỉ cho mở bảng chia sẻ / ghi clipboard NGAY trong cú bấm: dữ liệu phải tạo sẵn trước khi bấm.
+function prepareAi() {
+  ai.text = ""; ai.pending = null; ai.version = (ai.version || 0) + 1;
+  const v = ai.version;
+  setAiButtons(false);
+  $("#ai-status").textContent = "Đang chuẩn bị dữ liệu…";
+  aiText().then(() => { if (v === ai.version) setAiButtons(true); }).catch((error) => { if (v === ai.version) $("#ai-status").textContent = `Chưa tạo được dữ liệu: ${error.message || error}`; });
+}
+function setAiButtons(ready) { ["#ai-share", "#ai-copy", "#ai-download"].forEach((id) => { $(id).disabled = !ready; }); }
+$("#ai-scope").addEventListener("click", (e) => { const k = e.target.closest("[data-ai-scope]")?.dataset.aiScope; if (!k) return; ai.scope = k; renderAiScopes(); prepareAi(); });
+$("#ai-bills").addEventListener("change", prepareAi);
+$("#ai-export").addEventListener("toggle", (e) => { if (e.target.open) { renderAiScopes(); if (!ai.text && !ai.busy) prepareAi(); } });
 const INITIAL_SET = INITIAL_CATEGORIES;
 async function buildAiText() {
   if (state.demo || state.simulation) throw new Error("Đang xem demo / mô phỏng: tắt để xuất số thật.");
@@ -2664,7 +2694,7 @@ async function buildAiText() {
   const months = monthKeysAll.map((key) => {
     const inMonth = (ms) => monthKeyOf(Number(ms || 0)) === key;
     const rec = live.filter((r) => countsAsCost(r) && !isInitialReceipt(r) && inMonth(r.purchaseDate));
-    const oth = others.filter((c) => inMonth(c.at) && !INITIAL_SET.has(c.category));
+    const oth = others.filter((c) => inMonth(c.at) && !isInitialCost(c));
     const isInv = (cat) => INVESTMENT_CATEGORIES.has(cat);
     const purchases = rec.filter((r) => !r.expenseCategory || r.expenseCategory === "INVENTORY_PURCHASE").reduce((t, r) => t + Number(r.total || 0), 0);
     const investment = rec.filter((r) => isInv(r.expenseCategory)).reduce((t, r) => t + Number(r.total || 0), 0) + oth.filter((c) => isInv(c.category)).reduce((t, c) => t + c.amount, 0);
@@ -2698,7 +2728,7 @@ async function buildAiText() {
     lastClose: lastKey ? { monthKey: lastKey, savedAt: Number(lastFund?.savedAt || lastSh?.closedAt || lastSh?.updatedAt || 0), distributable: lastFund ? Number(lastFund.distributable) : NaN } : null,
     months, daily: dayList.map((k) => dailyDocs[k]), items, bills,
     receipts: live.filter((r) => inScope(r.purchaseDate)).map((r) => ({ at: Number(r.purchaseDate || 0), code: receiptCode(r), kind: isInitialReceipt(r) ? "INITIAL_RECORD" : kindOf(r), payer: r.enteredByName || "", fund: r.fundSource || "", review: reviewStatus(r), reimb: reimbursementStatus(r), total: Number(r.total || 0), content: [(r.items || []).map((i) => `${i.materialName}${i.qty ? ` ${i.qty}${i.unit || ""}` : ""}`).join("; "), r.note].filter(Boolean).join(" · ") })),
-    otherCosts: others.filter((c) => inScope(c.at) && !INITIAL_SET.has(c.category)),
+    otherCosts: others.filter((c) => inScope(c.at) && !isInitialCost(c)),
     movements: moves.filter((m) => inScope(m.occurredAt)).map((m) => ({ at: Number(m.occurredAt), type: m.type, who: m.counterpartyName || "", amount: Number(m.amount || 0), note: m.note || "" })),
     closings: fundCloses.map((c) => ({ ...c, monthKey: c.monthKey || c.id })),
     payback: currentPayback(), menu,
@@ -2710,22 +2740,33 @@ async function buildAiText() {
 }
 async function aiText() {
   if (ai.text) return ai.text;
-  if (ai.busy) throw new Error("Đang tạo dữ liệu, chờ chút.");
+  if (ai.pending) return ai.pending;
+  const v = ai.version;
   ai.busy = true;
-  try { ai.text = await buildAiText(); return ai.text; } finally { ai.busy = false; }
+  ai.pending = buildAiText().then((t) => { if (v === ai.version) ai.text = t; return t; }).finally(() => { ai.busy = false; ai.pending = null; });
+  return ai.pending;
 }
 const aiFileName = () => `POS0210-AI-${ai.scope}-${dateKeyOf(new Date())}.md`;
-async function aiAction(kind) {
+function aiAction(kind) {
+  const text = ai.text;
+  if (!text) { if (!ai.busy) prepareAi(); $("#ai-status").textContent = "Đang chuẩn bị dữ liệu, chờ vài giây rồi bấm lại."; return; }
+  const fallback = (why) => { downloadFile(aiFileName(), "text/markdown;charset=utf-8", text); $("#ai-status").textContent = `${why} Đã tải file ${aiFileName()}: mở app AI và đính kèm file này.`; };
+  if (kind === "download") { downloadFile(aiFileName(), "text/markdown;charset=utf-8", text); return; }
+  if (kind === "copy") {
+    const done = () => flashNote("Đã sao chép. Mở app AI và dán vào ô chat.");
+    const legacy = () => { const t = Object.assign(document.createElement("textarea"), { value: text }); t.style.position = "fixed"; t.style.opacity = "0"; document.body.append(t); t.select(); const ok = document.execCommand("copy"); t.remove(); if (ok) done(); else fallback("Trình duyệt không cho sao chép."); };
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(done, legacy); else legacy();
+    return;
+  }
+  // Gọi share đồng bộ trong cú bấm (không await gì trước đó).
+  const file = new File([text], aiFileName(), { type: "text/plain" });
+  let p = null;
   try {
-    const text = await aiText();
-    if (kind === "download") { downloadFile(aiFileName(), "text/markdown;charset=utf-8", text); return; }
-    if (kind === "copy") { await navigator.clipboard.writeText(text); flashNote("Đã sao chép. Mở app AI và dán vào ô chat."); return; }
-    const file = new File([text], aiFileName(), { type: "text/markdown" });
-    if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: "Dữ liệu quán 0210", text: "Phân tích giúp tôi theo hướng dẫn trong file." }); return; }
-    if (navigator.share) { await navigator.share({ title: "Dữ liệu quán 0210", text }); return; }
-    downloadFile(aiFileName(), "text/markdown;charset=utf-8", text);
-    $("#ai-status").textContent += " Trình duyệt này không chia sẻ trực tiếp được: đã tải file, hãy đính kèm file vào app AI.";
-  } catch (error) { if (error?.name !== "AbortError") $("#ai-status").textContent = `Chưa xuất được: ${error.message || error}`; }
+    if (navigator.canShare?.({ files: [file] })) p = navigator.share({ files: [file], title: "Dữ liệu quán 0210", text: "Phân tích giúp tôi theo hướng dẫn trong file." });
+    else if (navigator.share) p = navigator.share({ title: "Dữ liệu quán 0210", text });
+  } catch (error) { p = Promise.reject(error); }
+  if (!p) { fallback("Trình duyệt này không chia sẻ trực tiếp được."); return; }
+  p.catch((error) => { if (error?.name !== "AbortError") fallback(`Không mở được bảng chia sẻ (${error.message || error}).`); });
 }
 $("#ai-share").addEventListener("click", () => aiAction("share"));
 $("#ai-copy").addEventListener("click", () => aiAction("copy"));
@@ -2735,7 +2776,7 @@ async function loadPayback() {
   if (state.demo || state.simulation) return;
   try { const c = await getDoc(doc(db, ...root, "config", "investment")); state.investment = c.exists() ? c.data() : null; } catch { state.investment = null; }
   try { state.closingsAll = rows(await getDocs(collection(db, ...root, "fundClosings"))); } catch { state.closingsAll = []; }
-  renderPayback(); renderCumulativeSummary();
+  renderPayback(); renderCumulativeSummary(); renderMonthlyReport(); renderTransactions(); renderPeriodSummary();
 }
 function currentPayback() {
   const report = currentMonthReport();
@@ -2773,7 +2814,7 @@ $("#invest-save").addEventListener("click", async () => {
   const amount = Math.round(Number($("#invest-amount").value) || 0);
   if (amount <= 0) { $("#invest-note-line").textContent = "Nhập số vốn lớn hơn 0."; return; }
   const payload = { amount, openingMonth: $("#invest-opening").value || "", note: $("#invest-note").value.trim(), setBy: myName(), setAt: Date.now() };
-  try { await setDoc(doc(db, ...root, "config", "investment"), payload); state.investment = payload; $("#invest-amount").blur(); renderPayback(); renderCumulativeSummary(); flashNote("Đã lưu vốn đầu tư ban đầu."); }
+  try { await setDoc(doc(db, ...root, "config", "investment"), payload); state.investment = payload; $("#invest-amount").blur(); renderPayback(); renderCumulativeSummary(); renderMonthlyReport(); renderTransactions(); renderPeriodSummary(); flashNote("Đã lưu vốn đầu tư ban đầu."); }
   catch (error) { $("#invest-note-line").textContent = `Chưa lưu được: ${error.message}`; }
 });
 /* ---------- Đối soát quỹ & chia tiền cổ đông theo tháng (fundClosings/{YYYY-MM}) ---------- */

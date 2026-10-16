@@ -1,5 +1,5 @@
 // Danh mục vật tư chuẩn, giá vốn từ phiếu chi chi tiết và giá vốn món từ công thức. Hàm thuần, không Firebase, không DOM.
-import { normalizeText, isSummaryReceipt, groupLabelOf } from "./expense-rules.js?v=20261016-21";
+import { normalizeText, isSummaryReceipt, groupLabelOf } from "./expense-rules.js?v=20261016-22";
 
 export const KIND_LABELS = { NL: "Nguyên liệu", BB: "Bao bì theo món", VH: "Vận hành" };
 

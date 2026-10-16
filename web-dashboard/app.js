@@ -19,29 +19,29 @@ import {
   setDoc as rawSetDoc,
   writeBatch as rawWriteBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261016-21";
-import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261016-21";
-import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261016-21";
-import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261016-21";
-import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261016-21";
-import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261016-21";
-import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261016-21";
-import { buildSimulation } from "./sim-data.js?v=20261016-21";
-import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261016-21";
-import { menuCsv } from "./menu-export.js?v=20261016-21";
-import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-21";
-import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-21";
-import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261016-21";
-import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261016-21";
-import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261016-21";
-import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261016-21";
-import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261016-21";
-import { otherCostRows } from "./other-costs.js?v=20261016-21";
-import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-21";
-import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261016-21";
-import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261016-21";
-import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261016-21";
-import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261016-21";
+import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261016-22";
+import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261016-22";
+import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261016-22";
+import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261016-22";
+import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261016-22";
+import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261016-22";
+import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261016-22";
+import { buildSimulation } from "./sim-data.js?v=20261016-22";
+import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261016-22";
+import { menuCsv } from "./menu-export.js?v=20261016-22";
+import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-22";
+import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-22";
+import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261016-22";
+import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261016-22";
+import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261016-22";
+import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261016-22";
+import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261016-22";
+import { otherCostRows } from "./other-costs.js?v=20261016-22";
+import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-22";
+import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261016-22";
+import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261016-22";
+import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261016-22";
+import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261016-22";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",
@@ -603,36 +603,71 @@ function renderFinanceMetadata() {
   state.payerFilter = payerSelect.value;
 }
 
+const REVIEW_TAG = { PENDING: ["Chờ duyệt · chưa tính", "warn"], REJECTED: ["Bị trả lại · chưa tính", "warn"] };
+const FUND_SHORT = { PERSONAL: "tiền cá nhân", SHOP_CASH: "quỹ quán", SHOP_BANK: "quỹ quán" };
 function renderTransactions() {
   const range = rangeForPeriod();
-  const purchases = expenseRows()
-    .filter((p) => p.status !== "DELETED" && inRange(p.purchasedAt, range))
-    .filter((p) => matchesPayer(state.payerFilter, p.paidByName))
-    .map((p) => ({ kind: "EXPENSE", at: Number(p.purchasedAt || 0), id: p.id, amount: Number(p.total || 0), title: `${p.summary ? "Phiếu tổng · " : ""}${EXPENSE_LABELS[p.expenseCategory] || p.expenseCategory || "Phiếu chi"}`, person: p.paidByName || "", note: p.note || "" }));
+  const term = normalizeMaterial($("#transaction-search")?.value || "");
+  // Mọi phiếu còn hiệu lực trong kỳ, kể cả chờ duyệt / bị trả lại (gắn nhãn, KHÔNG cộng vào tổng).
+  const purchases = state.expenseReceipts
+    .filter((r) => reviewStatus(r) !== "NONE" && inRange(Number(r.purchaseDate || 0), range))
+    .filter((r) => matchesPayer(state.payerFilter, r.enteredByName || ""))
+    .map((r) => {
+      const items = (r.items || []).map((i) => `${i.materialName}${i.qty ? ` ${Number(i.qty).toLocaleString("vi-VN")} ${i.unit || ""}` : ""}`.trim());
+      const kind = kindOf(r);
+      return { kind: "EXPENSE", at: Number(r.purchaseDate || 0), id: r.id, amount: Number(r.total || 0), review: reviewStatus(r),
+        title: `${receiptCode(r)} · ${isSummaryReceipt(r) ? "Phiếu tổng" : kind === "MATERIAL" ? "Mua hàng" : KIND_SHORT[kind] || "Phiếu chi"}`,
+        person: r.enteredByName || "", fund: FUND_SHORT[r.fundSource] || "chưa rõ nguồn tiền",
+        note: [items.slice(0, 4).join(", ") + (items.length > 4 ? ` … +${items.length - 4} dòng` : ""), r.note].filter(Boolean).join(" · "),
+        search: normalizeMaterial([receiptCode(r), r.enteredByName, r.note, ...items].join(" ")) };
+    });
   const others = otherCosts()
     .filter((c) => inRange(c.at, range) && matchesPayer(state.payerFilter, c.payer))
-    .map((c) => ({ kind: "EXPENSE", at: c.at, id: c.id, amount: c.amount, title: EXPENSE_LABELS[c.category] || c.category, person: c.payer, note: [c.supplierName, c.note, "nhập ở Giao dịch khác / máy POS"].filter(Boolean).join(" · "), readonly: true }));
+    .map((c) => ({ kind: "EXPENSE", at: c.at, id: c.id, amount: c.amount, review: "APPROVED", title: EXPENSE_LABELS[c.category] || c.category, person: c.payer, fund: c.payer ? "tiền cá nhân" : "quỹ quán", note: [c.supplierName, c.note, "nhập ở Thu chi khác / máy POS"].filter(Boolean).join(" · "), readonly: true, search: normalizeMaterial([c.supplierName, c.note, c.payer].join(" ")) }));
   const movements = state.movements
     .filter((m) => inRange(m.occurredAt, range) && matchesPayer(state.payerFilter, m.counterpartyName))
-    .map((m) => ({ kind: "MOVEMENT", at: Number(m.occurredAt || 0), id: m.id, amount: Number(m.amount || 0), title: MOVEMENT_LABELS[m.type] || m.type || "Dòng tiền", person: m.counterpartyName || "", note: m.note || "" }));
+    .map((m) => ({ kind: "MOVEMENT", at: Number(m.occurredAt || 0), id: m.id, amount: Number(m.amount || 0), review: "APPROVED", title: MOVEMENT_LABELS[m.type] || m.type || "Dòng tiền", person: m.counterpartyName || "", note: m.note || "", search: normalizeMaterial([m.note, m.counterpartyName].join(" ")) }));
   let rows0 = [...purchases, ...others, ...movements].sort((a, b) => b.at - a.at);
   if (state.transactionKind !== "ALL") rows0 = rows0.filter((r) => r.kind === state.transactionKind);
-  rows0 = rows0.slice(0, 100);
+  if (term) rows0 = rows0.filter((r) => r.search.includes(term));
+  // Tổng theo người chi (chỉ phiếu chi đã duyệt), để xem ai chi bao nhiêu trong kỳ.
+  const spend = rows0.filter((r) => r.kind === "EXPENSE");
+  const byPerson = new Map();
+  for (const r of spend) {
+    const key = r.person || "Chưa rõ";
+    const x = byPerson.get(key) || { name: key, count: 0, total: 0, pending: 0 };
+    x.count += 1;
+    if (r.review === "APPROVED") x.total += r.amount; else x.pending += r.amount;
+    byPerson.set(key, x);
+  }
+  const people = [...byPerson.values()].sort((a, b) => b.total - a.total);
+  const approvedTotal = people.reduce((t, x) => t + x.total, 0);
+  const pendingTotal = people.reduce((t, x) => t + x.pending, 0);
+  $("#payer-breakdown").innerHTML = spend.length ? `<p class="reimb-sub">${spend.length} phiếu chi · đã duyệt ${money(approvedTotal)}${pendingTotal ? ` · chờ duyệt / trả lại ${money(pendingTotal)} (chưa tính)` : ""}</p>${people.map((x) => `<button type="button" class="paylist-row" data-pick-payer="${escapeHtml(x.name)}"><span><strong>${escapeHtml(x.name)}</strong> · ${x.count} phiếu</span><span><b>${money(x.total)}</b>${x.pending ? `<small class="warn-text"> +${money(x.pending)} chờ</small>` : ""}</span></button>`).join("")}` : "";
   const host = $("#transactions");
   if (!rows0.length) {
-    host.innerHTML = '<p class="muted empty-state">Chưa có phiếu trong kỳ đã chọn.</p>';
+    host.innerHTML = '<p class="muted empty-state">Không có phiếu nào khớp kỳ / người chi / từ khoá đã chọn.</p>';
     return;
   }
-  host.replaceChildren(...rows0.map((r) => {
+  host.replaceChildren(...rows0.slice(0, 300).map((r) => {
     const node = document.createElement("article");
     node.className = "transaction-card";
-    const meta = [dateTime(r.at), r.person].filter(Boolean).join(" · ");
+    const meta = [dateTime(r.at), r.person, r.kind === "EXPENSE" ? r.fund : ""].filter(Boolean).join(" · ");
     const rec = r.kind === "EXPENSE" && !r.readonly ? findReceipt(r.id) : null;
-    const actions = rec ? `<div class="row-actions">${canEditReceipt(rec) ? `<button type="button" class="text-button" data-edit-receipt="${escapeHtml(r.id)}">Sửa</button><button type="button" class="text-button danger" data-cancel-receipt="${escapeHtml(r.id)}">Huỷ phiếu</button>` : `<button type="button" class="text-button" data-edit-receipt="${escapeHtml(r.id)}">Xem</button>`}</div>` : "";
-    node.innerHTML = `<div><strong>${escapeHtml(r.title)}</strong><small>${escapeHtml(meta)}</small><p>${escapeHtml(r.note)}</p>${actions}</div><b>${money(r.amount)}</b>`;
+    const tag = REVIEW_TAG[r.review] ? ` <span class="bill-tag ${REVIEW_TAG[r.review][1]}">${REVIEW_TAG[r.review][0]}</span>` : "";
+    const actions = rec ? `<div class="row-actions"><button type="button" class="text-button" data-edit-receipt="${escapeHtml(r.id)}">${canEditReceipt(rec) ? "Xem / sửa" : "Xem chi tiết"}</button>${canEditReceipt(rec) ? `<button type="button" class="text-button danger" data-cancel-receipt="${escapeHtml(r.id)}">Huỷ phiếu</button>` : ""}</div>` : "";
+    node.innerHTML = `<div><strong>${escapeHtml(r.title)}</strong>${tag}<small>${escapeHtml(meta)}</small><p>${escapeHtml(r.note)}</p>${actions}</div><b${r.review !== "APPROVED" ? ' class="muted"' : ""}>${money(r.amount)}</b>`;
     return node;
   }));
 }
+$("#transaction-search").addEventListener("input", renderTransactions);
+$("#payer-breakdown").addEventListener("click", (e) => {
+  const name = e.target.closest("[data-pick-payer]")?.dataset.pickPayer;
+  if (!name) return;
+  const sel = $("#payer-filter");
+  const opt = [...sel.options].find((o) => o.textContent === name || o.value === name || normalizePayer(o.value) === normalizePayer(name));
+  if (opt) { sel.value = opt.value; sel.dispatchEvent(new Event("change")); }
+});
 
 function showDetail(record) {
   $("#detail-title").textContent = record.table.name || "Bàn";

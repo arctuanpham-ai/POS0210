@@ -295,3 +295,4 @@ input[readonly] { background: #f3ece2; color: #5b4b3e; }
 .fund-table td:last-child { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .fund-table tr.total td { font-weight: 800; border-top: 2px solid #c9b59c; }
 .fund-table tr.sub td:first-child { padding-left: 16px; color: #6e5b4b; }
+button.paylist-row { width: 100%; font: inherit; color: inherit; cursor: pointer; text-align: left; }

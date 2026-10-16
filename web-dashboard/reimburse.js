@@ -180,7 +180,7 @@ export const myAlerts = ({ myId, role, me = null, receipts = [], batches = [], m
   const vnd = (n) => `${Number(n || 0).toLocaleString("vi-VN")}đ`;
   // Phần của người mua (chủ quán / thủ quỹ cũng có thể là người mua).
   const mine = receipts.filter((r) => isMine(r, myId));
-  const rejected = mine.filter((r) => reimbursementStatus(r) === "REJECTED");
+  const rejected = mine.filter((r) => reviewStatus(r) === "REJECTED");
   if (rejected.length) out.push({ key: "rejected", level: "warn", count: rejected.length, text: `${rejected.length} phiếu của bạn bị trả lại: xem lý do, sửa rồi lưu để gửi duyệt lại.` });
   const paidMine = batches.filter((b) => b.status === "PAID" && isMine(b, myId));
   if (paidMine.length) {
@@ -198,6 +198,8 @@ export const myAlerts = ({ myId, role, me = null, receipts = [], batches = [], m
   const approved = review.filter((r) => reimbursementStatus(r) === "APPROVED");
   if (approved.length) out.push({ key: "pay", level: "warn", count: approved.length, text: `${approved.length} phiếu đã duyệt chờ hoàn tiền (${vnd(sum(approved, "total"))}).` });
   const unknown = review.filter((r) => reimbursementStatus(r) === "UNKNOWN");
+  const shopPending = review.filter((r) => reimbursementStatus(r) === "NONE" && reviewStatus(r) === "PENDING");
+  if (shopPending.length) out.push({ key: "shopReview", level: "warn", count: shopPending.length, text: `${shopPending.length} phiếu quỹ quán chờ bạn duyệt (${vnd(sum(shopPending, "total"))}): chưa duyệt thì chưa tính vào chi phí.` });
   if (unknown.length) out.push({ key: "unknown", level: "warn", count: unknown.length, text: `${unknown.length} phiếu chưa rõ nguồn tiền (tiền cá nhân hay tiền quán).` });
   const noBank = [...new Set(approved.filter((r) => !bankOf(r, members, payees)).map((r) => r.enteredByName || "Chưa rõ"))];
   if (noBank.length) out.push({ key: "nobank", level: "info", count: 0, text: `Chưa có tài khoản ngân hàng của: ${noBank.join(", ")} (chưa tạo được QR).` });
@@ -224,3 +226,24 @@ export const bankDeeplink = ({ fromBank, toBank, account, holder, amount, info }
   const q = new URLSearchParams({ app, ba: `${acc}@${to}`, am: String(Math.round(Number(amount))), tn: asciiUpper(info).slice(0, 50), bn: asciiUpper(holder).slice(0, 50) });
   return `https://dl.vietqr.io/pay?${q.toString()}`;
 };
+
+// ---------- Duyệt phiếu chi: phiếu chỉ "pass" (tính vào chi phí) khi đã được người khác duyệt ----------
+/**
+ * Trạng thái duyệt: PENDING (chờ duyệt) · APPROVED · REJECTED · NONE (đã huỷ).
+ * Phiếu tiền cá nhân đi theo quy trình hoàn ứng; phiếu quỹ quán có trường review riêng.
+ * Phiếu cũ trước khi có quy trình duyệt coi như đã duyệt để không làm lệch số đã chốt.
+ */
+export const reviewStatus = (r) => {
+  if (!r || r.status === "DELETED" || r.status === "CANCELLED") return "NONE";
+  if (r.review === "PENDING" || r.review === "APPROVED" || r.review === "REJECTED") return r.review;
+  const reimb = r.reimbursement?.status;
+  if (reimb === "PENDING" || reimb === "REJECTED") return reimb;
+  return "APPROVED";
+};
+/** Phiếu được tính vào chi phí (báo cáo, chia cổ đông): còn hiệu lực và đã duyệt. */
+export const countsAsCost = (r) => reviewStatus(r) === "APPROVED";
+/**
+ * Trạng thái duyệt khi người nhập lưu phiếu: chờ người khác duyệt; chỉ tự duyệt khi quán chưa có ai khác duyệt được
+ * (không thì không ai duyệt được phiếu).
+ */
+export const initialReview = (entrantId, members = []) => (reviewerOtherThan(entrantId, members) ? "PENDING" : "APPROVED");

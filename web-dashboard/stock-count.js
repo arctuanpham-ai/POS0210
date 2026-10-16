@@ -1,7 +1,7 @@
 // Kiểm đếm tồn kho hằng tuần cho vật tư đắt / để lâu, và hao hụt giữa hai lần đếm.
 // Thực dùng = tồn lần trước + nhập trong kỳ − tồn lần này. Hao hụt = thực dùng − định mức (món bán × công thức).
-import { materialById, matchMaterial, unitFactor } from "./cost-recipe.js?v=20261016-19";
-import { isSummaryReceipt } from "./expense-rules.js?v=20261016-19";
+import { materialById, matchMaterial, unitFactor } from "./cost-recipe.js?v=20261016-20";
+import { isSummaryReceipt } from "./expense-rules.js?v=20261016-20";
 
 /** Vật tư cần đếm và đơn vị đếm thuận tay (quy đổi về đơn vị định lượng khi lưu). */
 export const COUNT_ITEMS = [

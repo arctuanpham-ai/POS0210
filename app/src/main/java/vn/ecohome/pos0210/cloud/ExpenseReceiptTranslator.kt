@@ -15,7 +15,9 @@ data class RemoteExpenseReceipt(
     val updatedAt: Long,
     val items: List<RemoteExpenseLine>,
     /** PERSONAL (người mua ứng tiền, cần hoàn) · SHOP_CASH · SHOP_BANK · rỗng = phiếu cũ chưa rõ. */
-    val fundSource: String = ""
+    val fundSource: String = "",
+    /** Duyệt trên web: PENDING · APPROVED · REJECTED. Phiếu chưa duyệt / bị trả lại chưa tính vào chi phí. */
+    val review: String = "APPROVED"
 )
 
 data class RemoteExpenseLine(
@@ -115,7 +117,15 @@ object ExpenseReceiptParser {
             RemoteExpenseLine(lineId, materialName, line.text("materialCode").orEmpty(), line.text("expenseGroup").orEmpty(), qty, unit, unitPrice, line.long("amount") ?: (qty * unitPrice).toLong())
         }
         if (items.isEmpty()) return null
-        return RemoteExpenseReceipt(id, purchaseDate, fields.text("enteredByUid").orEmpty(), fields.text("enteredByName").orEmpty(), fields.text("note").orEmpty(), fields.text("status").orEmpty(), updatedAt, items, fields.text("fundSource").orEmpty())
+        return RemoteExpenseReceipt(id, purchaseDate, fields.text("enteredByUid").orEmpty(), fields.text("enteredByName").orEmpty(), fields.text("note").orEmpty(), fields.text("status").orEmpty(), updatedAt, items, fields.text("fundSource").orEmpty(),
+            reviewOf(fields.text("review"), (fields["reimbursement"] as? Map<*, *>)?.text("status")))
+    }
+
+    /** Phiếu cũ chưa có trường review: theo trạng thái hoàn ứng (chờ duyệt / bị trả lại); còn lại coi như đã duyệt. */
+    fun reviewOf(review: String?, reimbursementStatus: String?): String = when {
+        review?.uppercase() in setOf("PENDING", "APPROVED", "REJECTED") -> review!!.uppercase()
+        reimbursementStatus?.uppercase() in setOf("PENDING", "REJECTED") -> reimbursementStatus!!.uppercase()
+        else -> "APPROVED"
     }
 
     private fun Map<*, *>.text(key: String) = (this[key] as? String)?.trim()?.takeIf { it.isNotEmpty() }
@@ -133,6 +143,15 @@ object ExpenseReceiptTranslator {
 
     fun isDeleted(status: String) = normalizeStatus(status) == "DELETED"
 
+    const val PENDING_REVIEW = "PENDING_REVIEW"
+    const val REJECTED_REVIEW = "REJECTED_REVIEW"
+    /** Phiếu còn hiệu lực nhưng chưa được duyệt / bị trả lại: giữ trên máy nhưng không ACTIVE nên không vào chi phí, công nợ. */
+    fun statusOf(receipt: RemoteExpenseReceipt): String {
+        val s = normalizeStatus(receipt.status)
+        if (s != "ACTIVE") return s
+        return when (receipt.review) { "PENDING" -> PENDING_REVIEW; "REJECTED" -> REJECTED_REVIEW; else -> s }
+    }
+
     /** Chỉ phiếu người mua ứng tiền mới tính vào công nợ người ứng; mua bằng tiền quán thì không ai bị nợ. */
     fun payerOf(receipt: RemoteExpenseReceipt): String = if (receipt.fundSource == "SHOP_CASH" || receipt.fundSource == "SHOP_BANK") "" else receipt.enteredByName
 
@@ -142,7 +161,7 @@ object ExpenseReceiptTranslator {
             PurchaseItemEntity("$purchaseId:${line.id}", purchaseId, line.materialCode.ifBlank { "web-${line.expenseGroup.lowercase()}" }, line.materialName, line.qty, line.unit.ifBlank { "lần" }, line.unitPrice, line.amount)
         }
         return TranslatedExpenseReceipt(
-            PurchaseEntity(purchaseId, null, receipt.enteredByUid.ifBlank { "WEB_MANAGER" }, receipt.purchaseDate, items.sumOf { it.amount }, receipt.note, status = normalizeStatus(receipt.status), expenseCategory = categoryFor(receipt.items), paidByName = payerOf(receipt), updatedAt = receipt.updatedAt),
+            PurchaseEntity(purchaseId, null, receipt.enteredByUid.ifBlank { "WEB_MANAGER" }, receipt.purchaseDate, items.sumOf { it.amount }, receipt.note, status = statusOf(receipt), expenseCategory = categoryFor(receipt.items), paidByName = payerOf(receipt), updatedAt = receipt.updatedAt),
             items
         )
     }
@@ -211,7 +230,7 @@ object WebEditOfAndroidReceipt {
     fun apply(local: PurchaseEntity, receipt: RemoteExpenseReceipt): TranslatedExpenseReceipt? {
         if (local.id.startsWith("web:")) return null
         if (receipt.updatedAt <= (local.updatedAt ?: 0L)) return null
-        val status = if (ExpenseReceiptTranslator.isDeleted(receipt.status)) "DELETED" else "ACTIVE"
+        val status = ExpenseReceiptTranslator.statusOf(receipt)
         val items = receipt.items.map { line ->
             PurchaseItemEntity(line.id, local.id, line.materialCode.ifBlank { "pc_production" }, line.materialName, line.qty, line.unit.ifBlank { "lần" }, line.unitPrice, line.amount)
         }

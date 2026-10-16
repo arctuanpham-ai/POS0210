@@ -198,4 +198,14 @@ class ExpenseReceiptTranslatorTest {
             "items" to listOf(mapOf("id" to "l", "materialName" to "Gà", "qty" to 1.0, "unit" to "kg", "unitPrice" to 100L, "amount" to 100L))))
         assertEquals("SHOP_CASH", parsed?.fundSource)
     }
+
+    @org.junit.Test fun unreviewedReceiptsAreNotActive() {
+        val line = mapOf("id" to "l1", "materialName" to "Cà phê", "qty" to 1, "unit" to "kg", "unitPrice" to 300000L, "amount" to 300000L, "expenseGroup" to "Cà phê")
+        fun parse(extra: Map<String, Any?>) = ExpenseReceiptParser.parse("r1", mapOf("purchaseDate" to 1L, "updatedAt" to 2L, "items" to listOf(line), "status" to "ACTIVE") + extra)!!
+        org.junit.Assert.assertEquals("PENDING_REVIEW", ExpenseReceiptTranslator.translate(parse(mapOf("fundSource" to "SHOP_CASH", "review" to "PENDING"))).purchase.status)
+        org.junit.Assert.assertEquals("REJECTED_REVIEW", ExpenseReceiptTranslator.translate(parse(mapOf("fundSource" to "PERSONAL", "reimbursement" to mapOf("status" to "REJECTED")))).purchase.status)
+        org.junit.Assert.assertEquals("ACTIVE", ExpenseReceiptTranslator.translate(parse(mapOf("fundSource" to "PERSONAL", "review" to "APPROVED", "reimbursement" to mapOf("status" to "PAID")))).purchase.status)
+        org.junit.Assert.assertEquals("ACTIVE", ExpenseReceiptTranslator.translate(parse(emptyMap())).purchase.status)
+        org.junit.Assert.assertEquals("DELETED", ExpenseReceiptTranslator.translate(parse(mapOf("status" to "CANCELLED", "review" to "PENDING"))).purchase.status)
+    }
 }

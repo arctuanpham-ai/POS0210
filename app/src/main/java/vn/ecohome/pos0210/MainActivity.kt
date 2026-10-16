@@ -4420,7 +4420,11 @@ fun MonthlyProfitReport(vm:PosViewModel){
     val monthKey=SimpleDateFormat("yyyy-MM",Locale.US).format(Date(from));val monthLabel=SimpleDateFormat("MM/yyyy",Locale.getDefault()).format(Date(from))
     val now=System.currentTimeMillis()
     val unclassified=byCategory.filter{it.first==ExpenseCategories.UNCLASSIFIED}.sumOf{it.second}
-    val warnings=ShareholderMonth.warnings(openSessions.count{it.dataScope=="LIVE"&&it.openedAt in from until to},cloud?.lastPullAt?:cloud?.lastSuccessAt,now,to,unclassified)
+    val unreviewed by vm.unreviewedPurchases.collectAsState()
+    val unreviewedInMonth=unreviewed.filter{it.purchasedAt in from until to}
+    val pendingReview=unreviewedInMonth.filter{it.status=="PENDING_REVIEW"}.let{l->l.size to l.sumOf{it.total}}
+    val rejectedReview=unreviewedInMonth.filter{it.status=="REJECTED_REVIEW"}.let{l->l.size to l.sumOf{it.total}}
+    val warnings=ShareholderMonth.warnings(openSessions.count{it.dataScope=="LIVE"&&it.openedAt in from until to},cloud?.lastPullAt?:cloud?.lastSuccessAt,now,to,unclassified,pendingReview,rejectedReview)
     val closed=ShareholderMonth.decode(appSettings.firstOrNull{it.key==ShareholderMonth.settingKey(monthKey)}?.value)
     val withdrawnThisMonth=movements.filter{it.type=="PROFIT_WITHDRAWAL"&&it.occurredAt in from until to}.sumOf{it.amount}
     var confirmClose by remember(monthKey){mutableStateOf(false)}

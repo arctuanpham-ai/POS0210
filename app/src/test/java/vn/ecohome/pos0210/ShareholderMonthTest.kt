@@ -47,4 +47,12 @@ class ShareholderMonthTest {
         assertTrue(t.contains("DÒNG TIỀN RÒNG: 700.000đ"))
         assertTrue(t.contains("! Tháng chưa kết thúc"))
     }
+
+    @org.junit.Test fun warnsAboutUnreviewedReceipts() {
+        val h = 3_600_000L
+        val w = ShareholderMonth.warnings(0, 100 * h, 101 * h, 50 * h, 0, 2 to 1_500_000L, 1 to 300_000L)
+        org.junit.Assert.assertEquals(2, w.size)
+        org.junit.Assert.assertTrue(w[0].contains("2 phiếu chi chờ duyệt") && w[0].contains("1.500.000đ"))
+        org.junit.Assert.assertTrue(w[1].contains("bị trả lại"))
+    }
 }

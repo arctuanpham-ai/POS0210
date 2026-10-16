@@ -20,7 +20,9 @@ object ShareholderMonth {
             .sortedWith(compareByDescending<Pair<String, Long>> { it.second }.thenBy { it.first })
 
     /** Lý do CHƯA NÊN chốt chia tiền. Rỗng nghĩa là có thể chốt. */
-    fun warnings(openSessionsOpenedInMonth: Int, lastPullAt: Long?, now: Long, monthEnd: Long, unclassified: Long): List<String> = buildList {
+    fun warnings(openSessionsOpenedInMonth: Int, lastPullAt: Long?, now: Long, monthEnd: Long, unclassified: Long, pendingReview: Pair<Int, Long> = 0 to 0L, rejected: Pair<Int, Long> = 0 to 0L): List<String> = buildList {
+        if (pendingReview.first > 0) add("Còn ${pendingReview.first} phiếu chi chờ duyệt (${"%,d".format(pendingReview.second).replace(',', '.')}đ) chưa tính vào chi phí: duyệt trên web rồi mới chốt.")
+        if (rejected.first > 0) add("${rejected.first} phiếu chi bị trả lại (${"%,d".format(rejected.second).replace(',', '.')}đ) chưa tính: người nhập cần sửa hoặc huỷ.")
         if (now < monthEnd) add("Tháng chưa kết thúc: số còn thay đổi.")
         if (openSessionsOpenedInMonth > 0) add("Còn $openSessionsOpenedInMonth bàn/đơn mở trong tháng chưa thanh toán: doanh thu tháng chưa đủ.")
         if (lastPullAt == null) add("Máy chưa từng kéo phiếu chi từ web: chi phí có thể thiếu.")

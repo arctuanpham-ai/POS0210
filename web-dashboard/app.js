@@ -711,7 +711,7 @@ function applyKindUi() {
   $("#add-expense-line").textContent = nonMaterial ? "+ Thêm dòng" : "+ Thêm vật tư";
   $("#expense-fund-hint").hidden = !(canTreasure(state.role) && $("#expense-fund").value === FUND_PERSONAL);
   const hint = $("#expense-kind-hint");
-  if (hint) hint.textContent = { MAINTENANCE: "Tính vào chi vận hành của tháng.", ADDITIONAL_INVESTMENT: "Không tính vào chi vận hành; báo cáo tháng ghi riêng là Đầu tư bổ sung.", OTHER_EXPENSE: "Tính vào chi vận hành của tháng." }[$("#expense-kind").value] || "Vào giá vốn: chọn đúng nhóm vật tư cho từng dòng.";
+  if (hint) hint.textContent = { MAINTENANCE: "Tính vào chi vận hành của tháng.", ADDITIONAL_INVESTMENT: "Ghi riêng dòng Đầu tư bổ sung (không lẫn chi vận hành) nhưng VẪN TRỪ vào tiền chia cổ đông của tháng.", OTHER_EXPENSE: "Tính vào chi vận hành của tháng." }[$("#expense-kind").value] || "Vào giá vốn: chọn đúng nhóm vật tư cho từng dòng.";
 }
 function applyExpenseInputs() {
   if (!expenseDraft) return;

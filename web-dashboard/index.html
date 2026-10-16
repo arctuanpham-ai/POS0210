@@ -17,7 +17,7 @@
         <p class="eyebrow">0210 · BREAKFAST · COFFEE · DRINKS</p>
         <h1 id="login-title">Manager realtime</h1>
         <p class="muted">Theo dõi quán và nhập phiếu tài chính từ xa.</p>
-        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.16.4 · Giao diện tài chính</p>
+        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.16.5 · Hoàn ứng</p>
         <label>Email Firebase<input id="email" type="email" autocomplete="username" inputmode="email" /></label>
         <label>Mật khẩu<input id="password" type="password" autocomplete="current-password" /></label>
         <label class="show-password"><input id="show-password" type="checkbox" /> Hiện mật khẩu để kiểm tra khi gõ</label>
@@ -34,7 +34,7 @@
           <div class="heading-actions"><button id="refresh-dashboard" class="btn">Làm mới</button><button id="request-sync" class="btn" title="Yêu cầu máy POS ở quán đồng bộ ngay">Yêu cầu đồng bộ</button><button id="logout-button" class="btn ghost">Đăng xuất</button></div>
         </header>
 
-        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.16.4 · Giao diện tài chính</p>
+        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.16.5 · Hoàn ứng</p>
 
         <nav class="tabbar" id="tabbar" aria-label="Các trang">
           <a href="#ban" data-tab="ban">Bàn</a>
@@ -43,6 +43,7 @@
           <a href="#thanhtoan" data-tab="thanhtoan">Thanh toán</a>
           <a href="#taichinh" data-tab="taichinh">Tài chính</a>
           <a href="#giavon" data-tab="giavon">Giá vốn</a>
+          <a href="#hoanung" data-tab="hoanung">Hoàn ứng<span id="hoanung-badge" class="tab-badge" hidden></span></a>
         </nav>
 
         <div class="page" data-page="ban" hidden>
@@ -140,6 +141,37 @@
           <div><p class="eyebrow">GIÁ VẬT TƯ</p><h2>Từ phiếu chi đã nhập</h2></div>
         </section>
         <section id="material-costs" class="material-costs"></section>
+        </div>
+
+        <div class="page" data-page="hoanung" hidden>
+        <section class="section-heading first-section">
+          <div><p class="eyebrow">HOÀN ỨNG</p><h2>Duyệt phiếu và hoàn tiền người mua</h2></div>
+          <div class="heading-actions"><button id="reload-reimb" type="button" class="btn">Tải lại</button></div>
+        </section>
+        <p class="muted">Quy trình: người mua up phiếu (nguồn tiền "Tiền cá nhân") → thủ quỹ kiểm tra, <strong>Duyệt</strong> → <strong>Hoàn tiền</strong> bằng QR động, nội dung CK là mã đợt hoàn → người mua bấm <strong>Đã nhận tiền</strong> (xác nhận chậm cũng được, có nút nhắc qua Zalo).</p>
+        <div class="panel">
+          <div class="field-row"><label for="reimb-person">Xem theo người</label><select id="reimb-person"><option value="">Tất cả</option></select></div>
+          <p id="reimb-note" class="panel-total" role="status"></p>
+        </div>
+        <section id="reimb-counters" class="summary-grid"></section>
+        <section id="reimb-unknown"></section>
+        <section class="section-heading compact"><div><p class="eyebrow">CẦN XỬ LÝ</p><h2>Theo người mua</h2></div></section>
+        <section id="reimb-queues" class="reimb-list"></section>
+        <section class="section-heading compact"><div><p class="eyebrow">ĐÃ HOÀN</p><h2>Chờ người nhận xác nhận</h2></div></section>
+        <section id="reimb-paid" class="reimb-list"></section>
+        <section class="section-heading compact"><div><p class="eyebrow">LỊCH SỬ</p><h2>Đợt hoàn đã xác nhận</h2></div></section>
+        <section id="reimb-history" class="reimb-list"></section>
+        <section class="section-heading compact"><div><p class="eyebrow">TÀI KHOẢN NHẬN HOÀN</p><h2>Để tạo QR động</h2></div></section>
+        <section id="payee-list" class="reimb-list"></section>
+        <form id="payee-form" class="panel">
+          <div class="field-row"><label for="payee-name">Tên người mua</label><input id="payee-name" list="payee-names" maxlength="60" required /></div>
+          <div class="field-row"><label for="payee-bank">Ngân hàng</label><input id="payee-bank" list="bank-choices" maxlength="30" required /></div>
+          <div class="field-row"><label for="payee-account">Số tài khoản</label><input id="payee-account" inputmode="numeric" maxlength="19" required /></div>
+          <div class="field-row"><label for="payee-holder">Tên chủ TK</label><input id="payee-holder" maxlength="50" /></div>
+          <p id="payee-error" class="error" role="alert"></p>
+          <div class="tool-row"><button type="submit" class="btn">Lưu tài khoản</button></div>
+        </form>
+        <datalist id="payee-names"></datalist><datalist id="bank-choices"></datalist>
         </div>
 
         <div class="page" data-page="taichinh" hidden>
@@ -259,6 +291,26 @@
       </article>
     </dialog>
 
+    <dialog id="reimb-dialog">
+      <article>
+        <div class="dialog-header"><div><p class="eyebrow">HOÀN TIỀN</p><h2 id="reimb-title"></h2></div><button id="close-reimb" type="button" class="text-button">Đóng</button></div>
+        <div id="reimb-receipts" class="reimb-pick"></div>
+        <p class="entry-total">Tổng hoàn: <strong id="reimb-total">0đ</strong></p>
+        <div class="field-row"><label for="reimb-treasurer">Người hoàn (thủ quỹ)</label><input id="reimb-treasurer" maxlength="40" /></div>
+        <div id="reimb-qr" class="reimb-qr"></div>
+        <p id="reimb-error" class="error" role="alert"></p>
+        <div class="tool-row"><button id="reimb-paid-bank" type="button" class="btn">Đã chuyển khoản</button><button id="reimb-paid-cash" type="button" class="btn">Đã đưa tiền mặt</button></div>
+      </article>
+    </dialog>
+    <dialog id="share-dialog">
+      <article>
+        <div class="dialog-header"><div><p class="eyebrow">GỬI ZALO</p><h2 id="share-title"></h2></div><button id="close-share" type="button" class="text-button">Đóng</button></div>
+        <textarea id="share-text" rows="5" readonly></textarea>
+        <p id="share-note" class="muted"></p>
+        <div class="tool-row"><button id="share-send" type="button" class="btn">Gửi qua Zalo / ứng dụng khác</button><button id="share-copy" type="button" class="btn ghost">Sao chép</button></div>
+      </article>
+    </dialog>
+
     <dialog id="bill-detail">
       <article>
         <div class="dialog-header"><div><p class="eyebrow">CHI TIẾT BILL</p><h2 id="bill-detail-title"></h2></div><button id="close-bill-detail" class="text-button">Đóng</button></div>
@@ -273,6 +325,7 @@
         <p class="muted">Mỗi khối là một hóa đơn: chỉ cần ngày, nhóm và số tiền. Phiếu tổng được cộng vào chi phí và báo cáo theo nhóm, nhưng không vào thống kê giá hay khối lượng theo vật tư.</p>
         <form id="summary-form" class="entry-form">
           <datalist id="summary-groups"></datalist>
+          <label>Nguồn tiền (cho tất cả hoá đơn bên dưới)<select id="summary-fund"><option value="PERSONAL">Tiền cá nhân · cần hoàn</option><option value="SHOP_CASH">Tiền mặt quỹ quán</option><option value="SHOP_BANK">CK từ tài khoản quán</option></select></label>
           <section id="summary-blocks" class="summary-blocks"></section>
           <button id="add-summary-block" type="button" class="secondary">+ Thêm hóa đơn</button>
           <button id="summary-to-detail" type="button" class="text-button" hidden>Nhập chi tiết thay thế phiếu này</button>
@@ -288,6 +341,8 @@
         <div class="dialog-header"><div><p class="eyebrow">CHI PHÍ MUA HÀNG</p><h2 id="expense-title">Phiếu nhiều vật tư</h2></div><button id="close-expense" class="text-button">Đóng</button></div>
         <form id="expense-form" class="entry-form">
           <label>Ngày mua<input id="expense-date" type="datetime-local" required /></label>
+          <div class="two-col"><label>Người mua (ứng tiền)<input id="expense-payer" list="payee-names" maxlength="60" required /></label>
+          <label>Nguồn tiền<select id="expense-fund" required><option value="">— chọn nguồn tiền —</option><option value="PERSONAL">Tiền cá nhân · cần hoàn</option><option value="SHOP_CASH">Tiền mặt quỹ quán</option><option value="SHOP_BANK">CK từ tài khoản quán</option></select></label></div>
           <label>Ghi chú<input id="expense-note" type="text" maxlength="240" /></label>
           <section id="expense-lines" class="expense-lines"></section>
           <button id="add-expense-line" type="button" class="secondary">+ Thêm vật tư</button>
@@ -391,6 +446,6 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261016-4"></script>
+    <script type="module" src="app.js?v=20261016-5"></script>
   </body>
 </html>

@@ -19,30 +19,32 @@ import {
   setDoc as rawSetDoc,
   writeBatch as rawWriteBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261016-29";
-import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261016-29";
-import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261016-29";
-import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261016-29";
-import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261016-29";
-import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261016-29";
-import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261016-29";
-import { buildSimulation } from "./sim-data.js?v=20261016-29";
-import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261016-29";
-import { menuCsv } from "./menu-export.js?v=20261016-29";
-import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-29";
-import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-29";
-import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261016-29";
-import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261016-29";
-import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261016-29";
-import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261016-29";
-import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261016-29";
-import { otherCostRows } from "./other-costs.js?v=20261016-29";
-import { paybackStatus } from "./payback.js?v=20261016-29";
-import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-29";
-import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261016-29";
-import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261016-29";
-import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261016-29";
-import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261016-29";
+import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261016-30";
+import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261016-30";
+import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261016-30";
+import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261016-30";
+import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261016-30";
+import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261016-30";
+import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261016-30";
+import { buildSimulation } from "./sim-data.js?v=20261016-30";
+import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261016-30";
+import { menuCsv } from "./menu-export.js?v=20261016-30";
+import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-30";
+import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-30";
+import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261016-30";
+import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261016-30";
+import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261016-30";
+import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261016-30";
+import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261016-30";
+import { otherCostRows } from "./other-costs.js?v=20261016-30";
+import { paybackStatus } from "./payback.js?v=20261016-30";
+import { topSellers } from "./top-banner.js?v=20261016-30";
+import { AI_SCOPES, buildAiPack, scopeRange } from "./ai-export.js?v=20261016-30";
+import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-30";
+import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261016-30";
+import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261016-30";
+import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261016-30";
+import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261016-30";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",
@@ -1665,12 +1667,19 @@ function renderMonthlyReport() {
   const report = all.filter((r) => r.monthKey >= since);
   const note = [state.receiptsNote, state.monthlyError].filter(Boolean).join(" · ");
   $("#monthly-note").textContent = note;
-  target.innerHTML = report.slice().reverse().map((r) => `<article class="month-card"><h3>${r.monthKey}${r.monthKey === report[report.length - 1].monthKey ? " · đang chạy" : ""}</h3><dl>
-    <div><dt>Nhập hàng</dt><dd>${money(r.purchases)}</dd></div>
+  target.innerHTML = report.slice().reverse().map((r) => {
+    const inv = Object.entries(r.otherByCategory || {}).filter(([k]) => INVESTMENT_CATEGORIES.has(k)).reduce((t, [, v]) => t + v, 0);
+    const ops = r.otherExpenses - inv;
+    const net = r.revenue === null ? null : r.revenue - r.purchases - ops - inv;
+    const pct = (v) => (r.revenue ? ` <small class="muted">${((v / r.revenue) * 100).toFixed(1)}% DT</small>` : "");
+    return `<article class="month-card"><h3>Tháng ${Number(r.monthKey.slice(5))}/${r.monthKey.slice(0, 4)}${r.monthKey === report[report.length - 1].monthKey ? " · đang chạy" : ""}</h3><dl>
     <div><dt>Doanh thu</dt><dd>${r.revenue === null ? "chưa có dữ liệu" : money(r.revenue)}</dd></div>
-    <div><dt>Nhập / doanh thu</dt><dd>${r.ratio === null ? "—" : `${(r.ratio * 100).toFixed(1)}%`}</dd></div>
-    <div><dt>Phiếu</dt><dd>${r.receiptCount} · tổng ${money(r.summaryAmount)} · chi tiết ${money(r.itemizedAmount)}</dd></div>
-    <div><dt>Chi phí khác (lương, điện…)</dt><dd>${r.otherExpenses ? money(r.otherExpenses) : "—"}</dd></div></dl></article>`).join("") || '<p class="muted">Chưa có phiếu trong khoảng đã tải.</p>';
+    <div><dt>− Nhập hàng</dt><dd>${money(r.purchases)}${pct(r.purchases)}</dd></div>
+    <div><dt>− Chi vận hành khác</dt><dd>${ops ? money(ops) : "—"}${ops ? pct(ops) : ""}</dd></div>
+    <div><dt>− Đầu tư bổ sung</dt><dd>${inv ? money(inv) : "—"}</dd></div>
+    <div class="month-net"><dt>= Còn lại (dòng tiền ròng)</dt><dd>${net === null ? "—" : money(net)}</dd></div>
+    <div class="month-sub"><dt>Số phiếu mua hàng</dt><dd>${r.receiptCount} phiếu${r.summaryAmount ? ` · ${money(r.summaryAmount)} nhập theo phiếu tổng (không có từng món)` : ""}</dd></div></dl></article>`;
+  }).join("") || '<p class="muted">Chưa có phiếu trong khoảng đã tải.</p>';
 }
 function downloadFile(name, mime, text) {
   const url = URL.createObjectURL(new Blob([text], { type: mime }));
@@ -2573,6 +2582,154 @@ $("#members-zone").addEventListener("click", async (e) => {
 
 
 
+
+/* ---------- Banner "món đỉnh nhất" ở tab Doanh thu: hôm nay / 7 ngày / tháng này, tự chuyển slide ---------- */
+const banner = { slides: [], index: 0, timer: null, loadedAt: 0 };
+async function loadTopBanner() {
+  if (!state.user || !state.role || state.demo || state.simulation) return;
+  if (Date.now() - banner.loadedAt < 5 * 60000 && banner.slides.length) { renderTopBanner(); return; }
+  const now = new Date();
+  const first = new Date(Math.min(new Date(now.getFullYear(), now.getMonth(), 1).getTime(), new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6).getTime()));
+  try {
+    const got = rows(await getDocs(query(collection(db, ...root, "dashboardDaily"), where("dateKey", ">=", dateKeyOf(first)), where("dateKey", "<=", dateKeyOf(now)), limit(62))));
+    for (const d of got) state.dailyDocs[d.dateKey || d.id] = d; // hôm nay luôn lấy bản mới nhất
+  } catch { /* banner chỉ để vui: lỗi thì dùng dữ liệu đã có */ }
+  banner.loadedAt = Date.now();
+  banner.slides = topSellers(state.dailyDocs, now).filter((s) => s.name);
+  renderTopBanner();
+}
+const BANNER_ICON = { today: "🔥", week: "🚀", month: "👑" };
+const BANNER_CHEER = { today: "Đang cháy hàng!", week: "Ngôi sao của tuần", month: "Vua doanh số tháng" };
+function renderTopBanner() {
+  const host = $("#top-banner");
+  if (!host) return;
+  clearInterval(banner.timer);
+  if (!banner.slides.length) { host.hidden = true; return; }
+  host.hidden = false;
+  banner.index = Math.min(banner.index, banner.slides.length - 1);
+  const s = banner.slides[banner.index];
+  host.className = `top-banner tb-${s.id}`;
+  host.innerHTML = `<div class="tb-slide">
+      <div class="tb-confetti" aria-hidden="true">${["✨", "🎉", "⭐", "☕", "🎊", "✨"].map((c, i) => `<span style="--i:${i}">${c}</span>`).join("")}</div>
+      <div class="tb-icon" aria-hidden="true">${BANNER_ICON[s.id]}</div>
+      <div class="tb-text"><p class="tb-label">${escapeHtml(s.label)} · ${BANNER_CHEER[s.id]}</p>
+        <h3 class="tb-name">${escapeHtml(s.name)}</h3>
+        <p class="tb-meta"><b>${s.qty.toLocaleString("vi-VN")}</b> phần · ${money(s.revenue)} · ${Math.round(s.share * 100)}% số món bán ra${s.runnerUp ? ` · bỏ xa <b>${escapeHtml(s.runnerUp)}</b> ${s.lead.toLocaleString("vi-VN")} phần` : ""}</p></div>
+    </div><div class="tb-dots">${banner.slides.map((x, i) => `<button type="button" class="${i === banner.index ? "active" : ""}" data-banner="${i}" aria-label="${escapeHtml(x.label)}"></button>`).join("")}</div>`;
+  if (banner.slides.length > 1 && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    banner.timer = setInterval(() => { if ($("#top-banner").offsetParent === null) return; banner.index = (banner.index + 1) % banner.slides.length; renderTopBanner(); }, 5000);
+  }
+}
+$("#top-banner").addEventListener("click", (e) => { const i = e.target.closest("[data-banner]")?.dataset.banner; if (i !== undefined) { banner.index = Number(i); renderTopBanner(); } });
+
+/* ---------- Xuất dữ liệu cho AI phân tích (một file Markdown: prompt + bảng CSV) ---------- */
+const ai = { scope: "month", text: "", busy: false };
+function renderAiScopes() {
+  $("#ai-scope").innerHTML = AI_SCOPES.map(([k, label]) => `<button type="button" class="filter${ai.scope === k ? " active" : ""}" data-ai-scope="${k}">${label}</button>`).join("");
+}
+$("#ai-scope").addEventListener("click", (e) => { const k = e.target.closest("[data-ai-scope]")?.dataset.aiScope; if (!k) return; ai.scope = k; ai.text = ""; renderAiScopes(); $("#ai-status").textContent = ""; });
+$("#ai-bills").addEventListener("change", () => { ai.text = ""; });
+$("#ai-export").addEventListener("toggle", (e) => { if (e.target.open) renderAiScopes(); });
+const INITIAL_SET = INITIAL_CATEGORIES;
+async function buildAiText() {
+  if (state.demo || state.simulation) throw new Error("Đang xem demo / mô phỏng: tắt để xuất số thật.");
+  const status = (t) => { $("#ai-status").textContent = t; };
+  const now = Date.now();
+  if (!state.investment && !state.closingsAll.length) await loadPayback();
+  const [fundCloses, shCloses, monthlyAll] = await Promise.all([
+    getDocs(collection(db, ...root, "fundClosings")).then(rows).catch(() => []),
+    getDocs(collection(db, ...root, "shareholderCloses")).then(rows).catch(() => []),
+    getDocs(collection(db, ...root, "dashboardMonthly")).then(rows).catch(() => []),
+  ]);
+  const closedKeys = [...fundCloses.map((c) => c.monthKey || c.id), ...shCloses.map((c) => c.monthKey || c.id)].filter((k) => /^\d{4}-\d{2}$/.test(k)).sort();
+  const lastKey = closedKeys[closedKeys.length - 1] || "";
+  const lastFund = fundCloses.find((c) => (c.monthKey || c.id) === lastKey);
+  const lastSh = shCloses.find((c) => (c.monthKey || c.id) === lastKey);
+  const openingMonth = state.investment?.openingMonth || "";
+  const scope = scopeRange(ai.scope, { now, lastClosedMonth: lastKey, openingMonth });
+  const all = scopeRange("all", { now, openingMonth });
+  const dk = (ms) => dateKeyOf(new Date(ms));
+  status("Đang đọc số liệu ngày, phiếu chi, dòng tiền…");
+  const [daily, receiptsAll, purchasesAll, moves] = await Promise.all([
+    getDocs(query(collection(db, ...root, "dashboardDaily"), where("dateKey", ">=", dk(scope.from)), where("dateKey", "<=", dk(now)), limit(800))).then(rows),
+    getDocs(query(collection(db, ...root, "expenseReceipts"), where("purchaseDate", ">=", all.from), limit(5000))).then(rows),
+    getDocs(query(collection(db, ...root, "purchases"), where("purchasedAt", ">=", all.from), limit(5000))).then(rows).catch(() => []),
+    getDocs(query(collection(db, ...root, "financialMovements"), where("occurredAt", ">=", scope.from), limit(3000))).then(rows).catch(() => []),
+  ]);
+  const live = receiptsAll.filter((r) => reviewStatus(r) !== "NONE");
+  const others = otherCostRows(purchasesAll, new Set(receiptsAll.map((r) => String(r.id))));
+  // Theo tháng: từ khai trương đến nay, cùng quy tắc với chốt sổ (chỉ phiếu đã duyệt, bỏ ghi chép đầu tư ban đầu).
+  const monthKeysAll = []; for (let d = new Date(all.from); d.getTime() <= now; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) monthKeysAll.push(monthKeyOf(d.getTime()));
+  const revByMonth = new Map(monthlyAll.map((m) => [m.monthKey || m.id, m]));
+  const months = monthKeysAll.map((key) => {
+    const inMonth = (ms) => monthKeyOf(Number(ms || 0)) === key;
+    const rec = live.filter((r) => countsAsCost(r) && !isInitialReceipt(r) && inMonth(r.purchaseDate));
+    const oth = others.filter((c) => inMonth(c.at) && !INITIAL_SET.has(c.category));
+    const isInv = (cat) => INVESTMENT_CATEGORIES.has(cat);
+    const purchases = rec.filter((r) => !r.expenseCategory || r.expenseCategory === "INVENTORY_PURCHASE").reduce((t, r) => t + Number(r.total || 0), 0);
+    const investment = rec.filter((r) => isInv(r.expenseCategory)).reduce((t, r) => t + Number(r.total || 0), 0) + oth.filter((c) => isInv(c.category)).reduce((t, c) => t + c.amount, 0);
+    const otherOperating = rec.filter((r) => r.expenseCategory && r.expenseCategory !== "INVENTORY_PURCHASE" && !isInv(r.expenseCategory)).reduce((t, r) => t + Number(r.total || 0), 0) + oth.filter((c) => !isInv(c.category)).reduce((t, c) => t + c.amount, 0);
+    const m = revByMonth.get(key);
+    const revenue = m && Number.isFinite(Number(m.revenue)) ? Number(m.revenue) : key === monthKeyOf(now) && state.dashboard?.monthRevenue != null ? Number(state.dashboard.monthRevenue) : null;
+    return { monthKey: key, revenue, paidBills: m?.paidBills ?? null, purchases, otherOperating, investment, closed: closedKeys.includes(key) };
+  });
+  const dailyDocs = Object.fromEntries(daily.map((d) => [d.dateKey || d.id, d]));
+  const dayList = Object.keys(dailyDocs).sort();
+  const items = aggregateItems(dailyDocs, dayList, "combined");
+  let bills = [];
+  const notes = [];
+  if ($("#ai-bills").checked) {
+    status("Đang đọc bill…");
+    const q = (name, field, from, max) => getDocs(query(collection(db, ...root, name), where(field, ">=", from), where(field, "<", now + 1), limit(max))).then(rows);
+    const [billDocs, sessDocs] = await Promise.all([q("bills", "openedAt", scope.from, 6000), q("sessions", "openedAt", scope.from - 86400000, 8000)]);
+    const ids = billDocs.filter((b) => b.status === "PAID" || b.status === "REFUNDED").map((b) => String(b.id));
+    const pays = (await Promise.all(chunk(ids, 30).map((part) => getDocs(query(collection(db, ...root, "payments"), where("billId", "in", part))).then(rows)))).flat();
+    if (!state.historyTables) state.historyTables = await getDocs(collection(db, ...root, "tableStatus")).then(rows).catch(() => []);
+    bills = buildBillRows({ bills: billDocs, payments: pays, sessions: sessDocs, tables: state.historyTables || [], refunds: state.refunds, range: { from: scope.from, to: now + 1 } });
+    if (billDocs.length >= 6000) notes.push("Bill bị cắt ở 6000 dòng đầu: chọn phạm vi ngắn hơn để đủ.");
+  } else notes.push("Không kèm từng bill (người xuất đã bỏ chọn).");
+  if (!state.recipesLoaded) { status("Đang đọc menu và công thức…"); await loadRecipes(); }
+  const { costs } = currentCosts();
+  const cats = new Map((state.menuCats || []).map((c) => [String(c.id), c.name]));
+  const menu = (state.menuItems || []).filter((m) => m.active !== false).map((m) => { const lines = recipeLinesFor(m); const r = lines.length ? recipeCost(lines, costs, m.price) : null; return { name: m.name, category: cats.get(String(m.categoryId)) || "", price: Number(m.price || 0), cost: r && !r.missing.length ? Math.round(r.total) : null }; });
+  const inScope = (ms) => Number(ms || 0) >= scope.from && Number(ms || 0) <= now;
+  const text = buildAiPack({
+    now, shopName: "Quán cà phê 0210", scope,
+    lastClose: lastKey ? { monthKey: lastKey, savedAt: Number(lastFund?.savedAt || lastSh?.closedAt || lastSh?.updatedAt || 0), distributable: lastFund ? Number(lastFund.distributable) : NaN } : null,
+    months, daily: dayList.map((k) => dailyDocs[k]), items, bills,
+    receipts: live.filter((r) => inScope(r.purchaseDate)).map((r) => ({ at: Number(r.purchaseDate || 0), code: receiptCode(r), kind: isInitialReceipt(r) ? "INITIAL_RECORD" : kindOf(r), payer: r.enteredByName || "", fund: r.fundSource || "", review: reviewStatus(r), reimb: reimbursementStatus(r), total: Number(r.total || 0), content: [(r.items || []).map((i) => `${i.materialName}${i.qty ? ` ${i.qty}${i.unit || ""}` : ""}`).join("; "), r.note].filter(Boolean).join(" · ") })),
+    otherCosts: others.filter((c) => inScope(c.at) && !INITIAL_SET.has(c.category)),
+    movements: moves.filter((m) => inScope(m.occurredAt)).map((m) => ({ at: Number(m.occurredAt), type: m.type, who: m.counterpartyName || "", amount: Number(m.amount || 0), note: m.note || "" })),
+    closings: fundCloses.map((c) => ({ ...c, monthKey: c.monthKey || c.id })),
+    payback: currentPayback(), menu,
+    partners: state.profitPartners.filter((p) => p.active !== false).map((p) => ({ name: p.name, percent: Number(p.shareBasisPoints || 0) / 100 })),
+    notes,
+  });
+  status(`Đã tạo: ${scope.label} · ${dayList.length} ngày · ${items.length} món · ${bills.length} bill · ${live.filter((r) => inScope(r.purchaseDate)).length} phiếu chi · ${(text.length / 1024).toFixed(0)} KB.`);
+  return text;
+}
+async function aiText() {
+  if (ai.text) return ai.text;
+  if (ai.busy) throw new Error("Đang tạo dữ liệu, chờ chút.");
+  ai.busy = true;
+  try { ai.text = await buildAiText(); return ai.text; } finally { ai.busy = false; }
+}
+const aiFileName = () => `POS0210-AI-${ai.scope}-${dateKeyOf(new Date())}.md`;
+async function aiAction(kind) {
+  try {
+    const text = await aiText();
+    if (kind === "download") { downloadFile(aiFileName(), "text/markdown;charset=utf-8", text); return; }
+    if (kind === "copy") { await navigator.clipboard.writeText(text); flashNote("Đã sao chép. Mở app AI và dán vào ô chat."); return; }
+    const file = new File([text], aiFileName(), { type: "text/markdown" });
+    if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: "Dữ liệu quán 0210", text: "Phân tích giúp tôi theo hướng dẫn trong file." }); return; }
+    if (navigator.share) { await navigator.share({ title: "Dữ liệu quán 0210", text }); return; }
+    downloadFile(aiFileName(), "text/markdown;charset=utf-8", text);
+    $("#ai-status").textContent += " Trình duyệt này không chia sẻ trực tiếp được: đã tải file, hãy đính kèm file vào app AI.";
+  } catch (error) { if (error?.name !== "AbortError") $("#ai-status").textContent = `Chưa xuất được: ${error.message || error}`; }
+}
+$("#ai-share").addEventListener("click", () => aiAction("share"));
+$("#ai-copy").addEventListener("click", () => aiAction("copy"));
+$("#ai-download").addEventListener("click", () => aiAction("download"));
 /* ---------- Vốn đầu tư ban đầu (một con số, config/investment) & hoàn vốn ---------- */
 async function loadPayback() {
   if (state.demo || state.simulation) return;
@@ -2738,6 +2895,7 @@ function showTab() {
   if (name === "giavon" && state.role && !state.recipesLoaded) loadRecipes();
   if (name === "hoanung" && state.role && !state.reimbLoaded) loadReimbursements();
   if (name === "taikhoan" && state.role) renderAccount();
+  if (name === "doanhthu" && state.role) loadTopBanner();
 }
 window.addEventListener("hashchange", showTab);
 showTab();

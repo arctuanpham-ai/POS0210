@@ -106,3 +106,27 @@ test("bill trả chậm qua hôm sau vẫn thuộc ngày mở bill", () => {
   assert.deepEqual(buildBillRows({ bills: [late], payments: [pay], sessions, tables, refunds: [], range }).map((r) => r.id), ["late"]);
   assert.equal(buildBillRows({ bills: [late], payments: [pay], sessions, tables, refunds: [], range: dayRange("2026-10-15") }).length, 0);
 });
+
+import { filterBillRows } from "../bill-history-view.js";
+test("bill đã hoàn vẫn hiện (đánh dấu hoàn), lọc theo hình thức / thanh toán / hoàn", () => {
+  const range = dayRange("2026-10-14");
+  const at = (h, m) => new Date(2026, 9, 14, h, m).getTime();
+  const rows = buildBillRows({
+    bills: [
+      { id: "a", sessionId: "s1", billNo: "1", openedAt: at(8, 0), closedAt: at(8, 5), total: 100, status: "PAID" },
+      { id: "b", sessionId: "s2", billNo: "2", openedAt: at(9, 0), closedAt: at(9, 5), total: 50, status: "REFUNDED" },
+      { id: "c", sessionId: "s3", billNo: "3", openedAt: at(10, 0), closedAt: at(10, 5), total: 70, status: "PAID" },
+    ],
+    payments: [{ billId: "a", method: "CASH", amount: 100 }, { billId: "b", method: "TRANSFER", amount: 50 }, { billId: "c", method: "TRANSFER", amount: 70 }],
+    sessions: [{ id: "s1", flow: "prepaid" }, { id: "s2", flow: "prepaid" }, { id: "s3", flow: "postpaid" }],
+    tables: [], refunds: [], range,
+  });
+  assert.equal(rows.length, 3);
+  assert.equal(rows.find((r) => r.id === "b").refund.amount, 50);
+  assert.equal(summarizeBillRows(rows).net, 170);
+  assert.deepEqual(filterBillRows(rows, { flow: "postpaid" }).map((r) => r.id), ["c"]);
+  assert.deepEqual(filterBillRows(rows, { method: "CASH" }).map((r) => r.id), ["a"]);
+  assert.deepEqual(filterBillRows(rows, { flow: "prepaid", method: "TRANSFER" }).map((r) => r.id), ["b"]);
+  assert.deepEqual(filterBillRows(rows, { refund: "REFUNDED" }).map((r) => r.id), ["b"]);
+  assert.equal(filterBillRows(rows, {}).length, 3);
+});

@@ -17,7 +17,7 @@
         <p class="eyebrow">0210 · BREAKFAST · COFFEE · DRINKS</p>
         <h1 id="login-title">Manager realtime</h1>
         <p class="muted">Theo dõi quán và nhập phiếu tài chính từ xa.</p>
-        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.16.1 · Demo phiếu chi</p>
+        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.16.3 · Đồng bộ đơn vị</p>
         <label>Email Firebase<input id="email" type="email" autocomplete="username" inputmode="email" /></label>
         <label>Mật khẩu<input id="password" type="password" autocomplete="current-password" /></label>
         <label class="show-password"><input id="show-password" type="checkbox" /> Hiện mật khẩu để kiểm tra khi gõ</label>
@@ -34,7 +34,7 @@
           <div class="heading-actions"><button id="refresh-dashboard" class="secondary">Làm mới</button><button id="request-sync" class="secondary" title="Yêu cầu máy POS ở quán đồng bộ ngay">Yêu cầu đồng bộ</button><button id="logout-button" class="text-button">Đăng xuất</button></div>
         </header>
 
-        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.16.1 · Demo phiếu chi</p>
+        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.16.3 · Đồng bộ đơn vị</p>
 
         <nav class="tabbar" id="tabbar" aria-label="Các trang">
           <a href="#ban" data-tab="ban">Bàn</a>
@@ -114,6 +114,18 @@
         </section>
         <p id="usage-note" class="muted"></p>
         <section id="usage-check"></section>
+        <section class="section-heading compact">
+          <div><p class="eyebrow">KIỂM ĐẾM TUẦN</p><h2>Tồn kho vật tư đắt và hao hụt</h2></div>
+        </section>
+        <p class="muted">Mỗi tuần đếm số còn lại của các vật tư dưới đây (ô nào không đếm thì để trống). Hao hụt = tồn lần trước + nhập trong kỳ − tồn lần này − định mức theo món bán.</p>
+        <form id="count-form" class="entry-form count-form">
+          <label>Thời điểm đếm<input id="count-datetime" type="datetime-local" required /></label>
+          <div id="count-form-items" class="count-items"></div>
+          <p id="count-error" class="error" role="alert"></p>
+          <button type="submit" class="primary">LƯU LẦN ĐẾM</button>
+        </form>
+        <p id="count-note" class="muted" role="status"></p>
+        <section id="count-variance"></section>
         <section class="section-heading compact">
           <div><p class="eyebrow">GIÁ VẬT TƯ</p><h2>Từ phiếu chi đã nhập</h2></div>
         </section>
@@ -279,7 +291,6 @@
           <div id="purchase-fields">
             <label id="expense-category-wrap">Nhóm chi phí
               <select id="entry-category">
-                <option value="INVENTORY_PURCHASE">Nhập nguyên liệu / hàng hóa</option>
                 <option value="PAYROLL">Lương / nhân công</option>
                 <option value="ELECTRICITY">Điện</option>
                 <option value="WATER">Nước</option>
@@ -292,6 +303,7 @@
                 <option value="OTHER_EXPENSE">Chi phí khác</option>
               </select>
             </label>
+            <p class="muted" id="entry-inventory-hint">Nhập nguyên liệu, bao bì, vật tư pha chế: dùng nút <strong>+ CHI PHÍ MUA HÀNG</strong> để có giá vật tư và giá vốn món. Mục này dành cho lương, điện, nước, mặt bằng, bảo trì…</p>
             <label id="purchase-category-wrap">2. Phân mục chi tiết
               <select id="entry-purchase-category"><option value="">Không phân mục</option></select>
             </label>
@@ -346,6 +358,6 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261016-1"></script>
+    <script type="module" src="app.js?v=20261016-3"></script>
   </body>
 </html>

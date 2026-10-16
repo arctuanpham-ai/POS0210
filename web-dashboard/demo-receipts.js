@@ -16,7 +16,7 @@ export const DEFAULT_DAILY_SALES = {
 };
 
 // Hao hụt giả định (đồ tươi hỏng, làm dư) để màn "nhập so với định mức" có cái mà soi.
-const WASTE = { rau_thom: 1.25, dua_hau: 1.15, cam: 1.1, chanh: 1.12, thit_bo: 1.12, ga_ta_loc: 1.08, banh_mi: 1.1, bun_tuoi: 1.1, dua_chuot: 1.15, ca_chua: 1.15 };
+export const DEMO_WASTE = { rau_thom: 1.25, dua_hau: 1.15, cam: 1.1, chanh: 1.12, thit_bo: 1.12, ga_ta_loc: 1.08, banh_mi: 1.1, bun_tuoi: 1.1, dua_chuot: 1.15, ca_chua: 1.15 };
 // Giá mỗi đơn vị MUA, quy cách mua và bước làm tròn số lượng.
 const BUY = {
   cf_phin: ["kg", 280000, 0.5], cf_espresso: ["kg", 420000, 0.5], cf_coldbrew: ["kg", 600000, 0.5],
@@ -104,7 +104,7 @@ export const buildDemoReceipts = ({ now = Date.now(), days = 30, dailySales = DE
         if (!m || !buy || !(usage[id] > 0)) continue;
         const [unit, price, step] = buy;
         const per = m.units.find((u) => u.unit === unit)?.per ?? 1;
-        const need = (usage[id] * sup.every * (WASTE[id] ?? 1.04) * (0.9 + rand() * 0.2)) / per;
+        const need = (usage[id] * sup.every * (DEMO_WASTE[id] ?? 1.04) * (0.9 + rand() * 0.2)) / per;
         const qty = Math.max(step, roundTo(need, step));
         const drift = id === "thit_bo" && d < 10 ? 1.12 : 1;
         lines.push(line(lineId(), m, unit, qty, round100(price * drift * (0.96 + rand() * 0.08))));

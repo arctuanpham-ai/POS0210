@@ -32,13 +32,20 @@ const groupOfItem = (item) =>
  * - revenue: từ monthlyDocs[monthKey].revenue; thiếu thì dùng revenueFallback (chỉ cho tháng hiện tại), không có thì null.
  * - ratio: purchases / revenue, null khi không có doanh thu hoặc doanh thu <= 0.
  */
-export const buildMonthlyReport = ({ receipts, monthlyDocs = {}, monthKeys, currentMonthKey = null, revenueFallback = null }) => {
-  const rows = new Map(monthKeys.map((key) => [key, { monthKey: key, receiptCount: 0, purchases: 0, summaryAmount: 0, itemizedAmount: 0, byGroup: {} }]));
+export const buildMonthlyReport = ({ receipts, monthlyDocs = {}, monthKeys, currentMonthKey = null, revenueFallback = null, otherCosts = [] }) => {
+  const rows = new Map(monthKeys.map((key) => [key, { monthKey: key, receiptCount: 0, purchases: 0, summaryAmount: 0, itemizedAmount: 0, byGroup: {}, otherExpenses: 0, otherByCategory: {} }]));
+  const addOther = (row, category, amount) => { row.otherExpenses += amount; row.otherByCategory[category] = (row.otherByCategory[category] || 0) + amount; };
+  for (const c of Array.isArray(otherCosts) ? otherCosts : []) {
+    const row = rows.get(monthKeyOf(c.at));
+    if (row && Number(c.amount) > 0) addOther(row, c.category || "OTHER_EXPENSE", Number(c.amount));
+  }
   for (const receipt of Array.isArray(receipts) ? receipts : []) {
     if (!isActive(receipt)) continue;
     const row = rows.get(monthKeyOf(receipt.purchaseDate));
     if (!row) continue;
     const total = Number(receipt.total || 0);
+    // Phiếu từ máy POS có thể là lương, điện, nước…: không phải nhập hàng, tính vào chi phí khác.
+    if (receipt.expenseCategory && receipt.expenseCategory !== "INVENTORY_PURCHASE") { addOther(row, receipt.expenseCategory, total); continue; }
     row.receiptCount += 1;
     row.purchases += total;
     if (isSummaryReceipt(receipt)) row.summaryAmount += total; else row.itemizedAmount += total;
@@ -72,10 +79,10 @@ const csvCell = (value) => {
 
 /** CSV một dòng mỗi tháng; cột nhóm theo thứ tự MATERIAL_GROUPS. Ô thiếu dữ liệu để trống. */
 export const monthlyCsv = (report) => {
-  const header = ["thang", "doanh_thu", "nguon_doanh_thu", "doanh_thu_da_chot", "so_bill", "nhap_hang", "ti_le_nhap_tren_doanh_thu", "so_phieu", "phieu_tong", "phieu_chi_tiet", ...MATERIAL_GROUPS.map(([code]) => `nhom_${code}`)];
+  const header = ["thang", "doanh_thu", "nguon_doanh_thu", "doanh_thu_da_chot", "so_bill", "nhap_hang", "ti_le_nhap_tren_doanh_thu", "so_phieu", "phieu_tong", "phieu_chi_tiet", "chi_phi_khac", ...MATERIAL_GROUPS.map(([code]) => `nhom_${code}`)];
   const lines = [header.join(",")];
   for (const r of report) {
-    lines.push([r.monthKey, r.revenue, r.revenueSource, r.revenueFinal, r.paidBills, r.purchases, r.ratio === null ? "" : r.ratio.toFixed(4), r.receiptCount, r.summaryAmount, r.itemizedAmount, ...MATERIAL_GROUPS.map(([code]) => r.byGroup[code] || 0)].map(csvCell).join(","));
+    lines.push([r.monthKey, r.revenue, r.revenueSource, r.revenueFinal, r.paidBills, r.purchases, r.ratio === null ? "" : r.ratio.toFixed(4), r.receiptCount, r.summaryAmount, r.itemizedAmount, r.otherExpenses, ...MATERIAL_GROUPS.map(([code]) => r.byGroup[code] || 0)].map(csvCell).join(","));
   }
   return `﻿${lines.join("\r\n")}\r\n`;
 };
@@ -86,11 +93,12 @@ export const monthlyJson = (report, { generatedAt = Date.now(), rules = [] } = {
   generatedAt,
   currency: "VND",
   description: {
-    nhap_hang: "Tổng phiếu chi chưa huỷ theo ngày mua (purchaseDate), tính theo giờ Việt Nam của máy xem.",
+    nhap_hang: "Tổng phiếu mua hàng chưa huỷ (nguyên liệu, bao bì, vật tư) theo ngày mua, giờ Việt Nam. Không gồm lương, điện, nước, mặt bằng.",
     doanh_thu: "Doanh thu bill đã thanh toán dữ liệu thật (LIVE), tính theo ngày đóng bill. Trống nghĩa là chưa có dữ liệu, không phải 0.",
     ti_le_nhap_tren_doanh_thu: "nhap_hang / doanh_thu. Trống khi không có doanh thu.",
     phieu_tong: "Hóa đơn nhập chung chung chỉ có nhóm và số tiền (không có tên vật tư), nên không dùng được cho thống kê giá/khối lượng.",
     phieu_chi_tiet: "Hóa đơn có từng dòng vật tư.",
+    chi_phi_khac: "Chi phí không phải nhập hàng (lương, điện, nước, mặt bằng, bảo trì…) nhập ở Giao dịch khác hoặc trên máy POS. Không tính vào nhap_hang.",
     doanh_thu_da_chot: "true khi tháng đã kết thúc; false cho tháng đang chạy (số còn thay đổi).",
     nhom_: "Chia theo nhóm vật tư từ dòng phiếu. Nhóm 'KHAC' gồm dòng chưa phân nhóm được.",
   },

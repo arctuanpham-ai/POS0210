@@ -190,3 +190,8 @@ body.simulating #taichinh-page, body.simulating [data-page="taichinh"] { outline
 .mat-table th, .mat-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line, #eadfd2); }
 .mat-table tr.dim td { color: var(--muted, #9a8b7d); }
 @media (max-width: 480px) { .recipe-row { grid-template-columns: 1fr auto; } .recipe-row .recipe-num:first-of-type { display: none; } }
+
+.count-items { display: grid; gap: 8px; }
+.count-row { display: grid; grid-template-columns: 1fr 7em 3em; gap: 8px; align-items: center; }
+.count-row input { width: 100%; }
+.count-row .unit { color: #806b55; }

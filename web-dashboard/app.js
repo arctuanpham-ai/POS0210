@@ -28,8 +28,10 @@ import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, norma
 import { buildSimulation } from "./sim-data.js?v=20261014-10";
 import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261014-9";
 import { menuCsv } from "./menu-export.js?v=20261015-1";
-import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, materialById, materialCosts, recipeCost, sliderSpec, usageVsPurchase } from "./cost-recipe.js?v=20261016-1";
-import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-1";
+import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-1";
+import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-2";
+import { otherCostRows } from "./other-costs.js?v=20261016-2";
+import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-2";
 import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261014-9";
 import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261014-6";
 import { buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261014-4";
@@ -56,7 +58,7 @@ const state = {
   purchaseCategories: [], profitPartners: [], assetCategories: [], suppliers: [],
   unsubs: [], paymentFlowDoc: null, refunds: [], frozenRefundDocs: [], flowError: "", dailyDocs: {}, dailyError: "", salesLoaded: false, salesDays: 7, itemMode: "combined", period: "today", customFrom: null, customTo: null,
   transactionKind: "ALL", payerFilter: "ALL", user: null,
-  expenseRules: [], rulesError: "", simulation: null, demo: null, menuItems: [], menuCats: [], recipes: {}, recipesLoaded: false, recipeError: "", monthlyDocs: {}, monthlyError: "", reportFrom: 0, receiptsNote: "", detailCutoff: null, receiptsFrom: 0, summaryBlocks: [], historyDay: "today", historyDocs: {}, historyTables: null, historyError: "", historyLoading: false, billDetailCache: {},
+  expenseRules: [], rulesError: "", simulation: null, demo: null, otherPurchases: [], stockCounts: [], countsLoaded: false, menuItems: [], menuCats: [], recipes: {}, recipesLoaded: false, recipeError: "", monthlyDocs: {}, monthlyError: "", reportFrom: 0, receiptsNote: "", detailCutoff: null, receiptsFrom: 0, summaryBlocks: [], historyDay: "today", historyDocs: {}, historyTables: null, historyError: "", historyLoading: false, billDetailCache: {},
 };
 let expenseDraft = null;
 let editingReceipt = null;
@@ -506,10 +508,13 @@ function renderTransactions() {
     .filter((p) => p.status !== "DELETED" && inRange(p.purchasedAt, range))
     .filter((p) => matchesPayer(state.payerFilter, p.paidByName))
     .map((p) => ({ kind: "EXPENSE", at: Number(p.purchasedAt || 0), id: p.id, amount: Number(p.total || 0), title: `${p.summary ? "Phiếu tổng · " : ""}${EXPENSE_LABELS[p.expenseCategory] || p.expenseCategory || "Phiếu chi"}`, person: p.paidByName || "", note: p.note || "" }));
+  const others = otherCosts()
+    .filter((c) => inRange(c.at, range) && matchesPayer(state.payerFilter, c.payer))
+    .map((c) => ({ kind: "EXPENSE", at: c.at, id: c.id, amount: c.amount, title: EXPENSE_LABELS[c.category] || c.category, person: c.payer, note: [c.supplierName, c.note, "nhập ở Giao dịch khác / máy POS"].filter(Boolean).join(" · "), readonly: true }));
   const movements = state.movements
     .filter((m) => inRange(m.occurredAt, range) && matchesPayer(state.payerFilter, m.counterpartyName))
     .map((m) => ({ kind: "MOVEMENT", at: Number(m.occurredAt || 0), id: m.id, amount: Number(m.amount || 0), title: MOVEMENT_LABELS[m.type] || m.type || "Dòng tiền", person: m.counterpartyName || "", note: m.note || "" }));
-  let rows0 = [...purchases, ...movements].sort((a, b) => b.at - a.at);
+  let rows0 = [...purchases, ...others, ...movements].sort((a, b) => b.at - a.at);
   if (state.transactionKind !== "ALL") rows0 = rows0.filter((r) => r.kind === state.transactionKind);
   rows0 = rows0.slice(0, 100);
   const host = $("#transactions");
@@ -521,7 +526,7 @@ function renderTransactions() {
     const node = document.createElement("article");
     node.className = "transaction-card";
     const meta = [dateTime(r.at), r.person].filter(Boolean).join(" · ");
-    const actions = r.kind === "EXPENSE" ? `<div class="row-actions"><button type="button" class="text-button" data-edit-receipt="${escapeHtml(r.id)}">Sửa</button><button type="button" class="text-button danger" data-cancel-receipt="${escapeHtml(r.id)}">Huỷ phiếu</button></div>` : "";
+    const actions = r.kind === "EXPENSE" && !r.readonly ? `<div class="row-actions"><button type="button" class="text-button" data-edit-receipt="${escapeHtml(r.id)}">Sửa</button><button type="button" class="text-button danger" data-cancel-receipt="${escapeHtml(r.id)}">Huỷ phiếu</button></div>` : "";
     node.innerHTML = `<div><strong>${escapeHtml(r.title)}</strong><small>${escapeHtml(meta)}</small><p>${escapeHtml(r.note)}</p>${actions}</div><b>${money(r.amount)}</b>`;
     return node;
   }));
@@ -567,7 +572,8 @@ function recalcEntryTotal() {
   $("#entry-total").textContent = money(Math.round(qty * price));
 }
 const MATERIAL_GROUPS = [["THIT","Thịt, gia cầm"],["RAU","Rau, củ, quả"],["BUN","Bún, bánh đa, tinh bột"],["BANH","Bánh mì, nguyên liệu bánh"],["SUA","Trứng, sữa, bơ"],["GIAVI","Gia vị, nước dùng"],["CAPHE","Cà phê"],["TRA","Trà, nguyên liệu pha trà"],["MUT","Siro, mứt, nguyên liệu bổ sung"],["NUOC","Đồ uống đóng chai"],["DA","Đá, nước tinh khiết"],["BAOBI","Bao bì, vật tư phục vụ"],["VESINH","Vệ sinh, vật tư tiêu hao"],["KHAC","Vật tư khác"]];
-const MATERIAL_UNITS = ["kg","gam","lít","ml","con","quả","bó","túi","hộp","chai","lon","gói","cái","thùng","bình","ổ","suất"];
+// Cùng bộ đơn vị với danh mục vật tư chuẩn (giá vốn quy đổi theo đúng các đơn vị này).
+const MATERIAL_UNITS = ["kg","g","lít","ml","hộp","thùng","chai","can","quả","vỉ","khay","bó","túi","gói","cái","ổ","cây","bao","bình","con","lon","suất"];
 function savedMaterials() { try { return JSON.parse(localStorage.getItem(`pos0210.materials.${state.user?.uid}`) || "[]"); } catch { return []; } }
 function rememberMaterials(items) { const records = savedMaterials(); for (const item of items) { const name = String(item.materialName || "").trim(); if (!name) continue; const index = records.findIndex((r) => normalizeMaterial(r.materialName) === normalizeMaterial(name)); const record = { materialName: name, materialCode: item.materialCode, expenseGroup: item.expenseGroup, unit: item.unit }; if (index >= 0) records[index] = record; else records.push(record); } localStorage.setItem(`pos0210.materials.${state.user?.uid}`, JSON.stringify(records.slice(-500))); }
 function materialOptions(field, search) {
@@ -605,10 +611,14 @@ function refreshRuleHint(line) {
   if (s.status === "learned" || s.status === "matched") {
     const label = groupLabelOf(s.group);
     if (!chosen) text = `Gợi ý: ${label}`;
-    else if (chosen === s.group) text = `✓ Khớp quy tắc${s.status === "matched" ? ` (từ khoá “${s.matched}”)` : " đã học"}: ${label}`;
+    else if (chosen === s.group) text = `✓ Khớp quy tắc${s.status === "matched" ? ` (từ khoá “${s.matched}”)` : " (danh mục vật tư / đã học)"}: ${label}`;
     else { text = `Khác gợi ý (${label}). Lựa chọn của bạn sẽ được ghi nhớ cho lần sau.`; warn = true; }
   } else if (s.status === "ambiguous") { text = `Tên này có thể thuộc: ${s.groups.map(groupLabelOf).join(" hoặc ")}. Hãy chọn đúng nhóm.`; warn = true; }
   else { text = chosen ? "Chưa có quy tắc cho tên này; lựa chọn của bạn sẽ được ghi nhớ." : "Chưa khớp quy tắc nào, hãy chọn nhóm vật tư."; warn = true; }
+  // Đơn vị phải quy đổi được thì mới ra giá vốn vật tư.
+  const std = matchMaterial({ materialName: name });
+  const unit = line.querySelector("[data-field=unit]")?.value;
+  if (std && unit && !unitFactor(std, unit)) { text += ` · Đơn vị “${unit}” chưa quy đổi được cho ${std.name}: dùng ${std.units.map((u) => u.unit).join(", ")}.`; warn = true; }
   hint.textContent = text;
   hint.className = warn ? "rule-hint warn" : "rule-hint";
 }
@@ -743,7 +753,7 @@ function render() {
   renderClassificationReview();
   renderDetailLevel();
   renderMonthlyReport();
-  if (state.recipesLoaded) { renderRecipes(); renderUsageCheck(); }
+  if (state.recipesLoaded) { renderRecipes(); renderUsageCheck(); if (state.countsLoaded) renderCounts(); }
   renderFinanceMetadata();
   renderTransactions();
 }
@@ -767,6 +777,7 @@ async function refreshDashboard() {
       loadDailyDocs(),
       loadReceiptsCached(),
       loadMonthlyDocs(),
+      loadOtherPurchases(),
       read("financialMovements", "movements", query(collection(db, ...root, "financialMovements"), where("occurredAt", ">=", sevenDays), orderBy("occurredAt", "desc"), limit(300))),
       read("costCodes", "costCodes"), read("purchaseCategories", "purchaseCategories"), read("profitPartners", "profitPartners"), read("assetCategories", "assetCategories"), read("suppliers", "suppliers"),
     ]);
@@ -807,6 +818,7 @@ async function saveEntry(event) {
   error.textContent = "";
   if (!Number.isFinite(occurredAt)) { error.textContent = "Ngày giờ không hợp lệ."; return; }
   if (!state.user) { error.textContent = "Phiên đăng nhập đã hết."; return; }
+  if (state.demo || state.simulation) { error.textContent = "Đang xem demo / mô phỏng: Giao dịch khác ghi vào dữ liệu thật nên tạm khoá. Tắt demo để nhập."; return; }
 
   const now = Date.now();
   const id = uuid();
@@ -1002,12 +1014,15 @@ $("#expense-lines").addEventListener("change", (event) => {
   const input = event.target;
   const line = input.closest(".expense-line");
   if (!line) return;
+  if (input.matches("[data-field=unit]")) { applyExpenseInputs(); refreshRuleHint(line); return; }
   if (input.matches("[data-field=materialName]")) {
     const suggestion = classifyMaterial(input.value, allRules());
     // Nhóm tự điền không được sót lại khi đổi tên: gợi ý rõ thì điền, mơ hồ hoặc chưa khớp thì xoá để buộc người nhập chọn.
     if (line.dataset.groupTouched !== "1") line.querySelector("[data-field=expenseGroup]").value = suggestion.group ? groupLabelOf(suggestion.group) : "";
     const known = savedMaterials().find((item) => normalizeMaterial(item.materialName) === normalizeMaterial(input.value));
+    const std = matchMaterial({ materialName: input.value });
     if (known?.unit) line.querySelector("[data-field=unit]").value = known.unit;
+    else if (std && normalizeMaterial(std.name) === normalizeMaterial(input.value)) line.querySelector("[data-field=unit]").value = std.units[0].unit;
     line.querySelector("[data-field=materialCode]").value = "";
     applyExpenseInputs(); refreshRuleHint(line);
     return;
@@ -1303,7 +1318,7 @@ const currentMonthReport = () => {
   const keys = lastMonthKeys(MONTHLY_REPORT_MONTHS);
   const current = keys[keys.length - 1];
   const fallback = state.dashboard?.monthRevenue;
-  return buildMonthlyReport({ receipts: state.expenseReceipts, monthlyDocs: state.monthlyDocs, monthKeys: keys, currentMonthKey: current, revenueFallback: fallback === undefined ? null : fallback });
+  return buildMonthlyReport({ receipts: state.expenseReceipts, monthlyDocs: state.monthlyDocs, monthKeys: keys, currentMonthKey: current, revenueFallback: fallback === undefined ? null : fallback, otherCosts: otherCosts() });
 };
 function renderMonthlyReport() {
   const target = $("#monthly-report");
@@ -1318,7 +1333,8 @@ function renderMonthlyReport() {
     <div><dt>Nhập hàng</dt><dd>${money(r.purchases)}</dd></div>
     <div><dt>Doanh thu</dt><dd>${r.revenue === null ? "chưa có dữ liệu" : money(r.revenue)}</dd></div>
     <div><dt>Nhập / doanh thu</dt><dd>${r.ratio === null ? "—" : `${(r.ratio * 100).toFixed(1)}%`}</dd></div>
-    <div><dt>Phiếu</dt><dd>${r.receiptCount} · tổng ${money(r.summaryAmount)} · chi tiết ${money(r.itemizedAmount)}</dd></div></dl></article>`).join("") || '<p class="muted">Chưa có phiếu trong khoảng đã tải.</p>';
+    <div><dt>Phiếu</dt><dd>${r.receiptCount} · tổng ${money(r.summaryAmount)} · chi tiết ${money(r.itemizedAmount)}</dd></div>
+    <div><dt>Chi phí khác (lương, điện…)</dt><dd>${r.otherExpenses ? money(r.otherExpenses) : "—"}</dd></div></dl></article>`).join("") || '<p class="muted">Chưa có phiếu trong khoảng đã tải.</p>';
 }
 function downloadFile(name, mime, text) {
   const url = URL.createObjectURL(new Blob([text], { type: mime }));
@@ -1376,6 +1392,7 @@ async function loadRecipes() {
     state.recipesLoaded = true;
     state.recipeError = "";
     renderUsageCheck();
+    loadCounts();
   } catch (error) { state.recipeError = error.code === "permission-denied" ? "Không có quyền đọc menu hoặc công thức (cần mở quy tắc Firestore cho recipes)." : (error.message || "lỗi không rõ"); }
   renderRecipes();
 }
@@ -1509,6 +1526,7 @@ async function setDemo(on) {
     note.textContent = "Đã quay về dữ liệu thật.";
   }
   document.body.classList.toggle("demo-view", !!state.demo);
+  if (state.countsLoaded) loadCounts();
   $("#demo-banner").hidden = !state.demo;
   $("#demo-toggle").textContent = state.demo ? "Tắt xem demo" : "Xem dữ liệu demo";
   render();
@@ -1519,6 +1537,8 @@ async function createDemo() {
   try {
     const existing = await readDemoReceipts();
     if (existing.length) { note.textContent = `Đã có ${existing.length} phiếu demo. Xoá bộ cũ trước khi tạo bộ mới để không bị cộng trùng.`; return; }
+    const existingCounts = rows(await getDocs(query(collection(db, ...root, "demoStockCounts"), limit(1))));
+    if (existingCounts.length) { note.textContent = "Còn lần kiểm đếm demo cũ. Bấm Xoá toàn bộ phiếu demo trước."; return; }
     if (!state.recipesLoaded) await loadRecipes();
     const { sales, source } = salesForDemo();
     const d = new Date();
@@ -1531,6 +1551,10 @@ async function createDemo() {
       list.slice(i, i + 400).forEach((r) => batchWrite.set(doc(db, ...root, DEMO_COLLECTION, r.id), r));
       await batchWrite.commit();
     }
+    const counts = buildDemoCounts({ receipts: list, usagePerDay: dailyMaterialUsage(sales, recipeByName), waste: DEMO_WASTE, now: Date.now(), batch });
+    const cw = writeBatch(db);
+    counts.forEach((c) => cw.set(doc(db, ...root, "demoStockCounts", c.id), c));
+    await cw.commit();
     note.textContent = `Đã tạo ${list.length} phiếu demo (đợt ${batch}, theo ${source}).`;
     if (state.demo) { state.demo.stash && Object.assign(state, { expenseReceipts: list }); render(); } else await setDemo(true);
   } catch (error) { note.textContent = demoError(error); }
@@ -1539,16 +1563,18 @@ async function deleteDemo() {
   const note = $("#demo-note");
   try {
     const list = await readDemoReceipts();
-    if (!list.length) { note.textContent = "Không có phiếu demo nào."; return; }
-    if (!window.confirm(`Xoá hẳn ${list.length} phiếu demo? Chỉ xoá phiếu trong mục demo, phiếu chi thật không bị đụng.`)) return;
+    const counts = rows(await getDocs(query(collection(db, ...root, "demoStockCounts"), limit(500))));
+    if (!list.length && !counts.length) { note.textContent = "Không có phiếu demo nào."; return; }
+    if (!window.confirm(`Xoá hẳn ${list.length} phiếu demo và ${counts.length} lần kiểm đếm demo? Chỉ xoá trong mục demo, dữ liệu thật không bị đụng.`)) return;
     note.textContent = `Đang xoá ${list.length} phiếu demo…`;
-    for (let i = 0; i < list.length; i += 400) {
+    const refs = [...list.map((r) => doc(db, ...root, DEMO_COLLECTION, r.id)), ...counts.map((c) => doc(db, ...root, "demoStockCounts", c.id))];
+    for (let i = 0; i < refs.length; i += 400) {
       const batchWrite = writeBatch(db);
-      list.slice(i, i + 400).forEach((r) => batchWrite.delete(doc(db, ...root, DEMO_COLLECTION, r.id)));
+      refs.slice(i, i + 400).forEach((ref) => batchWrite.delete(ref));
       await batchWrite.commit();
     }
-    note.textContent = `Đã xoá ${list.length} phiếu demo.`;
-    if (state.demo) { state.expenseReceipts = []; render(); }
+    note.textContent = `Đã xoá ${list.length} phiếu demo và ${counts.length} lần kiểm đếm demo.`;
+    if (state.demo) { state.expenseReceipts = []; state.stockCounts = []; render(); }
   } catch (error) { note.textContent = demoError(error); }
 }
 $("#demo-toggle").addEventListener("click", () => setDemo(!state.demo));
@@ -1569,6 +1595,82 @@ function renderUsageCheck() {
   $("#usage-note").textContent = `Định mức tính từ ${source} × công thức. Đồ khô mua theo tuần (cà phê, sữa, gia vị) cần xem khoảng dài hơn mới đúng; đồ tươi (thịt, rau, bánh mì) xem 7 ngày là được.`;
   host.innerHTML = rowsUsage.length ? `<div class="table-wrap"><table class="mat-table"><thead><tr><th>Vật tư</th><th>Định mức 7 ngày</th><th>Thực nhập</th><th>Nhập / định mức</th></tr></thead><tbody>${rowsUsage.map((r) => `<tr><td>${escapeHtml(r.name)}</td><td>${r.expected ? fmt(r.expected, r.base) : "—"}</td><td>${r.bought ? fmt(r.bought, r.base) : "chưa nhập"}</td><td>${chip(r)}</td></tr>`).join("")}</tbody></table></div>` : '<p class="muted">Chưa có phiếu chi chi tiết trong 7 ngày.</p>';
 }
+
+/* ---------- Chi phí khác (Giao dịch khác trên web, chi phí nhập trên máy POS): collection purchases ---------- */
+async function loadOtherPurchases() {
+  try {
+    const from = startOfPreviousMonth();
+    state.otherPurchases = rows(await getDocs(query(collection(db, ...root, "purchases"), where("purchasedAt", ">=", from), orderBy("purchasedAt", "desc"), limit(800))));
+  } catch { state.otherPurchases = []; }
+}
+/** Chi phí ngoài phiếu mua hàng; khi xem demo/mô phỏng thì không trộn dữ liệu thật vào. */
+function otherCosts() {
+  if (state.demo || state.simulation) return [];
+  return otherCostRows(state.otherPurchases, new Set(state.expenseReceipts.map((r) => String(r.id))));
+}
+
+/* ---------- Kiểm đếm tồn kho hằng tuần (stockCounts; khi xem demo dùng demoStockCounts) ---------- */
+const countCollection = () => (state.demo ? "demoStockCounts" : "stockCounts");
+async function loadCounts() {
+  try {
+    state.stockCounts = rows(await getDocs(query(collection(db, ...root, countCollection()), orderBy("countedAt", "desc"), limit(20)))).sort((a, b) => Number(b.countedAt) - Number(a.countedAt));
+    state.countsError = "";
+  } catch (error) { state.stockCounts = []; state.countsError = error.code === "permission-denied" ? `Không có quyền với ${countCollection()} (cần mở quy tắc Firestore).` : (error.message || "lỗi không rõ"); }
+  state.countsLoaded = true;
+  renderCounts();
+}
+function expectedUsageBetween(from, to) {
+  const { sales } = state.demo && !Object.keys(averageDailySales(state.dailyDocs, dailyKeys(7))).length ? { sales: DEFAULT_DAILY_SALES } : salesForDemo();
+  const perDay = dailyMaterialUsage(sales, recipeByName);
+  const days = (to - from) / 86400000;
+  return Object.fromEntries(Object.entries(perDay).map(([k, v]) => [k, v * days]));
+}
+function renderCounts() {
+  const form = $("#count-form-items");
+  if (!form) return;
+  if (!$("#count-datetime").value) $("#count-datetime").value = localDateTimeInput(new Date());
+  if (!form.childElementCount) form.innerHTML = COUNT_ITEMS.map(({ id, unit }) => `<label class="count-row"><span>${escapeHtml(materialById.get(id).name)}</span><input id="count-${id}" data-material="${id}" data-unit="${unit}" type="number" min="0" step="0.01" inputmode="decimal" placeholder="—" /><span class="unit">${unit}</span></label>`).join("");
+  const list = state.stockCounts;
+  $("#count-note").textContent = state.countsError || (list.length ? `Đã có ${list.length} lần đếm${state.demo ? " (demo)" : ""}. Lần gần nhất: ${dateTime(list[0].countedAt)}.` : `Chưa có lần đếm nào${state.demo ? " (demo)" : ""}. Cần ít nhất 2 lần đếm để tính hao hụt.`);
+  const host = $("#count-variance");
+  if (list.length < 2) { host.innerHTML = ""; return; }
+  const [next, prev] = list;
+  const { costs } = currentCosts();
+  const rows2 = varianceBetween({ prev, next, receipts: state.expenseReceipts, expectedUsage: expectedUsageBetween, costs });
+  const fmt = (q, base) => (base === "g" || base === "ml") ? `${(q / 1000).toLocaleString("vi-VN", { maximumFractionDigits: 2 })} ${base === "g" ? "kg" : "lít"}` : `${Math.round(q * 10) / 10} ${base}`;
+  const total = rows2.reduce((s, r) => s + (r.diffValue && r.diffValue > 0 ? r.diffValue : 0), 0);
+  host.innerHTML = `<p class="muted">Kỳ ${dateTime(prev.countedAt)} → ${dateTime(next.countedAt)} · hao hụt ước tính ${money(total)} (chỉ tính vật tư dùng vượt định mức).</p><div class="table-wrap"><table class="mat-table"><thead><tr><th>Vật tư</th><th>Tồn đầu</th><th>Nhập</th><th>Tồn cuối</th><th>Thực dùng</th><th>Định mức</th><th>Chênh</th></tr></thead><tbody>${rows2.map((r) => {
+    const level = r.suspicious ? "bad" : r.diffPct === null ? "unknown" : r.diffPct > 0.15 ? "bad" : r.diffPct > 0.05 ? "warn" : r.diffPct < -0.15 ? "warn" : "ok";
+    const label = r.suspicious ? "số đếm sai?" : r.diffPct === null ? "chưa có định mức" : `${r.diffPct > 0 ? "+" : ""}${Math.round(r.diffPct * 100)}%${r.diffValue !== null ? ` · ${money(r.diffValue)}` : ""}`;
+    return `<tr><td>${escapeHtml(r.name)}</td><td>${fmt(r.opening, r.base)}</td><td>${fmt(r.bought, r.base)}</td><td>${fmt(r.closing, r.base)}</td><td>${fmt(r.actual, r.base)}</td><td>${r.expected ? fmt(r.expected, r.base) : "—"}</td><td><span class="cost-chip ${level}">${label}</span></td></tr>`;
+  }).join("")}</tbody></table></div>`;
+}
+async function saveCount(event) {
+  event.preventDefault();
+  const err = $("#count-error");
+  err.textContent = "";
+  if (state.simulation) { err.textContent = "Đang mô phỏng: không lưu."; return; }
+  const at = new Date($("#count-datetime").value).getTime();
+  if (!Number.isFinite(at)) { err.textContent = "Ngày giờ đếm không hợp lệ."; return; }
+  const items = {};
+  for (const input of document.querySelectorAll("#count-form-items input[data-material]")) {
+    if (input.value === "") continue;
+    const base = countToBase(input.dataset.material, input.dataset.unit, input.value);
+    if (base === null) { err.textContent = `Số đếm không hợp lệ: ${materialById.get(input.dataset.material).name}`; return; }
+    items[input.dataset.material] = Math.round(base);
+  }
+  if (!Object.keys(items).length) { err.textContent = "Chưa nhập số đếm nào."; return; }
+  const d = new Date(at);
+  const id = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const payload = { id, countedAt: at, countedBy: state.user?.email || "", items, updatedAt: Date.now(), ...(state.demo ? { demo: true, demoBatch: "manual" } : {}) };
+  try {
+    await setDoc(doc(db, ...root, countCollection(), id), payload);
+    document.querySelectorAll("#count-form-items input").forEach((x) => { x.value = ""; });
+    await loadCounts();
+    $("#count-note").textContent = `Đã lưu lần đếm ${id}. ` + $("#count-note").textContent;
+  } catch (error) { err.textContent = error.code === "permission-denied" ? `Không có quyền lưu vào ${countCollection()} (cần mở quy tắc Firestore).` : error.message; }
+}
+$("#count-form").addEventListener("submit", saveCount);
 
 /* ---------- Tải phiếu cũ hơn 7 ngày khi chọn kỳ xem xa hơn (tối đa 500 phiếu) ---------- */
 async function ensureReceiptsLoaded() {

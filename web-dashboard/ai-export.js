@@ -65,6 +65,8 @@ Quy tắc đọc dữ liệu:
 - Chỉ phiếu chi có trạng thái duyệt \`APPROVED\` mới được tính là chi phí. \`PENDING\`/\`REJECTED\` là chưa tính.
 - "Ghi chép đầu tư ban đầu" (trước khai trương) không tính vào chi phí tháng; vốn ban đầu dùng một con số ở mục Vốn & hoàn vốn.
 - Dòng tiền ròng tháng = doanh thu − chi vận hành (đã duyệt) − đầu tư bổ sung. Đây là số dùng để chia cổ đông.
+- Doanh thu có hai nguồn: **số POS tự cộng** (snapshot, ghi tại một thời điểm, POS ghi lại tối đa ~10 phút/lần) và **từng bill**. Bill đóng SAU lúc POS ghi số tổng chưa nằm trong số tổng: đó là chênh lệch thời điểm, KHÔNG phải mất tiền. Mục "Đối chiếu doanh thu" đã tách sẵn phần này; chỉ cảnh báo lệch tiền với phần "chưa giải thích được" hoặc bill bị đánh dấu cần kiểm tra.
+- tam_tinh là tổng giá món trước giảm giá; tong là số khách trả. giam_gia = tam_tinh − tong (giảm theo chương trình khuyến mãi / thẻ thành viên áp ở máy POS).
 - Nếu cần thêm dữ liệu để kết luận, hãy nói rõ cần gì.
 `;
 }
@@ -86,7 +88,7 @@ export function buildAiPack(input) {
   const {
     now = Date.now(), shopName = "Quán 0210", scope, lastClose = null,
     months = [], daily = [], items = [], bills = [], receipts = [], otherCosts = [], movements = [],
-    closings = [], payback = null, menu = [], partners = [], notes = [],
+    closings = [], payback = null, menu = [], partners = [], notes = [], reconcile = null,
   } = input;
   const nowText = `${stamp(now)} (${WEEKDAYS[new Date(now).getDay()]})`;
   const lastCloseText = lastClose ? `tháng ${lastClose.monthKey}${lastClose.savedAt ? `, lưu lúc ${stamp(lastClose.savedAt)}` : ""}${Number.isFinite(lastClose.distributable) ? `, có thể chia ${lastClose.distributable}đ` : ""}` : "chưa chốt tháng nào";
@@ -99,6 +101,7 @@ export function buildAiPack(input) {
     `# Dữ liệu ${shopName} cho AI phân tích\n\nXuất lúc ${nowText} · phạm vi: ${scope.label} (${stamp(scope.from)} → ${stamp(scope.to)}) · nguồn: POS0210 web quản lý.\n`,
     aiPrompt({ shopName, nowText, scopeLabel: `${scope.label} (${dayKey(scope.from)} → ${dayKey(scope.to)})`, lastCloseText }),
     DICTIONARY,
+    reconcile ? `## 0. ĐỐI CHIẾU DOANH THU ${reconcile.monthKey} (số POS ↔ từng bill)\n\n- Số POS cộng: ${reconcile.snapRevenue ?? "chưa có"}đ · ${reconcile.snapBills ?? ""} bill, ghi lúc ${stamp(reconcile.snapAt)}\n- Cộng từng bill trên cloud: ${reconcile.cloudRevenue}đ · ${reconcile.cloudBills} bill\n- Chênh (bill − POS): ${reconcile.diff ?? ""}đ · ${reconcile.diffBills ?? ""} bill\n- Trong đó do bill đóng sau lúc POS ghi số tổng (bình thường): ${reconcile.explained}đ · ${reconcile.explainedBills} bill\n- **Chưa giải thích được: ${reconcile.unexplained ?? ""}đ · ${reconcile.unexplainedBills ?? ""} bill**\n${reconcile.suspects.length ? `\n\`\`\`csv\n${csv(["so_bill", "tong", "loai", "ly_do"], reconcile.suspects.map((x) => [x.billNo, x.total, x.kind, x.reason]))}\n\`\`\`\n(loai: late = đóng sau lúc POS ghi số; warn = cần kiểm tra; excluded = không tính; info = ghi chú)\n` : ""}` : "",
     `## 1. TÓM TẮT PHẠM VI\n\n- Doanh thu (snapshot ngày): ${daily.length ? `${dayRevenue}đ · ${dayBills} bill · ${daily.length} ngày có dữ liệu` : "không có snapshot ngày"}\n- Doanh thu theo bill đọc được: ${bills.length ? `${billRevenue}đ · ${bills.length} bill (trừ bill đã hoàn)` : "không đọc bill"}\n- Chi phí đã duyệt (phiếu chi + thu chi khác): ${spend}đ · ${approved.length} phiếu duyệt, ${receipts.length - approved.length} phiếu chưa duyệt\n${notes.map((n) => `- ${n}`).join("\n")}\n`,
     block("2. Theo tháng (đủ các tháng để so sánh)", "Tháng cuối là tháng đang chạy (chưa trọn).", ["thang", "doanh_thu", "so_bill", "bill_tb", "nhap_hang", "ti_le_nhap", "chi_van_hanh_khac", "dau_tu_bo_sung", "dong_tien_rong", "da_chot_so"],
       months.map((m) => [m.monthKey, m.revenue, m.paidBills, m.revenue && m.paidBills ? Math.round(m.revenue / m.paidBills) : null, m.purchases, m.revenue ? (m.purchases / m.revenue).toFixed(3) : null, m.otherOperating, m.investment, m.revenue === null || m.revenue === undefined ? null : m.revenue - m.purchases - m.otherOperating - m.investment, m.closed ? "có" : "chưa"])),
@@ -106,8 +109,8 @@ export function buildAiPack(input) {
       daily.map((d) => [d.dateKey, WEEKDAYS[new Date(`${d.dateKey}T12:00:00`).getDay()], d.revenue, d.paidBills, d.averageBill, (Array.isArray(d.hourlyBills) ? d.hourlyBills : []).map((n, h) => (n ? `${h}h:${n}` : "")).filter(Boolean).join(" ")])),
     block("4. Món bán trong phạm vi", "Sắp theo số lượng.", ["mon", "so_luong", "doanh_thu", "ti_trong_so_luong"],
       (() => { const total = items.reduce((t, i) => t + i.qty, 0); return items.slice().sort((a, b) => b.qty - a.qty || b.revenue - a.revenue).map((i) => [i.name, i.qty, i.revenue, total ? (i.qty / total).toFixed(3) : null]); })()),
-    bills.length ? block("5. Bill", "Mỗi dòng một bill đã thanh toán (dữ liệu thật).", ["so_bill", "gio_mo", "gio_dong", "phut_ngoi", "ban", "tam_tinh", "tong", "giam_gia", "phuong_thuc", "luong", "hoan_tien"],
-      bills.slice().sort((a, b) => a.openedAt - b.openedAt).map((b) => [b.billNo, stamp(b.openedAt), stamp(b.closedAt), b.closedAt && b.openedAt ? Math.round((b.closedAt - b.openedAt) / 60000) : null, b.tableName, b.subtotal || null, b.total, b.subtotal ? Math.max(0, b.subtotal - b.total) : null, methodOf(b.method), b.flow, b.refund ? b.refund.amount : ""])) : "### 5. Bill\nKhông đọc bill cho phạm vi này.\n",
+    bills.length ? block("5. Bill", "Mỗi dòng một bill đã thanh toán (dữ liệu thật).", ["so_bill", "gio_mo", "gio_dong", "phut_ngoi", "ban", "tam_tinh", "tong", "giam_gia", "phuong_thuc", "luong", "hoan_tien", "tien_thanh_toan"],
+      bills.slice().sort((a, b) => a.openedAt - b.openedAt).map((b) => [b.billNo, stamp(b.openedAt), stamp(b.closedAt), b.closedAt && b.openedAt ? Math.round((b.closedAt - b.openedAt) / 60000) : null, b.tableName, b.subtotal || null, b.total, b.subtotal ? Math.max(0, b.subtotal - b.total) : null, methodOf(b.method), b.flow, b.refund ? b.refund.amount : "", b.paymentMissing ? "THIEU_THANH_TOAN" : b.amountPaid])) : "### 5. Bill\nKhông đọc bill cho phạm vi này.\n",
     block("6. Phiếu chi", "", ["ngay_mua", "ma", "loai", "nguoi_chi", "nguon_tien", "duyet", "hoan_ung", "tong", "noi_dung"],
       receipts.slice().sort((a, b) => a.at - b.at).map((r) => [stamp(r.at), r.code, r.kind, r.payer, r.fund, r.review, r.reimb, r.total, r.content])),
     block("7a. Chi phí nhập ở Thu chi khác / máy POS", "", ["ngay", "loai", "nguoi_chi", "so_tien", "ghi_chu"], otherCosts.slice().sort((a, b) => a.at - b.at).map((c) => [stamp(c.at), c.category, c.payer, c.amount, [c.supplierName, c.note].filter(Boolean).join(" · ")])),

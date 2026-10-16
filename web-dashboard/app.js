@@ -19,32 +19,32 @@ import {
   setDoc as rawSetDoc,
   writeBatch as rawWriteBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261016-32";
-import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261016-32";
-import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261016-32";
-import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261016-32";
-import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261016-32";
-import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261016-32";
-import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261016-32";
-import { buildSimulation } from "./sim-data.js?v=20261016-32";
-import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261016-32";
-import { menuCsv } from "./menu-export.js?v=20261016-32";
-import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-32";
-import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-32";
-import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261016-32";
-import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261016-32";
-import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261016-32";
-import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261016-32";
-import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261016-32";
-import { otherCostRows } from "./other-costs.js?v=20261016-32";
-import { paybackStatus } from "./payback.js?v=20261016-32";
-import { topSellers } from "./top-banner.js?v=20261016-32";
-import { AI_SCOPES, buildAiPack, scopeRange } from "./ai-export.js?v=20261016-32";
-import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-32";
-import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261016-32";
-import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261016-32";
-import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261016-32";
-import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261016-32";
+import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261016-33";
+import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261016-33";
+import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261016-33";
+import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261016-33";
+import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261016-33";
+import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261016-33";
+import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261016-33";
+import { buildSimulation } from "./sim-data.js?v=20261016-33";
+import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261016-33";
+import { menuCsv } from "./menu-export.js?v=20261016-33";
+import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-33";
+import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-33";
+import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261016-33";
+import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261016-33";
+import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261016-33";
+import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261016-33";
+import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261016-33";
+import { otherCostRows } from "./other-costs.js?v=20261016-33";
+import { paybackStatus } from "./payback.js?v=20261016-33";
+import { topSellers } from "./top-banner.js?v=20261016-33";
+import { AI_SCOPES, buildAiPack, scopeRange } from "./ai-export.js?v=20261016-33";
+import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-33";
+import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261016-33";
+import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261016-33";
+import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261016-33";
+import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261016-33";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",
@@ -2746,12 +2746,13 @@ async function aiText() {
   ai.pending = buildAiText().then((t) => { if (v === ai.version) ai.text = t; return t; }).finally(() => { ai.busy = false; ai.pending = null; });
   return ai.pending;
 }
-const aiFileName = () => `POS0210-AI-${ai.scope}-${dateKeyOf(new Date())}.md`;
+// Chrome Android chỉ cho chia sẻ file thuộc danh sách đuôi cho phép (.txt có, .md KHÔNG): dùng .txt.
+const aiFileName = () => `POS0210-AI-${ai.scope}-${dateKeyOf(new Date())}.txt`;
 function aiAction(kind) {
   const text = ai.text;
   if (!text) { if (!ai.busy) prepareAi(); $("#ai-status").textContent = "Đang chuẩn bị dữ liệu, chờ vài giây rồi bấm lại."; return; }
-  const fallback = (why) => { downloadFile(aiFileName(), "text/markdown;charset=utf-8", text); $("#ai-status").textContent = `${why} Đã tải file ${aiFileName()}: mở app AI và đính kèm file này.`; };
-  if (kind === "download") { downloadFile(aiFileName(), "text/markdown;charset=utf-8", text); return; }
+  const fallback = (why) => { downloadFile(aiFileName(), "text/plain;charset=utf-8", text); $("#ai-status").textContent = `${why} Đã tải file ${aiFileName()}: mở app AI và đính kèm file này.`; };
+  if (kind === "download") { downloadFile(aiFileName(), "text/plain;charset=utf-8", text); return; }
   if (kind === "copy") {
     const done = () => flashNote("Đã sao chép. Mở app AI và dán vào ô chat.");
     const legacy = () => { const t = Object.assign(document.createElement("textarea"), { value: text }); t.style.position = "fixed"; t.style.opacity = "0"; document.body.append(t); t.select(); const ok = document.execCommand("copy"); t.remove(); if (ok) done(); else fallback("Trình duyệt không cho sao chép."); };

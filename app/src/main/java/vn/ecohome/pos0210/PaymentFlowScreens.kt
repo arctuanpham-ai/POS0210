@@ -298,6 +298,8 @@ fun PrepaidReview(vm: PosViewModel, t: vn.ecohome.pos0210.data.DiningTableEntity
     Column {
         Header("Soát đơn · ${t.name}") { vm.screen.value = "ORDER" }
         Text("Đọc lại đơn với khách. Đúng rồi mới sang thanh toán và in bill.", Modifier.padding(horizontal = 18.dp), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Brown)
+        val editNote by vm.prepaidEditNote.collectAsState()
+        editNote?.let { Text(it, Modifier.padding(horizontal = 18.dp, vertical = 4.dp), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF7A4B00)) }
         if (message.isNotBlank()) Text(message, Modifier.padding(horizontal = 18.dp, vertical = 4.dp), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFB3261E))
         if (keys.isEmpty()) {
             Text("Giỏ hàng trống.", Modifier.padding(20.dp))

@@ -1207,9 +1207,11 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                 if (resumed) Surface(Modifier.fillMaxWidth().padding(bottom = 6.dp), color = Color(0xFFFFF1D6), shape = RoundedCornerShape(8.dp)) {
                     Column(Modifier.padding(10.dp)) {
                         Text("ĐƠN MỞ LẠI · chưa xác nhận thu tiền trước đó", fontWeight = FontWeight.Black)
+                        val splitNote by vm.prepaidSplitNote.collectAsState()
+                        splitNote?.let { Text(it, fontSize = 12.sp, color = Color(0xFF7A4B00)) }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Checkbox(skipK, { vm.skipKitchenPrint.value = it })
-                            Text("Bếp đã làm theo lời gọi: KHÔNG in phiếu bếp, đánh dấu đã giao", fontSize = 13.sp)
+                            Text("Bếp đã làm cả món gọi thêm: KHÔNG in phiếu bếp nào, đánh dấu đã giao hết", fontSize = 13.sp)
                         }
                     }
                 }

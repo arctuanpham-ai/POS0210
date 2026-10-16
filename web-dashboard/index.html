@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20261016-22" />
+    <link rel="stylesheet" href="styles.css?v=20261016-25" />
     <title>0210 · Manager</title>
   </head>
   <body>
@@ -17,7 +17,7 @@
         <p class="eyebrow">0210 · BREAKFAST · COFFEE · DRINKS</p>
         <h1 id="login-title">Manager realtime</h1>
         <p class="muted">Theo dõi quán và nhập phiếu tài chính từ xa.</p>
-        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.16.22 · Danh sách phiếu chi lọc theo kỳ / người</p>
+        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.16.25 · Phiếu chi: ghi rõ chỉ hiện phiếu cần xử lý</p>
         <p class="muted">Đăng nhập tài khoản quán một lần trên mỗi máy, sau đó mỗi người vào bằng PIN riêng.</p>
         <label>Email tài khoản quán<input id="email" type="email" autocomplete="username" inputmode="email" /></label>
         <label>Mật khẩu<input id="password" type="password" autocomplete="current-password" /></label>
@@ -47,7 +47,7 @@
           <div class="heading-actions"><button id="refresh-dashboard" class="btn">Làm mới</button><button id="request-sync" class="btn" title="Yêu cầu máy POS ở quán đồng bộ ngay">Yêu cầu đồng bộ</button><button id="switch-person" class="btn">Đổi người</button><button id="logout-button" class="btn ghost">Đăng xuất</button></div>
         </header>
 
-        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><section id="my-alerts" class="my-alerts" aria-live="polite" hidden></section><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.16.22 · Danh sách phiếu chi lọc theo kỳ / người</p>
+        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><section id="my-alerts" class="my-alerts" aria-live="polite" hidden></section><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.16.25 · Phiếu chi: ghi rõ chỉ hiện phiếu cần xử lý</p>
 
         <nav class="tabbar" id="tabbar" aria-label="Các trang">
           <a href="#ban" data-tab="ban">Bàn</a>
@@ -174,7 +174,7 @@
           <button id="open-entry" type="button" class="action-btn"><strong>+ Thu chi khác</strong><small>Lương, góp vốn, rút tiền, tài sản</small></button>
         </div>
         <p class="muted">Ai trả tiền thì ghi đúng <strong>Nguồn tiền</strong>: tiền túi mình → "Tiền cá nhân" (cần hoàn); tiền quỹ quán do thủ quỹ chi (tiền mặt hay CK) → "Quỹ quán", không cần hoàn. Phiếu tiền cá nhân: người mua nhập bằng PIN của mình → thủ quỹ thấy cảnh báo, <strong>Duyệt</strong> → <strong>Hoàn tiền</strong> bằng QR động tạo từ tài khoản ngân hàng người mua đã nhập, nội dung CK là mã đợt hoàn → người mua thấy cảnh báo, kiểm tra tài khoản và bấm <strong>Tôi đã nhận tiền</strong> (xác nhận chậm cũng được).</p>
-        <p id="reimb-note" class="panel-total" role="status"></p>
+        <p id="reimb-note" class="panel-total" role="status"></p><p class="muted">Tab này chỉ hiện phiếu <b>cần xử lý</b> (chờ duyệt, chờ hoàn, chờ nhận tiền) và vài phiếu gần đây. Xem <b>toàn bộ phiếu</b>, lọc theo ngày / người chi: <a href="#taichinh">Tài chính → Danh sách phiếu chi</a>.</p>
         <section class="section-heading compact"><div><p class="eyebrow">CỦA TÔI</p><h2>Phiếu tôi đã ứng tiền</h2></div></section>
         <section id="reimb-mine" class="reimb-list"></section>
         <div id="reimb-treasurer-zone" hidden>
@@ -213,12 +213,12 @@
         </form>
         <div id="members-zone" hidden>
         <section class="section-heading compact"><div><p class="eyebrow">CHỦ QUÁN</p><h2>Thành viên dùng web</h2></div></section>
-        <p class="muted">Mọi người dùng chung tài khoản quán, vào bằng PIN riêng. <strong>Thủ quỹ</strong>: duyệt phiếu, hoàn tiền, xem toàn bộ. <strong>Người mua</strong>: chỉ thấy tab Hoàn ứng và Tài khoản, nhập phiếu của mình, xác nhận đã nhận tiền. <strong>Chủ quán</strong>: như thủ quỹ và quản lý thành viên.</p>
+        <p class="muted">Mọi người dùng chung tài khoản quán, vào bằng PIN riêng. <strong>Thủ quỹ</strong>: duyệt phiếu, hoàn tiền, xem toàn bộ. <strong>Thành viên</strong>: xem và nhập ở mọi tab (phiếu nhập đứng tên chính mình), xác nhận đã nhận tiền. <strong>Chủ quán</strong>: như thủ quỹ và quản lý thành viên.</p>
         <section id="member-list" class="reimb-list"></section>
         <form id="member-form" class="panel">
           <input id="member-id" type="hidden" />
           <div class="field-row"><label for="member-name">Tên</label><input id="member-name" maxlength="60" required /></div>
-          <div class="field-row"><label for="member-role">Vai trò</label><select id="member-role"><option value="NGUOI_MUA">Người mua</option><option value="THU_QUY">Thủ quỹ</option><option value="CHU_QUAN">Chủ quán</option></select></div>
+          <div class="field-row"><label for="member-role">Vai trò</label><select id="member-role"><option value="NGUOI_MUA">Thành viên</option><option value="THU_QUY">Thủ quỹ</option><option value="CHU_QUAN">Chủ quán</option></select></div>
           <div class="field-row"><label for="member-pin">PIN (4–6 số)</label><input id="member-pin" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="Bắt buộc khi thêm người mới" /></div>
           <p id="member-error" class="error" role="alert"></p>
           <div class="tool-row"><button type="submit" class="btn">Lưu thành viên</button><button id="member-clear" type="button" class="btn ghost">Thêm người mới</button></div>
@@ -511,7 +511,7 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261016-22"></script>
+    <script type="module" src="app.js?v=20261016-25"></script>
     <script>
       // Trang không chạy được (thường do trình duyệt còn giữ file cũ): báo rõ thay vì để nút đăng nhập "chết".
       setTimeout(function () {

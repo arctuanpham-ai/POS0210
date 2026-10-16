@@ -129,8 +129,8 @@ export const vietQrPayload = ({ bank, account, holder, amount, info }) => {
 // ---------- Người dùng web: một tài khoản Firebase dùng chung, mỗi người vào bằng PIN riêng ----------
 export const ROLE_OWNER = "CHU_QUAN";      // quản lý thành viên, toàn quyền
 export const ROLE_TREASURER = "THU_QUY";   // duyệt, hoàn tiền, xem toàn bộ
-export const ROLE_BUYER = "NGUOI_MUA";     // chỉ nhập phiếu của mình, xem hoàn ứng của mình, xác nhận đã nhận
-export const ROLE_LABELS = { CHU_QUAN: "Chủ quán", THU_QUY: "Thủ quỹ", NGUOI_MUA: "Người mua" };
+export const ROLE_BUYER = "NGUOI_MUA";     // xem và nhập mọi tab; phiếu nhập là phiếu của chính mình; không duyệt / chi hoàn / lưu đối soát
+export const ROLE_LABELS = { CHU_QUAN: "Chủ quán", THU_QUY: "Thủ quỹ", NGUOI_MUA: "Thành viên" };
 /** Duyệt và hoàn tiền: chủ quán hoặc thủ quỹ. */
 export const canTreasure = (role) => role === ROLE_OWNER || role === ROLE_TREASURER;
 /** Không tự duyệt / tự hoàn phiếu của mình khi đã có người khác làm được việc đó (thủ quỹ hoặc chủ quán khác). */
@@ -198,8 +198,8 @@ export const myAlerts = ({ myId, role, me = null, receipts = [], batches = [], m
   const approved = review.filter((r) => reimbursementStatus(r) === "APPROVED");
   if (approved.length) out.push({ key: "pay", level: "warn", count: approved.length, text: `${approved.length} phiếu đã duyệt chờ hoàn tiền (${vnd(sum(approved, "total"))}).` });
   const unknown = review.filter((r) => reimbursementStatus(r) === "UNKNOWN");
-  const shopPending = review.filter((r) => reimbursementStatus(r) === "NONE" && reviewStatus(r) === "PENDING");
-  if (shopPending.length) out.push({ key: "shopReview", level: "warn", count: shopPending.length, text: `${shopPending.length} phiếu quỹ quán chờ bạn duyệt (${vnd(sum(shopPending, "total"))}): chưa duyệt thì chưa tính vào chi phí.` });
+  const shopPending = review.filter((r) => (reimbursementStatus(r) === "NONE" || isPaidOut(r)) && reviewStatus(r) === "PENDING");
+  if (shopPending.length) out.push({ key: "shopReview", level: "warn", count: shopPending.length, text: `${shopPending.length} phiếu quỹ quán / phiếu sửa sau khi hoàn chờ bạn duyệt (${vnd(sum(shopPending, "total"))}): chưa duyệt thì chưa tính vào chi phí.` });
   if (unknown.length) out.push({ key: "unknown", level: "warn", count: unknown.length, text: `${unknown.length} phiếu chưa rõ nguồn tiền (tiền cá nhân hay tiền quán).` });
   const noBank = [...new Set(approved.filter((r) => !bankOf(r, members, payees)).map((r) => r.enteredByName || "Chưa rõ"))];
   if (noBank.length) out.push({ key: "nobank", level: "info", count: 0, text: `Chưa có tài khoản ngân hàng của: ${noBank.join(", ")} (chưa tạo được QR).` });
@@ -247,3 +247,22 @@ export const countsAsCost = (r) => reviewStatus(r) === "APPROVED";
  * (không thì không ai duyệt được phiếu).
  */
 export const initialReview = (entrantId, members = []) => (reviewerOtherThan(entrantId, members) ? "PENDING" : "APPROVED");
+
+// ---------- Sửa phiếu đã hoàn tiền ----------
+export const isPaidOut = (r) => ["PAID", "CONFIRMED"].includes(r?.reimbursement?.status);
+/**
+ * Phiếu đã hoàn tiền vẫn sửa được (tên vật tư, nhóm, số lượng / đơn giá, ghi chú…) nhưng KHÔNG đổi tổng tiền,
+ * nguồn tiền hay người mua, vì tiền đã chuyển. Sửa xong phải được duyệt lại.
+ * Trả về "" nếu hợp lệ, ngược lại là hướng dẫn xử lý phần chênh.
+ */
+export const paidEditProblem = (original, next) => {
+  if (!isPaidOut(original)) return "";
+  const paid = Number(original.reimbursement?.paidAmount ?? original.total ?? 0);
+  const diff = Number(next.total || 0) - paid;
+  const vnd = (n) => `${Math.abs(Number(n)).toLocaleString("vi-VN")}đ`;
+  if (next.fundSource && next.fundSource !== original.fundSource && !(original.fundSource === "SHOP_BANK" && next.fundSource === "SHOP_CASH")) return "Phiếu đã hoàn tiền: không đổi nguồn tiền được.";
+  if (asciiUpper(next.enteredByName) !== asciiUpper(original.enteredByName)) return "Phiếu đã hoàn tiền: không đổi người mua được.";
+  if (diff > 0) return `Phiếu đã hoàn ${vnd(paid)}: không tăng tổng tiền được. Mua thêm thì nhập PHIẾU MỚI phần chênh ${vnd(diff)} (ghi chú "bổ sung ${receiptCode(original)}"), phiếu đó duyệt và hoàn như thường.`;
+  if (diff < 0) return `Phiếu đã hoàn ${vnd(paid)}: không giảm tổng tiền được. Phần thừa ${vnd(diff)} người mua nộp lại quỹ, thủ quỹ ghi ở "Thu chi khác → Thu / điều chỉnh khác" (ghi chú "nộp lại ${receiptCode(original)}").`;
+  return "";
+};

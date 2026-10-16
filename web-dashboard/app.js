@@ -40,7 +40,7 @@ import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./st
 import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261014-9";
 import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261014-6";
 import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261014-4";
-import { aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261013-2";
+import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261013-2";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",
@@ -61,7 +61,7 @@ const state = {
   dashboard: {}, tables: [], sessions: [], batches: [], items: [],
   bills: [], purchases: [], expenseReceipts: [], purchaseItems: [], movements: [], costCodes: [],
   purchaseCategories: [], profitPartners: [], assetCategories: [], suppliers: [],
-  unsubs: [], paymentFlowDoc: null, refunds: [], frozenRefundDocs: [], flowError: "", dailyDocs: {}, dailyError: "", salesLoaded: false, salesDays: 7, itemMode: "combined", period: "today", customFrom: null, customTo: null,
+  unsubs: [], paymentFlowDoc: null, refunds: [], frozenRefundDocs: [], flowError: "", dailyDocs: {}, dailyError: "", salesLoaded: false, salesDays: 7, salesPeriod: "7d", dailyLoadedFrom: null, itemMode: "combined", period: "today", customFrom: null, customTo: null,
   transactionKind: "ALL", payerFilter: "ALL", user: null,
   expenseRules: [], rulesError: "", simulation: null, demo: null, reimbBatches: [], payees: [], role: null, me: null, members: [], closedMonths: [], closedLoaded: false, openReceipts: [], reimbLoaded: false, reimbPerson: "", otherPurchases: [], stockCounts: [], countsLoaded: false, menuItems: [], menuCats: [], recipes: {}, recipesLoaded: false, recipeError: "", monthlyDocs: {}, monthlyError: "", reportFrom: 0, receiptsNote: "", detailCutoff: null, receiptsFrom: 0, summaryBlocks: [], historyDay: "today", historyDocs: {}, historyTables: null, historyError: "", historyLoading: false, billDetailCache: {},
 };
@@ -342,23 +342,50 @@ function renderSalesSnapshots() {
   $("#live-revenue-today").textContent = hasSnapshot ? money(dashboard.revenueToday) : "—";
   $("#live-paid-bills").textContent = hasSnapshot ? String(Number(dashboard.paidBillsToday || 0)) : "—";
 
-  const keys = dailyKeys(state.salesDays);
+  const plan = periodPlan(state.salesPeriod);
+  const keys = plan.dayKeys;
   const summary = summarizeDaily(state.dailyDocs, keys, dateKeyOf(new Date()));
   const notes = [];
   if (state.dailyError) notes.push(`Không đọc được snapshot ngày: ${state.dailyError}`);
-  else if (summary.unavailableDays.length) notes.push(`Chưa có snapshot ngày ${summary.unavailableDays.map(shortDay).join(", ")}: số liệu chưa đầy đủ, cần POS đồng bộ.`);
+  else if (plan.byMonth) { const have = keys.length - summary.unavailableDays.length; notes.push(`Doanh thu theo tháng lấy từ số chốt tháng của POS. Giờ cao điểm và món bán nhiều tính trên ${have} ngày có số liệu chi tiết.`); }
+  else if (summary.unavailableDays.length) notes.push(summary.unavailableDays.length <= 7 ? `Chưa có snapshot ngày ${summary.unavailableDays.map(shortDay).join(", ")}: số liệu chưa đầy đủ, cần POS đồng bộ.` : `${summary.unavailableDays.length}/${keys.length} ngày chưa có số liệu ngày (quán chưa mở hoặc trước khi có đồng bộ).`);
   if (summary.needsFinalizeDays.length) notes.push(`Ngày ${summary.needsFinalizeDays.map(shortDay).join(", ")} chưa được POS chốt.`);
   if (hasSnapshot && shouldMarkSnapshotStale(dashboard.lastUpdatedAt)) notes.push("Snapshot POS cũ hơn 15 phút, cần kiểm tra máy POS.");
   $("#sales-notice").textContent = notes.join(" ");
 
-  document.querySelectorAll("[data-sales-days]").forEach((button) => button.classList.toggle("active", Number(button.dataset.salesDays) === keys.length));
+  document.querySelectorAll("[data-sales-period]").forEach((button) => button.classList.toggle("active", button.dataset.salesPeriod === plan.period));
   document.querySelectorAll("[data-item-mode]").forEach((button) => button.classList.toggle("active", button.dataset.itemMode === state.itemMode));
 
+  // Kỳ theo tháng: doanh thu lấy từ snapshot tháng (đủ cả những ngày trước khi có snapshot ngày).
+  const series = plan.monthKeys.length ? monthSeries(plan.monthKeys, state.monthlyDocs, state.dailyDocs) : [];
+  const fromMonths = plan.byMonth && series.some((m) => m.available);
+  const totalRevenue = fromMonths ? series.reduce((t, m) => t + (m.revenue || 0), 0) : summary.totalRevenue;
+  const totalBills = fromMonths ? series.reduce((t, m) => t + (m.paidBills || 0), 0) : summary.totalBills;
+  const hasData = fromMonths || summary.days.some((day) => day.available);
   const cards = [
-    [`Doanh thu đã chốt · ${keys.length} ngày`, summary.days.some((day) => day.available) ? money(summary.totalRevenue) : "Chưa có dữ liệu"],
-    ["Số bill đã thanh toán", summary.days.some((day) => day.available) ? summary.totalBills : "Chưa có dữ liệu"],
-    ["Bill trung bình", summary.days.some((day) => day.available) ? money(summary.averageBill) : "Chưa có dữ liệu"],
+    [`Doanh thu đã chốt · ${plan.label}`, hasData ? money(totalRevenue) : "Chưa có dữ liệu"],
+    ["Số bill đã thanh toán", hasData ? totalBills : "Chưa có dữ liệu"],
+    ["Bill trung bình", hasData && totalBills ? money(Math.round(totalRevenue / totalBills)) : "Chưa có dữ liệu"],
   ];
+  // So sánh: tháng này / tháng trước so với tháng liền trước; kỳ nhiều tháng thì trung bình và tháng cao nhất.
+  if (plan.period === "thisMonth" || plan.period === "lastMonth") {
+    const cur = plan.monthKeys[0];
+    const [y, m] = cur.split("-").map(Number);
+    const prevKey = `${new Date(y, m - 2, 1).getFullYear()}-${String(new Date(y, m - 2, 1).getMonth() + 1).padStart(2, "0")}`;
+    const prev = monthSeries([prevKey], state.monthlyDocs, state.dailyDocs)[0];
+    if (prev.available) {
+      const pct = plan.period === "lastMonth" ? changePct(totalRevenue, prev.revenue) : null;
+      cards.push([`Tháng ${Number(prevKey.slice(5))} cả tháng`, money(prev.revenue)]);
+      if (pct !== null) cards.push(["So với tháng trước đó", `${pct >= 0 ? "+" : ""}${(pct * 100).toFixed(1)}%`]);
+      if (plan.period === "thisMonth") { const days = keys.length; const dim = new Date(y, m, 0).getDate(); cards.push(["Ước cả tháng (theo nhịp hiện tại)", money(Math.round(totalRevenue / days * dim))]); }
+    }
+  } else if (plan.byMonth) {
+    const avail = series.filter((x) => x.available);
+    if (avail.length) {
+      const best = avail.reduce((a, b) => (b.revenue > a.revenue ? b : a));
+      cards.push(["Trung bình / tháng", money(Math.round(totalRevenue / avail.length))], [`Tháng cao nhất · ${Number(best.monthKey.slice(5))}/${best.monthKey.slice(0, 4)}`, money(best.revenue)]);
+    }
+  }
   $("#sales-summary").replaceChildren(...cards.map(([label, value]) => {
     const node = $("#metric-template").content.firstElementChild.cloneNode(true);
     node.querySelector("p").textContent = label;
@@ -367,8 +394,19 @@ function renderSalesSnapshots() {
   }));
 
   renderSalesBars(keys);
+  const chart = $("#sales-chart");
+  if (plan.byMonth) {
+    const maxM = Math.max(1, ...series.filter((x) => x.available).map((x) => x.revenue));
+    chart.classList.toggle("dense", series.length > 8);
+    chart.innerHTML = series.map((x) => {
+      const bar = x.available ? `<div class="bar${x.source === "daily" ? " partial" : ""}" style="height:${Math.max(2, Math.round(x.revenue / maxM * 100))}%"></div>` : '<div class="bar empty" style="height:100%"></div>';
+      return `<div class="bar-col"><span class="bar-value">${x.available ? escapeHtml(compactMoney(x.revenue)) : "Chưa có"}</span><div class="bar-area">${bar}</div><small>T${Number(x.monthKey.slice(5))}</small><small>${x.available ? `${x.paidBills} bill` : ""}</small></div>`;
+    }).join("");
+    if (series.some((x) => x.source === "daily")) $("#sales-notice").textContent = [$("#sales-notice").textContent, "Cột nhạt: tháng chưa có snapshot tháng, đang cộng từ các ngày có số liệu."].filter(Boolean).join(" ");
+  } else {
+  chart.classList.toggle("dense", summary.days.length > 10);
   const max = Math.max(1, ...summary.days.filter((day) => day.available).map((day) => day.revenue));
-  $("#sales-chart").innerHTML = summary.days.map((day) => {
+  chart.innerHTML = summary.days.map((day) => {
     const bar = day.available
       ? `<div class="bar" style="height:${Math.max(2, Math.round(day.revenue / max * 100))}%"></div>`
       : '<div class="bar empty" style="height:100%"></div>';
@@ -376,6 +414,7 @@ function renderSalesSnapshots() {
     const bills = day.available ? `${day.paidBills} bill` : "";
     return `<div class="bar-col"><span class="bar-value">${escapeHtml(value)}</span><div class="bar-area">${bar}</div><small>${shortDay(day.dateKey)}</small><small>${escapeHtml(bills)}</small></div>`;
   }).join("");
+  }
 
   const host = $("#sales-items");
   const table = (rows) => rows.length
@@ -389,6 +428,21 @@ function renderSalesSnapshots() {
   }
 }
 
+/** Đọc snapshot ngày của cả kỳ bằng MỘT truy vấn theo dateKey (chỉ tính lượt đọc cho ngày có dữ liệu). Kỳ đã đọc không đọc lại. */
+async function loadSalesPeriod() {
+  const plan = periodPlan(state.salesPeriod);
+  const from = plan.dayKeys[0];
+  const to = plan.dayKeys[plan.dayKeys.length - 1];
+  if (!from || (state.dailyLoadedFrom && state.dailyLoadedFrom <= from)) return;
+  const until = state.dailyLoadedFrom && state.dailyLoadedFrom > from ? plan.dayKeys.find((k) => k >= state.dailyLoadedFrom) || to : to;
+  try {
+    const got = rows(await getDocs(query(collection(db, ...root, "dashboardDaily"), where("dateKey", ">=", from), where("dateKey", "<=", until), limit(400))));
+    const byKey = new Map(got.map((d) => [d.dateKey || d.id, d]));
+    for (const key of plan.dayKeys.filter((k) => k <= until)) if (!(key in state.dailyDocs) || byKey.has(key)) state.dailyDocs[key] = byKey.get(key) || null;
+    state.dailyLoadedFrom = from;
+    state.dailyError = "";
+  } catch (error) { state.dailyError = error.code || error.message || "lỗi không rõ"; }
+}
 async function loadDailyDocs() {
   // Chỉ đọc các ngày chưa có trong bộ nhớ: 3 hoặc 7 document, không đọc bill/order lịch sử.
   const missing = dailyKeys(7).filter((key) => !(key in state.dailyDocs));
@@ -910,6 +964,7 @@ async function refreshDashboard() {
     const dashboardDoc = await getDoc(doc(db, ...root, "dashboard", "current"));
     state.dashboard = dashboardDoc.exists() ? dashboardDoc.data() : {};
     state.dailyDocs = {};
+    state.dailyLoadedFrom = null;
     state.historyDocs = {};
     state.billDetailCache = {};
     const hasLiveTables = Array.isArray(state.dashboard.liveTables);
@@ -918,7 +973,7 @@ async function refreshDashboard() {
     const read = async (name, key, q = null) => { const snapshot = await getDocs(q || collection(db, ...root, name)); state[key] = rows(snapshot); };
     await Promise.all([
       hasLiveTables ? Promise.resolve() : read("tableStatus", "tables"),
-      loadDailyDocs(),
+      loadDailyDocs().then(loadSalesPeriod),
       loadReceiptsCached(),
       loadMonthlyDocs(),
       loadOtherPurchases(),
@@ -1078,11 +1133,13 @@ $("#show-password").addEventListener("change", (event) => { $("#password").type 
 $("#password").addEventListener("keydown", (event) => { if (event.key === "Enter") $("#login-button").click(); });
 $("#logout-button").addEventListener("click", () => signOut(auth));
 $("#refresh-dashboard").addEventListener("click", refreshDashboard);
+$("#sales-days-filters").replaceChildren(...SALES_PERIODS.map(([k, label]) => { const b = document.createElement("button"); b.type = "button"; b.className = `filter${k === "7d" ? " active" : ""}`; b.dataset.salesPeriod = k; b.textContent = label; return b; }));
 $("#sales-days-filters").addEventListener("click", async (event) => {
-  const days = Number(event.target.dataset?.salesDays);
-  if (days !== 3 && days !== 7) return;
-  state.salesDays = days;
-  if (state.user) { await loadDailyDocs(); state.salesLoaded = true; }
+  const period = event.target.dataset?.salesPeriod;
+  if (!period) return;
+  state.salesPeriod = period;
+  renderSalesSnapshots();
+  if (state.user && state.role) { $("#sales-notice").textContent = "Đang đọc số liệu kỳ…"; await loadSalesPeriod(); state.salesLoaded = true; }
   renderSalesSnapshots();
 });
 $("#sales-item-modes").addEventListener("click", (event) => {

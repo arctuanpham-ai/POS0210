@@ -283,3 +283,8 @@ input[readonly] { background: #f3ece2; color: #5b4b3e; }
 .inline-date input { width: auto; max-width: 150px; }
 #bill-history-days { flex-wrap: wrap; }
 .bill-tag.postpaid { background: #f6e3c8; color: #7a4b00; }
+
+.sales-chart.dense { grid-auto-columns: 38px; overflow-x: auto; justify-content: start; }
+.sales-chart.dense .bar-value { font-size: 10px; }
+.sales-chart .bar.partial { opacity: .5; }
+#sales-days-filters { flex-wrap: wrap; }

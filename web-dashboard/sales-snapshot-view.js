@@ -123,3 +123,43 @@ export const periodDailySummary = (range, docs, now = new Date()) => {
   if (!keys.every((key) => window.has(key))) return null;
   return summarizeDaily(docs, keys, dateKeyOf(now));
 };
+
+// ---------- Kỳ xem doanh thu: 3/7 ngày, tháng này, tháng trước, 3/6/12 tháng ----------
+export const SALES_PERIODS = [["3d", "3 ngày"], ["7d", "7 ngày"], ["thisMonth", "Tháng này"], ["lastMonth", "Tháng trước"], ["3m", "3 tháng"], ["6m", "6 tháng"], ["12m", "1 năm"]];
+const monthKeyOfDate = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+const daysBetween = (from, to) => {
+  const out = [];
+  for (let d = new Date(from.getFullYear(), from.getMonth(), from.getDate()); d <= to; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) out.push(dateKeyOf(d));
+  return out;
+};
+/**
+ * Kế hoạch đọc / vẽ của một kỳ: các ngày cần snapshot ngày, các tháng cần snapshot tháng,
+ * byMonth = biểu đồ theo tháng (kỳ dài) hay theo ngày.
+ */
+export const periodPlan = (period, now = new Date()) => {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const label = (SALES_PERIODS.find(([k]) => k === period) || SALES_PERIODS[1])[1];
+  if (period === "3d" || period === "7d") return { period, label, dayKeys: dailyKeys(period === "3d" ? 3 : 7, now), monthKeys: [], byMonth: false };
+  if (period === "thisMonth") return { period, label, dayKeys: daysBetween(new Date(today.getFullYear(), today.getMonth(), 1), today), monthKeys: [monthKeyOfDate(today)], byMonth: false };
+  if (period === "lastMonth") {
+    const first = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    return { period, label, dayKeys: daysBetween(first, new Date(today.getFullYear(), today.getMonth(), 0)), monthKeys: [monthKeyOfDate(first)], byMonth: false };
+  }
+  const months = period === "3m" ? 3 : period === "6m" ? 6 : 12;
+  const first = new Date(today.getFullYear(), today.getMonth() - (months - 1), 1);
+  const monthKeys = Array.from({ length: months }, (_, i) => monthKeyOfDate(new Date(first.getFullYear(), first.getMonth() + i, 1)));
+  return { period, label, dayKeys: daysBetween(first, today), monthKeys, byMonth: true };
+};
+/**
+ * Doanh thu từng tháng: ưu tiên snapshot tháng do POS chốt; tháng chưa có thì cộng snapshot ngày (đánh dấu partial).
+ * Tháng không có dữ liệu nào là "chưa có", KHÔNG phải 0 đồng.
+ */
+export const monthSeries = (monthKeys, monthlyDocs = {}, dailyDocs = {}) => monthKeys.map((key) => {
+  const m = monthlyDocs?.[key];
+  if (m) return { monthKey: key, available: true, source: "monthly", revenue: Number(m.revenue || 0), paidBills: Number(m.paidBills || 0) };
+  const days = Object.entries(dailyDocs || {}).filter(([k, v]) => v && k.startsWith(`${key}-`));
+  if (!days.length) return { monthKey: key, available: false, source: "none", revenue: null, paidBills: null };
+  return { monthKey: key, available: true, source: "daily", revenue: days.reduce((s, [, v]) => s + Number(v.revenue || 0), 0), paidBills: days.reduce((s, [, v]) => s + Number(v.paidBills || 0), 0) };
+});
+/** Thay đổi phần trăm, null khi không so được. */
+export const changePct = (now, before) => (Number.isFinite(now) && Number(before) > 0 ? (now - before) / before : null);

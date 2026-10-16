@@ -9,9 +9,9 @@ import {
   collection,
   doc,
   getFirestore,
-  getDoc,
-  runTransaction,
-  getDocs,
+  getDoc as rawGetDoc,
+  runTransaction as rawRunTransaction,
+  getDocs as rawGetDocs,
   query,
   where,
   orderBy,
@@ -19,33 +19,34 @@ import {
   setDoc as rawSetDoc,
   writeBatch as rawWriteBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261016-34";
-import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261016-34";
-import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261016-34";
-import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261016-34";
-import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261016-34";
-import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261016-34";
-import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261016-34";
-import { buildSimulation } from "./sim-data.js?v=20261016-34";
-import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261016-34";
-import { menuCsv } from "./menu-export.js?v=20261016-34";
-import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-34";
-import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-34";
-import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261016-34";
-import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261016-34";
-import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261016-34";
-import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261016-34";
-import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261016-34";
-import { otherCostRows } from "./other-costs.js?v=20261016-34";
-import { paybackStatus } from "./payback.js?v=20261016-34";
-import { topSellers } from "./top-banner.js?v=20261016-34";
-import { reconcileRevenue } from "./revenue-check.js?v=20261016-34";
-import { AI_SCOPES, buildAiPack, scopeRange } from "./ai-export.js?v=20261016-34";
-import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-34";
-import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261016-34";
-import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261016-34";
-import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261016-34";
-import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261016-34";
+import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261016-35";
+import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261016-35";
+import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261016-35";
+import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261016-35";
+import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261016-35";
+import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261016-35";
+import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261016-35";
+import { buildSimulation } from "./sim-data.js?v=20261016-35";
+import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261016-35";
+import { menuCsv } from "./menu-export.js?v=20261016-35";
+import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-35";
+import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-35";
+import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261016-35";
+import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261016-35";
+import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261016-35";
+import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261016-35";
+import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261016-35";
+import { otherCostRows } from "./other-costs.js?v=20261016-35";
+import { paybackStatus } from "./payback.js?v=20261016-35";
+import { topSellers } from "./top-banner.js?v=20261016-35";
+import { reconcileRevenue } from "./revenue-check.js?v=20261016-35";
+import { POS_CEILING, SPARK, dayUsage, lastPacificDays, nextReset, pacificDay, usageTrend } from "./usage.js?v=20261016-35";
+import { AI_SCOPES, buildAiPack, scopeRange } from "./ai-export.js?v=20261016-35";
+import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-35";
+import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261016-35";
+import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261016-35";
+import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261016-35";
+import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261016-35";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",
@@ -94,8 +95,48 @@ const expenseRows = () => costReceipts().map((receipt) => ({
 
 // Chế độ mô phỏng không bao giờ được ghi Firestore: mọi đường ghi đi qua hai hàm này.
 const SIM_BLOCKED = "Đang ở chế độ mô phỏng: không ghi dữ liệu thật. Tắt mô phỏng để lưu.";
-const setDoc = (...args) => { if (state.simulation) throw new Error(SIM_BLOCKED); return rawSetDoc(...args); };
-const writeBatch = (...args) => { if (state.simulation) throw new Error(SIM_BLOCKED); return rawWriteBatch(...args); };
+/* ---------- Đếm lượt đọc / ghi của web (so với hạn mức gói Spark), lưu theo ngày Pacific vào config/webUsage-{ngày} ---------- */
+const usageStore = (() => { try { return window.localStorage; } catch { return null; } })();
+const usageDevice = (() => { try { let d = usageStore?.getItem("pos0210-usage-device"); if (!d) { d = Math.random().toString(36).slice(2, 10); usageStore?.setItem("pos0210-usage-device", d); } return d; } catch { return "web"; } })();
+const webUsage = { day: "", reads: 0, writes: 0, deletes: 0, dirty: false, flushedAt: 0 };
+function usageToday() {
+  const day = pacificDay();
+  if (webUsage.day !== day) {
+    let saved = null; try { saved = JSON.parse(usageStore?.getItem(`pos0210-usage-${day}`) || "null"); } catch { saved = null; }
+    Object.assign(webUsage, { day, reads: saved?.reads || 0, writes: saved?.writes || 0, deletes: saved?.deletes || 0, dirty: false });
+  }
+  return webUsage;
+}
+function countUsage(kind, n) {
+  const u = usageToday(); u[kind] += n; u.dirty = true;
+  try { usageStore?.setItem(`pos0210-usage-${u.day}`, JSON.stringify({ reads: u.reads, writes: u.writes, deletes: u.deletes })); } catch { /* bộ nhớ trình duyệt bị chặn: chỉ đếm trong phiên */ }
+}
+async function flushUsage(force = false) {
+  const u = usageToday();
+  if (!u.dirty || !state.user || state.simulation) return;
+  if (!force && Date.now() - u.flushedAt < 5 * 60000) return;
+  u.dirty = false; u.flushedAt = Date.now();
+  countUsage("writes", 1); u.dirty = false; // chính lần lưu này cũng là một lượt ghi
+  try { await rawSetDoc(doc(db, ...root, "config", `webUsage-${u.day}`), { day: u.day, devices: { [usageDevice]: { reads: u.reads, writes: u.writes, deletes: u.deletes, name: myName?.() || "", updatedAt: Date.now() } } }, { merge: true }); }
+  catch { u.dirty = true; }
+}
+setInterval(() => flushUsage(), 60000);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushUsage(true); });
+// Firestore tính tối thiểu 1 lượt đọc cho truy vấn trả về rỗng.
+const getDocs = async (q) => { const snap = await rawGetDocs(q); countUsage("reads", Math.max(1, snap.docs.length)); return snap; };
+const getDoc = async (ref) => { const snap = await rawGetDoc(ref); countUsage("reads", 1); return snap; };
+const setDoc = (...args) => { if (state.simulation) throw new Error(SIM_BLOCKED); return rawSetDoc(...args).then((v) => { countUsage("writes", 1); return v; }); };
+const writeBatch = (...args) => {
+  if (state.simulation) throw new Error(SIM_BLOCKED);
+  const b = rawWriteBatch(...args); let w = 0, d = 0;
+  const proxy = { set: (...a) => { w += 1; b.set(...a); return proxy; }, update: (...a) => { w += 1; b.update(...a); return proxy; }, delete: (...a) => { d += 1; b.delete(...a); return proxy; }, commit: () => b.commit().then((v) => { countUsage("writes", w); if (d) countUsage("deletes", d); return v; }) };
+  return proxy;
+};
+const runTransaction = (database, fn) => {
+  let r = 0, w = 0;
+  return rawRunTransaction(database, (tx) => fn({ get: (ref) => { r += 1; return tx.get(ref); }, set: (...a) => { w += 1; tx.set(...a); return tx; }, update: (...a) => { w += 1; tx.update(...a); return tx; }, delete: (...a) => { w += 1; tx.delete(...a); return tx; } }))
+    .then((v) => { countUsage("reads", r); countUsage("writes", w); return v; });
+};
 
 /** Quy tắc đã học của quán trước, rồi tên vật tư chuẩn trong danh mục. */
 const allRules = () => [...state.expenseRules, ...catalogRules];
@@ -2645,6 +2686,47 @@ function renderTopBanner() {
 $("#top-banner").addEventListener("click", (e) => { const i = e.target.closest("[data-banner]")?.dataset.banner; if (i !== undefined) { banner.index = Number(i); renderTopBanner(); } });
 
 
+
+/* ---------- Bảng mức dùng Firebase (Tài khoản) ---------- */
+async function loadUsage() {
+  if (!state.user || !state.role) return;
+  await flushUsage(true);
+  const days = lastPacificDays(14);
+  $("#usage-today").innerHTML = '<p class="muted">Đang đọc số đếm 14 ngày…</p>';
+  const get = (id) => getDoc(doc(db, ...root, "config", id)).then((d) => (d.exists() ? d.data() : null)).catch(() => null);
+  const rowsUsage = await Promise.all(days.map(async (day) => dayUsage({ day, app: await get(`quota-${day}`), web: await get(`webUsage-${day}`) })));
+  // Hôm nay: cộng phần web của trình duyệt này chưa kịp lưu.
+  const today = rowsUsage[rowsUsage.length - 1];
+  renderUsage(usageTrend(rowsUsage), today);
+}
+function usageBar(label, m, extra = "") {
+  const level = m.pct >= 80 ? "bad" : m.pct >= 60 ? "warn" : "ok";
+  return `<div class="usage-row"><div class="usage-head"><b>${label}</b><span>${m.used.toLocaleString("vi-VN")} / ${m.limit.toLocaleString("vi-VN")} · <b>còn ${m.remainingPct.toFixed(1)}%</b> (${m.remaining.toLocaleString("vi-VN")})</span></div><div class="usage-track"><div class="usage-fill ${level}" style="width:${Math.min(100, m.pct).toFixed(1)}%"></div></div>${extra ? `<small class="muted">${extra}</small>` : ""}</div>`;
+}
+const USAGE_CAT = { sales: "bán hàng", dashboard: "số tổng", catalog: "menu", finance: "tài chính", people: "nhân viên/khách", backup: "sao lưu", media: "ảnh", system: "hệ thống" };
+function renderUsage(trend, today) {
+  const reset = nextReset();
+  $("#usage-reset").textContent = new Date(reset).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  const hoursLeft = Math.max(0, (reset - Date.now()) / 3600000);
+  const t = trend[trend.length - 1];
+  const worst = Math.max(t.reads.pct, t.writes.pct, t.deletes.pct);
+  $("#usage-badge").textContent = `· hôm nay dùng ${worst.toFixed(0)}% · ${worst >= 80 ? "⚠ sắp chạm" : worst >= 60 ? "chú ý" : "an toàn"}`;
+  const cats = Object.entries(t.categories).filter(([, v]) => v).map(([k, v]) => `${USAGE_CAT[k] || k} ${v.toLocaleString("vi-VN")}`).join(" · ");
+  $("#usage-today").innerHTML = `<p class="reimb-sub">Ngày quota ${t.day} (Pacific) · còn ${hoursLeft.toFixed(1)} giờ đến lúc reset</p>
+    ${usageBar("Ghi", t.writes, `máy POS ${t.appWrites.toLocaleString("vi-VN")}${t.hasApp ? "" : " (chưa có số đếm hôm nay)"}${cats ? ` (${cats})` : ""} · web ${t.web.writes.toLocaleString("vi-VN")} · máy POS tự dừng ở ${POS_CEILING.toLocaleString("vi-VN")}`)}
+    ${usageBar("Đọc", t.reads, `web ${t.web.reads.toLocaleString("vi-VN")} (mọi trình duyệt đã lưu số đếm)`)}
+    ${usageBar("Xoá", t.deletes)}
+    ${t.flags.length ? `<p class="warn-text">⚠ ${t.flags.join(" · ")}</p>` : ""}`;
+  const maxW = Math.max(1, ...trend.map((d) => d.writes.used)), maxR = Math.max(1, ...trend.map((d) => d.reads.used));
+  $("#usage-days").innerHTML = `<p class="reimb-sub">14 ngày gần nhất</p><div class="table-wrap"><table class="usage-table"><thead><tr><th>Ngày</th><th>Ghi (POS + web)</th><th>Đọc (web)</th><th>Ghi chú</th></tr></thead><tbody>${trend.slice().reverse().map((d) => `<tr class="${d.flags.length ? "flag" : ""}">
+    <td>${d.day.slice(8)}/${d.day.slice(5, 7)}</td>
+    <td><div class="mini-bar"><span style="width:${(d.writes.used / maxW * 100).toFixed(0)}%"></span></div>${d.hasApp || d.hasWeb ? `${d.writes.used.toLocaleString("vi-VN")} <small class="muted">${d.writes.pct.toFixed(0)}%</small>` : "—"}</td>
+    <td><div class="mini-bar read"><span style="width:${(d.reads.used / maxR * 100).toFixed(0)}%"></span></div>${d.hasWeb ? `${d.reads.used.toLocaleString("vi-VN")} <small class="muted">${d.reads.pct.toFixed(0)}%</small>` : "—"}</td>
+    <td>${d.flags.length ? `<span class="warn-text">${d.flags.join(" · ")}</span>` : d.avgWrites !== null && (d.hasApp || d.hasWeb) ? `<small class="muted">TB ghi 7 ngày trước ${Math.round(d.avgWrites).toLocaleString("vi-VN")}</small>` : ""}</td></tr>`).join("")}</tbody></table></div>
+    <p class="muted">Số đếm web bắt đầu từ bản này, các ngày trước chưa có phần web. Ngày tô vàng: tăng hơn 1,5 lần trung bình 7 ngày trước hoặc vượt 70% hạn mức.</p>`;
+}
+$("#usage-panel").addEventListener("toggle", (e) => { if (e.target.open) loadUsage(); });
+$("#usage-reload").addEventListener("click", loadUsage);
 /* ---------- Đối chiếu doanh thu: dashboardMonthly (POS cộng) ↔ từng bill trên cloud ---------- */
 const rc = { month: "this", cache: {} };
 function rcMonthKey() { const d = new Date(); const m = rc.month === "last" ? new Date(d.getFullYear(), d.getMonth() - 1, 1) : d; return monthKeyOf(m.getTime()); }

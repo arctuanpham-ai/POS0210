@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20261016-34" />
+    <link rel="stylesheet" href="styles.css?v=20261016-35" />
     <title>0210 · Manager</title>
   </head>
   <body>
@@ -17,7 +17,7 @@
         <p class="eyebrow">0210 · BREAKFAST · COFFEE · DRINKS</p>
         <h1 id="login-title">Manager realtime</h1>
         <p class="muted">Theo dõi quán và nhập phiếu tài chính từ xa.</p>
-        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.16.34 · Đối chiếu doanh thu POS ↔ từng bill</p>
+        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.16.35 · Mức dùng Firebase so với gói Spark</p>
         <p class="muted">Đăng nhập tài khoản quán một lần trên mỗi máy, sau đó mỗi người vào bằng PIN riêng.</p>
         <label>Email tài khoản quán<input id="email" type="email" autocomplete="username" inputmode="email" /></label>
         <label>Mật khẩu<input id="password" type="password" autocomplete="current-password" /></label>
@@ -47,7 +47,7 @@
           <div class="heading-actions"><button id="refresh-dashboard" class="btn">Làm mới</button><button id="request-sync" class="btn" title="Yêu cầu máy POS ở quán đồng bộ ngay">Yêu cầu đồng bộ</button><button id="switch-person" class="btn">Đổi người</button><button id="logout-button" class="btn ghost">Đăng xuất</button></div>
         </header>
 
-        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><section id="my-alerts" class="my-alerts" aria-live="polite" hidden></section><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.16.34 · Đối chiếu doanh thu POS ↔ từng bill</p>
+        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><section id="my-alerts" class="my-alerts" aria-live="polite" hidden></section><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.16.35 · Mức dùng Firebase so với gói Spark</p>
 
         <nav class="tabbar" id="tabbar" aria-label="Các trang">
           <a href="#ban" data-tab="ban">Bàn</a>
@@ -208,6 +208,14 @@
           <div><p class="eyebrow">TÀI KHOẢN CỦA TÔI</p><h2 id="me-title">Thông tin cá nhân</h2></div>
         </section>
         <p id="me-role" class="muted"></p>
+        <details class="panel usage-panel" id="usage-panel">
+          <summary><strong>📊 Mức dùng Firebase so với gói Spark (miễn phí)</strong> <span class="muted" id="usage-badge"></span></summary>
+          <p class="muted">Hạn mức mỗi ngày: <b>50.000 lượt đọc</b>, <b>20.000 lượt ghi</b>, <b>20.000 lượt xoá</b>. Vượt thì Firebase chặn đến lúc reset (nửa đêm giờ Pacific = <span id="usage-reset"></span> giờ VN), máy POS vẫn bán bình thường và giữ dữ liệu trên máy để đẩy sau. Lượt ghi máy POS do chính máy POS đếm (tự dừng ở 16.000 để chừa chỗ cho web); lượt đọc / ghi của web do từng trình duyệt đếm và lưu mỗi 5 phút.</p>
+          <div class="filter-row"><button type="button" class="filter" id="usage-reload">Đọc lại</button></div>
+          <section id="usage-today"></section>
+          <section id="usage-days"></section>
+          <p class="muted">Chưa đếm được: lượt đọc của máy POS (rất ít), dung lượng lưu trữ (hạn mức 1 GiB) và băng thông (10 GiB/tháng Firestore, 360 MB/ngày Hosting); xem chính xác trong Firebase Console → Usage.</p>
+        </details>
         <form id="me-form" class="panel">
           <div class="field-row"><label for="me-name">Tên hiển thị</label><input id="me-name" maxlength="60" required /></div>
           <p class="muted">Tài khoản ngân hàng nhận tiền hoàn ứng: thủ quỹ dùng để tạo QR động, đúng số tiền và nội dung.</p>
@@ -541,7 +549,7 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261016-34"></script>
+    <script type="module" src="app.js?v=20261016-35"></script>
     <script>
       // Trang không chạy được (thường do trình duyệt còn giữ file cũ): báo rõ thay vì để nút đăng nhập "chết".
       setTimeout(function () {

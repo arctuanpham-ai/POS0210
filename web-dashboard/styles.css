@@ -336,3 +336,17 @@ button.paylist-row { width: 100%; font: inherit; color: inherit; cursor: pointer
 .ai-export button:disabled { opacity: .5; }
 .rc-list { margin: 4px 0 10px; padding-left: 18px; font-size: .9rem; }
 .rc-list li { margin: 3px 0; }
+
+/* Mức dùng Firebase */
+.usage-row { margin: 10px 0; }
+.usage-head { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: .92rem; }
+.usage-track { height: 12px; border-radius: 6px; background: var(--line, #e5ded5); overflow: hidden; margin: 4px 0 2px; }
+.usage-fill { height: 100%; border-radius: 6px; background: #2e9e5b; transition: width .6s ease; }
+.usage-fill.warn { background: #e0a100; }
+.usage-fill.bad { background: #d23c3c; }
+.usage-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+.usage-table th, .usage-table td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--line, #e5ded5); vertical-align: top; }
+.usage-table tr.flag { background: rgba(224, 161, 0, .12); }
+.mini-bar { height: 6px; width: 100%; max-width: 120px; background: var(--line, #e5ded5); border-radius: 3px; margin-bottom: 2px; }
+.mini-bar span { display: block; height: 100%; border-radius: 3px; background: #6b4a3a; }
+.mini-bar.read span { background: #3a6b8a; }

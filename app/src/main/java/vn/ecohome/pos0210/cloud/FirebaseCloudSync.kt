@@ -656,7 +656,7 @@ object FirebaseCloudSync {
     }
     fun schedule(context:Context){
         val network=Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
-        val syncRequest=PeriodicWorkRequestBuilder<FirebaseSyncWorker>(15,TimeUnit.MINUTES)
+        val syncRequest=PeriodicWorkRequestBuilder<FirebaseSyncWorker>(15,TimeUnit.MINUTES).setInputData(androidx.work.workDataOf(FirebaseSyncWorker.PERIODIC to true))
             .setConstraints(network).build()
         val backupRequest=PeriodicWorkRequestBuilder<FirebaseBackupWorker>(1,TimeUnit.HOURS)
             .setConstraints(network).build()
@@ -691,9 +691,17 @@ object FirebaseCloudSync {
 }
 
 class FirebaseSyncWorker(context:Context,params:WorkerParameters):CoroutineWorker(context,params){
+    companion object {
+        const val PERIODIC="periodic"
+        const val IDLE_INTERVAL_MS=60*60_000L
+        fun skipIdle(periodic:Boolean,dirty:Boolean,lastSuccessAt:Long?,now:Long)=periodic&&!dirty&&lastSuccessAt!=null&&now-lastSuccessAt in 0 until IDLE_INTERVAL_MS
+    }
     override suspend fun doWork():Result{
         val state=PosDatabase.get(applicationContext).dao().cloudSyncStateSnapshot()
         if(state?.enabled!=true)return Result.success()
+        // Chu kỳ dự phòng 15 phút: không có thay đổi trên máy thì chỉ kiểm tra lại mỗi 60 phút (vẫn kéo menu sửa từ web).
+        // Thay đổi dữ liệu đã tự đẩy ngay (InvalidationTracker); lệnh từ web không bị bỏ qua.
+        if(FirebaseSyncWorker.skipIdle(inputData.getBoolean(PERIODIC,false),state.dirty,state.lastSuccessAt,System.currentTimeMillis()))return Result.success()
         val result=FirebaseCloudSync.syncNow(applicationContext)
         return if(result.isSuccess||!CloudQuotaGuard.retry(result.exceptionOrNull()))Result.success() else Result.retry()
     }

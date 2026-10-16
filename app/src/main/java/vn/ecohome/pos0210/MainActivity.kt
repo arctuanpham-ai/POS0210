@@ -1647,7 +1647,7 @@ fun Manage(vm: PosViewModel) {
                 Rowx("Bàn & khu vực", "Thêm · sửa · Trong nhà / Ngoài trời") { vm.screen.value = "TABLE_ADMIN" }
             }
             if (employee?.role == "ADMIN" || employee?.canPurchase == true) {
-                Rowx("Chi phí (xem)", "Nhập chi phí trên web · trên máy chỉ xem") { vm.screen.value = "PURCHASE" }
+                // Chi phí: nhập, duyệt, hoàn ứng, xem đều trên web (màn PURCHASE vẫn còn trong code, chỉ ẩn khỏi menu).
             }
             if (employee?.role == "ADMIN" || employee?.role == "MANAGER") {
                 Rowx("VietQR", "Chọn QR động theo bill hoặc QR tĩnh · lưu tài khoản") { vm.screen.value = "VIETQR" }
@@ -1660,7 +1660,7 @@ fun Manage(vm: PosViewModel) {
             if (employee?.role == "ADMIN") {
                 Rowx("Kiểm tra dữ liệu", "Đối soát Payment · Bill · Customer · điểm · trạng thái bàn") { vm.screen.value = "HEALTH" }
                 Rowx("TEST MODE", "Test order · bếp · thanh toán · in bill nhưng KHÔNG tính doanh thu") { vm.screen.value = "TEST_MODE" }
-                Rowx("Dọn dữ liệu trước khai trương", "Bill thanh toán và chấm công · GIỮ NGUYÊN nhập hàng, chi phí, tài sản") { vm.screen.value = "RESET_PREOPENING_SALES" }
+                // Đã khai trương: ẩn "Dọn dữ liệu trước khai trương" để không bấm nhầm (màn vẫn còn trong code).
                 Rowx("Cloud & Manager realtime", "Firebase backup · trạng thái bàn · doanh thu trực tiếp") { vm.screen.value = "CLOUD" }
                 Rowx("Nhật ký hệ thống", "Audit thao tác · người thực hiện · thời điểm · dữ liệu thay đổi") { vm.screen.value = "SETTINGS" }
             }
@@ -3973,8 +3973,7 @@ fun Report(vm: PosViewModel) {
             FilterChip(section == "OVERVIEW", { section = "OVERVIEW" }, { Text("TỔNG QUAN") })
             FilterChip(section == "ITEMS", { section = "ITEMS" }, { Text("THỐNG KÊ MÓN") })
             FilterChip(section == "BILLS", { section = "BILLS" }, { Text("LỊCH SỬ BILL") })
-            FilterChip(section == "PURCHASES", { section = "PURCHASES" }, { Text("CHI / NGƯỜI CHI") })
-            FilterChip(section == "MONTHLY", { section = "MONTHLY" }, { Text("BÁO CÁO THÁNG") })
+            // Chi phí và báo cáo tháng / chốt chia cổ đông chuyển hẳn sang web (Tài chính → Đối soát quỹ & chia cổ đông).
             FilterChip(section == "EXPORT", { section = "EXPORT" }, { Text("XUẤT DỮ LIỆU") })
         }
         if(section == "PURCHASES") {
@@ -4863,7 +4862,7 @@ fun BankPaymentSettings(vm:PosViewModel){
             HorizontalDivider(Modifier.padding(vertical=12.dp))
             Text("Chế độ xác nhận",fontWeight=FontWeight.Bold)
             Text("Phát hiện + nhân viên xác nhận (mặc định)\nKhông tự động đóng bill.",fontSize=12.sp)
-            OutlinedButton(onClick={vm.screen.value="BANK_NOTIFICATION_TEST"},modifier=Modifier.fillMaxWidth().padding(top=14.dp)){Text("TEST THÔNG BÁO NGÂN HÀNG")}
+            // Màn thử thông báo ngân hàng là màn kỹ thuật: ẩn khỏi giao diện bán hàng.
         }
     }
 }

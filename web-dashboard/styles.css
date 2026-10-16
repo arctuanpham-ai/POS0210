@@ -381,3 +381,10 @@ button.paylist-row { width: 100%; font: inherit; color: inherit; cursor: pointer
 .tb-photo img { width: 76px; height: 76px; border-radius: 50%; object-fit: cover; border: 3px solid rgba(255,255,255,.9); box-shadow: 0 6px 16px rgba(0,0,0,.25); display: block; }
 .tb-photo span { position: absolute; right: -6px; bottom: -4px; font-size: 1.6rem; }
 @media (prefers-reduced-motion: reduce) { .tb-photo { animation: none !important; } }
+.menu-row[data-edit-menu] { cursor: pointer; }
+.menu-row[data-edit-menu]:active { background: #f6ede2; }
+.menu-group .text-button { margin-left: auto; font-size: .82rem; }
+#menu-edit-form { display: grid; gap: 10px; min-width: min(420px, 86vw); }
+.menu-edit-photo { display: flex; align-items: center; gap: 12px; }
+.menu-edit-photo img { width: 72px; height: 72px; border-radius: 12px; object-fit: cover; }
+.menu-edit-photo span { width: 72px; height: 72px; border-radius: 12px; background: #efe5da; display: grid; place-items: center; font-size: .75rem; color: #6b4a3a; text-align: center; }

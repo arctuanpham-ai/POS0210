@@ -65,3 +65,30 @@ export function mergePlan(items = [], soldById = {}) {
     ],
   };
 }
+
+/** Mã món mới không trùng: theo tiền tố đang dùng trong nhóm (vd "CF-"), số kế tiếp, 3 chữ số. */
+export function nextProductCode(items = [], categoryId = "") {
+  const all = new Set(items.map((m) => String(m.productCode || "")).filter(Boolean));
+  const inCat = items.filter((m) => String(m.categoryId) === String(categoryId) && /^[A-Za-z]+-\d+$/.test(m.productCode || ""));
+  const counts = new Map();
+  for (const m of inCat) { const p = m.productCode.split("-")[0].toUpperCase(); counts.set(p, (counts.get(p) || 0) + 1); }
+  const prefix = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "MN";
+  let n = Math.max(0, ...[...all].filter((c) => c.toUpperCase().startsWith(`${prefix}-`)).map((c) => Number(c.split("-")[1]) || 0)) + 1;
+  let code = `${prefix}-${String(n).padStart(3, "0")}`;
+  while (all.has(code)) { n += 1; code = `${prefix}-${String(n).padStart(3, "0")}`; }
+  return code;
+}
+
+/** Kiểm tra trước khi lưu món sửa trên web. Trả về lỗi tiếng Việt hoặc "". */
+export function menuEditProblem(draft, items = []) {
+  const name = String(draft.name || "").replace(/\s+/g, " ").trim();
+  if (!name) return "Nhập tên món.";
+  if (!Number.isFinite(Number(draft.price)) || Number(draft.price) < 0) return "Giá không hợp lệ.";
+  if (Number(draft.price) % 500 !== 0 && Number(draft.price) > 0) return "Giá nên tròn 500đ (vd 35000, 2500).";
+  if (!draft.categoryId) return "Chọn nhóm món.";
+  const dupName = items.find((m) => m.id !== draft.id && m.deleted !== true && m.active !== false && normName(m.name) === normName(name));
+  if (dupName && draft.active !== false) return `Đã có món đang bán tên "${dupName.name.trim()}".`;
+  const dupCode = draft.productCode && items.find((m) => m.id !== draft.id && m.productCode === draft.productCode);
+  if (dupCode) return `Mã ${draft.productCode} đã thuộc món "${dupCode.name.trim()}".`;
+  return "";
+}

@@ -19,35 +19,35 @@ import {
   setDoc as rawSetDoc,
   writeBatch as rawWriteBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261017-07";
-import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261017-07";
-import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261017-07";
-import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261017-07";
-import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261017-07";
-import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261017-07";
-import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261017-07";
-import { buildSimulation } from "./sim-data.js?v=20261017-07";
-import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261017-07";
-import { menuCsv } from "./menu-export.js?v=20261017-07";
-import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261017-07";
-import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261017-07";
-import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261017-07";
-import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261017-07";
-import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261017-07";
-import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261017-07";
-import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261017-07";
-import { otherCostRows } from "./other-costs.js?v=20261017-07";
-import { paybackStatus } from "./payback.js?v=20261017-07";
-import { topSellers } from "./top-banner.js?v=20261017-07";
-import { reconcileRevenue } from "./revenue-check.js?v=20261017-07";
-import { menuGroups, mergePlan, nameIssues, normName, soldNotInMenu } from "./menu-view.js?v=20261017-07";
-import { POS_CEILING, SPARK, dayUsage, lastPacificDays, nextReset, pacificDay, usageTrend } from "./usage.js?v=20261017-07";
-import { AI_SCOPES, buildAiPack, scopeRange } from "./ai-export.js?v=20261017-07";
-import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261017-07";
-import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261017-07";
-import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261017-07";
-import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261017-07";
-import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261017-07";
+import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261017-08";
+import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261017-08";
+import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261017-08";
+import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261017-08";
+import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261017-08";
+import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261017-08";
+import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261017-08";
+import { buildSimulation } from "./sim-data.js?v=20261017-08";
+import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261017-08";
+import { menuCsv } from "./menu-export.js?v=20261017-08";
+import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261017-08";
+import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261017-08";
+import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261017-08";
+import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261017-08";
+import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261017-08";
+import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261017-08";
+import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261017-08";
+import { otherCostRows } from "./other-costs.js?v=20261017-08";
+import { paybackStatus } from "./payback.js?v=20261017-08";
+import { topSellers } from "./top-banner.js?v=20261017-08";
+import { reconcileRevenue } from "./revenue-check.js?v=20261017-08";
+import { menuEditProblem, menuGroups, mergePlan, nameIssues, nextProductCode, normName, soldNotInMenu } from "./menu-view.js?v=20261017-08";
+import { POS_CEILING, SPARK, dayUsage, lastPacificDays, nextReset, pacificDay, usageTrend } from "./usage.js?v=20261017-08";
+import { AI_SCOPES, buildAiPack, scopeRange } from "./ai-export.js?v=20261017-08";
+import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261017-08";
+import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261017-08";
+import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261017-08";
+import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261017-08";
+import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261017-08";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",
@@ -2737,12 +2737,12 @@ function renderMenuView() {
   const { costs } = currentCosts();
   if (!menuView.cat || (menuView.cat !== "all" && !groups.some((g) => g.id === menuView.cat))) menuView.cat = groups[0]?.id || "all";
   const shown = groups.filter((g) => menuView.cat === "all" || g.id === menuView.cat);
-  $("#menu-grid").innerHTML = shown.map((g) => `<h3 class="menu-group">${escapeHtml(g.name)} <small class="muted">${g.items.length} món${g.active ? "" : " · nhóm đang tắt"}</small></h3><div class="menu-list">${g.items.map((m) => {
+  $("#menu-grid").innerHTML = shown.map((g) => `<h3 class="menu-group">${escapeHtml(g.name)} <small class="muted">${g.items.length} món${g.active ? "" : " · nhóm đang tắt"}</small>${canEditMenu() && g.id !== "_other" ? `<button type="button" class="text-button" data-add-menu="${escapeHtml(g.id)}">+ Thêm món</button>` : ""}</h3><div class="menu-list">${g.items.map((m) => {
     const img = thumbFor(m.id);
     const lines = recipeLinesFor(m);
     const r = lines.length ? recipeCost(lines, costs, m.price) : null;
     const cost = r && !r.missing.length && m.price ? `vốn ${Math.round((r.total / m.price) * 100)}%` : "";
-    return `<article class="menu-row${m.active === false ? " off" : ""}">${img ? `<img src="${img}" alt="" loading="lazy" />` : `<span class="menu-initial">${escapeHtml(m.name.trim().charAt(0).toUpperCase())}</span>`}<div class="menu-info"><strong>${escapeHtml(m.name.trim())}</strong><b class="menu-price">${money(m.price)}</b><small>${[m.productCode, cost, m.active === false ? "ngừng bán" : ""].filter(Boolean).join(" · ")}</small></div></article>`;
+    return `<article class="menu-row${m.active === false ? " off" : ""}"${canEditMenu() ? ` data-edit-menu="${escapeHtml(m.id)}" role="button" tabindex="0"` : ""}>${img ? `<img src="${img}" alt="" loading="lazy" />` : `<span class="menu-initial">${escapeHtml(m.name.trim().charAt(0).toUpperCase())}</span>`}<div class="menu-info"><strong>${escapeHtml(m.name.trim())}</strong><b class="menu-price">${money(m.price)}</b><small>${[m.productCode, cost, m.active === false ? "ngừng bán" : ""].filter(Boolean).join(" · ")}</small></div></article>`;
   }).join("")}</div>`).join("") || '<p class="muted">Chưa có menu trên cloud.</p>';
   const issues = nameIssues(state.menuItems);
   const sold = soldNotInMenu(state.dailyDocs, state.menuItems);
@@ -2774,6 +2774,7 @@ $("#menu-issues").addEventListener("click", async (e) => {
     const now = Date.now();
     const batch = writeBatch(db);
     for (const w of plan.writes) batch.set(doc(db, ...root, "menu", w.id), { ...w.data, updatedAt: now, editedBy: `WEB:${myName()}` }, { merge: true });
+    await bumpMenuVersion(batch);
     await batch.commit();
     for (const w of plan.writes) { const m = state.menuItems.find((x) => x.id === w.id); if (m) Object.assign(m, w.data, { updatedAt: now }); }
     try { await setDoc(doc(db, ...root, "commands", "sync"), { requestedAt: now, requestedBy: myName(), scope: "" }, { merge: true }); } catch { /* máy POS vẫn tự đồng bộ theo chu kỳ */ }
@@ -2847,6 +2848,88 @@ $("#menu-remote").addEventListener("click", async () => {
   }, 5000);
 });
 $("#menu-cats").addEventListener("click", (e) => { const k = e.target.closest("[data-menu-cat]")?.dataset.menuCat; if (!k) return; menuView.cat = k; renderMenuView(); });
+
+/* ---------- Sửa / thêm món trên web: ghi menu cloud + tăng config/menuVersion, máy POS (app 167+) tự kéo về ---------- */
+const canEditMenu = () => state.role === ROLE_OWNER || state.role === ROLE_TREASURER;
+const menuEdit = { item: null, photo: null };
+async function bumpMenuVersion(batch) { batch.set(doc(db, ...root, "config", "menuVersion"), { v: Date.now(), by: `WEB:${myName()}` }, { merge: true }); }
+function openMenuEdit(item, categoryId = "") {
+  const isNew = !item;
+  const cat = item?.categoryId || categoryId;
+  menuEdit.item = item || { id: (crypto.randomUUID?.() || `web-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`), categoryId: cat, name: "", price: 0, active: true, sortOrder: Math.max(0, ...state.menuItems.filter((m) => m.categoryId === cat).map((m) => Number(m.sortOrder || 0))) + 1, productCode: nextProductCode(state.menuItems, cat), description: "", isNew: true };
+  menuEdit.photo = null;
+  const m = menuEdit.item;
+  $("#menu-edit-title").textContent = isNew ? "Thêm món mới" : "Sửa món";
+  $("#menu-edit-name").value = (m.name || "").trim(); $("#menu-edit-price").value = m.price || ""; $("#menu-edit-code").value = m.productCode || "";
+  $("#menu-edit-cat").innerHTML = (state.menuCats || []).slice().sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0)).map((c) => `<option value="${escapeHtml(c.id)}"${String(c.id) === String(m.categoryId) ? " selected" : ""}>${escapeHtml(c.name)}</option>`).join("") + (m.categoryId && !(state.menuCats || []).some((c) => String(c.id) === String(m.categoryId)) ? `<option value="${escapeHtml(m.categoryId)}" selected>(nhóm hiện tại)</option>` : "");
+  $("#menu-edit-active").checked = m.active !== false;
+  const img = thumbFor(m.id); $("#menu-edit-img").hidden = !img; $("#menu-edit-img").src = img || ""; $("#menu-edit-noimg").hidden = Boolean(img);
+  $("#menu-edit-error").textContent = ""; $("#menu-edit-file").value = "";
+  $("#menu-edit-dialog").showModal();
+}
+/** Ảnh gốc ≤ 1280px, JPEG ≤ 450 KB (cùng chuẩn app), kèm sha256 để máy POS kiểm tra khi tải về. */
+async function prepareMenuPhoto(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => bad(new Error("Không đọc được ảnh")); i.src = url; });
+    const scale = Math.min(1, 1280 / Math.max(img.width, img.height));
+    const c = document.createElement("canvas"); c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    let dataUrl = "";
+    for (const q of [0.82, 0.72, 0.6, 0.45, 0.3]) { dataUrl = c.toDataURL("image/jpeg", q); if (dataUrl.length * 0.75 <= 450000) break; }
+    const payload = dataUrl.split(",")[1];
+    const bytes = Uint8Array.from(atob(payload), (ch) => ch.charCodeAt(0));
+    if (bytes.length > 450000) throw new Error("Ảnh quá lớn sau khi nén");
+    const sha = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((b) => b.toString(16).padStart(2, "0")).join("");
+    const thumb = await shrinkImage(dataUrl);
+    return { payload, sha, bytes: bytes.length, thumb };
+  } finally { URL.revokeObjectURL(url); }
+}
+$("#menu-grid").addEventListener("click", (e) => {
+  const add = e.target.closest("[data-add-menu]")?.dataset.addMenu;
+  if (add && canEditMenu()) { openMenuEdit(null, add); return; }
+  const id = e.target.closest("[data-edit-menu]")?.dataset.editMenu;
+  if (id && canEditMenu()) openMenuEdit(state.menuItems.find((m) => m.id === id));
+});
+$("#menu-edit-close").addEventListener("click", () => $("#menu-edit-dialog").close());
+$("#menu-edit-file").addEventListener("change", async (e) => {
+  const file = e.target.files?.[0]; if (!file) return;
+  $("#menu-edit-error").textContent = "Đang nén ảnh…";
+  try { menuEdit.photo = await prepareMenuPhoto(file); $("#menu-edit-img").src = menuEdit.photo.thumb; $("#menu-edit-img").hidden = false; $("#menu-edit-noimg").hidden = true; $("#menu-edit-error").textContent = ""; }
+  catch (error) { menuEdit.photo = null; $("#menu-edit-error").textContent = error.message || String(error); }
+});
+$("#menu-edit-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!canEditMenu() || !menuEdit.item) return;
+  if (state.demo || state.simulation) { $("#menu-edit-error").textContent = "Tắt demo / mô phỏng để sửa menu thật."; return; }
+  const m = menuEdit.item;
+  const draft = { ...m, name: $("#menu-edit-name").value.replace(/\s+/g, " ").trim(), price: Math.round(Number($("#menu-edit-price").value)), categoryId: $("#menu-edit-cat").value, active: $("#menu-edit-active").checked };
+  const problem = menuEditProblem(draft, state.menuItems);
+  if (problem) { $("#menu-edit-error").textContent = problem; return; }
+  if (!m.isNew && m.price !== draft.price && !window.confirm(`Đổi giá "${draft.name}" từ ${money(m.price)} thành ${money(draft.price)}? Bill đã bán giữ giá cũ.`)) return;
+  $("#menu-edit-save").disabled = true;
+  try {
+    const now = Date.now();
+    const data = { id: m.id, categoryId: draft.categoryId, name: draft.name, price: draft.price, sortOrder: Number(m.sortOrder || 0), active: draft.active, productCode: m.productCode || "", description: m.description || "", updatedAt: now, editedBy: `WEB:${myName()}` };
+    const batch = writeBatch(db);
+    if (menuEdit.photo) {
+      const p = menuEdit.photo;
+      batch.set(doc(db, ...root, "media", `menu_${m.id}`), { mediaId: `menu_${m.id}`, entityType: "menu", entityId: m.id, encoding: "jpeg-base64-v1", payload: p.payload, sha256: p.sha, sourceSha256: p.sha, bytes: p.bytes, version: now, updatedAt: now, source: "WEB" });
+      batch.set(doc(db, ...root, "menuThumbs", `menu_${m.id}`), { id: `menu_${m.id}`, entityType: "menu", entityId: m.id, sourceSha256: p.sha, thumb: p.thumb, bytes: Math.round(p.thumb.length * 0.75), updatedAt: now, source: "WEB" });
+      data.imageSha = p.sha;
+    }
+    batch.set(doc(db, ...root, "menu", m.id), data, { merge: true });
+    await bumpMenuVersion(batch);
+    await batch.commit();
+    const local = state.menuItems.find((x) => x.id === m.id);
+    if (local) Object.assign(local, data); else state.menuItems.push(data);
+    if (menuEdit.photo) { cachedThumbs()[`menu_${m.id}`] = { thumb: menuEdit.photo.thumb, sha: menuEdit.photo.sha, updatedAt: now }; try { usageStore?.setItem(THUMB_CACHE, JSON.stringify({ at: Date.now(), map: cachedThumbs() })); menuView.cachedAt = Date.now(); } catch { /* bỏ qua */ } }
+    $("#menu-edit-dialog").close();
+    renderMenuView();
+    flashNote(`Đã lưu "${draft.name}". Máy POS nhận ở lần đồng bộ tới.`);
+  } catch (error) { $("#menu-edit-error").textContent = `Chưa lưu được: ${error.message || error}`; }
+  $("#menu-edit-save").disabled = false;
+});
 /* ---------- Bảng mức dùng Firebase (Tài khoản) ---------- */
 async function loadUsage() {
   if (!state.user || !state.role) return;

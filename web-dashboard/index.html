@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20261017-07" />
+    <link rel="stylesheet" href="styles.css?v=20261017-08" />
     <title>0210 · Manager</title>
   </head>
   <body>
@@ -17,7 +17,7 @@
         <p class="eyebrow">0210 · BREAKFAST · COFFEE · DRINKS</p>
         <h1 id="login-title">Manager realtime</h1>
         <p class="muted">Theo dõi quán và nhập phiếu tài chính từ xa.</p>
-        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.17.07 · Chốt sổ chỉ trên web</p>
+        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.17.08 · Sửa, thêm món và ảnh trên web</p>
         <p class="muted">Đăng nhập tài khoản quán một lần trên mỗi máy, sau đó mỗi người vào bằng PIN riêng.</p>
         <label>Email tài khoản quán<input id="email" type="email" autocomplete="username" inputmode="email" /></label>
         <label>Mật khẩu<input id="password" type="password" autocomplete="current-password" /></label>
@@ -47,7 +47,7 @@
           <div class="heading-actions"><button id="refresh-dashboard" class="btn">Làm mới</button><button id="request-sync" class="btn" title="Yêu cầu máy POS ở quán đồng bộ ngay">Yêu cầu đồng bộ</button><button id="switch-person" class="btn">Đổi người</button><button id="logout-button" class="btn ghost">Đăng xuất</button></div>
         </header>
 
-        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><section id="my-alerts" class="my-alerts" aria-live="polite" hidden></section><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.17.07 · Chốt sổ chỉ trên web</p>
+        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><section id="my-alerts" class="my-alerts" aria-live="polite" hidden></section><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.17.08 · Sửa, thêm món và ảnh trên web</p>
 
         <nav class="tabbar" id="tabbar" aria-label="Các trang">
           <a href="#ban" data-tab="ban">Bàn</a>
@@ -393,6 +393,19 @@
       </article>
     </dialog>
 
+    <dialog id="menu-edit-dialog">
+      <form id="menu-edit-form" method="dialog">
+        <div class="dialog-header"><div><p class="eyebrow">MENU</p><h2 id="menu-edit-title">Sửa món</h2></div><button id="menu-edit-close" type="button" class="text-button">Đóng</button></div>
+        <div class="menu-edit-photo"><img id="menu-edit-img" alt="" hidden /><span id="menu-edit-noimg">Chưa có ảnh</span><label class="btn">📷 Chọn / chụp ảnh<input id="menu-edit-file" type="file" accept="image/*" hidden /></label></div>
+        <label>Tên món<input id="menu-edit-name" maxlength="60" required /></label>
+        <div class="two-col"><label>Giá (đ)<input id="menu-edit-price" type="number" inputmode="numeric" min="0" step="500" required /></label><label>Mã món<input id="menu-edit-code" readonly /></label></div>
+        <label>Nhóm<select id="menu-edit-cat"></select></label>
+        <label class="inline-check"><input id="menu-edit-active" type="checkbox" /> Đang bán (bỏ chọn = tạm ngừng / hết món)</label>
+        <p class="muted">Lưu xong máy POS tự nhận menu mới ở lần đồng bộ kế tiếp (app 167+). Bill cũ giữ nguyên tên và giá lúc bán.</p>
+        <p id="menu-edit-error" class="error" role="alert"></p>
+        <button id="menu-edit-save" type="submit" class="btn primary">Lưu món</button>
+      </form>
+    </dialog>
     <dialog id="recipe-dialog">
       <article>
         <div class="dialog-header"><div><p class="eyebrow">CÔNG THỨC</p><h2 id="recipe-title"></h2></div><button id="close-recipe" type="button" class="text-button">Đóng</button></div>
@@ -561,7 +574,7 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261017-07"></script>
+    <script type="module" src="app.js?v=20261017-08"></script>
     <script>
       // Trang không chạy được (thường do trình duyệt còn giữ file cũ): báo rõ thay vì để nút đăng nhập "chết".
       setTimeout(function () {

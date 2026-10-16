@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20261016-12" />
+    <link rel="stylesheet" href="styles.css?v=20261016-13" />
     <title>0210 · Manager</title>
   </head>
   <body>
@@ -17,7 +17,7 @@
         <p class="eyebrow">0210 · BREAKFAST · COFFEE · DRINKS</p>
         <h1 id="login-title">Manager realtime</h1>
         <p class="muted">Theo dõi quán và nhập phiếu tài chính từ xa.</p>
-        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.16.12 · Loại chi từng dòng, QR gọn</p>
+        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.16.13 · Lịch sử bill đủ + bộ lọc</p>
         <p class="muted">Đăng nhập tài khoản quán một lần trên mỗi máy, sau đó mỗi người vào bằng PIN riêng.</p>
         <label>Email tài khoản quán<input id="email" type="email" autocomplete="username" inputmode="email" /></label>
         <label>Mật khẩu<input id="password" type="password" autocomplete="current-password" /></label>
@@ -47,7 +47,7 @@
           <div class="heading-actions"><button id="refresh-dashboard" class="btn">Làm mới</button><button id="request-sync" class="btn" title="Yêu cầu máy POS ở quán đồng bộ ngay">Yêu cầu đồng bộ</button><button id="switch-person" class="btn">Đổi người</button><button id="logout-button" class="btn ghost">Đăng xuất</button></div>
         </header>
 
-        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><section id="my-alerts" class="my-alerts" aria-live="polite" hidden></section><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.16.12 · Loại chi từng dòng, QR gọn</p>
+        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><section id="my-alerts" class="my-alerts" aria-live="polite" hidden></section><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.16.13 · Lịch sử bill đủ + bộ lọc</p>
 
         <nav class="tabbar" id="tabbar" aria-label="Các trang">
           <a href="#ban" data-tab="ban">Bàn</a>
@@ -108,11 +108,19 @@
 
         <div class="page" data-page="bill" hidden>
         <section class="section-heading compact">
-          <div><p class="eyebrow">LỊCH SỬ BILL</p><h2>Bill đã thanh toán trong ngày</h2></div>
+          <div><p class="eyebrow">LỊCH SỬ BILL</p><h2>Tất cả bill trong ngày</h2></div>
         </section>
+        <p class="muted">Gồm cả trả trước, trả sau, tiền mặt, chuyển khoản và bill đã hoàn tiền. Bill tính theo ngày mở bill.</p>
         <div class="filter-row" id="bill-history-days">
           <button data-history-day="today" class="filter active">Hôm nay</button>
           <button data-history-day="yesterday" class="filter">Hôm qua</button>
+          <label class="inline-date">Ngày<input id="bill-history-date" type="date" /></label>
+        </div>
+        <div class="panel bill-filters">
+          <div class="field-row"><label for="bill-filter-flow">Hình thức</label><select id="bill-filter-flow"><option value="ALL">Tất cả</option><option value="prepaid">Trả trước</option><option value="postpaid">Trả sau</option></select></div>
+          <div class="field-row"><label for="bill-filter-method">Thanh toán</label><select id="bill-filter-method"><option value="ALL">Tất cả</option><option value="CASH">Tiền mặt</option><option value="TRANSFER">Chuyển khoản</option><option value="UNKNOWN">Chưa rõ</option></select></div>
+          <div class="field-row"><label for="bill-filter-refund">Hoàn tiền</label><select id="bill-filter-refund"><option value="ALL">Tất cả</option><option value="NONE">Không hoàn</option><option value="REFUNDED">Đã hoàn</option></select></div>
+          <p id="bill-filter-note" class="panel-total"></p>
         </div>
         <p id="bill-history-notice" class="sales-notice" role="status"></p>
         <section id="bill-history-summary" class="summary-grid" aria-label="Tổng kết bill trong ngày"></section>
@@ -488,6 +496,6 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261016-12"></script>
+    <script type="module" src="app.js?v=20261016-13"></script>
   </body>
 </html>

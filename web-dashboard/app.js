@@ -39,7 +39,7 @@ import { otherCostRows } from "./other-costs.js?v=20261016-2";
 import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-2";
 import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261014-9";
 import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261014-6";
-import { buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261014-4";
+import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261014-4";
 import { aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261013-2";
 
 const firebaseConfig = {
@@ -405,7 +405,8 @@ async function loadDailyDocs() {
 }
 
 /* ---------- Lịch sử bill trong ngày (chỉ Hôm nay / Hôm qua) ---------- */
-const historyKey = (which) => keyOfTime(which === "yesterday" ? Date.now() - 86400000 : Date.now());
+const historyKey = (which) => (/^\d{4}-\d{2}-\d{2}$/.test(String(which)) ? which : keyOfTime(which === "yesterday" ? Date.now() - 86400000 : Date.now()));
+const billFilter = () => ({ flow: $("#bill-filter-flow").value, method: $("#bill-filter-method").value, refund: $("#bill-filter-refund").value });
 
 async function loadBillHistory(which, force = false) {
   const key = historyKey(which);
@@ -422,7 +423,7 @@ async function loadBillHistory(which, force = false) {
       q("bills", "openedAt", range.from, range.to, 400),
       q("sessions", "openedAt", range.from - 86400000, range.to, 600),
     ]);
-    const billIds = rows(billSnap).filter((b) => b.status === "PAID").map((b) => String(b.id));
+    const billIds = rows(billSnap).filter((b) => b.status === "PAID" || b.status === "REFUNDED").map((b) => String(b.id));
     const paySnaps = await Promise.all(chunk(billIds, 30).map((ids) => getDocs(query(collection(db, ...root, "payments"), where("billId", "in", ids)))));
     const paySnap = { docs: paySnaps.flatMap((x) => x.docs) };
     if (!state.historyTables) state.historyTables = rows(await getDocs(collection(db, ...root, "tableStatus")));
@@ -448,16 +449,22 @@ function renderBillHistory() {
   const list = $("#bill-history-list");
   if (!list) return;
   notice.textContent = state.historyLoading ? "Đang đọc bill…" : state.historyError ? `Không đọc được lịch sử bill: ${state.historyError}` : "";
-  const data = billHistoryRows();
+  const all = billHistoryRows();
+  const data = all ? filterBillRows(all, billFilter()) : null;
+  const filtered = all && data.length !== all.length;
+  $("#bill-filter-note").textContent = all ? (filtered ? `Đang lọc: ${data.length}/${all.length} bill` : `${all.length} bill`) : "";
   if (!data) { summaryHost.replaceChildren(); list.innerHTML = state.historyLoading || state.historyError ? "" : '<p class="muted empty-state">Bấm Làm mới để đọc bill.</p>'; return; }
-  const s = summarizeBillRows(data);
+  // Doanh thu / tiền mặt / CK chỉ tính bill không hoàn (khớp doanh thu trên máy POS); bill đã hoàn hiện riêng.
+  const s = summarizeBillRows(data.filter((r) => !r.refund));
+  const refunded = data.filter((r) => r.refund);
   const tiles = [
-    ["Số bill", String(s.count)],
+    ["Số bill", refunded.length ? `${s.count} (+${refunded.length} đã hoàn)` : String(s.count)],
     ["Doanh thu", money(s.total)],
     ["Tiền mặt", money(s.cash)],
     ["Chuyển khoản", money(s.transfer)],
   ];
-  if (s.refundedCount) tiles.push([`Hoàn tiền (${s.refundedCount} bill)`, `−${money(s.refunded)}`], ["Thực thu sau hoàn", money(s.net)]);
+  if (refunded.length) tiles.push([`Đã hoàn (${refunded.length} bill)`, money(refunded.reduce((t, r) => t + r.refund.amount, 0))]);
+  if (s.missingPayment + refunded.filter((r) => r.paymentMissing).length) s.missingPayment += refunded.filter((r) => r.paymentMissing).length;
   summaryHost.replaceChildren(...tiles.map(([label, value]) => {
     const node = $("#metric-template").content.firstElementChild.cloneNode(true);
     node.querySelector("p").textContent = label;
@@ -468,10 +475,10 @@ function renderBillHistory() {
   list.innerHTML = data.length
     ? data.map((r) => {
       const method = r.paymentMissing ? "Chưa rõ" : methodLabel(r.method);
-      const tags = `${r.flow === "prepaid" ? '<span class="bill-tag">Trả trước</span>' : ""}${r.refund ? `<span class="bill-tag warn">${r.refund.status === "FROZEN" ? "Hoàn CK · đóng băng" : "Đã hoàn"}</span>` : ""}`;
+      const tags = `${r.flow === "prepaid" ? '<span class="bill-tag">Trả trước</span>' : '<span class="bill-tag postpaid">Trả sau</span>'}${r.refund ? `<span class="bill-tag warn">${r.refund.status === "FROZEN" ? "Hoàn CK · đóng băng" : "Đã hoàn"}</span>` : ""}`;
       return `<button type="button" class="bill-row" data-bill-id="${escapeHtml(r.id)}"><time>${timeLabel(r.closedAt)}</time><span class="bill-main"><strong>${escapeHtml(r.tableName)} · #${escapeHtml(r.billNo)}${tags}</strong><small>${escapeHtml(method)}${r.reference ? ` · ${escapeHtml(r.reference)}` : ""}</small></span><span class="bill-amount">${money(r.total)}<small>Xem chi tiết</small></span></button>`;
     }).join("")
-    : '<p class="muted empty-state">Chưa có bill đã thanh toán trong ngày này.</p>';
+    : `<p class="muted empty-state">${filtered || (all && all.length) ? "Không có bill nào khớp bộ lọc." : "Chưa có bill đã thanh toán trong ngày này."}</p>`;
 }
 
 async function openBillDetail(billId) {
@@ -1090,9 +1097,21 @@ $("#bill-history-days").addEventListener("click", (event) => {
   if (!button) return;
   state.historyDay = button.dataset.historyDay === "yesterday" ? "yesterday" : "today";
   $("#bill-history-days").querySelectorAll(".filter").forEach((b) => b.classList.toggle("active", b === button));
+  $("#bill-history-date").value = historyKey(state.historyDay);
   renderBillHistory();
   loadBillHistory(state.historyDay);
 });
+$("#bill-history-date").addEventListener("change", (event) => {
+  const key = event.target.value;
+  if (!dayRange(key)) return;
+  state.historyDay = key;
+  $("#bill-history-days").querySelectorAll(".filter").forEach((b) => b.classList.toggle("active", historyKey(b.dataset.historyDay) === key));
+  renderBillHistory();
+  loadBillHistory(key);
+});
+["#bill-filter-flow", "#bill-filter-method", "#bill-filter-refund"].forEach((id) => $(id).addEventListener("change", renderBillHistory));
+$("#bill-history-date").value = historyKey("today");
+$("#bill-history-date").max = historyKey("today");
 $("#bill-history-list").addEventListener("click", (event) => {
   const button = event.target.closest("[data-bill-id]");
   if (button) openBillDetail(button.dataset.billId);

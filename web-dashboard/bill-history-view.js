@@ -41,12 +41,13 @@ export const buildBillRows = ({ bills, payments, sessions, tables, refunds, rang
   const refundByBill = new Map();
   (Array.isArray(refunds) ? refunds : []).forEach((r) => { if (r.billId) refundByBill.set(String(r.billId), r); });
   const rows = (Array.isArray(bills) ? bills : [])
-    .filter((b) => b.status === "PAID" && Number(b.closedAt || 0) > 0 && Number(b.openedAt || 0) >= range.from && Number(b.openedAt || 0) < range.to)
+    .filter((b) => (b.status === "PAID" || b.status === "REFUNDED") && Number(b.closedAt || 0) > 0 && Number(b.openedAt || 0) >= range.from && Number(b.openedAt || 0) < range.to)
     .map((b) => {
       const payment = paymentByBill.get(String(b.id)) || null;
       const session = sessionMap.get(String(b.sessionId)) || null;
       const table = session ? tableMap.get(String(session.tableId)) : null;
-      const refund = refundByBill.get(String(b.id)) || null;
+      // Bill đã hoàn mà phiếu hoàn ngoài khoảng đọc: vẫn đánh dấu đã hoàn đủ tiền bill để không lẫn vào thực thu.
+      const refund = refundByBill.get(String(b.id)) || (b.status === "REFUNDED" ? { amount: Number(b.total || 0), status: "DONE", reason: "", createdAt: 0, method: "" } : null);
       return {
         id: String(b.id),
         billNo: String(b.billNo ?? ""),
@@ -134,3 +135,9 @@ export const chunk = (list, size = 30) => {
   for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
   return out;
 };
+
+/** Bộ lọc danh sách bill: hình thức (trả trước / trả sau), cách thanh toán (tiền mặt / CK), đã hoàn. "ALL" = không lọc. */
+export const filterBillRows = (rows, { flow = "ALL", method = "ALL", refund = "ALL" } = {}) => (Array.isArray(rows) ? rows : []).filter((r) =>
+  (flow === "ALL" || (flow === "postpaid" ? r.flow !== "prepaid" : r.flow === flow))
+  && (method === "ALL" || (method === "UNKNOWN" ? r.paymentMissing || !["CASH", "TRANSFER"].includes(r.method) : r.method === method))
+  && (refund === "ALL" || (refund === "REFUNDED" ? Boolean(r.refund) : !r.refund)));

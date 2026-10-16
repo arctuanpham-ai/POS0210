@@ -1,6 +1,6 @@
 // Hàm thuần: nhập hàng theo tháng so với doanh thu tháng, và xuất CSV/JSON cho phân tích AI.
 // Không đọc Firebase, không có DOM. Doanh thu thiếu thì tỷ lệ là null, không bao giờ là 0.
-import { MATERIAL_GROUPS, groupCodeOrNull, groupLabelOf, isSummaryReceipt } from "./expense-rules.js?v=20261017-01";
+import { MATERIAL_GROUPS, groupCodeOrNull, groupLabelOf, isSummaryReceipt } from "./expense-rules.js?v=20261017-02";
 
 const pad = (n) => String(n).padStart(2, "0");
 

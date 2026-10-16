@@ -19,29 +19,30 @@ import {
   setDoc as rawSetDoc,
   writeBatch as rawWriteBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261016-26";
-import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261016-26";
-import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261016-26";
-import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261016-26";
-import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261016-26";
-import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261016-26";
-import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261016-26";
-import { buildSimulation } from "./sim-data.js?v=20261016-26";
-import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261016-26";
-import { menuCsv } from "./menu-export.js?v=20261016-26";
-import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-26";
-import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-26";
-import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261016-26";
-import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261016-26";
-import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261016-26";
-import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261016-26";
-import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261016-26";
-import { otherCostRows } from "./other-costs.js?v=20261016-26";
-import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-26";
-import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261016-26";
-import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261016-26";
-import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261016-26";
-import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261016-26";
+import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261016-27";
+import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261016-27";
+import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261016-27";
+import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261016-27";
+import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261016-27";
+import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261016-27";
+import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261016-27";
+import { buildSimulation } from "./sim-data.js?v=20261016-27";
+import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261016-27";
+import { menuCsv } from "./menu-export.js?v=20261016-27";
+import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-27";
+import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-27";
+import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261016-27";
+import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261016-27";
+import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261016-27";
+import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261016-27";
+import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261016-27";
+import { otherCostRows } from "./other-costs.js?v=20261016-27";
+import { paybackStatus } from "./payback.js?v=20261016-27";
+import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-27";
+import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261016-27";
+import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261016-27";
+import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261016-27";
+import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261016-27";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",
@@ -63,13 +64,18 @@ const state = {
   bills: [], purchases: [], expenseReceipts: [], purchaseItems: [], movements: [], costCodes: [],
   purchaseCategories: [], profitPartners: [], assetCategories: [], suppliers: [],
   unsubs: [], paymentFlowDoc: null, refunds: [], frozenRefundDocs: [], flowError: "", dailyDocs: {}, dailyError: "", salesLoaded: false, salesDays: 7, salesPeriod: "7d", itemDay: "", dailyLoadedFrom: null, itemMode: "combined", period: "today", customFrom: null, customTo: null,
-  transactionKind: "ALL", payerFilter: "ALL", user: null,
+  transactionKind: "ALL", payerFilter: "ALL", user: null, investment: null, closingsAll: [], showInitial: false,
   expenseRules: [], rulesError: "", simulation: null, demo: null, reimbBatches: [], payees: [], role: null, me: null, members: [], closedMonths: [], closedLoaded: false, openReceipts: [], reimbLoaded: false, reimbPerson: "", otherPurchases: [], stockCounts: [], countsLoaded: false, menuItems: [], menuCats: [], recipes: {}, recipesLoaded: false, recipeError: "", monthlyDocs: {}, monthlyError: "", reportFrom: 0, receiptsNote: "", detailCutoff: null, receiptsFrom: 0, summaryBlocks: [], historyDay: "today", historyDocs: {}, historyTables: null, historyError: "", historyLoading: false, billDetailCache: {},
 };
 let expenseDraft = null;
 let editingReceipt = null;
 // Chỉ phiếu đã duyệt mới tính vào chi phí (phiếu chờ duyệt / bị trả lại chưa "pass").
-const expenseRows = () => state.expenseReceipts.filter(countsAsCost).map((receipt) => ({
+// Ghi chép đầu tư ban đầu (phiếu lẻ trước khai trương) chỉ để tham khảo: không cộng vào chi phí, đầu tư trong kỳ hay báo cáo.
+// Vốn ban đầu dùng MỘT con số chủ quán nhập ở "Vốn đầu tư ban đầu & hoàn vốn" (config/investment).
+const receiptCategory = (r) => r?.expenseCategory || r?.items?.[0]?.expenseGroup || "";
+const isInitialReceipt = (r) => INITIAL_CATEGORIES.has(receiptCategory(r));
+const costReceipts = () => state.expenseReceipts.filter(countsAsCost).filter((r) => !isInitialReceipt(r));
+const expenseRows = () => costReceipts().map((receipt) => ({
   id: receipt.id,
   status: receipt.status || "ACTIVE",
   purchasedAt: Number(receipt.purchaseDate || 0),
@@ -177,9 +183,7 @@ function renderCumulativeSummary() {
     ["Doanh thu tháng hiện tại", money(dashboard.monthRevenue)],
     ["Lợi nhuận vận hành", dashboard.operatingProfit == null ? "Chưa có" : money(dashboard.operatingProfit)],
     ["Tiền cuối kỳ ước tính", money(dashboard.closingCash)],
-    ["Tổng vốn đầu tư", money(dashboard.initialInvestment)],
-    ["Đã thu hồi vốn", money(dashboard.recoveredCapital)],
-    ["Tỷ lệ hoàn vốn", `${(Number(dashboard.paybackBasisPoints || 0) / 100).toLocaleString("vi-VN", { maximumFractionDigits: 1 })}%`],
+    ...(() => { const p = currentPayback(); return p.set ? [["Vốn đầu tư ban đầu", money(p.initial)], ["Đã thu hồi (luỹ kế)", money(p.recovered)], ["Tỷ lệ hoàn vốn", `${p.percent.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}%`]] : [["Vốn đầu tư ban đầu", "Chưa nhập"], ["Đã thu hồi (luỹ kế)", money(p.recovered)], ["Tỷ lệ hoàn vốn", "—"]]; })(),
   ];
   const host = $("#summary");
   host.replaceChildren(...cards.map(([label, value]) => {
@@ -603,7 +607,7 @@ function renderFinanceMetadata() {
   state.payerFilter = payerSelect.value;
 }
 
-const REVIEW_TAG = { PENDING: ["Chờ duyệt · chưa tính", "warn"], REJECTED: ["Bị trả lại · chưa tính", "warn"] };
+const REVIEW_TAG = { PENDING: ["Chờ duyệt · chưa tính", "warn"], REJECTED: ["Bị trả lại · chưa tính", "warn"], INITIAL: ["Ghi chép ban đầu · không tính", "warn"] };
 const FUND_SHORT = { PERSONAL: "tiền cá nhân", SHOP_CASH: "quỹ quán", SHOP_BANK: "quỹ quán" };
 function renderTransactions() {
   const range = rangeForPeriod();
@@ -611,6 +615,7 @@ function renderTransactions() {
   // Mọi phiếu còn hiệu lực trong kỳ, kể cả chờ duyệt / bị trả lại (gắn nhãn, KHÔNG cộng vào tổng).
   const purchases = state.expenseReceipts
     .filter((r) => reviewStatus(r) !== "NONE" && inRange(Number(r.purchaseDate || 0), range))
+    .filter((r) => !isInitialReceipt(r))
     .filter((r) => matchesPayer(state.payerFilter, r.enteredByName || ""))
     .map((r) => {
       const items = (r.items || []).map((i) => `${i.materialName}${i.qty ? ` ${Number(i.qty).toLocaleString("vi-VN")} ${i.unit || ""}` : ""}`.trim());
@@ -633,14 +638,20 @@ function renderTransactions() {
       const detail = paid.length ? `Gồm ${paid.length} phiếu: ${paid.map((r) => `${receiptCode(r)} ${money(r.total)} (mua ${dateTime(r.purchaseDate).split(" ").pop()}${KIND_SHORT[kindOf(r)] && kindOf(r) !== "MATERIAL" ? ` · ${KIND_SHORT[kindOf(r)]}` : ""}${inRange(Number(r.purchaseDate || 0), range) ? "" : " · ngoài kỳ đang xem"})`).join("; ")}` : m.note || "";
       return { kind: "MOVEMENT", at: Number(m.occurredAt || 0), id: m.id, amount: Number(m.amount || 0), review: "APPROVED", title: MOVEMENT_LABELS[m.type] || m.type || "Dòng tiền", person: m.counterpartyName || "", note: detail, outside, reimb: m.type === "PAYER_REIMBURSEMENT", search: normalizeMaterial([m.note, m.counterpartyName, ...paid.map(receiptCode)].join(" ")) };
     });
-  let rows0 = [...purchases, ...others, ...movements].sort((a, b) => b.at - a.at);
+  const ini = initialRecords();
+  const iniRows = [
+    ...ini.receipts.filter((r) => inRange(Number(r.purchaseDate || 0), range) && matchesPayer(state.payerFilter, r.enteredByName || "")).map((r) => ({ kind: "EXPENSE", at: Number(r.purchaseDate || 0), id: r.id, amount: Number(r.total || 0), review: "INITIAL", title: `${receiptCode(r)} · ${EXPENSE_LABELS[receiptCategory(r)] || "Đầu tư ban đầu"}`, person: r.enteredByName || "", fund: FUND_SHORT[r.fundSource] || "", note: (r.items || []).map((i) => i.materialName).join(", "), search: normalizeMaterial([receiptCode(r), r.enteredByName, r.note, ...(r.items || []).map((i) => i.materialName)].join(" ")) })),
+    ...ini.others.filter((c) => inRange(c.at, range) && matchesPayer(state.payerFilter, c.payer)).map((c) => ({ kind: "EXPENSE", at: c.at, id: c.id, amount: c.amount, review: "INITIAL", title: EXPENSE_LABELS[c.category] || c.category, person: c.payer, fund: c.payer ? "tiền cá nhân" : "quỹ quán", note: [c.supplierName, c.note].filter(Boolean).join(" · "), readonly: true, search: normalizeMaterial([c.note, c.supplierName, c.payer].join(" ")) })),
+  ];
+  const iniTotal = iniRows.reduce((t, r) => t + r.amount, 0);
+  let rows0 = [...purchases, ...others, ...movements, ...(state.showInitial ? iniRows : [])].sort((a, b) => b.at - a.at);
   const reimbRows = movements.filter((m) => m.reimb);
   const outsideAll = reimbRows.flatMap((m) => m.outside);
   const reimbHint = reimbRows.length ? `<p class="muted">Hoàn ứng trong kỳ: ${money(reimbRows.reduce((t, m) => t + m.amount, 0))}${outsideAll.length ? ` · trong đó ${outsideAll.length} phiếu mua ngày khác (${money(outsideAll.reduce((t, r) => t + Number(r.total || 0), 0))}: ${outsideAll.map((r) => `${receiptCode(r)} mua ${dateTime(r.purchaseDate).split(" ").pop()}`).join(", ")}) không hiện trong danh sách chi của kỳ này vì danh sách tính theo <b>ngày mua</b>` : ""}. Bấm <b>Thu / vốn / hoàn ứng</b> để xem chi tiết.</p>` : "";
   if (state.transactionKind !== "ALL") rows0 = rows0.filter((r) => r.kind === state.transactionKind);
   if (term) rows0 = rows0.filter((r) => r.search.includes(term));
   // Tổng theo người chi (chỉ phiếu chi đã duyệt), để xem ai chi bao nhiêu trong kỳ.
-  const spend = rows0.filter((r) => r.kind === "EXPENSE");
+  const spend = rows0.filter((r) => r.kind === "EXPENSE" && r.review !== "INITIAL");
   const byPerson = new Map();
   for (const r of spend) {
     const key = r.person || "Chưa rõ";
@@ -654,6 +665,7 @@ function renderTransactions() {
   const pendingTotal = people.reduce((t, x) => t + x.pending, 0);
   $("#payer-breakdown").innerHTML = spend.length ? `<p class="reimb-sub">${spend.length} phiếu chi · đã duyệt ${money(approvedTotal)}${pendingTotal ? ` · chờ duyệt / trả lại ${money(pendingTotal)} (chưa tính)` : ""}</p>${people.map((x) => `<button type="button" class="paylist-row" data-pick-payer="${escapeHtml(x.name)}"><span><strong>${escapeHtml(x.name)}</strong> · ${x.count} phiếu</span><span><b>${money(x.total)}</b>${x.pending ? `<small class="warn-text"> +${money(x.pending)} chờ</small>` : ""}</span></button>`).join("")}` : "";
   if (reimbHint) $("#payer-breakdown").insertAdjacentHTML("beforeend", reimbHint);
+  if (iniRows.length) $("#payer-breakdown").insertAdjacentHTML("beforeend", `<p class="muted">${iniRows.length} ghi chép đầu tư ban đầu cũ · ${money(iniTotal)} · <b>không tính</b> vào chi phí hay đầu tư (vốn ban đầu dùng một con số ở mục Vốn đầu tư ban đầu & hoàn vốn). <button type="button" class="text-button" data-toggle-initial>${state.showInitial ? "Ẩn" : "Xem"}</button></p>`);
   const host = $("#transactions");
   if (!rows0.length) {
     host.innerHTML = '<p class="muted empty-state">Không có phiếu nào khớp kỳ / người chi / từ khoá đã chọn.</p>';
@@ -672,6 +684,7 @@ function renderTransactions() {
 }
 $("#transaction-search").addEventListener("input", renderTransactions);
 $("#payer-breakdown").addEventListener("click", (e) => {
+  if (e.target.closest("[data-toggle-initial]")) { state.showInitial = !state.showInitial; renderTransactions(); return; }
   const name = e.target.closest("[data-pick-payer]")?.dataset.pickPayer;
   if (!name) return;
   const sel = $("#payer-filter");
@@ -1018,6 +1031,7 @@ async function loadClosedMonths() {
 async function refreshDashboard() {
   if (!state.user || !state.role) return;
   await loadClosedMonths();
+  loadPayback();
   if (state.simulation) { $("#sync-status").textContent = "Đang ở chế độ mô phỏng. Tắt mô phỏng để đọc dữ liệu thật."; return; }
   if (state.demo) { $("#sync-status").textContent = "Đang xem dữ liệu DEMO. Tắt xem demo để đọc dữ liệu thật."; return; }
   $("#sync-status").textContent = "Đang đọc snapshot…";
@@ -1638,7 +1652,7 @@ const currentMonthReport = () => {
   const keys = lastMonthKeys(MONTHLY_REPORT_MONTHS);
   const current = keys[keys.length - 1];
   const fallback = state.dashboard?.monthRevenue;
-  return buildMonthlyReport({ receipts: state.expenseReceipts.filter(countsAsCost), monthlyDocs: state.monthlyDocs, monthKeys: keys, currentMonthKey: current, revenueFallback: fallback === undefined ? null : fallback, otherCosts: otherCosts() });
+  return buildMonthlyReport({ receipts: costReceipts(), monthlyDocs: state.monthlyDocs, monthKeys: keys, currentMonthKey: current, revenueFallback: fallback === undefined ? null : fallback, otherCosts: otherCosts() });
 };
 function renderMonthlyReport() {
   const target = $("#monthly-report");
@@ -1925,9 +1939,17 @@ async function loadOtherPurchases() {
   } catch { state.otherPurchases = []; }
 }
 /** Chi phí ngoài phiếu mua hàng; khi xem demo/mô phỏng thì không trộn dữ liệu thật vào. */
-function otherCosts() {
+function allOtherCosts() {
   if (state.demo || state.simulation) return [];
   return otherCostRows(state.otherPurchases, new Set(state.expenseReceipts.map((r) => String(r.id))));
+}
+function otherCosts() { return allOtherCosts().filter((c) => !INITIAL_CATEGORIES.has(c.category)); }
+/** Ghi chép đầu tư ban đầu cũ: hiện khi bấm xem, gắn nhãn "không tính". */
+function initialRecords() {
+  return {
+    receipts: state.expenseReceipts.filter((r) => reviewStatus(r) !== "NONE" && isInitialReceipt(r)),
+    others: allOtherCosts().filter((c) => INITIAL_CATEGORIES.has(c.category)),
+  };
 }
 
 /* ---------- Kiểm đếm tồn kho hằng tuần (stockCounts; khi xem demo dùng demoStockCounts) ---------- */
@@ -2548,6 +2570,53 @@ $("#members-zone").addEventListener("click", async (e) => {
 });
 
 
+
+/* ---------- Vốn đầu tư ban đầu (một con số, config/investment) & hoàn vốn ---------- */
+async function loadPayback() {
+  if (state.demo || state.simulation) return;
+  try { const c = await getDoc(doc(db, ...root, "config", "investment")); state.investment = c.exists() ? c.data() : null; } catch { state.investment = null; }
+  try { state.closingsAll = rows(await getDocs(collection(db, ...root, "fundClosings"))); } catch { state.closingsAll = []; }
+  renderPayback(); renderCumulativeSummary();
+}
+function currentPayback() {
+  const report = currentMonthReport();
+  const cur = report[report.length - 1];
+  const net = cur && cur.revenue !== null ? cur.revenue - cur.purchases - cur.otherExpenses : null;
+  return paybackStatus({ initial: state.investment?.amount, closings: state.closingsAll.map((c) => ({ monthKey: c.monthKey || c.id, net: c.net })), current: net === null ? null : { monthKey: cur.monthKey, net }, openingMonth: state.investment?.openingMonth || "" });
+}
+function renderPayback() {
+  const host = $("#payback-view");
+  if (!host) return;
+  const p = currentPayback();
+  const inv = state.investment || {};
+  const owner = state.role === ROLE_OWNER;
+  ["#invest-amount", "#invest-opening", "#invest-note"].forEach((id) => { $(id).disabled = !owner; });
+  $("#invest-save").hidden = !owner;
+  if (document.activeElement?.id?.startsWith("invest-") !== true) {
+    $("#invest-amount").value = inv.amount || ""; $("#invest-opening").value = inv.openingMonth || ""; $("#invest-note").value = inv.note || "";
+  }
+  $("#invest-note-line").textContent = inv.amount ? `Đã lưu ${money(inv.amount)}${inv.setBy ? ` · ${inv.setBy}` : ""}${inv.setAt ? ` · ${dateTime(inv.setAt)}` : ""}${owner ? "" : " · chỉ chủ quán sửa"}` : owner ? "Chưa nhập vốn ban đầu." : "Chủ quán chưa nhập vốn ban đầu.";
+  $("#payback-summary").textContent = p.set ? `· đã thu hồi ${p.percent.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}%` : "· chưa nhập";
+  const row = (a, b, cls = "") => `<tr class="${cls}"><td>${a}</td><td>${b}</td></tr>`;
+  host.innerHTML = `<table class="fund-table"><tbody>
+    ${row("Vốn đầu tư ban đầu", p.set ? money(p.initial) : "chưa nhập", "total")}
+    ${p.months.map((m) => row(`${monthLabel(m.monthKey)}${m.saved ? "" : " · tạm tính"}`, money(m.net), "sub")).join("")}
+    ${row("Đã thu hồi (luỹ kế)", money(p.recovered), "total")}
+    ${p.set ? row("Còn phải thu hồi", money(p.remaining), "total") : ""}
+    ${p.set ? row("Tiến độ", `${p.percent.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}%`) : ""}
+    ${p.set && p.monthsLeft !== null ? row("Ước tính còn", p.monthsLeft === 0 ? "đã hoàn vốn" : `~${Math.ceil(p.monthsLeft)} tháng (theo TB ${money(Math.round(p.avg))}/tháng)`) : ""}
+  </tbody></table>${p.months.some((m) => m.saved) ? "" : '<p class="muted">Chưa có tháng nào lưu đối soát: số đã thu hồi đang là tạm tính của tháng này. Cuối tháng lưu đối soát ở mục bên dưới để số được cố định.</p>'}`;
+}
+$("#payback-panel").addEventListener("toggle", (e) => { if (e.target.open) loadPayback(); });
+$("#invest-save").addEventListener("click", async () => {
+  if (state.role !== ROLE_OWNER) return;
+  if (state.demo || state.simulation) { $("#invest-note-line").textContent = "Đang xem demo / mô phỏng: tắt để lưu số thật."; return; }
+  const amount = Math.round(Number($("#invest-amount").value) || 0);
+  if (amount <= 0) { $("#invest-note-line").textContent = "Nhập số vốn lớn hơn 0."; return; }
+  const payload = { amount, openingMonth: $("#invest-opening").value || "", note: $("#invest-note").value.trim(), setBy: myName(), setAt: Date.now() };
+  try { await setDoc(doc(db, ...root, "config", "investment"), payload); state.investment = payload; $("#invest-amount").blur(); renderPayback(); renderCumulativeSummary(); flashNote("Đã lưu vốn đầu tư ban đầu."); }
+  catch (error) { $("#invest-note-line").textContent = `Chưa lưu được: ${error.message}`; }
+});
 /* ---------- Đối soát quỹ & chia tiền cổ đông theo tháng (fundClosings/{YYYY-MM}) ---------- */
 const fundState = { key: "", receipts: [], movements: [], others: [], saved: null, prevSaved: null, loading: false, error: "" };
 function fundMonthOptions() {
@@ -2636,7 +2705,7 @@ $("#fund-save").addEventListener("click", async () => {
   if (!canTreasure(state.role)) return;
   const { result: f } = currentFund();
   const payload = { monthKey: fundState.key, opening: f.opening, cashCounted: $("#fund-cash").value === "" ? null : Number($("#fund-cash").value), bankBalance: $("#fund-bank").value === "" ? null : Number($("#fund-bank").value), reserve: f.reserve, revenue: f.revenue, operating: f.operating, investment: f.investment, net: f.net, expected: f.expected, actual: f.actual, diff: f.diff, owedTotal: f.owedTotal, distributable: f.distributable, shares: f.shares, pendingCount: f.pending.count, savedBy: myName(), savedAt: Date.now() };
-  try { await setDoc(doc(db, ...root, "fundClosings", fundState.key), payload); fundState.saved = payload; renderFundMonth(); flashNote(`Đã lưu đối soát tháng ${Number(fundState.key.slice(5))}.`); }
+  try { await setDoc(doc(db, ...root, "fundClosings", fundState.key), payload); fundState.saved = payload; state.closingsAll = [...state.closingsAll.filter((c) => (c.monthKey || c.id) !== payload.monthKey), payload]; renderFundMonth(); renderPayback(); flashNote(`Đã lưu đối soát tháng ${Number(fundState.key.slice(5))}.`); }
   catch (error) { $("#fund-note").textContent = `Chưa lưu được: ${error.message}`; }
 });
 

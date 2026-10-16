@@ -19,28 +19,29 @@ import {
   setDoc as rawSetDoc,
   writeBatch as rawWriteBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261016-19";
-import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261016-19";
-import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261016-19";
-import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261016-19";
-import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261016-19";
-import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261016-19";
-import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261016-19";
-import { buildSimulation } from "./sim-data.js?v=20261016-19";
-import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261016-19";
-import { menuCsv } from "./menu-export.js?v=20261016-19";
-import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-19";
-import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-19";
-import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261016-19";
-import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261016-19";
-import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261016-19";
-import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261016-19";
-import { otherCostRows } from "./other-costs.js?v=20261016-19";
-import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-19";
-import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261016-19";
-import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261016-19";
-import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261016-19";
-import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261016-19";
+import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261016-20";
+import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261016-20";
+import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261016-20";
+import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261016-20";
+import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261016-20";
+import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261016-20";
+import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261016-20";
+import { buildSimulation } from "./sim-data.js?v=20261016-20";
+import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261016-20";
+import { menuCsv } from "./menu-export.js?v=20261016-20";
+import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-20";
+import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-20";
+import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261016-20";
+import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261016-20";
+import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261016-20";
+import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261016-20";
+import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261016-20";
+import { otherCostRows } from "./other-costs.js?v=20261016-20";
+import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-20";
+import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261016-20";
+import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261016-20";
+import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261016-20";
+import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261016-20";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",
@@ -67,7 +68,8 @@ const state = {
 };
 let expenseDraft = null;
 let editingReceipt = null;
-const expenseRows = () => state.expenseReceipts.map((receipt) => ({
+// Chỉ phiếu đã duyệt mới tính vào chi phí (phiếu chờ duyệt / bị trả lại chưa "pass").
+const expenseRows = () => state.expenseReceipts.filter(countsAsCost).map((receipt) => ({
   id: receipt.id,
   status: receipt.status || "ACTIVE",
   purchasedAt: Number(receipt.purchaseDate || 0),
@@ -864,7 +866,10 @@ async function saveExpenseReceipt(event) {
       // Tháng đã chốt chia cổ đông: ghi sổ vào tháng chưa chốt gần nhất, giữ ngày mua thật và mã phiếu theo ngày thật.
       ...(shift.shifted ? { purchaseDate: shift.ts, originalPurchaseDate: shift.original, note: withShiftNote(note, shift) } : {}) };
     const typed = part.kind === "MATERIAL" ? (() => { const { expenseCategory: _ec, ...rest } = withMeta; return rest; })() : { ...withMeta, expenseCategory: part.kind };
-    return withDemoFlags(withReimbursement(typed, original, now));
+    const reimbursed = withReimbursement(typed, original, now);
+    // Phiếu cần người khác duyệt mới tính vào chi phí; phiếu đã hoàn tiền giữ nguyên đã duyệt.
+    const done = ["PAID", "CONFIRMED"].includes(reimbursed.reimbursement?.status);
+    return withDemoFlags({ ...reimbursed, review: done ? "APPROVED" : initialReview(reimbursed.payerId || state.me?.id, people()), reviewReason: "" });
   });
   try {
     const batch = writeBatch(db);
@@ -1470,6 +1475,8 @@ async function saveSummaryBlocks(event) {
     const base = editingSummary ? { ...editingSummary } : { id: block.id, createdAt: now, source: "WEB_MANAGER" };
     const payload = withReimbursement({ ...base, purchaseDate, note: withShiftNote(block.place, shift), ...(shift.shifted ? { originalPurchaseDate: shift.original, code: base.code || receiptCode({ ...base, enteredByName: block.payer || myName(), purchaseDate: shift.original }) } : {}), enteredByUid: state.user.uid, enteredByName: block.payer || myName(), payerId: payerIdFor(block.payer || myName(), editingSummary), fundSource: $("#summary-fund").value,
       items, total, status: "ACTIVE", detailLevel: "SUMMARY", updatedAt: Math.max(now, Number(editingSummary?.updatedAt || 0) + 1), updatedByUid: state.user.uid }, editingSummary, now);
+    payload.review = ["PAID", "CONFIRMED"].includes(payload.reimbursement?.status) ? "APPROVED" : initialReview(payload.payerId || state.me?.id, people());
+    payload.reviewReason = "";
     try { await setDoc(doc(db, ...root, receiptCollection(), payload.id), withDemoFlags(payload)); replaceLocalReceipt(withDemoFlags(payload)); saved += 1; }
     catch (e) { failed.push({ block, message: e.message || String(e) }); }
   }
@@ -1584,7 +1591,7 @@ const currentMonthReport = () => {
   const keys = lastMonthKeys(MONTHLY_REPORT_MONTHS);
   const current = keys[keys.length - 1];
   const fallback = state.dashboard?.monthRevenue;
-  return buildMonthlyReport({ receipts: state.expenseReceipts, monthlyDocs: state.monthlyDocs, monthKeys: keys, currentMonthKey: current, revenueFallback: fallback === undefined ? null : fallback, otherCosts: otherCosts() });
+  return buildMonthlyReport({ receipts: state.expenseReceipts.filter(countsAsCost), monthlyDocs: state.monthlyDocs, monthKeys: keys, currentMonthKey: current, revenueFallback: fallback === undefined ? null : fallback, otherCosts: otherCosts() });
 };
 function renderMonthlyReport() {
   const target = $("#monthly-report");
@@ -2090,7 +2097,10 @@ async function loadReimbursementsNow() {
   $("#reimb-note").textContent = "Đang đọc…";
   try {
     const [open, batches, payees] = await Promise.all([
-      getDocs(query(collection(db, ...root, receiptCollection()), where("reimbursement.status", "in", ["PENDING", "APPROVED", "REJECTED", "PAID"]), limit(500))).then(rows).catch(() => []),
+      Promise.all([
+        getDocs(query(collection(db, ...root, receiptCollection()), where("reimbursement.status", "in", ["PENDING", "APPROVED", "REJECTED", "PAID"]), limit(500))).then(rows).catch(() => []),
+        getDocs(query(collection(db, ...root, receiptCollection()), where("review", "in", ["PENDING", "REJECTED"]), limit(500))).then(rows).catch(() => []),
+      ]).then(([a, b]) => [...a, ...b.filter((x) => !a.some((y) => y.id === x.id))]),
       getDocs(query(collection(db, ...root, reimbCollection()), orderBy("paidAt", "desc"), limit(100))).then(rows),
       getDocs(collection(db, ...root, "payees")).then(rows).catch(() => []), // danh sách tài khoản cũ: chỉ dùng dự phòng khi người mua chưa tự nhập
     ]);
@@ -2136,6 +2146,7 @@ function batchCard(b) {
 function renderMine() {
   const host = $("#reimb-mine");
   const me = myId();
+  const shopMine = reimbReceipts().filter((r) => (isBuyer() || isMine(r, me)) && reimbursementStatus(r) === "NONE" && ["PENDING", "REJECTED"].includes(reviewStatus(r)));
   const mine = reimbReceipts().filter((r) => (isBuyer() || isMine(r, me)) && reimbursementStatus(r) !== "NONE").sort((a, b) => Number(b.purchaseDate || 0) - Number(a.purchaseDate || 0));
   const myBatches = state.reimbBatches.filter((b) => isMine(b, me));
   const paid = myBatches.filter((b) => b.status === "PAID");
@@ -2145,6 +2156,7 @@ function renderMine() {
   const html = [
     paid.length ? `<p class="reimb-sub">Đã được hoàn · chờ bạn xác nhận</p>${paid.map(batchCard).join("")}` : "",
     block("REJECTED", "Bị trả lại · sửa rồi lưu để gửi lại"), block("PENDING", STATUS_LABELS.PENDING), block("APPROVED", STATUS_LABELS.APPROVED),
+    ...[["REJECTED", "Quỹ quán · bị trả lại, sửa rồi lưu để gửi lại"], ["PENDING", "Quỹ quán · chờ duyệt (chưa tính chi phí)"]].map(([st, title]) => { const list = shopMine.filter((r) => reviewStatus(r) === st); return list.length ? `<p class="reimb-sub">${title} · ${list.length} phiếu · ${money(list.reduce((t, r) => t + Number(r.total || 0), 0))}</p>${list.map((r) => `${receiptLine(r, null, `<button type="button" class="text-button" data-cancel-mine="${escapeHtml(r.id)}">Huỷ phiếu</button>`)}${r.reviewReason ? `<small class="warn-text">Lý do: ${escapeHtml(r.reviewReason)}</small>` : ""}`).join("")}` : ""; }),
     block("PAID", "Đã hoàn"), block("CONFIRMED", "Đã nhận tiền (gần đây)"),
   ].join("");
   host.innerHTML = html ? `<article class="reimb-card">${html}</article>` : `<p class="muted">Chưa có phiếu nào ${isBuyer() ? "bạn" : `${escapeHtml(myName())}`} ứng tiền. Bấm <b>+ Phiếu chi</b> để nhập.</p>`;
@@ -2186,6 +2198,10 @@ function renderReimbursements() {
   const payable = payerQueues(list).filter((q) => q.APPROVED.length && !q.APPROVED.some(selfBlocked));
   const payTotal = payable.reduce((t, q) => t + q.approvedTotal, 0);
   $("#reimb-paylist").innerHTML = payable.length ? `<p class="reimb-sub">Cần hoàn · tổng ${money(payTotal)}</p>${payable.map((q) => `<div class="paylist-row"><span><strong>${escapeHtml(q.payer)}</strong> · ${q.APPROVED.length} phiếu · <b>${money(q.approvedTotal)}</b></span><button type="button" class="btn strong" data-pay="${escapeHtml(q.payer)}">Hoàn · QR</button></div>`).join("")}` : "";
+  // Phiếu chi bằng quỹ quán: người nhập (thường là thủ quỹ) không tự duyệt; người còn lại duyệt thì phiếu mới tính vào chi phí.
+  const shopReview = all.filter((r) => reimbursementStatus(r) === "NONE" && reviewStatus(r) === "PENDING").sort((a, b) => Number(a.purchaseDate) - Number(b.purchaseDate));
+  const shopDups = duplicateSuspects(all.filter((r) => reviewStatus(r) !== "NONE"));
+  $("#reimb-shopreview").innerHTML = shopReview.length ? `<p class="reimb-sub">Phiếu quỹ quán chờ duyệt · ${shopReview.length} phiếu · ${money(shopReview.reduce((t, r) => t + Number(r.total || 0), 0))}</p>${shopReview.map((r) => receiptLine(r, shopDups.get(r.id), selfBlocked(r) ? '<span class="muted">Phiếu của bạn: chờ người kia duyệt</span>' : `<span class="muted">${escapeHtml(r.enteredByName || "")}</span><button type="button" class="btn" data-review-ok="${escapeHtml(r.id)}">Duyệt</button><button type="button" class="btn ghost" data-review-no="${escapeHtml(r.id)}">Không duyệt</button>`)).join("")}` : '<p class="muted">Không có phiếu quỹ quán nào chờ duyệt.</p>';
   $("#reimb-paid").innerHTML = waiting.map(batchCard).join("") || '<p class="muted">Không có khoản nào chờ xác nhận.</p>';
   $("#reimb-history").innerHTML = batches.filter((b) => b.status === "CONFIRMED").slice(0, 20).map((b) => `<div class="reimb-receipt"><div><strong>${escapeHtml(b.code)}</strong> · ${escapeHtml(b.payer)} · <b>${money(b.amount)}</b><small>Hoàn ${dateTime(b.paidAt)} · xác nhận ${dateTime(b.confirmedAt)}${b.confirmedOnBehalf ? ` (${escapeHtml(b.confirmedBy || "thủ quỹ")} xác nhận hộ)` : ""} · ${b.receiptIds.length} phiếu</small></div></div>`).join("") || '<p class="muted">Chưa có.</p>';
 }
@@ -2193,7 +2209,9 @@ async function updateReceiptReimb(id, patch) {
   const r = reimbReceipts().find((x) => x.id === id);
   if (!r) return;
   const now = Date.now();
-  const next = { ...r, ...(patch.fundSource ? { fundSource: patch.fundSource } : {}), code: receiptCode(r), reimbursement: { ...(r.reimbursement || {}), ...patch.reimbursement, updatedAt: now, by: myName() }, updatedAt: Math.max(now, Number(r.updatedAt || 0) + 1), ...(r.source === "ANDROID_POS" ? { editedBy: "WEB_MANAGER" } : {}) };
+  const st = patch.reimbursement?.status;
+  const review = st === "APPROVED" ? "APPROVED" : st === "REJECTED" ? "REJECTED" : patch.fundSource ? (patch.fundSource === FUND_PERSONAL ? initialReview(r.payerId || memberOf(r, people())?.id, people()) : "APPROVED") : (r.review || undefined);
+  const next = { ...r, ...(review ? { review, reviewBy: myName(), reviewAt: now, reviewReason: st === "REJECTED" ? patch.reimbursement.rejectReason : "" } : {}), ...(patch.fundSource ? { fundSource: patch.fundSource } : {}), code: receiptCode(r), reimbursement: { ...(r.reimbursement || {}), ...patch.reimbursement, updatedAt: now, by: myName() }, updatedAt: Math.max(now, Number(r.updatedAt || 0) + 1), ...(r.source === "ANDROID_POS" ? { editedBy: "WEB_MANAGER" } : {}) };
   if (!next.payerId) { const id = memberOf(next, people())?.id; if (id) next.payerId = id; }
   try {
     await setDoc(doc(db, ...root, receiptCollection(), id), next);
@@ -2212,6 +2230,20 @@ async function approveAll(payer) {
   if (!window.confirm(`Duyệt ${ok.length} phiếu của ${payer} · ${money(ok.reduce((t, r) => t + Number(r.total || 0), 0))}?${ok.length < list.length ? ` (${list.length - ok.length} phiếu nghi trùng để lại xem riêng)` : ""}`)) return;
   for (const r of ok) await updateReceiptReimb(r.id, { reimbursement: { status: "APPROVED", approvedAt: Date.now(), rejectReason: "" } });
   flashNote(`Đã duyệt ${ok.length} phiếu của ${payer}.`);
+}
+/** Duyệt / trả lại phiếu chi bằng quỹ quán (không có bước hoàn tiền). */
+async function updateReceiptReview(id, status, reason) {
+  const r = reimbReceipts().find((x) => x.id === id);
+  if (!r) return;
+  const now = Date.now();
+  const next = { ...r, review: status, reviewReason: reason, reviewBy: myName(), reviewById: state.me?.id || "", reviewAt: now, updatedAt: Math.max(now, Number(r.updatedAt || 0) + 1), ...(r.source === "ANDROID_POS" ? { editedBy: "WEB_MANAGER" } : {}) };
+  try {
+    await setDoc(doc(db, ...root, receiptCollection(), id), next);
+    replaceLocalReceipt(next);
+    state.openReceipts = state.openReceipts.map((x) => (x.id === id ? next : x));
+    render(); renderReimbursements();
+    flashNote(`${status === "APPROVED" ? "Đã duyệt" : "Đã trả lại"} ${receiptCode(next)}.`);
+  } catch (error) { $("#reimb-note").textContent = `Không lưu được: ${error.message}`; }
 }
 let reimbDraft = null;
 function openReimbDialog(payer) {
@@ -2367,6 +2399,14 @@ $("[data-page=hoanung]").addEventListener("click", (e) => {
   const target = reimbReceipts().find((r) => r.id === (t.dataset.approve || t.dataset.reject));
   if (target && selfBlocked(target)) { flashNote("Phiếu của chính bạn: để thủ quỹ duyệt."); return; }
   if (t.dataset.approveAll) { approveAll(t.dataset.approveAll); return; }
+  if (t.dataset.reviewOk || t.dataset.reviewNo) {
+    const id = t.dataset.reviewOk || t.dataset.reviewNo;
+    const r = reimbReceipts().find((x) => x.id === id);
+    if (!r || selfBlocked(r)) return;
+    if (t.dataset.reviewOk) updateReceiptReview(id, "APPROVED", "");
+    else { const reason = window.prompt("Lý do không duyệt (người nhập sẽ thấy để sửa):"); if (reason && reason.trim()) updateReceiptReview(id, "REJECTED", reason.trim()); }
+    return;
+  }
   if (t.dataset.approve) updateReceiptReimb(t.dataset.approve, { reimbursement: { status: "APPROVED", approvedAt: Date.now(), rejectReason: "" } });
   else if (t.dataset.reject) { const reason = window.prompt("Lý do không duyệt (người mua sẽ thấy trên tài khoản của họ):"); if (reason && reason.trim()) updateReceiptReimb(t.dataset.reject, { reimbursement: { status: "REJECTED", rejectReason: reason.trim() } }); }
   else if (t.dataset.fund) updateReceiptReimb(t.dataset.fund, { fundSource: t.dataset.value, reimbursement: { status: t.dataset.value === FUND_PERSONAL ? "PENDING" : "NONE" } });
@@ -2472,6 +2512,99 @@ $("#members-zone").addEventListener("click", async (e) => {
     }
     renderAccount(); renderReimbursements();
   } catch (error) { $("#member-error").textContent = error.message; }
+});
+
+
+/* ---------- Đối soát quỹ & chia tiền cổ đông theo tháng (fundClosings/{YYYY-MM}) ---------- */
+const fundState = { key: "", receipts: [], movements: [], others: [], saved: null, prevSaved: null, loading: false, error: "" };
+function fundMonthOptions() {
+  const keys = lastMonthKeys(13).reverse();
+  $("#fund-month").replaceChildren(...keys.map((k) => new Option(`Tháng ${Number(k.slice(5))}/${k.slice(0, 4)}`, k)));
+  if (!fundState.key) fundState.key = keys[0];
+  $("#fund-month").value = fundState.key;
+}
+async function loadFundMonth() {
+  if (!state.role || state.demo || state.simulation) { $("#fund-note").textContent = state.demo || state.simulation ? "Đang xem demo / mô phỏng: tắt để đối soát số thật." : ""; return; }
+  const key = fundState.key;
+  const { from, to } = monthRange(key);
+  fundState.loading = true; fundState.error = "";
+  $("#fund-note").textContent = "Đang đọc số liệu tháng…";
+  try {
+    const [rec, mov, pur, saved, prev] = await Promise.all([
+      getDocs(query(collection(db, ...root, "expenseReceipts"), where("purchaseDate", ">=", from), where("purchaseDate", "<", to), limit(1500))).then(rows),
+      getDocs(query(collection(db, ...root, "financialMovements"), where("occurredAt", ">=", from), where("occurredAt", "<", to), limit(500))).then(rows),
+      getDocs(query(collection(db, ...root, "purchases"), where("purchasedAt", ">=", from), where("purchasedAt", "<", to), limit(800))).then(rows),
+      getDoc(doc(db, ...root, "fundClosings", key)),
+      getDoc(doc(db, ...root, "fundClosings", prevMonthKey(key))),
+    ]);
+    fundState.receipts = rec;
+    fundState.movements = mov;
+    fundState.others = otherCostRows(pur, new Set(rec.map((r) => String(r.id))));
+    fundState.saved = saved.exists() ? saved.data() : null;
+    fundState.prevSaved = prev.exists() ? prev.data() : null;
+    const s = fundState.saved;
+    const prevClose = fundState.prevSaved ? (fundState.prevSaved.actual ?? fundState.prevSaved.expected) : null;
+    $("#fund-opening").value = s ? s.opening : (prevClose ?? 0);
+    $("#fund-cash").value = s?.cashCounted ?? "";
+    $("#fund-bank").value = s?.bankBalance ?? "";
+    $("#fund-reserve").value = s?.reserve ?? 0;
+  } catch (error) { fundState.error = error.message || "lỗi không rõ"; }
+  fundState.loading = false;
+  renderFundMonth();
+}
+function currentFund() {
+  const key = fundState.key;
+  const revenueDoc = state.monthlyDocs[key];
+  const owedPool = [...fundState.receipts, ...state.openReceipts.filter((r) => !fundState.receipts.some((x) => x.id === r.id))];
+  const num = (id) => { const v = $(id).value; return v === "" ? null : Number(v); };
+  return { hasRevenue: Boolean(revenueDoc), result: fundMonth({ monthKey: key, revenue: revenueDoc ? Number(revenueDoc.revenue || 0) : 0, receipts: owedPool, otherPurchases: fundState.others, movements: fundState.movements, opening: num("#fund-opening") || 0, cashCounted: num("#fund-cash"), bankBalance: num("#fund-bank"), reserve: num("#fund-reserve") || 0, partners: state.profitPartners }) };
+}
+function renderFundMonth() {
+  const host = $("#fund-result");
+  if (!host || !fundState.key) return;
+  if (fundState.error) { $("#fund-note").textContent = `Không đọc được: ${fundState.error}`; host.innerHTML = ""; return; }
+  const { hasRevenue, result: f } = currentFund();
+  const notes = [];
+  if (!hasRevenue) notes.push("Chưa có số chốt doanh thu tháng này từ máy POS (đang tính doanh thu = 0).");
+  if (f.pending.count) notes.push(`⚠ Còn ${f.pending.count} phiếu chờ duyệt (${money(f.pending.total)}) chưa tính vào chi phí: duyệt xong rồi mới chốt.`);
+  if (f.rejected.count) notes.push(`⚠ ${f.rejected.count} phiếu bị trả lại (${money(f.rejected.total)}) chưa tính: người nhập cần sửa hoặc huỷ.`);
+  if (!f.partnersConfigured) notes.push("Chưa cấu hình tỷ lệ chia trên máy POS: tạm chia đôi 50/50.");
+  if (fundState.saved) notes.push(`Đã lưu lúc ${dateTime(fundState.saved.savedAt)} bởi ${fundState.saved.savedBy || "—"}.`);
+  $("#fund-note").textContent = notes.join(" ");
+  const row = (label, value, cls = "") => `<tr class="${cls}"><td>${label}</td><td>${value}</td></tr>`;
+  const signed = (v) => `${v < 0 ? "−" : ""}${money(Math.abs(v))}`;
+  host.innerHTML = `<table class="fund-table"><tbody>
+    ${row("<strong>1. Lợi nhuận tháng</strong>", "")}
+    ${row("Tiền thu bán hàng (tiền mặt + CK)", money(f.revenue), "sub")}
+    ${row("− Chi vận hành (phiếu đã duyệt)", signed(-f.operating), "sub")}
+    ${row("− Đầu tư bổ sung", signed(-f.investment), "sub")}
+    ${row("= Dòng tiền ròng (khớp báo cáo tháng trên POS)", signed(f.net), "total")}
+    ${row("<strong>2. Quỹ cuối kỳ</strong>", "")}
+    ${row("Quỹ đầu kỳ", money(f.opening), "sub")}
+    ${row("+ Doanh thu tháng", money(f.revenue), "sub")}
+    ${row("− Chi bằng quỹ quán", signed(-f.fromFund), "sub")}
+    ${row("− Hoàn ứng đã trả", signed(-f.reimbursed), "sub")}
+    ${f.moveIn ? row("+ Góp vốn / thu khác", money(f.moveIn), "sub") : ""}
+    ${f.withdrawn ? row("− Rút vốn / rút lợi nhuận", signed(-f.withdrawn), "sub") : ""}
+    ${row("= Quỹ phải có", signed(f.expected), "total")}
+    ${f.actual !== null ? row("Thực tế (tiền mặt + TK)", money(f.actual), "sub") + row("Chênh lệch", `<span class="${f.diff ? "warn-text" : ""}">${signed(f.diff)}</span>`, "sub") : row("Thực tế", '<span class="muted">nhập tiền mặt + số dư TK</span>', "sub")}
+    ${row("<strong>3. Tiền có thể chia</strong>", "")}
+    ${row(`${f.actual !== null ? "Quỹ thực tế" : "Quỹ phải có"}`, signed(f.actual ?? f.expected), "sub")}
+    ${row(`− Còn nợ hoàn ứng (${f.owedCount} phiếu đã duyệt, chưa hoàn)`, signed(-f.owedTotal), "sub")}
+    ${row("− Giữ lại làm vốn", signed(-f.reserve), "sub")}
+    ${row("= Có thể chia", signed(f.distributable), "total")}
+    ${f.shares.map((s) => row(`${escapeHtml(s.name)} · ${s.percent}%`, money(s.amount), "sub")).join("")}
+  </tbody></table>${Math.abs(f.mismatch) > 0 ? `<p class="muted">Có thể chia khác dòng tiền ròng ${signed(f.mismatch)}: do quỹ đầu kỳ, vốn giữ lại, chênh lệch thực tế hoặc phiếu chi cá nhân tháng trước mới hoàn tháng này.</p>` : '<p class="muted">Có thể chia khớp dòng tiền ròng.</p>'}`;
+}
+$("#fund-close").addEventListener("toggle", (e) => { if (e.target.open) { fundMonthOptions(); loadFundMonth(); } });
+$("#fund-month").addEventListener("change", (e) => { fundState.key = e.target.value; loadFundMonth(); });
+["#fund-opening", "#fund-cash", "#fund-bank", "#fund-reserve"].forEach((id) => $(id).addEventListener("input", renderFundMonth));
+$("#fund-save").addEventListener("click", async () => {
+  if (!canTreasure(state.role)) return;
+  const { result: f } = currentFund();
+  const payload = { monthKey: fundState.key, opening: f.opening, cashCounted: $("#fund-cash").value === "" ? null : Number($("#fund-cash").value), bankBalance: $("#fund-bank").value === "" ? null : Number($("#fund-bank").value), reserve: f.reserve, revenue: f.revenue, operating: f.operating, investment: f.investment, net: f.net, expected: f.expected, actual: f.actual, diff: f.diff, owedTotal: f.owedTotal, distributable: f.distributable, shares: f.shares, pendingCount: f.pending.count, savedBy: myName(), savedAt: Date.now() };
+  try { await setDoc(doc(db, ...root, "fundClosings", fundState.key), payload); fundState.saved = payload; renderFundMonth(); flashNote(`Đã lưu đối soát tháng ${Number(fundState.key.slice(5))}.`); }
+  catch (error) { $("#fund-note").textContent = `Chưa lưu được: ${error.message}`; }
 });
 
 /* ---------- Tải phiếu cũ hơn 7 ngày khi chọn kỳ xem xa hơn (tối đa 500 phiếu) ---------- */

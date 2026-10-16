@@ -334,3 +334,5 @@ button.paylist-row { width: 100%; font: inherit; color: inherit; cursor: pointer
 .ai-export .inline-check { display: flex !important; flex-direction: row; justify-content: flex-start; text-align: left; }
 .ai-export .inline-check input { width: auto; flex: 0 0 auto; margin-top: 3px; }
 .ai-export button:disabled { opacity: .5; }
+.rc-list { margin: 4px 0 10px; padding-left: 18px; font-size: .9rem; }
+.rc-list li { margin: 3px 0; }

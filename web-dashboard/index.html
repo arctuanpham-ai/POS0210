@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20261014-8" />
+    <link rel="stylesheet" href="styles.css?v=20261016-6" />
     <title>0210 · Manager</title>
   </head>
   <body>
@@ -17,7 +17,7 @@
         <p class="eyebrow">0210 · BREAKFAST · COFFEE · DRINKS</p>
         <h1 id="login-title">Manager realtime</h1>
         <p class="muted">Theo dõi quán và nhập phiếu tài chính từ xa.</p>
-        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.16.5 · Hoàn ứng</p>
+        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.16.6 · Tài khoản riêng</p>
         <label>Email Firebase<input id="email" type="email" autocomplete="username" inputmode="email" /></label>
         <label>Mật khẩu<input id="password" type="password" autocomplete="current-password" /></label>
         <label class="show-password"><input id="show-password" type="checkbox" /> Hiện mật khẩu để kiểm tra khi gõ</label>
@@ -34,7 +34,7 @@
           <div class="heading-actions"><button id="refresh-dashboard" class="btn">Làm mới</button><button id="request-sync" class="btn" title="Yêu cầu máy POS ở quán đồng bộ ngay">Yêu cầu đồng bộ</button><button id="logout-button" class="btn ghost">Đăng xuất</button></div>
         </header>
 
-        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.16.5 · Hoàn ứng</p>
+        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><section id="my-alerts" class="my-alerts" aria-live="polite" hidden></section><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.16.6 · Tài khoản riêng</p>
 
         <nav class="tabbar" id="tabbar" aria-label="Các trang">
           <a href="#ban" data-tab="ban">Bàn</a>
@@ -44,6 +44,7 @@
           <a href="#taichinh" data-tab="taichinh">Tài chính</a>
           <a href="#giavon" data-tab="giavon">Giá vốn</a>
           <a href="#hoanung" data-tab="hoanung">Hoàn ứng<span id="hoanung-badge" class="tab-badge" hidden></span></a>
+          <a href="#taikhoan" data-tab="taikhoan">Tài khoản<span id="taikhoan-badge" class="tab-badge" hidden></span></a>
         </nav>
 
         <div class="page" data-page="ban" hidden>
@@ -145,13 +146,17 @@
 
         <div class="page" data-page="hoanung" hidden>
         <section class="section-heading first-section">
-          <div><p class="eyebrow">HOÀN ỨNG</p><h2>Duyệt phiếu và hoàn tiền người mua</h2></div>
-          <div class="heading-actions"><button id="reload-reimb" type="button" class="btn">Tải lại</button></div>
+          <div><p class="eyebrow">HOÀN ỨNG</p><h2>Phiếu chi ứng tiền và hoàn tiền</h2></div>
+          <div class="heading-actions"><button id="reimb-new-receipt" type="button" class="btn strong">+ Phiếu chi</button><button id="reload-reimb" type="button" class="btn">Tải lại</button></div>
         </section>
-        <p class="muted">Quy trình: người mua up phiếu (nguồn tiền "Tiền cá nhân") → thủ quỹ kiểm tra, <strong>Duyệt</strong> → <strong>Hoàn tiền</strong> bằng QR động, nội dung CK là mã đợt hoàn → người mua bấm <strong>Đã nhận tiền</strong> (xác nhận chậm cũng được, có nút nhắc qua Zalo).</p>
+        <p class="muted">Người mua nhập phiếu bằng tài khoản của mình (nguồn tiền "Tiền cá nhân") → thủ quỹ thấy cảnh báo, <strong>Duyệt</strong> → <strong>Hoàn tiền</strong> bằng QR động tạo từ tài khoản ngân hàng người mua đã nhập, nội dung CK là mã đợt hoàn → người mua thấy cảnh báo, kiểm tra tài khoản và bấm <strong>Tôi đã nhận tiền</strong> (xác nhận chậm cũng được).</p>
+        <p id="reimb-note" class="panel-total" role="status"></p>
+        <section class="section-heading compact"><div><p class="eyebrow">CỦA TÔI</p><h2>Phiếu tôi đã ứng tiền</h2></div></section>
+        <section id="reimb-mine" class="reimb-list"></section>
+        <div id="reimb-treasurer-zone" hidden>
+        <section class="section-heading compact"><div><p class="eyebrow">THỦ QUỸ</p><h2>Tổng quan</h2></div></section>
         <div class="panel">
           <div class="field-row"><label for="reimb-person">Xem theo người</label><select id="reimb-person"><option value="">Tất cả</option></select></div>
-          <p id="reimb-note" class="panel-total" role="status"></p>
         </div>
         <section id="reimb-counters" class="summary-grid"></section>
         <section id="reimb-unknown"></section>
@@ -161,17 +166,37 @@
         <section id="reimb-paid" class="reimb-list"></section>
         <section class="section-heading compact"><div><p class="eyebrow">LỊCH SỬ</p><h2>Đợt hoàn đã xác nhận</h2></div></section>
         <section id="reimb-history" class="reimb-list"></section>
-        <section class="section-heading compact"><div><p class="eyebrow">TÀI KHOẢN NHẬN HOÀN</p><h2>Để tạo QR động</h2></div></section>
-        <section id="payee-list" class="reimb-list"></section>
-        <form id="payee-form" class="panel">
-          <div class="field-row"><label for="payee-name">Tên người mua</label><input id="payee-name" list="payee-names" maxlength="60" required /></div>
-          <div class="field-row"><label for="payee-bank">Ngân hàng</label><input id="payee-bank" list="bank-choices" maxlength="30" required /></div>
-          <div class="field-row"><label for="payee-account">Số tài khoản</label><input id="payee-account" inputmode="numeric" maxlength="19" required /></div>
-          <div class="field-row"><label for="payee-holder">Tên chủ TK</label><input id="payee-holder" maxlength="50" /></div>
-          <p id="payee-error" class="error" role="alert"></p>
-          <div class="tool-row"><button type="submit" class="btn">Lưu tài khoản</button></div>
-        </form>
+        </div>
         <datalist id="payee-names"></datalist><datalist id="bank-choices"></datalist>
+        </div>
+
+        <div class="page" data-page="taikhoan" hidden>
+        <section class="section-heading first-section">
+          <div><p class="eyebrow">TÀI KHOẢN CỦA TÔI</p><h2 id="me-title">Thông tin cá nhân</h2></div>
+        </section>
+        <p id="me-role" class="muted"></p>
+        <form id="me-form" class="panel">
+          <div class="field-row"><label for="me-name">Tên hiển thị</label><input id="me-name" maxlength="60" required /></div>
+          <p class="muted">Tài khoản ngân hàng nhận tiền hoàn ứng: thủ quỹ dùng để tạo QR động, đúng số tiền và nội dung.</p>
+          <div class="field-row"><label for="me-bank">Ngân hàng</label><input id="me-bank" list="bank-choices" maxlength="30" placeholder="VD Vietcombank, MB, Techcombank" /></div>
+          <div class="field-row"><label for="me-account">Số tài khoản</label><input id="me-account" inputmode="numeric" maxlength="19" /></div>
+          <div class="field-row"><label for="me-holder">Tên chủ TK</label><input id="me-holder" maxlength="50" placeholder="Viết như trên thẻ, không cần dấu" /></div>
+          <p id="me-error" class="error" role="alert"></p>
+          <div class="tool-row"><button type="submit" class="btn strong">Lưu thông tin</button></div>
+        </form>
+        <div id="members-zone" hidden>
+        <section class="section-heading compact"><div><p class="eyebrow">CHỦ QUÁN</p><h2>Thành viên dùng web</h2></div></section>
+        <p class="muted">Mỗi người một email đăng nhập riêng. <strong>Thủ quỹ</strong>: duyệt phiếu, hoàn tiền, xem toàn bộ. <strong>Người mua</strong>: chỉ thấy tab Hoàn ứng và Tài khoản, nhập phiếu của mình, xác nhận đã nhận tiền.</p>
+        <section id="member-list" class="reimb-list"></section>
+        <form id="member-form" class="panel">
+          <div class="field-row"><label for="member-email">Email đăng nhập</label><input id="member-email" type="email" maxlength="80" required /></div>
+          <div class="field-row"><label for="member-name">Tên</label><input id="member-name" maxlength="60" required /></div>
+          <div class="field-row"><label for="member-role">Vai trò</label><select id="member-role"><option value="NGUOI_MUA">Người mua</option><option value="THU_QUY">Thủ quỹ</option></select></div>
+          <div class="field-row"><label for="member-password">Mật khẩu ban đầu</label><input id="member-password" type="text" minlength="6" maxlength="40" placeholder="Để trống nếu email đã có tài khoản" autocomplete="off" /></div>
+          <p id="member-error" class="error" role="alert"></p>
+          <div class="tool-row"><button type="submit" class="btn">Lưu thành viên</button></div>
+        </form>
+        </div>
         </div>
 
         <div class="page" data-page="taichinh" hidden>
@@ -296,18 +321,9 @@
         <div class="dialog-header"><div><p class="eyebrow">HOÀN TIỀN</p><h2 id="reimb-title"></h2></div><button id="close-reimb" type="button" class="text-button">Đóng</button></div>
         <div id="reimb-receipts" class="reimb-pick"></div>
         <p class="entry-total">Tổng hoàn: <strong id="reimb-total">0đ</strong></p>
-        <div class="field-row"><label for="reimb-treasurer">Người hoàn (thủ quỹ)</label><input id="reimb-treasurer" maxlength="40" /></div>
         <div id="reimb-qr" class="reimb-qr"></div>
         <p id="reimb-error" class="error" role="alert"></p>
         <div class="tool-row"><button id="reimb-paid-bank" type="button" class="btn">Đã chuyển khoản</button><button id="reimb-paid-cash" type="button" class="btn">Đã đưa tiền mặt</button></div>
-      </article>
-    </dialog>
-    <dialog id="share-dialog">
-      <article>
-        <div class="dialog-header"><div><p class="eyebrow">GỬI ZALO</p><h2 id="share-title"></h2></div><button id="close-share" type="button" class="text-button">Đóng</button></div>
-        <textarea id="share-text" rows="5" readonly></textarea>
-        <p id="share-note" class="muted"></p>
-        <div class="tool-row"><button id="share-send" type="button" class="btn">Gửi qua Zalo / ứng dụng khác</button><button id="share-copy" type="button" class="btn ghost">Sao chép</button></div>
       </article>
     </dialog>
 
@@ -446,6 +462,6 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261016-5"></script>
+    <script type="module" src="app.js?v=20261016-6"></script>
   </body>
 </html>

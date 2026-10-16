@@ -1,5 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
 import {
+  createUserWithEmailAndPassword,
   getAuth,
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -32,7 +33,7 @@ import { menuCsv } from "./menu-export.js?v=20261015-1";
 import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-1";
 import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-2";
 import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261016-4";
-import { BANK_CHOICES, FUND_PERSONAL, batchCode, changedAfterPaid, duplicateSuspects, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, vietQrPayload, zaloText } from "./reimburse.js?v=20261016-5";
+import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, isMine, legacyOpenReceipts, memberOf, myAlerts, needsReminder, normEmail, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, vietQrPayload } from "./reimburse.js?v=20261016-6";
 import { otherCostRows } from "./other-costs.js?v=20261016-2";
 import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-2";
 import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261014-9";
@@ -61,7 +62,7 @@ const state = {
   purchaseCategories: [], profitPartners: [], assetCategories: [], suppliers: [],
   unsubs: [], paymentFlowDoc: null, refunds: [], frozenRefundDocs: [], flowError: "", dailyDocs: {}, dailyError: "", salesLoaded: false, salesDays: 7, itemMode: "combined", period: "today", customFrom: null, customTo: null,
   transactionKind: "ALL", payerFilter: "ALL", user: null,
-  expenseRules: [], rulesError: "", simulation: null, demo: null, reimbBatches: [], payees: [], openReceipts: [], reimbLoaded: false, reimbPerson: "", otherPurchases: [], stockCounts: [], countsLoaded: false, menuItems: [], menuCats: [], recipes: {}, recipesLoaded: false, recipeError: "", monthlyDocs: {}, monthlyError: "", reportFrom: 0, receiptsNote: "", detailCutoff: null, receiptsFrom: 0, summaryBlocks: [], historyDay: "today", historyDocs: {}, historyTables: null, historyError: "", historyLoading: false, billDetailCache: {},
+  expenseRules: [], rulesError: "", simulation: null, demo: null, reimbBatches: [], payees: [], role: null, me: null, members: [], openReceipts: [], reimbLoaded: false, reimbPerson: "", otherPurchases: [], stockCounts: [], countsLoaded: false, menuItems: [], menuCats: [], recipes: {}, recipesLoaded: false, recipeError: "", monthlyDocs: {}, monthlyError: "", reportFrom: 0, receiptsNote: "", detailCutoff: null, receiptsFrom: 0, summaryBlocks: [], historyDay: "today", historyDocs: {}, historyTables: null, historyError: "", historyLoading: false, billDetailCache: {},
 };
 let expenseDraft = null;
 let editingReceipt = null;
@@ -677,7 +678,9 @@ function renderExpenseDraft() {
   if (!expenseDraft) return;
   $("#expense-date").value = localDateTimeInput(new Date(expenseDraft.purchaseDate));
   $("#expense-note").value = expenseDraft.note || "";
-  $("#expense-payer").value = expenseDraft.enteredByName || lastPayer();
+  if (isBuyer()) expenseDraft.enteredByName = myName();
+  $("#expense-payer").value = expenseDraft.enteredByName || myName();
+  $("#expense-payer").readOnly = isBuyer();
   $("#expense-fund").value = expenseDraft.fundSource ?? FUND_PERSONAL;
   $("#expense-lines").innerHTML = expenseDraft.items.map(expenseLineMarkup).join("");
   setupMaterialSuggestions();
@@ -730,24 +733,23 @@ async function saveExpenseReceipt(event) {
   const payload0 = editingReceipt
     ? { ...buildEditedReceipt(editingReceipt, expenseDraft, { now, uid: state.user.uid }), enteredByName: expenseDraft.enteredByName, fundSource: expenseDraft.fundSource, ...(upgradeFrom ? { detailLevel: DETAIL_ITEMIZED } : {}) }
     : { ...expenseDraft, total: check.total, status: "ACTIVE", updatedAt: now, updatedByUid: state.user.uid, source: "WEB_MANAGER", items: expenseDraft.items.map((item) => ({ ...item, materialGroup: item.expenseGroup, amount: Math.round(item.qty * item.unitPrice) })) };
-  const { payerChosen: _pc, ...payload1 } = payload0;
+  const { payerChosen: _pc, ...payload1 } = { ...payload0, payerEmail: payerEmailFor(expenseDraft.enteredByName, editingReceipt) };
   const payload = withReimbursement(payload1, editingReceipt, now);
   try {
     await setDoc(doc(db, ...root, receiptCollection(), expenseDraft.id), withDemoFlags(payload));
     rememberMaterials(expenseDraft.items);
-    for (const rule of state.demo ? [] : learnList) { // đang xem demo: không học quy tắc từ phiếu demo
+    for (const rule of state.demo || isBuyer() ? [] : learnList) { // đang xem demo: không học quy tắc từ phiếu demo
       try {
         const learned = { id: rule.id, name: rule.name, group: rule.group, updatedAt: now, updatedByName: state.user.displayName || state.user.email || "" };
         await setDoc(doc(db, ...root, "expenseRules", rule.id), learned);
         state.expenseRules = [...state.expenseRules.filter((x) => x.id !== rule.id), learned];
       } catch { /* học quy tắc là phụ: phiếu đã lưu, lần sau sẽ thử lại khi người nhập chọn nhóm khác gợi ý */ }
     }
-    rememberPayer(payload.enteredByName);
     const wasNew = !editingReceipt;
     if (editingReceipt) { replaceLocalReceipt(payload); editingReceipt = null; upgradeFrom = null; render(); }
     else { localStorage.removeItem(`pos0210.expense-draft.${state.user.uid}`); replaceLocalReceipt(payload); render(); }
     expenseDraft = null; $("#expense-dialog").close();
-    if (wasNew && reimbursementStatus(payload) === "PENDING") openShare("Báo thủ quỹ có phiếu cần hoàn", zaloText.newReceipt(payload, shareUrl()), "Thông báo qua Zalo để thủ quỹ biết có phiếu mới cần duyệt.");
+    if (reimbursementStatus(payload) === "PENDING") flashNote(`${wasNew ? "Đã gửi" : "Đã gửi lại"} phiếu ${receiptCode(payload)} chờ duyệt: thủ quỹ sẽ thấy cảnh báo khi mở web.`);
   }
   catch (e) { error.textContent = editingReceipt ? `Chưa lưu được thay đổi: ${e.message || e}` : `Chưa đồng bộ được; bản nháp đã giữ lại: ${e.message || e}`; }
 }
@@ -758,7 +760,8 @@ function replaceLocalReceipt(receipt) {
 }
 
 function openReceiptEditor(id) {
-  const receipt = state.expenseReceipts.find((item) => item.id === id);
+  const receipt = state.expenseReceipts.find((item) => item.id === id) || state.openReceipts.find((item) => item.id === id);
+  if (receipt && !state.expenseReceipts.some((item) => item.id === id)) state.expenseReceipts.push(receipt);
   if (!receipt || !state.user) return;
   if (isSummaryReceipt(receipt)) { openSummaryDialog(receipt); return; }
   upgradeFrom = null;
@@ -782,6 +785,7 @@ async function cancelReceipt(id) {
 }
 
 function render() {
+  if (isBuyer()) { renderReimbursements(); return; }
   renderCumulativeSummary();
   renderPeriodSummary();
   renderTables();
@@ -797,7 +801,8 @@ function render() {
   renderTransactions();
 }
 async function refreshDashboard() {
-  if (!state.user) return;
+  if (!state.user || !state.role) return;
+  if (isBuyer()) { await loadReimbursements(); return; }
   if (state.simulation) { $("#sync-status").textContent = "Đang ở chế độ mô phỏng. Tắt mô phỏng để đọc dữ liệu thật."; return; }
   if (state.demo) { $("#sync-status").textContent = "Đang xem dữ liệu DEMO. Tắt xem demo để đọc dữ liệu thật."; return; }
   $("#sync-status").textContent = "Đang đọc snapshot…";
@@ -844,6 +849,7 @@ async function refreshDashboard() {
     $("#sync-status").textContent = state.dashboard.lastUpdatedAt ? `Snapshot POS: ${dateTime(state.dashboard.lastUpdatedAt)}${stale ? " · cần kiểm tra máy POS" : ""}` : "POS chưa gửi snapshot.";
     render();
     loadBillHistory(state.historyDay, true);
+    await loadMembers();
     loadReimbursements();
   } catch (error) { $("#sync-status").textContent = `Không đọc được dữ liệu: ${error.message}`; }
 }
@@ -1024,20 +1030,22 @@ $("#open-entry").addEventListener("click", () => {
   $("#entry-dialog").showModal();
 });
 $("#close-entry").addEventListener("click", () => $("#entry-dialog").close());
-$("#open-expense").addEventListener("click", () => {
+function openNewExpense() {
   if (!state.user) return;
   editingReceipt = null;
   upgradeFrom = null;
   $("#expense-title").textContent = "Phiếu nhiều vật tư";
   $("#expense-submit").textContent = "LƯU VÀ ĐỒNG BỘ";
   expenseDraft = createStableDraft(localStorage, state.user, uuid);
-  // Bản nháp mới mang tên tài khoản đăng nhập: thay bằng người mua lần trước (nhiều người dùng chung một tài khoản web).
-  if (!expenseDraft.payerChosen) { expenseDraft.enteredByName = lastPayer(); expenseDraft.fundSource = expenseDraft.fundSource || FUND_PERSONAL; }
+  // Mỗi người đăng nhập tài khoản riêng: bản nháp mới mặc định người mua là chính mình.
+  if (!expenseDraft.payerChosen || isBuyer()) { expenseDraft.enteredByName = myName(); expenseDraft.fundSource = expenseDraft.fundSource || FUND_PERSONAL; }
   expenseDraft.items = expenseDraft.items.map(item => ({ ...item, expenseGroup: item.materialName ? groupLabel(item.expenseGroup) : "" }));
   $("#expense-error").textContent = "";
   renderExpenseDraft();
   $("#expense-dialog").showModal();
-});
+}
+$("#open-expense").addEventListener("click", openNewExpense);
+$("#reimb-new-receipt").addEventListener("click", () => { if (state.demo) { window.alert("Đang xem DEMO: phiếu sẽ vào dữ liệu demo."); } openNewExpense(); });
 $("#close-expense").addEventListener("click", () => {
   if (editingReceipt) { editingReceipt = null; upgradeFrom = null; expenseDraft = null; $("#expense-dialog").close(); updateGapNote(); return; }
   applyExpenseInputs(); renderExpenseDraft(); $("#expense-dialog").close();
@@ -1244,7 +1252,7 @@ async function saveSummaryBlocks(event) {
   for (const { block, purchaseDate, total } of prepared) {
     const items = buildSummaryLines(block.lines, () => uuid());
     const base = editingSummary ? { ...editingSummary } : { id: block.id, createdAt: now, source: "WEB_MANAGER" };
-    const payload = withReimbursement({ ...base, purchaseDate, note: block.place, enteredByUid: state.user.uid, enteredByName: block.payer || state.user.displayName || state.user.email || "Quản lý", fundSource: $("#summary-fund").value,
+    const payload = withReimbursement({ ...base, purchaseDate, note: block.place, enteredByUid: state.user.uid, enteredByName: block.payer || myName(), payerEmail: payerEmailFor(block.payer || myName(), editingSummary), fundSource: $("#summary-fund").value,
       items, total, status: "ACTIVE", detailLevel: "SUMMARY", updatedAt: Math.max(now, Number(editingSummary?.updatedAt || 0) + 1), updatedByUid: state.user.uid }, editingSummary, now);
     try { await setDoc(doc(db, ...root, receiptCollection(), payload.id), withDemoFlags(payload)); replaceLocalReceipt(withDemoFlags(payload)); saved += 1; }
     catch (e) { failed.push({ block, message: e.message || String(e) }); }
@@ -1715,10 +1723,18 @@ async function saveCount(event) {
 }
 $("#count-form").addEventListener("submit", saveCount);
 
-/* ---------- Hoàn ứng: duyệt phiếu, hoàn tiền bằng QR động, người mua xác nhận ---------- */
-const lastPayer = () => { try { return localStorage.getItem("pos0210.lastPayer") || ""; } catch { return ""; } };
-const rememberPayer = (name) => { try { if (name) localStorage.setItem("pos0210.lastPayer", name); } catch { /* bỏ qua */ } };
-const shareUrl = () => `${location.origin}${location.pathname}#hoanung`;
+/* ---------- Hoàn ứng: mỗi người một tài khoản, cảnh báo theo người, QR động từ tài khoản ngân hàng người mua ---------- */
+const isBuyer = () => state.role === ROLE_BUYER;
+const myEmail = () => normEmail(state.user?.email);
+const myName = () => state.me?.name || state.user?.displayName || state.user?.email || "Quản lý";
+/** Mọi người có thể là người mua: thành viên đã thêm và chính mình. */
+const people = () => { const list = [...state.members]; if (state.me && !list.some((m) => normEmail(m.email) === myEmail())) list.push({ ...state.me, email: myEmail() }); return list; };
+/** Email người mua gắn vào phiếu: người mua tự nhập là chính mình; thủ quỹ nhập hộ thì khớp theo tên thành viên. */
+function payerEmailFor(name, original) {
+  if (isBuyer()) return myEmail();
+  if (original && asciiUpper(original.enteredByName) === asciiUpper(name) && original.payerEmail) return original.payerEmail;
+  return normEmail(memberOf({ enteredByName: name }, people())?.email);
+}
 const reimbCollection = () => (state.demo ? "demoReimbursements" : "reimbursements");
 /** Gắn mã phiếu và trạng thái hoàn ứng. Phiếu đã hoàn không bị đổi trạng thái khi sửa; chênh tiền hiện ở màn thủ quỹ. */
 function withReimbursement(payload, original, now) {
@@ -1728,38 +1744,90 @@ function withReimbursement(payload, original, now) {
   if (prev && (prev.status === "PAID" || prev.status === "CONFIRMED")) return { ...payload, code, reimbursement: prev };
   if (!fund) return { ...payload, code };
   if (fund !== FUND_PERSONAL) return { ...payload, code, reimbursement: { status: "NONE", updatedAt: now } };
-  // Sửa phiếu đã duyệt thì phải duyệt lại.
+  // Sửa phiếu đã duyệt hoặc bị trả lại thì gửi duyệt lại.
   return { ...payload, code, reimbursement: { status: "PENDING", requestedAt: prev?.requestedAt || now, updatedAt: now } };
 }
-function openShare(title, text, note = "") {
-  $("#share-title").textContent = title;
-  $("#share-text").value = text;
-  $("#share-note").textContent = note;
-  $("#share-dialog").showModal();
+let flashTimer = null;
+function flashNote(text) {
+  const el = $("#reimb-note");
+  if (el) el.textContent = text;
+  const bar = $("#my-alerts");
+  if (!bar) return;
+  bar.dataset.flash = text;
+  renderAlerts();
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => { delete bar.dataset.flash; renderAlerts(); }, 8000);
 }
-$("#close-share").addEventListener("click", () => $("#share-dialog").close());
-$("#share-send").addEventListener("click", async () => {
-  const text = $("#share-text").value;
-  try { if (navigator.share) { await navigator.share({ text }); $("#share-dialog").close(); return; } } catch { /* người dùng huỷ */ return; }
-  try { await navigator.clipboard.writeText(text); $("#share-note").textContent = "Máy này không mở được Zalo trực tiếp: đã sao chép, dán vào Zalo."; } catch { $("#share-text").select(); }
-});
-$("#share-copy").addEventListener("click", async () => { try { await navigator.clipboard.writeText($("#share-text").value); $("#share-note").textContent = "Đã sao chép."; } catch { $("#share-text").select(); } });
+const permissionHint = "Tài khoản này chưa được mở quyền trên Firestore (chủ quán cần dán quy tắc mới ở Firebase Console → Firestore → Rules).";
 
-async function loadReimbursements() {
-  const note = $("#reimb-note");
-  note.textContent = "Đang đọc…";
+/* ---- Vai trò khi đăng nhập ---- */
+async function resolveRole(user) {
+  state.role = null; state.me = null; state.members = [];
+  const email = normEmail(user.email);
+  let profile = null;
+  try { if (email) { const d = await getDoc(doc(db, ...root, "webMembers", email)); if (d.exists()) profile = { id: d.id, ...d.data() }; } } catch { profile = null; }
+  if (user.uid === STORE_OWNER_UID) { state.role = ROLE_OWNER; state.me = profile || { email, name: user.displayName || "Chủ quán", role: ROLE_OWNER }; return true; }
+  if (profile && profile.active !== false && [ROLE_TREASURER, ROLE_BUYER].includes(profile.role)) { state.role = profile.role; state.me = profile; return true; }
+  return false;
+}
+const BUYER_TABS = ["hoanung", "taikhoan"];
+function applyRoleUi() {
+  const buyer = isBuyer();
+  document.querySelectorAll("#tabbar [data-tab]").forEach((a) => { a.hidden = buyer && !BUYER_TABS.includes(a.dataset.tab); });
+  $("#request-sync").hidden = buyer;
+  $("#reimb-treasurer-zone").hidden = !canTreasure(state.role);
+  $("#members-zone").hidden = state.role !== ROLE_OWNER;
+  $("#me-title").textContent = myName();
+  $("#me-role").textContent = `${state.user?.email || ""} · ${ROLE_LABELS[state.role] || ""}`;
+}
+async function loadMembers() {
+  if (!canTreasure(state.role)) return;
+  try { state.members = rows(await getDocs(collection(db, ...root, "webMembers"))); } catch { state.members = []; }
+  const mine = state.members.find((m) => normEmail(m.email) === myEmail());
+  if (mine) state.me = { ...state.me, ...mine };
+  renderAccount();
+}
+/** Người mua chỉ đọc phiếu và đợt hoàn của chính mình (quy tắc Firestore chặn phần còn lại). */
+async function loadBuyerData() {
+  $("#sync-status").textContent = "Đang đọc phiếu của bạn…";
+  try {
+    const [mine, batches] = await Promise.all([
+      getDocs(query(collection(db, ...root, "expenseReceipts"), where("payerEmail", "==", myEmail()), limit(300))).then(rows),
+      getDocs(query(collection(db, ...root, "reimbursements"), where("payerEmail", "==", myEmail()), limit(100))).then(rows),
+    ]);
+    state.expenseReceipts = mine.sort((a, b) => Number(b.purchaseDate || 0) - Number(a.purchaseDate || 0));
+    state.reimbBatches = batches.sort((a, b) => Number(b.paidAt) - Number(a.paidAt));
+    state.openReceipts = [];
+    state.reimbLoaded = true;
+    state.reimbError = "";
+  } catch (error) { state.reimbError = error.code === "permission-denied" ? permissionHint : (error.message || "lỗi không rõ"); }
+  try { state.expenseRules = rows(await getDocs(query(collection(db, ...root, "expenseRules"), limit(2000)))); } catch { state.expenseRules = []; }
+  try { const c = await getDoc(doc(db, ...root, "config", "expenseDetail")); state.detailCutoff = c.exists() && Number(c.data().cutoffAt) > 0 ? Number(c.data().cutoffAt) : null; } catch { state.detailCutoff = null; }
+  $("#sync-status").textContent = `${myName()} · ${ROLE_LABELS[state.role]}`;
+  renderReimbursements();
+  renderAccount();
+}
+
+let reimbLoading = null;
+/** Một lần đọc tại một thời điểm: mở tab trong lúc đang đọc không tốn thêm lượt đọc Firestore. */
+function loadReimbursements() {
+  if (!reimbLoading) reimbLoading = (isBuyer() ? loadBuyerData() : loadReimbursementsNow()).finally(() => { reimbLoading = null; });
+  return reimbLoading;
+}
+async function loadReimbursementsNow() {
+  $("#reimb-note").textContent = "Đang đọc…";
   try {
     const [open, batches, payees] = await Promise.all([
-      getDocs(query(collection(db, ...root, receiptCollection()), where("reimbursement.status", "in", ["PENDING", "APPROVED", "PAID"]), limit(500))).then(rows).catch(() => []),
+      getDocs(query(collection(db, ...root, receiptCollection()), where("reimbursement.status", "in", ["PENDING", "APPROVED", "REJECTED", "PAID"]), limit(500))).then(rows).catch(() => []),
       getDocs(query(collection(db, ...root, reimbCollection()), orderBy("paidAt", "desc"), limit(100))).then(rows),
-      getDocs(collection(db, ...root, "payees")).then(rows),
+      getDocs(collection(db, ...root, "payees")).then(rows).catch(() => []), // danh sách tài khoản cũ: chỉ dùng dự phòng khi người mua chưa tự nhập
     ]);
     state.openReceipts = open;
     state.reimbBatches = batches.sort((a, b) => Number(b.paidAt) - Number(a.paidAt));
     state.payees = payees;
     state.reimbLoaded = true;
     state.reimbError = "";
-  } catch (error) { state.reimbError = error.code === "permission-denied" ? "Không có quyền đọc hoàn ứng (cần mở quy tắc Firestore cho reimbursements, payees)." : (error.message || "lỗi không rõ"); }
+  } catch (error) { state.reimbError = error.code === "permission-denied" ? permissionHint : (error.message || "lỗi không rõ"); }
   renderReimbursements();
 }
 /** Phiếu dùng cho màn hoàn ứng: phiếu đã tải + phiếu còn mở ngoài khoảng tải (không để sót). */
@@ -1768,58 +1836,87 @@ function reimbReceipts() {
   for (const r of state.openReceipts) if (!byId.has(r.id) && (!state.demo || r.demo)) byId.set(r.id, r);
   return [...byId.values()];
 }
-function updateReimbBadge() {
-  const list = reimbReceipts();
-  const n = list.filter((r) => ["PENDING", "APPROVED"].includes(reimbursementStatus(r))).length + state.reimbBatches.filter((b) => needsReminder(b)).length;
-  const badge = $("#hoanung-badge");
-  if (!badge) return;
-  badge.hidden = !n;
-  badge.textContent = String(n);
+/** Thanh cảnh báo việc cần làm của người đang đăng nhập: hiện ở mọi trang. */
+function renderAlerts() {
+  const bar = $("#my-alerts");
+  if (!bar || !state.user || !state.role) return;
+  const a = myAlerts({ email: myEmail(), role: state.role, me: state.me, receipts: reimbReceipts(), batches: state.reimbBatches, members: people(), payees: state.payees });
+  const flash = bar.dataset.flash ? `<p class="alert-flash">${escapeHtml(bar.dataset.flash)}</p>` : "";
+  bar.hidden = !a.items.length && !flash;
+  bar.innerHTML = flash + (a.items.length ? `<strong>Việc của ${escapeHtml(myName())}</strong><ul>${a.items.map((x) => `<li class="${x.level}"><a href="#${x.key === "bank" ? "taikhoan" : "hoanung"}">${escapeHtml(x.text)}</a></li>`).join("")}</ul>` : "");
+  const bank = a.items.find((x) => x.key === "bank")?.count || 0;
+  const setBadge = (id, n) => { const el = $(id); if (el) { el.hidden = !n; el.textContent = String(n); } };
+  setBadge("#hoanung-badge", a.badge - bank);
+  setBadge("#taikhoan-badge", bank);
 }
-function receiptLine(r, dup, extra = "") {
+function receiptLine(r, dup, extra = "", showEdit = true) {
   const items = (r.items || []).slice(0, 3).map((i) => i.materialName).join(", ") + ((r.items || []).length > 3 ? "…" : "");
   const diff = changedAfterPaid(r);
-  return `<div class="reimb-receipt"><div><strong>${escapeHtml(receiptCode(r))}</strong> · ${dateTime(r.purchaseDate)} · <b>${money(r.total)}</b><small>${escapeHtml(items)}${r.note ? ` · ${escapeHtml(r.note)}` : ""}</small>${dup ? `<small class="warn-text">Nghi trùng với ${escapeHtml(dup.join(", "))}: kiểm tra hoá đơn trước khi duyệt</small>` : ""}${diff ? `<small class="warn-text">Phiếu bị sửa sau khi hoàn: chênh ${money(diff)}</small>` : ""}${r.reimbursement?.rejectReason ? `<small class="warn-text">Lý do không duyệt: ${escapeHtml(r.reimbursement.rejectReason)}</small>` : ""}</div><div class="row-actions">${extra}<button type="button" class="text-button" data-edit-receipt="${escapeHtml(r.id)}">Xem / sửa</button></div></div>`;
+  return `<div class="reimb-receipt"><div><strong>${escapeHtml(receiptCode(r))}</strong> · ${dateTime(r.purchaseDate)} · <b>${money(r.total)}</b><small>${escapeHtml(items)}${r.note ? ` · ${escapeHtml(r.note)}` : ""}</small>${dup ? `<small class="warn-text">Nghi trùng với ${escapeHtml(dup.join(", "))}: kiểm tra hoá đơn trước khi duyệt</small>` : ""}${diff ? `<small class="warn-text">Phiếu bị sửa sau khi hoàn: chênh ${money(diff)}</small>` : ""}${reimbursementStatus(r) === "REJECTED" && r.reimbursement?.rejectReason ? `<small class="warn-text">Lý do không duyệt: ${escapeHtml(r.reimbursement.rejectReason)}</small>` : ""}</div><div class="row-actions">${extra}${showEdit ? `<button type="button" class="text-button" data-edit-receipt="${escapeHtml(r.id)}">Xem / sửa</button>` : ""}</div></div>`;
+}
+const confirmLabel = (b) => (isMine(b, myEmail()) ? "Tôi đã nhận tiền" : `Xác nhận hộ ${b.payer}`);
+function batchCard(b) {
+  return `<article class="reimb-card"><header><strong>${escapeHtml(b.payer)} · ${money(b.amount)}</strong><span>${escapeHtml(b.code)} · ${b.method === "CASH" ? "tiền mặt" : "CK"} · ${dateTime(b.paidAt)}</span></header><p class="muted">${b.receiptCodes?.length || b.receiptIds.length} phiếu: ${escapeHtml((b.receiptCodes || []).join(", "))} · nội dung CK "${escapeHtml(b.transferNote || "")}" · người hoàn ${escapeHtml(b.treasurer || "")}</p>${needsReminder(b) ? '<p class="warn-text">Đã quá 1 ngày chưa xác nhận.</p>' : ""}${isMine(b, myEmail()) || canTreasure(state.role) ? `<div class="tool-row"><button type="button" class="btn strong" data-confirm="${escapeHtml(b.id)}">${escapeHtml(confirmLabel(b))}</button></div>` : ""}</article>`;
+}
+/** Phần "của tôi": ai cũng có, kể cả chủ quán / thủ quỹ khi tự ứng tiền. */
+function renderMine() {
+  const host = $("#reimb-mine");
+  const email = myEmail();
+  const mine = reimbReceipts().filter((r) => (isBuyer() || isMine(r, email)) && reimbursementStatus(r) !== "NONE").sort((a, b) => Number(b.purchaseDate || 0) - Number(a.purchaseDate || 0));
+  const myBatches = state.reimbBatches.filter((b) => isMine(b, email));
+  const paid = myBatches.filter((b) => b.status === "PAID");
+  const by = (st) => mine.filter((r) => reimbursementStatus(r) === st);
+  const editable = (st) => ["PENDING", "APPROVED", "REJECTED", "UNKNOWN"].includes(st);
+  const block = (st, title) => { const list = by(st); return list.length ? `<p class="reimb-sub">${title} · ${list.length} phiếu · ${money(list.reduce((s, r) => s + Number(r.total || 0), 0))}</p>${list.slice(0, st === "CONFIRMED" ? 10 : 100).map((r) => receiptLine(r, null, editable(st) && st !== "APPROVED" ? `<button type="button" class="text-button" data-cancel-mine="${escapeHtml(r.id)}">Huỷ phiếu</button>` : "", editable(st))).join("")}` : ""; };
+  const html = [
+    paid.length ? `<p class="reimb-sub">Đã được hoàn · chờ bạn xác nhận</p>${paid.map(batchCard).join("")}` : "",
+    block("REJECTED", "Bị trả lại · sửa rồi lưu để gửi lại"), block("PENDING", STATUS_LABELS.PENDING), block("APPROVED", STATUS_LABELS.APPROVED),
+    block("PAID", "Đã hoàn"), block("CONFIRMED", "Đã nhận tiền (gần đây)"),
+  ].join("");
+  host.innerHTML = html ? `<article class="reimb-card">${html}</article>` : `<p class="muted">Chưa có phiếu nào ${isBuyer() ? "bạn" : `${escapeHtml(myName())}`} ứng tiền. Bấm <b>+ Phiếu chi</b> để nhập.</p>`;
 }
 function renderReimbursements() {
   const host = $("#reimb-queues");
-  if (!host) return;
+  if (!host || !state.role) return;
   const all = reimbReceipts();
-  const person = state.reimbPerson;
-  const names = [...new Set([...all.map((r) => r.enteredByName).filter(Boolean), ...state.payees.map((p) => p.name)])].sort((a, b) => a.localeCompare(b));
-  const sel = $("#reimb-person");
-  sel.innerHTML = `<option value="">Tất cả</option>${names.map((n) => `<option ${n === person ? "selected" : ""}>${escapeHtml(n)}</option>`).join("")}`;
+  const names = [...new Set([...people().map((m) => m.name), ...all.map((r) => r.enteredByName), ...state.payees.map((p) => p.name)].filter(Boolean))].sort((a, b) => a.localeCompare(b));
   $("#payee-names").innerHTML = names.map((n) => `<option value="${escapeHtml(n)}"></option>`).join("");
   $("#bank-choices").innerHTML = BANK_CHOICES.map((b) => `<option value="${b}"></option>`).join("");
+  $("#reimb-note").textContent = state.reimbError || (isBuyer() ? `Phiếu của ${myName()}.` : `${state.demo ? "DEMO · " : ""}Phiếu từ ${dateTime(state.receiptsFrom)} và mọi phiếu còn mở.`);
+  renderMine();
+  renderAlerts();
+  if (!canTreasure(state.role)) return;
+  const person = state.reimbPerson;
+  const sel = $("#reimb-person");
+  sel.innerHTML = `<option value="">Tất cả</option>${[...new Set(all.map((r) => r.enteredByName).filter(Boolean))].sort((a, b) => a.localeCompare(b)).map((n) => `<option ${n === person ? "selected" : ""}>${escapeHtml(n)}</option>`).join("")}`;
   const list = person ? all.filter((r) => r.enteredByName === person) : all;
   const batches = person ? state.reimbBatches.filter((b) => b.payer === person) : state.reimbBatches;
-  const dups = duplicateSuspects(all);
-  const queues = payerQueues(list);
+  const waiting = batches.filter((b) => b.status === "PAID");
+  const dups = duplicateSuspects(all.filter((r) => reimbursementStatus(r) !== "NONE"));
   const pending = list.filter((r) => reimbursementStatus(r) === "PENDING");
   const approved = list.filter((r) => reimbursementStatus(r) === "APPROVED");
-  const waiting = batches.filter((b) => b.status === "PAID");
-  $("#reimb-note").textContent = state.reimbError || `${state.demo ? "DEMO · " : ""}Phiếu từ ${dateTime(state.receiptsFrom)} và mọi phiếu còn mở.`;
   $("#reimb-counters").innerHTML = [["Chờ duyệt", `${pending.length} phiếu · ${money(pending.reduce((s, r) => s + Number(r.total || 0), 0))}`], ["Chờ hoàn tiền", `${approved.length} phiếu · ${money(approved.reduce((s, r) => s + Number(r.total || 0), 0))}`], ["Đã hoàn, chờ xác nhận", `${waiting.length} đợt · ${money(waiting.reduce((s, b) => s + Number(b.amount || 0), 0))}`]]
-    .map(([l, v]) => `<article class="metric"><p>${l}</p><strong>${v}</strong></article>`).join("");
+    .map(([k, v]) => `<article><span>${k}</span><strong>${v}</strong></article>`).join("");
   const unknown = list.filter((r) => reimbursementStatus(r) === "UNKNOWN");
   $("#reimb-unknown").innerHTML = unknown.length ? `<div class="panel warn-panel"><strong>${unknown.length} phiếu chưa rõ nguồn tiền</strong><p class="muted">Phiếu nhập trước khi có quy trình hoàn ứng hoặc nhập trên máy POS. Chọn nguồn tiền để không bị sót.</p>${unknown.slice(0, 30).map((r) => receiptLine(r, dups.get(r.id), `<button type="button" class="btn" data-fund="${escapeHtml(r.id)}" data-value="PERSONAL">Cần hoàn</button><button type="button" class="btn ghost" data-fund="${escapeHtml(r.id)}" data-value="SHOP_CASH">Tiền quán</button>`)).join("")}</div>` : "";
-  host.innerHTML = queues.filter((q) => q.PENDING.length || q.APPROVED.length).map((q) => {
-    const payee = state.payees.find((p) => p.name === q.payer);
-    return `<article class="reimb-card"><header><strong>${escapeHtml(q.payer)}</strong><span>${payee ? `${escapeHtml(payee.bank)} · ${escapeHtml(payee.account)}` : '<span class="warn-text">chưa có tài khoản nhận</span>'}</span></header>
+  host.innerHTML = payerQueues(list).filter((q) => q.PENDING.length || q.APPROVED.length || q.REJECTED.length).map((q) => {
+    const sample = q.APPROVED[0] || q.PENDING[0] || q.REJECTED[0];
+    const bank = bankOf(sample, people(), state.payees);
+    const account = memberOf(sample, people());
+    return `<article class="reimb-card"><header><strong>${escapeHtml(q.payer)}</strong><span>${bank ? `${escapeHtml(bank.bank)} · ${escapeHtml(bank.account)}${bank.from === "payee" ? " (danh sách cũ)" : ""}` : `<span class="warn-text">${account ? "chưa nhập tài khoản ngân hàng" : "chưa có tài khoản web"}</span>`}</span></header>
       ${q.PENDING.length ? `<p class="reimb-sub">Chờ duyệt · ${q.PENDING.length} phiếu · ${money(q.pendingTotal)}</p>${q.PENDING.map((r) => receiptLine(r, dups.get(r.id), `<button type="button" class="btn" data-approve="${escapeHtml(r.id)}">Duyệt</button><button type="button" class="btn ghost" data-reject="${escapeHtml(r.id)}">Không duyệt</button>`)).join("")}` : ""}
       ${q.APPROVED.length ? `<p class="reimb-sub">Đã duyệt · chờ hoàn · ${q.APPROVED.length} phiếu · ${money(q.approvedTotal)}</p>${q.APPROVED.map((r) => receiptLine(r, dups.get(r.id))).join("")}<div class="tool-row"><button type="button" class="btn strong" data-pay="${escapeHtml(q.payer)}">Hoàn ${money(q.approvedTotal)} cho ${escapeHtml(q.payer)}</button></div>` : ""}
-    </article>`;
-  }).join("") || '<p class="muted">Không có phiếu nào chờ duyệt hay chờ hoàn.</p>';
-  $("#reimb-paid").innerHTML = waiting.map((b) => `<article class="reimb-card"><header><strong>${escapeHtml(b.payer)} · ${money(b.amount)}</strong><span>${escapeHtml(b.code)} · ${b.method === "CASH" ? "tiền mặt" : "CK"} · ${dateTime(b.paidAt)}</span></header><p class="muted">${b.receiptCodes?.length || b.receiptIds.length} phiếu: ${escapeHtml((b.receiptCodes || []).join(", "))} · nội dung CK "${escapeHtml(b.transferNote || "")}" · người hoàn ${escapeHtml(b.treasurer || "")}</p>${needsReminder(b) ? '<p class="warn-text">Đã quá 1 ngày chưa xác nhận.</p>' : ""}<div class="tool-row"><button type="button" class="btn strong" data-confirm="${escapeHtml(b.id)}">${escapeHtml(b.payer)} đã nhận tiền</button><button type="button" class="btn ghost" data-remind="${escapeHtml(b.id)}">Nhắc qua Zalo</button></div></article>`).join("") || '<p class="muted">Không có khoản nào chờ xác nhận.</p>';
-  $("#reimb-history").innerHTML = batches.filter((b) => b.status === "CONFIRMED").slice(0, 20).map((b) => `<div class="reimb-receipt"><div><strong>${escapeHtml(b.code)}</strong> · ${escapeHtml(b.payer)} · <b>${money(b.amount)}</b><small>Hoàn ${dateTime(b.paidAt)} · xác nhận ${dateTime(b.confirmedAt)} · ${b.receiptIds.length} phiếu</small></div></div>`).join("") || '<p class="muted">Chưa có.</p>';
-  $("#payee-list").innerHTML = state.payees.map((p) => `<div class="reimb-receipt"><div><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.bank)} · ${escapeHtml(p.account)}${p.holder ? ` · ${escapeHtml(p.holder)}` : ""}</small></div><div class="row-actions"><button type="button" class="text-button" data-edit-payee="${escapeHtml(p.id)}">Sửa</button></div></div>`).join("") || '<p class="muted">Chưa có tài khoản nào. Thêm để tạo QR hoàn tiền.</p>';
-  updateReimbBadge();
+      ${q.REJECTED.length ? `<p class="reimb-sub">Đã trả lại · chờ người mua sửa · ${q.REJECTED.length} phiếu</p>${q.REJECTED.map((r) => receiptLine(r, null)).join("")}` : ""}</article>`;
+  }).join("") || '<p class="muted">Không có phiếu nào chờ duyệt hoặc chờ hoàn.</p>';
+  $("#reimb-paid").innerHTML = waiting.map(batchCard).join("") || '<p class="muted">Không có khoản nào chờ xác nhận.</p>';
+  $("#reimb-history").innerHTML = batches.filter((b) => b.status === "CONFIRMED").slice(0, 20).map((b) => `<div class="reimb-receipt"><div><strong>${escapeHtml(b.code)}</strong> · ${escapeHtml(b.payer)} · <b>${money(b.amount)}</b><small>Hoàn ${dateTime(b.paidAt)} · xác nhận ${dateTime(b.confirmedAt)}${b.confirmedOnBehalf ? ` (${escapeHtml(b.confirmedBy || "thủ quỹ")} xác nhận hộ)` : ""} · ${b.receiptIds.length} phiếu</small></div></div>`).join("") || '<p class="muted">Chưa có.</p>';
 }
 async function updateReceiptReimb(id, patch) {
   const r = reimbReceipts().find((x) => x.id === id);
   if (!r) return;
   const now = Date.now();
-  const next = { ...r, ...(patch.fundSource ? { fundSource: patch.fundSource } : {}), code: receiptCode(r), reimbursement: { ...(r.reimbursement || {}), ...patch.reimbursement, updatedAt: now }, updatedAt: Math.max(now, Number(r.updatedAt || 0) + 1), ...(r.source === "ANDROID_POS" ? { editedBy: "WEB_MANAGER" } : {}) };
+  const next = { ...r, ...(patch.fundSource ? { fundSource: patch.fundSource } : {}), code: receiptCode(r), reimbursement: { ...(r.reimbursement || {}), ...patch.reimbursement, updatedAt: now, by: myName() }, updatedAt: Math.max(now, Number(r.updatedAt || 0) + 1), ...(r.source === "ANDROID_POS" ? { editedBy: "WEB_MANAGER" } : {}) };
+  if (!next.payerEmail) { const email = normEmail(memberOf(next, people())?.email); if (email) next.payerEmail = email; }
   try {
     await setDoc(doc(db, ...root, receiptCollection(), id), next);
     replaceLocalReceipt(next);
@@ -1831,9 +1928,9 @@ let reimbDraft = null;
 function openReimbDialog(payer) {
   const approved = reimbReceipts().filter((r) => r.enteredByName === payer && reimbursementStatus(r) === "APPROVED");
   if (!approved.length) return;
-  reimbDraft = { payer, receipts: approved, selected: new Set(approved.map((r) => r.id)) };
+  const payerEmail = normEmail(approved.find((r) => r.payerEmail)?.payerEmail || memberOf(approved[0], people())?.email);
+  reimbDraft = { payer, payerEmail, receipts: approved, selected: new Set(approved.map((r) => r.id)), bank: bankOf({ payerEmail, enteredByName: payer }, people(), state.payees) };
   $("#reimb-title").textContent = `Hoàn cho ${payer}`;
-  try { $("#reimb-treasurer").value = localStorage.getItem("pos0210.treasurer") || ""; } catch { /* bỏ qua */ }
   $("#reimb-error").textContent = "";
   renderReimbDialog();
   $("#reimb-dialog").showModal();
@@ -1847,13 +1944,13 @@ function renderReimbDialog() {
   const code = batchCode(reimbDraft.payer, Date.now(), state.reimbBatches.map((b) => b.code));
   reimbDraft.code = code;
   reimbDraft.note = transferNote(code, sel.length);
-  const payee = state.payees.find((p) => p.name === reimbDraft.payer);
+  const bank = reimbDraft.bank;
   const host = $("#reimb-qr");
   if (!sel.length) { host.innerHTML = '<p class="muted">Chọn ít nhất một phiếu.</p>'; return; }
-  if (!payee) { host.innerHTML = `<p class="warn-text">Chưa có tài khoản nhận của ${escapeHtml(reimbDraft.payer)}: thêm ở mục Tài khoản nhận hoàn để có QR. Vẫn có thể chuyển tay với nội dung: <b>${escapeHtml(reimbDraft.note)}</b></p>`; return; }
+  if (!bank) { host.innerHTML = `<p class="warn-text">${escapeHtml(reimbDraft.payer)} chưa nhập tài khoản ngân hàng ở trang Tài khoản của họ nên chưa có QR. Vẫn có thể chuyển tay với nội dung: <b>${escapeHtml(reimbDraft.note)}</b></p>`; return; }
   try {
-    const payload = vietQrPayload({ bank: payee.bank, account: payee.account, holder: payee.holder || payee.name, amount: total, info: reimbDraft.note });
-    host.innerHTML = `<div id="reimb-qr-img" class="qr-box" aria-label="Mã QR chuyển khoản"></div><p class="qr-meta">${escapeHtml(payee.bank)} · ${escapeHtml(payee.account)} · ${escapeHtml(payee.holder || payee.name)}<br>Số tiền <b>${money(total)}</b> · Nội dung <b>${escapeHtml(reimbDraft.note)}</b></p>`;
+    const payload = vietQrPayload({ bank: bank.bank, account: bank.account, holder: bank.holder, amount: total, info: reimbDraft.note });
+    host.innerHTML = `<div id="reimb-qr-img" class="qr-box" aria-label="Mã QR chuyển khoản"></div><p class="qr-meta">${escapeHtml(bank.bank)} · ${escapeHtml(bank.account)} · ${escapeHtml(bank.holder)}<br>Số tiền <b>${money(total)}</b> · Nội dung <b>${escapeHtml(reimbDraft.note)}</b></p>`;
     drawQr($("#reimb-qr-img"), payload);
   } catch (error) { host.innerHTML = `<p class="warn-text">${escapeHtml(error.message)}</p>`; }
 }
@@ -1877,15 +1974,14 @@ async function payBatch(method) {
   const err = $("#reimb-error");
   err.textContent = "";
   const sel = reimbSelection();
-  const treasurer = $("#reimb-treasurer").value.trim();
+  const treasurer = myName();
   if (!sel.length) { err.textContent = "Chọn ít nhất một phiếu."; return; }
-  if (!treasurer) { err.textContent = "Ghi tên người hoàn (thủ quỹ)."; return; }
   if (state.simulation) { err.textContent = "Đang mô phỏng: không ghi."; return; }
-  try { localStorage.setItem("pos0210.treasurer", treasurer); } catch { /* bỏ qua */ }
   const now = Date.now();
   const batchId = uuid();
   const total = sel.reduce((s, r) => s + Number(r.total || 0), 0);
-  const batch = { id: batchId, code: reimbDraft.code, payer: reimbDraft.payer, amount: total, method, transferNote: reimbDraft.note, receiptIds: sel.map((r) => r.id), receiptCodes: sel.map(receiptCode), treasurer, paidAt: now, status: "PAID", ...(state.demo ? { demo: true } : {}) };
+  const batch = { id: batchId, code: reimbDraft.code, payer: reimbDraft.payer, payerEmail: reimbDraft.payerEmail || "", amount: total, method, transferNote: reimbDraft.note, receiptIds: sel.map((r) => r.id), receiptCodes: sel.map(receiptCode), treasurer, treasurerEmail: myEmail(), paidAt: now, status: "PAID", ...(state.demo ? { demo: true } : {}) };
+  const paidInfo = (f) => ({ ...(f.reimbursement || {}), status: "PAID", batchId, batchCode: batch.code, paidAt: now, paidAmount: Number(f.total), paidBy: treasurer, updatedAt: now });
   try {
     await runTransaction(db, async (tx) => {
       const refs = sel.map((r) => doc(db, ...root, receiptCollection(), r.id));
@@ -1893,39 +1989,51 @@ async function payBatch(method) {
       for (const ref of refs) { const snap = await tx.get(ref); if (snap.exists()) fresh.push({ id: snap.id, ...snap.data() }); }
       const check = validateBatchSelection(sel, fresh);
       if (!check.ok) throw new Error(check.problems.join("; "));
-      fresh.forEach((f, i) => tx.set(refs[i], { ...f, code: receiptCode(f), reimbursement: { ...(f.reimbursement || {}), status: "PAID", batchId, batchCode: batch.code, paidAt: now, paidAmount: Number(f.total), paidBy: treasurer, updatedAt: now }, updatedAt: Math.max(now, Number(f.updatedAt || 0) + 1), ...(f.source === "ANDROID_POS" ? { editedBy: "WEB_MANAGER" } : {}) }));
+      // Gắn email người mua vào phiếu cũ để người mua tự thấy và tự xác nhận được trên tài khoản của họ.
+      fresh.forEach((f, i) => tx.set(refs[i], { ...f, ...(batch.payerEmail && !f.payerEmail ? { payerEmail: batch.payerEmail } : {}), code: receiptCode(f), reimbursement: paidInfo(f), updatedAt: Math.max(now, Number(f.updatedAt || 0) + 1), ...(f.source === "ANDROID_POS" ? { editedBy: "WEB_MANAGER" } : {}) }));
       tx.set(doc(db, ...root, reimbCollection(), batchId), batch);
       // Ghi hoàn ứng vào sổ để công nợ người ứng trên máy POS khớp (không ghi khi đang xem demo).
       if (!state.demo) tx.set(doc(db, ...root, "financialMovements", batchId), { id: batchId, type: "PAYER_REIMBURSEMENT", amount: total, occurredAt: now, partnerId: null, method: method === "CASH" ? "CASH" : "TRANSFER", note: `${batch.code} · ${batch.receiptCodes.join(", ")}`, counterpartyName: batch.payer, source: "WEB_MANAGER", createdAt: now, createdBy: state.user.uid });
     });
     $("#reimb-dialog").close();
-    for (const r of sel) { const prev = reimbReceipts().find((x) => x.id === r.id); if (prev) replaceLocalReceipt({ ...prev, reimbursement: { ...(prev.reimbursement || {}), status: "PAID", batchId, batchCode: batch.code, paidAt: now, paidAmount: Number(prev.total), paidBy: treasurer, updatedAt: now } }); }
+    for (const r of sel) { const prev = reimbReceipts().find((x) => x.id === r.id); if (prev) replaceLocalReceipt({ ...prev, ...(batch.payerEmail && !prev.payerEmail ? { payerEmail: batch.payerEmail } : {}), reimbursement: paidInfo(prev) }); }
     state.reimbLoaded = false;
     await loadReimbursements();
-    openShare(`Báo ${batch.payer} đã hoàn tiền`, zaloText.paid(batch, shareUrl()), "Gửi cho người nhận để họ kiểm tra tài khoản và bấm xác nhận.");
-  } catch (error) { err.textContent = error.code === "permission-denied" ? "Không có quyền ghi hoàn ứng (cần mở quy tắc Firestore)." : `Chưa hoàn được: ${error.message}`; }
+    flashNote(`Đã ghi hoàn ${money(total)} cho ${batch.payer} (${batch.code}). ${batch.payer} sẽ thấy cảnh báo để xác nhận khi mở web.`);
+  } catch (error) { err.textContent = error.code === "permission-denied" ? permissionHint : `Chưa hoàn được: ${error.message}`; }
 }
 async function confirmBatch(id) {
   const b = state.reimbBatches.find((x) => x.id === id);
-  if (!b || !window.confirm(`${b.payer} xác nhận đã nhận ${money(b.amount)} (${b.code})?`)) return;
+  if (!b) return;
+  const mine = isMine(b, myEmail());
+  if (!mine && !canTreasure(state.role)) return;
+  const question = mine ? `Bạn đã kiểm tra và nhận đủ ${money(b.amount)} (${b.code})?` : `${b.payer} đã báo nhận đủ ${money(b.amount)} (${b.code})? Xác nhận hộ sẽ ghi tên bạn.`;
+  if (!window.confirm(question)) return;
   const now = Date.now();
+  const stamp = { status: "CONFIRMED", confirmedAt: now, confirmedBy: myName(), confirmedByEmail: myEmail(), ...(mine ? {} : { confirmedOnBehalf: true }) };
   try {
-    // Đọc lại phiếu ngay lúc xác nhận để không ghi đè thông tin hoàn tiền bằng bản cũ trong trình duyệt.
+    // Đọc lại ngay lúc xác nhận để không ghi đè bằng bản cũ trong trình duyệt.
     await runTransaction(db, async (tx) => {
+      const batchRef = doc(db, ...root, reimbCollection(), id);
+      const batchSnap = await tx.get(batchRef);
+      if (!batchSnap.exists()) throw new Error("Đợt hoàn không còn trên hệ thống");
+      const current = { ...batchSnap.data() };
+      if (current.status !== "PAID") throw new Error(`Đợt này đã ở trạng thái ${current.status === "CONFIRMED" ? "đã xác nhận" : current.status}`);
       const refs = b.receiptIds.map((rid) => doc(db, ...root, receiptCollection(), rid));
       const snaps = [];
       for (const ref of refs) snaps.push(await tx.get(ref));
-      tx.set(doc(db, ...root, reimbCollection(), id), { ...b, status: "CONFIRMED", confirmedAt: now });
+      tx.set(batchRef, { ...current, ...stamp });
       snaps.forEach((snap, i) => {
         if (!snap.exists()) return;
-        const r = { id: snap.id, ...snap.data() };
+        const r = { ...snap.data() };
         tx.set(refs[i], { ...r, reimbursement: { ...(r.reimbursement || {}), status: "CONFIRMED", confirmedAt: now, updatedAt: now }, updatedAt: Math.max(now, Number(r.updatedAt || 0) + 1), ...(r.source === "ANDROID_POS" ? { editedBy: "WEB_MANAGER" } : {}) });
       });
     });
     for (const rid of b.receiptIds) { const prev = reimbReceipts().find((x) => x.id === rid); if (prev) replaceLocalReceipt({ ...prev, reimbursement: { ...(prev.reimbursement || {}), status: "CONFIRMED", confirmedAt: now } }); }
     state.reimbLoaded = false;
     await loadReimbursements();
-  } catch (error) { $("#reimb-note").textContent = `Chưa xác nhận được: ${error.message}`; }
+    flashNote(`Đã xác nhận ${b.code}.`);
+  } catch (error) { $("#reimb-note").textContent = error.code === "permission-denied" ? permissionHint : `Chưa xác nhận được: ${error.message}`; }
 }
 $("#reload-reimb").addEventListener("click", () => { state.reimbLoaded = false; loadReimbursements(); });
 $("#reimb-person").addEventListener("change", (e) => { state.reimbPerson = e.target.value; renderReimbursements(); });
@@ -1937,27 +2045,108 @@ $("[data-page=hoanung]").addEventListener("click", (e) => {
   const t = e.target.closest("button");
   if (!t) return;
   if (t.dataset.approve) updateReceiptReimb(t.dataset.approve, { reimbursement: { status: "APPROVED", approvedAt: Date.now(), rejectReason: "" } });
-  else if (t.dataset.reject) { const reason = window.prompt("Lý do không duyệt (người mua sẽ thấy):"); if (reason && reason.trim()) updateReceiptReimb(t.dataset.reject, { reimbursement: { status: "REJECTED", rejectReason: reason.trim() } }); }
+  else if (t.dataset.reject) { const reason = window.prompt("Lý do không duyệt (người mua sẽ thấy trên tài khoản của họ):"); if (reason && reason.trim()) updateReceiptReimb(t.dataset.reject, { reimbursement: { status: "REJECTED", rejectReason: reason.trim() } }); }
   else if (t.dataset.fund) updateReceiptReimb(t.dataset.fund, { fundSource: t.dataset.value, reimbursement: { status: t.dataset.value === FUND_PERSONAL ? "PENDING" : "NONE" } });
   else if (t.dataset.pay) openReimbDialog(t.dataset.pay);
   else if (t.dataset.confirm) confirmBatch(t.dataset.confirm);
-  else if (t.dataset.remind) { const b = state.reimbBatches.find((x) => x.id === t.dataset.remind); if (b) openShare(`Nhắc ${b.payer} xác nhận`, zaloText.reminder(b, shareUrl())); }
+  else if (t.dataset.cancelMine) cancelReceipt(t.dataset.cancelMine).then(() => renderReimbursements());
   else if (t.dataset.editReceipt) openReceiptEditor(t.dataset.editReceipt);
-  else if (t.dataset.editPayee) { const p = state.payees.find((x) => x.id === t.dataset.editPayee); if (p) { $("#payee-name").value = p.name; $("#payee-bank").value = p.bank; $("#payee-account").value = p.account; $("#payee-holder").value = p.holder || ""; } }
 });
-$("#payee-form").addEventListener("submit", async (e) => {
+
+/* ---------- Tài khoản: thông tin cá nhân + ngân hàng của mỗi người, chủ quán quản lý thành viên ---------- */
+function renderAccount() {
+  if (!state.role) return;
+  applyRoleUi();
+  const me = state.me || {};
+  const form = $("#me-form");
+  if (!form.contains(document.activeElement)) {
+    $("#me-name").value = me.name || myName();
+    $("#me-bank").value = me.bank || "";
+    $("#me-account").value = me.account || "";
+    $("#me-holder").value = me.holder || "";
+  }
+  if (state.role !== ROLE_OWNER) return;
+  const receipts = reimbReceipts();
+  $("#member-list").innerHTML = state.members.filter((m) => normEmail(m.email) !== myEmail()).sort((a, b) => String(a.name).localeCompare(String(b.name))).map((m) => {
+    const legacy = legacyOpenReceipts(m, receipts).length;
+    return `<div class="reimb-receipt"><div><strong>${escapeHtml(m.name || m.email)}</strong><small>${escapeHtml(m.email)} · ${ROLE_LABELS[m.role] || m.role}${m.active === false ? " · <b>đã khoá</b>" : ""}</small><small>${m.bank && m.account ? `${escapeHtml(m.bank)} · ${escapeHtml(m.account)}` : '<span class="warn-text">chưa nhập tài khoản ngân hàng</span>'}</small></div><div class="row-actions">${legacy ? `<button type="button" class="btn" data-link-legacy="${escapeHtml(m.email)}">Gắn ${legacy} phiếu cũ</button>` : ""}<button type="button" class="text-button" data-edit-member="${escapeHtml(m.email)}">Sửa</button><button type="button" class="text-button" data-toggle-member="${escapeHtml(m.email)}">${m.active === false ? "Mở lại" : "Khoá"}</button></div></div>`;
+  }).join("") || '<p class="muted">Chưa có thành viên. Thêm email cho thủ quỹ và từng người mua.</p>';
+}
+const stripId = ({ id: _id, ...rest }) => rest;
+$("#me-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const err = $("#payee-error");
+  const err = $("#me-error");
   err.textContent = "";
-  const p = { name: $("#payee-name").value.trim(), bank: $("#payee-bank").value.trim(), account: $("#payee-account").value.replace(/\s+/g, ""), holder: $("#payee-holder").value.trim() };
-  try { vietQrPayload({ ...p, amount: 1000, info: "KIEM TRA" }); } catch (error) { err.textContent = error.message; return; }
-  const id = p.name.toLocaleLowerCase("vi").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || uuid();
+  const p = { name: $("#me-name").value.trim(), bank: $("#me-bank").value.trim(), account: $("#me-account").value.replace(/\s+/g, ""), holder: $("#me-holder").value.trim() };
+  if (!p.name) { err.textContent = "Nhập tên hiển thị."; return; }
+  if (p.bank || p.account) { try { vietQrPayload({ ...p, amount: 1000, info: "KIEM TRA" }); } catch (error) { err.textContent = error.message; return; } }
+  const email = myEmail();
+  if (!email) { err.textContent = "Tài khoản đăng nhập không có email."; return; }
+  const next = { ...stripId(state.me || {}), email, ...p, updatedAt: Date.now(), ...(state.role === ROLE_OWNER ? { role: ROLE_OWNER } : {}) };
   try {
-    await setDoc(doc(db, ...root, "payees", id), { id, ...p, updatedAt: Date.now() });
-    state.payees = [...state.payees.filter((x) => x.id !== id), { id, ...p }];
+    await setDoc(doc(db, ...root, "webMembers", email), next);
+    state.me = { ...next, id: email };
+    state.members = [...state.members.filter((m) => normEmail(m.email) !== email), state.me];
+    err.textContent = "";
+    renderAccount(); renderReimbursements();
+    flashNote("Đã lưu thông tin tài khoản.");
+  } catch (error) { err.textContent = error.code === "permission-denied" ? permissionHint : error.message; }
+});
+let memberAuth = null;
+/** Tạo tài khoản đăng nhập cho thành viên bằng một phiên Firebase phụ: chủ quán không bị đăng xuất. */
+async function createLogin(email, password) {
+  if (!memberAuth) memberAuth = getAuth(initializeApp(firebaseConfig, "member-create"));
+  try { await createUserWithEmailAndPassword(memberAuth, email, password); await signOut(memberAuth); return "Đã tạo tài khoản đăng nhập."; }
+  catch (error) {
+    if (error.code === "auth/email-already-in-use") return "Email đã có tài khoản đăng nhập: dùng mật khẩu cũ.";
+    throw new Error(error.code === "auth/weak-password" ? "Mật khẩu tối thiểu 6 ký tự." : error.code === "auth/operation-not-allowed" ? "Firebase chưa cho tạo tài khoản từ web: tạo ở Firebase Console → Authentication → Add user, rồi lưu lại ở đây với ô mật khẩu để trống." : (error.message || error.code));
+  }
+}
+$("#member-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const err = $("#member-error");
+  err.textContent = "";
+  const email = normEmail($("#member-email").value);
+  const name = $("#member-name").value.trim();
+  const role = $("#member-role").value;
+  const password = $("#member-password").value.trim();
+  if (!email || !name) { err.textContent = "Nhập email và tên."; return; }
+  if (email === myEmail()) { err.textContent = "Đây là tài khoản chủ quán: sửa ở mục Thông tin cá nhân phía trên."; return; }
+  try {
+    const note = password ? await createLogin(email, password) : "";
+    const prev = state.members.find((m) => normEmail(m.email) === email);
+    const next = { ...(prev ? stripId(prev) : { createdAt: Date.now() }), email, name, role, active: prev?.active ?? true, updatedAt: Date.now() };
+    await setDoc(doc(db, ...root, "webMembers", email), next);
+    state.members = [...state.members.filter((m) => normEmail(m.email) !== email), { ...next, id: email }];
     e.target.reset();
-    renderReimbursements();
-  } catch (error) { err.textContent = error.code === "permission-denied" ? "Không có quyền lưu tài khoản (cần mở quy tắc Firestore cho payees)." : error.message; }
+    renderAccount(); renderReimbursements();
+    err.textContent = `${note} Đã lưu ${name} (${ROLE_LABELS[role]}).`.trim();
+  } catch (error) { err.textContent = error.message; }
+});
+$("#members-zone").addEventListener("click", async (e) => {
+  const t = e.target.closest("button");
+  if (!t) return;
+  const m = state.members.find((x) => normEmail(x.email) === (t.dataset.editMember || t.dataset.toggleMember || t.dataset.linkLegacy));
+  if (!m) return;
+  if (t.dataset.editMember) { $("#member-email").value = m.email; $("#member-name").value = m.name || ""; $("#member-role").value = m.role || ROLE_BUYER; $("#member-password").value = ""; $("#member-name").focus(); return; }
+  try {
+    if (t.dataset.toggleMember) {
+      const next = { ...stripId(m), active: m.active === false, updatedAt: Date.now() };
+      await setDoc(doc(db, ...root, "webMembers", normEmail(m.email)), next);
+      state.members = state.members.map((x) => (x === m ? { ...next, id: x.id } : x));
+    } else {
+      // Phiếu cũ nhập trước khi có tài khoản riêng: gắn email để người mua thấy được trên tài khoản của họ.
+      const list = legacyOpenReceipts(m, reimbReceipts());
+      if (!window.confirm(`Gắn ${list.length} phiếu đang mở mang tên "${m.name}" vào tài khoản ${m.email}?`)) return;
+      const batch = writeBatch(db);
+      const now = Date.now();
+      const updated = list.map((r) => ({ ...r, payerEmail: normEmail(m.email), updatedAt: Math.max(now, Number(r.updatedAt || 0) + 1), ...(r.source === "ANDROID_POS" ? { editedBy: "WEB_MANAGER" } : {}) }));
+      updated.forEach((r) => batch.set(doc(db, ...root, receiptCollection(), r.id), r));
+      await batch.commit();
+      updated.forEach((r) => { replaceLocalReceipt(r); state.openReceipts = state.openReceipts.map((x) => (x.id === r.id ? r : x)); });
+    }
+    renderAccount(); renderReimbursements();
+  } catch (error) { $("#member-error").textContent = error.code === "permission-denied" ? permissionHint : error.message; }
 });
 
 /* ---------- Tải phiếu cũ hơn 7 ngày khi chọn kỳ xem xa hơn (tối đa 500 phiếu) ---------- */
@@ -1976,21 +2165,34 @@ async function ensureReceiptsLoaded() {
 }
 
 /* ---------- Chia tab: mỗi tab là một trang riêng theo #hash, nút Back của trình duyệt hoạt động ---------- */
-const TABS = ["ban", "doanhthu", "bill", "thanhtoan", "taichinh", "giavon", "hoanung"];
+const TABS = ["ban", "doanhthu", "bill", "thanhtoan", "taichinh", "giavon", "hoanung", "taikhoan"];
 function showTab() {
-  const name = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "ban";
+  const allowed = isBuyer() ? BUYER_TABS : TABS;
+  const name = allowed.includes(location.hash.slice(1)) ? location.hash.slice(1) : allowed[0];
   document.querySelectorAll(".page").forEach((page) => { page.hidden = page.dataset.page !== name; });
   document.querySelectorAll("#tabbar [data-tab]").forEach((link) => link.classList.toggle("active", link.dataset.tab === name));
   window.scrollTo(0, 0);
   if (name === "giavon" && state.user && !state.recipesLoaded) loadRecipes();
   if (name === "hoanung" && state.user && !state.reimbLoaded) loadReimbursements();
+  if (name === "taikhoan" && state.user) renderAccount();
 }
 window.addEventListener("hashchange", showTab);
 showTab();
 
-onAuthStateChanged(auth, (user) => {
+onAuthStateChanged(auth, async (user) => {
   state.user = user || null;
+  state.role = null;
+  if (user && !(await resolveRole(user))) {
+    // Đăng nhập được nhưng chủ quán chưa thêm email này vào danh sách thành viên.
+    const email = user.email || "";
+    await signOut(auth);
+    $("#login-error").textContent = `Tài khoản ${email} chưa được chủ quán cấp quyền (hoặc đã bị khoá). Nhờ chủ quán thêm email này ở trang Tài khoản.`;
+    return;
+  }
   $("#login-view").hidden = Boolean(user);
   $("#dashboard-view").hidden = !user;
-  if (user) refreshDashboard();
+  if (!user) return;
+  renderAccount();
+  showTab();
+  refreshDashboard();
 });

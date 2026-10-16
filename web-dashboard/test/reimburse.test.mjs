@@ -85,3 +85,59 @@ test("VietQR đúng chuẩn EMVCo (CRC16 và chuỗi mẫu tính độc lập)",
   assert.throws(() => vietQrPayload({ bank: "MB", account: "", amount: 1, info: "" }), /Thiếu số tài khoản/);
   assert.throws(() => vietQrPayload({ bank: "MB", account: "1", amount: 0, info: "" }), /Số tiền/);
 });
+
+import { bankOf, canTreasure, isMine, legacyOpenReceipts, memberOf, myAlerts } from "../reimburse.js";
+
+const members = [
+  { email: "huong@x.vn", name: "Phạm Thị Hương", role: "NGUOI_MUA", bank: "MB", account: "0909", holder: "PHAM THI HUONG" },
+  { email: "tq@x.vn", name: "Lan", role: "THU_QUY" },
+];
+test("người mua: theo email trước, phiếu cũ khớp theo tên", () => {
+  assert.equal(memberOf({ payerEmail: "HUONG@x.vn" }, members).name, "Phạm Thị Hương");
+  assert.equal(memberOf({ enteredByName: "pham thi huong" }, members).email, "huong@x.vn");
+  assert.equal(memberOf({ enteredByName: "Ai đó" }, members), null);
+  assert.ok(isMine({ payerEmail: "Huong@X.vn" }, "huong@x.vn"));
+  assert.ok(!isMine({ payerEmail: "" }, ""));
+  assert.ok(canTreasure("THU_QUY") && canTreasure("CHU_QUAN") && !canTreasure("NGUOI_MUA"));
+});
+test("tài khoản nhận: hồ sơ người dùng trước, danh sách cũ sau", () => {
+  assert.equal(bankOf({ payerEmail: "huong@x.vn" }, members, []).from, "member");
+  assert.equal(bankOf({ enteredByName: "Lan" }, members, [{ name: "Lan", bank: "VCB", account: "1" }]).from, "payee");
+  assert.equal(bankOf({ enteredByName: "Lan" }, members, []), null);
+});
+test("phiếu cũ chưa gắn email còn mở được gắn theo tên", () => {
+  const rs = [
+    { id: "1", enteredByName: "Phạm Thị Hương", fundSource: "PERSONAL" },
+    { id: "2", enteredByName: "Phạm Thị Hương", fundSource: "PERSONAL", payerEmail: "huong@x.vn" },
+    { id: "3", enteredByName: "Phạm Thị Hương", fundSource: "SHOP_CASH" },
+    { id: "4", enteredByName: "Phạm Thị Hương", fundSource: "PERSONAL", reimbursement: { status: "CONFIRMED" } },
+  ];
+  assert.deepEqual(legacyOpenReceipts(members[0], rs).map((r) => r.id), ["1"]);
+});
+test("cảnh báo người mua: bị trả lại, chờ xác nhận, thiếu tài khoản", () => {
+  const now = 10 * 86400000;
+  const receipts = [
+    { id: "a", payerEmail: "lan@x.vn", fundSource: "PERSONAL", total: 100, reimbursement: { status: "REJECTED", rejectReason: "mờ" } },
+    { id: "b", payerEmail: "lan@x.vn", fundSource: "PERSONAL", total: 50 },
+    { id: "c", payerEmail: "khac@x.vn", fundSource: "PERSONAL", total: 70 },
+  ];
+  const batches = [{ id: "z", status: "PAID", payerEmail: "lan@x.vn", amount: 200, paidAt: now - 2 * 86400000, payer: "Lan" }];
+  const a = myAlerts({ email: "lan@x.vn", role: "NGUOI_MUA", me: {}, receipts, batches, now });
+  assert.deepEqual(a.items.map((x) => x.key), ["rejected", "confirm", "waiting", "bank"]);
+  assert.equal(a.badge, 3);
+  assert.match(a.items[1].text, /quá 1 ngày/);
+  const ok = myAlerts({ email: "lan@x.vn", role: "NGUOI_MUA", me: { bank: "MB", account: "1" }, receipts: [], batches: [], now });
+  assert.equal(ok.badge, 0); assert.equal(ok.items.length, 0);
+});
+test("cảnh báo thủ quỹ: chờ duyệt, chờ hoàn, chưa rõ nguồn, thiếu tài khoản, chưa xác nhận", () => {
+  const now = 10 * 86400000;
+  const receipts = [
+    { id: "a", enteredByName: "Lan", fundSource: "PERSONAL", total: 100 },
+    { id: "b", enteredByName: "Tú", fundSource: "PERSONAL", total: 50, reimbursement: { status: "APPROVED" } },
+    { id: "c", enteredByName: "Tú", total: 70 },
+  ];
+  const batches = [{ id: "z", status: "PAID", payerEmail: "huong@x.vn", payer: "Hương", amount: 1, paidAt: now - 3 * 86400000 }];
+  const a = myAlerts({ email: "tq@x.vn", role: "THU_QUY", me: { bank: "MB", account: "1" }, receipts, batches, members, now });
+  assert.deepEqual(a.items.map((x) => x.key), ["approve", "pay", "unknown", "nobank", "late"]);
+  assert.equal(a.badge, 3);
+});

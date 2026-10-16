@@ -256,3 +256,13 @@ body.simulating #taichinh-page, body.simulating [data-page="taichinh"] { outline
 .qr-box svg { width: 100%; height: 100%; }
 .qr-meta { margin: 0; font-size: 14px; }
 #share-text { width: 100%; font: inherit; padding: 10px; border-radius: 12px; border: 1px solid #dfcfb8; background: #fffaf3; }
+
+/* Cảnh báo việc cần làm theo tài khoản */
+.my-alerts { margin: 8px 0 12px; padding: 12px 14px; border: 1px solid #e6b9a6; border-radius: 16px; background: #fff3ec; font-size: 14px; }
+.my-alerts strong { display: block; margin-bottom: 4px; color: #6e432d; }
+.my-alerts ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.my-alerts li a { color: inherit; text-decoration: none; }
+.my-alerts li.warn a { color: #8a2a12; font-weight: 700; }
+.my-alerts li.info a { color: #5b4b3e; }
+.my-alerts .alert-flash { margin: 0 0 6px; color: #1f6b3a; font-weight: 700; }
+input[readonly] { background: #f3ece2; color: #5b4b3e; }

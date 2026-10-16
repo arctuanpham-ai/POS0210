@@ -19,35 +19,35 @@ import {
   setDoc as rawSetDoc,
   writeBatch as rawWriteBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261017-06";
-import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261017-06";
-import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261017-06";
-import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261017-06";
-import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261017-06";
-import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261017-06";
-import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261017-06";
-import { buildSimulation } from "./sim-data.js?v=20261017-06";
-import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261017-06";
-import { menuCsv } from "./menu-export.js?v=20261017-06";
-import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261017-06";
-import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261017-06";
-import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261017-06";
-import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261017-06";
-import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261017-06";
-import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261017-06";
-import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261017-06";
-import { otherCostRows } from "./other-costs.js?v=20261017-06";
-import { paybackStatus } from "./payback.js?v=20261017-06";
-import { topSellers } from "./top-banner.js?v=20261017-06";
-import { reconcileRevenue } from "./revenue-check.js?v=20261017-06";
-import { menuGroups, mergePlan, nameIssues, normName, soldNotInMenu } from "./menu-view.js?v=20261017-06";
-import { POS_CEILING, SPARK, dayUsage, lastPacificDays, nextReset, pacificDay, usageTrend } from "./usage.js?v=20261017-06";
-import { AI_SCOPES, buildAiPack, scopeRange } from "./ai-export.js?v=20261017-06";
-import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261017-06";
-import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261017-06";
-import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261017-06";
-import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261017-06";
-import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261017-06";
+import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261017-07";
+import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261017-07";
+import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261017-07";
+import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261017-07";
+import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261017-07";
+import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261017-07";
+import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261017-07";
+import { buildSimulation } from "./sim-data.js?v=20261017-07";
+import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261017-07";
+import { menuCsv } from "./menu-export.js?v=20261017-07";
+import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261017-07";
+import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261017-07";
+import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261017-07";
+import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261017-07";
+import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261017-07";
+import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261017-07";
+import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261017-07";
+import { otherCostRows } from "./other-costs.js?v=20261017-07";
+import { paybackStatus } from "./payback.js?v=20261017-07";
+import { topSellers } from "./top-banner.js?v=20261017-07";
+import { reconcileRevenue } from "./revenue-check.js?v=20261017-07";
+import { menuGroups, mergePlan, nameIssues, normName, soldNotInMenu } from "./menu-view.js?v=20261017-07";
+import { POS_CEILING, SPARK, dayUsage, lastPacificDays, nextReset, pacificDay, usageTrend } from "./usage.js?v=20261017-07";
+import { AI_SCOPES, buildAiPack, scopeRange } from "./ai-export.js?v=20261017-07";
+import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261017-07";
+import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261017-07";
+import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261017-07";
+import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261017-07";
+import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261017-07";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",
@@ -1075,7 +1075,17 @@ function render() {
 }
 /** Tháng đã chốt chia cổ đông (máy POS v160+ đẩy lên). */
 async function loadClosedMonths() {
-  try { state.closedMonths = rows(await getDocs(collection(db, ...root, "shareholderCloses"))).map((x) => x.monthKey || x.id); state.closedLoaded = true; }
+  // Tháng đã chốt = chốt trên máy POS cũ (shareholderCloses) + tháng đã lưu đối soát chia cổ đông trên web và đã kết thúc.
+  // Từ app 166 chỉ chốt trên web; lưu đối soát giữa tháng đang chạy chưa tính là chốt.
+  try {
+    const current = monthKeyOf(Date.now());
+    const [sh, fc] = await Promise.all([
+      getDocs(collection(db, ...root, "shareholderCloses")).then(rows),
+      getDocs(collection(db, ...root, "fundClosings")).then(rows).catch(() => []),
+    ]);
+    state.closedMonths = [...new Set([...sh.map((x) => x.monthKey || x.id), ...fc.map((x) => x.monthKey || x.id).filter((k) => k < current)])];
+    state.closedLoaded = true;
+  }
   catch { state.closedLoaded = false; }
 }
 async function refreshDashboard() {

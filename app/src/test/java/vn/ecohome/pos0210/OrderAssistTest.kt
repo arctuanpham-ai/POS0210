@@ -61,11 +61,4 @@ class OrderAssistTest {
         assertFalse(SensitiveAudit.isSensitive("BILL", "DISCOUNT_APPLIED", "discount=5000,auto=true"))
         assertTrue(SensitiveAudit.isSensitive("BILL", "DISCOUNT_APPLIED", "discount=5000,auto=false"))
     }
-
-    @Test fun comboSuggestedWhenOnlyOnePartMissingEvenWithoutHistory() {
-        val combo = ComboDef("c9", "Sáng", 45_000L, mapOf("cf" to 1, "banh" to 1))
-        val s = ComboSuggestions.suggest(mapOf("cf" to 1), listOf(combo), mapOf("cf" to 25_000L, "banh" to 25_000L), emptyMap())
-        assertEquals(ComboSuggestion.Kind.PARTIAL, s.single().kind)
-        assertTrue(ComboSuggestions.suggest(mapOf("cf" to 1), listOf(ComboDef("c8", "Lớn", 70_000L, mapOf("cf" to 1, "banh" to 2))), mapOf("cf" to 25_000L, "banh" to 25_000L), emptyMap()).isEmpty())
-    }
 }

@@ -330,3 +330,7 @@ button.paylist-row { width: 100%; font: inherit; color: inherit; cursor: pointer
 .ai-export .ai-actions { flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .ai-export .inline-check { display: flex; gap: 8px; align-items: flex-start; font-size: .9rem; margin: 6px 0; }
 .ai-export .ai-open a { font-weight: 700; }
+.ai-export .filter-row { flex-wrap: wrap; overflow: visible; }
+.ai-export .inline-check { display: flex !important; flex-direction: row; justify-content: flex-start; text-align: left; }
+.ai-export .inline-check input { width: auto; flex: 0 0 auto; margin-top: 3px; }
+.ai-export button:disabled { opacity: .5; }

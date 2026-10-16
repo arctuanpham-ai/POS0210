@@ -19,32 +19,32 @@ import {
   setDoc as rawSetDoc,
   writeBatch as rawWriteBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261016-30";
-import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261016-30";
-import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261016-30";
-import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261016-30";
-import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261016-30";
-import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261016-30";
-import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261016-30";
-import { buildSimulation } from "./sim-data.js?v=20261016-30";
-import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261016-30";
-import { menuCsv } from "./menu-export.js?v=20261016-30";
-import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-30";
-import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-30";
-import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261016-30";
-import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261016-30";
-import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261016-30";
-import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261016-30";
-import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261016-30";
-import { otherCostRows } from "./other-costs.js?v=20261016-30";
-import { paybackStatus } from "./payback.js?v=20261016-30";
-import { topSellers } from "./top-banner.js?v=20261016-30";
-import { AI_SCOPES, buildAiPack, scopeRange } from "./ai-export.js?v=20261016-30";
-import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-30";
-import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261016-30";
-import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261016-30";
-import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261016-30";
-import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261016-30";
+import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261016-31";
+import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261016-31";
+import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261016-31";
+import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261016-31";
+import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261016-31";
+import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261016-31";
+import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261016-31";
+import { buildSimulation } from "./sim-data.js?v=20261016-31";
+import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261016-31";
+import { menuCsv } from "./menu-export.js?v=20261016-31";
+import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-31";
+import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-31";
+import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261016-31";
+import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261016-31";
+import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261016-31";
+import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261016-31";
+import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261016-31";
+import { otherCostRows } from "./other-costs.js?v=20261016-31";
+import { paybackStatus } from "./payback.js?v=20261016-31";
+import { topSellers } from "./top-banner.js?v=20261016-31";
+import { AI_SCOPES, buildAiPack, scopeRange } from "./ai-export.js?v=20261016-31";
+import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-31";
+import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261016-31";
+import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261016-31";
+import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261016-31";
+import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261016-31";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",
@@ -2627,9 +2627,18 @@ const ai = { scope: "month", text: "", busy: false };
 function renderAiScopes() {
   $("#ai-scope").innerHTML = AI_SCOPES.map(([k, label]) => `<button type="button" class="filter${ai.scope === k ? " active" : ""}" data-ai-scope="${k}">${label}</button>`).join("");
 }
-$("#ai-scope").addEventListener("click", (e) => { const k = e.target.closest("[data-ai-scope]")?.dataset.aiScope; if (!k) return; ai.scope = k; ai.text = ""; renderAiScopes(); $("#ai-status").textContent = ""; });
-$("#ai-bills").addEventListener("change", () => { ai.text = ""; });
-$("#ai-export").addEventListener("toggle", (e) => { if (e.target.open) renderAiScopes(); });
+// Điện thoại chỉ cho mở bảng chia sẻ / ghi clipboard NGAY trong cú bấm: dữ liệu phải tạo sẵn trước khi bấm.
+function prepareAi() {
+  ai.text = ""; ai.pending = null; ai.version = (ai.version || 0) + 1;
+  const v = ai.version;
+  setAiButtons(false);
+  $("#ai-status").textContent = "Đang chuẩn bị dữ liệu…";
+  aiText().then(() => { if (v === ai.version) setAiButtons(true); }).catch((error) => { if (v === ai.version) $("#ai-status").textContent = `Chưa tạo được dữ liệu: ${error.message || error}`; });
+}
+function setAiButtons(ready) { ["#ai-share", "#ai-copy", "#ai-download"].forEach((id) => { $(id).disabled = !ready; }); }
+$("#ai-scope").addEventListener("click", (e) => { const k = e.target.closest("[data-ai-scope]")?.dataset.aiScope; if (!k) return; ai.scope = k; renderAiScopes(); prepareAi(); });
+$("#ai-bills").addEventListener("change", prepareAi);
+$("#ai-export").addEventListener("toggle", (e) => { if (e.target.open) { renderAiScopes(); if (!ai.text && !ai.busy) prepareAi(); } });
 const INITIAL_SET = INITIAL_CATEGORIES;
 async function buildAiText() {
   if (state.demo || state.simulation) throw new Error("Đang xem demo / mô phỏng: tắt để xuất số thật.");
@@ -2710,22 +2719,33 @@ async function buildAiText() {
 }
 async function aiText() {
   if (ai.text) return ai.text;
-  if (ai.busy) throw new Error("Đang tạo dữ liệu, chờ chút.");
+  if (ai.pending) return ai.pending;
+  const v = ai.version;
   ai.busy = true;
-  try { ai.text = await buildAiText(); return ai.text; } finally { ai.busy = false; }
+  ai.pending = buildAiText().then((t) => { if (v === ai.version) ai.text = t; return t; }).finally(() => { ai.busy = false; ai.pending = null; });
+  return ai.pending;
 }
 const aiFileName = () => `POS0210-AI-${ai.scope}-${dateKeyOf(new Date())}.md`;
-async function aiAction(kind) {
+function aiAction(kind) {
+  const text = ai.text;
+  if (!text) { if (!ai.busy) prepareAi(); $("#ai-status").textContent = "Đang chuẩn bị dữ liệu, chờ vài giây rồi bấm lại."; return; }
+  const fallback = (why) => { downloadFile(aiFileName(), "text/markdown;charset=utf-8", text); $("#ai-status").textContent = `${why} Đã tải file ${aiFileName()}: mở app AI và đính kèm file này.`; };
+  if (kind === "download") { downloadFile(aiFileName(), "text/markdown;charset=utf-8", text); return; }
+  if (kind === "copy") {
+    const done = () => flashNote("Đã sao chép. Mở app AI và dán vào ô chat.");
+    const legacy = () => { const t = Object.assign(document.createElement("textarea"), { value: text }); t.style.position = "fixed"; t.style.opacity = "0"; document.body.append(t); t.select(); const ok = document.execCommand("copy"); t.remove(); if (ok) done(); else fallback("Trình duyệt không cho sao chép."); };
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(done, legacy); else legacy();
+    return;
+  }
+  // Gọi share đồng bộ trong cú bấm (không await gì trước đó).
+  const file = new File([text], aiFileName(), { type: "text/plain" });
+  let p = null;
   try {
-    const text = await aiText();
-    if (kind === "download") { downloadFile(aiFileName(), "text/markdown;charset=utf-8", text); return; }
-    if (kind === "copy") { await navigator.clipboard.writeText(text); flashNote("Đã sao chép. Mở app AI và dán vào ô chat."); return; }
-    const file = new File([text], aiFileName(), { type: "text/markdown" });
-    if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: "Dữ liệu quán 0210", text: "Phân tích giúp tôi theo hướng dẫn trong file." }); return; }
-    if (navigator.share) { await navigator.share({ title: "Dữ liệu quán 0210", text }); return; }
-    downloadFile(aiFileName(), "text/markdown;charset=utf-8", text);
-    $("#ai-status").textContent += " Trình duyệt này không chia sẻ trực tiếp được: đã tải file, hãy đính kèm file vào app AI.";
-  } catch (error) { if (error?.name !== "AbortError") $("#ai-status").textContent = `Chưa xuất được: ${error.message || error}`; }
+    if (navigator.canShare?.({ files: [file] })) p = navigator.share({ files: [file], title: "Dữ liệu quán 0210", text: "Phân tích giúp tôi theo hướng dẫn trong file." });
+    else if (navigator.share) p = navigator.share({ title: "Dữ liệu quán 0210", text });
+  } catch (error) { p = Promise.reject(error); }
+  if (!p) { fallback("Trình duyệt này không chia sẻ trực tiếp được."); return; }
+  p.catch((error) => { if (error?.name !== "AbortError") fallback(`Không mở được bảng chia sẻ (${error.message || error}).`); });
 }
 $("#ai-share").addEventListener("click", () => aiAction("share"));
 $("#ai-copy").addEventListener("click", () => aiAction("copy"));

@@ -2,9 +2,9 @@
 // Hàm thuần: không Firebase, không DOM.
 
 export const FUND_PERSONAL = "PERSONAL";   // tiền túi người mua, cần hoàn
-export const FUND_SHOP_CASH = "SHOP_CASH"; // tiền mặt quỹ quán, không hoàn
-export const FUND_SHOP_BANK = "SHOP_BANK"; // chuyển khoản từ tài khoản quán, không hoàn
-export const FUND_LABELS = { PERSONAL: "Tiền cá nhân · cần hoàn", SHOP_CASH: "Tiền mặt quỹ quán", SHOP_BANK: "CK từ tài khoản quán" };
+export const FUND_SHOP_CASH = "SHOP_CASH"; // quỹ quán do thủ quỹ giữ và chi (tiền mặt hoặc CK), không hoàn
+export const FUND_SHOP_BANK = "SHOP_BANK"; // phiếu cũ: CK từ tài khoản quán, nay gộp chung là quỹ quán
+export const FUND_LABELS = { PERSONAL: "Tiền cá nhân · cần hoàn", SHOP_CASH: "Quỹ quán", SHOP_BANK: "Quỹ quán" };
 export const STATUS_LABELS = { PENDING: "Chờ duyệt", APPROVED: "Đã duyệt · chờ hoàn", REJECTED: "Không duyệt", PAID: "Đã hoàn · chờ xác nhận", CONFIRMED: "Đã nhận tiền", NONE: "Không cần hoàn", UNKNOWN: "Chưa rõ nguồn tiền" };
 
 const pad = (n) => String(n).padStart(2, "0");

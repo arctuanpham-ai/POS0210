@@ -1645,7 +1645,7 @@ fun Manage(vm: PosViewModel) {
                 Rowx("Bàn & khu vực", "Thêm · sửa · Trong nhà / Ngoài trời") { vm.screen.value = "TABLE_ADMIN" }
             }
             if (employee?.role == "ADMIN" || employee?.canPurchase == true) {
-                Rowx("Nhập đầu vào", "Lương · vật tư cố định · vật tư sản xuất") { vm.screen.value = "PURCHASE" }
+                Rowx("Chi phí (xem)", "Nhập chi phí trên web · trên máy chỉ xem") { vm.screen.value = "PURCHASE" }
             }
             if (employee?.role == "ADMIN" || employee?.role == "MANAGER") {
                 Rowx("VietQR", "Chọn QR động theo bill hoặc QR tĩnh · lưu tài khoản") { vm.screen.value = "VIETQR" }
@@ -3045,6 +3045,12 @@ fun Purchases(vm: PosViewModel) {
         }
         return
     }
+    // Chi phí nhập 100% trên web. Trên máy chỉ xem; ADMIN mở được form cũ khi khẩn cấp (mất mạng, web lỗi).
+    var deviceEntry by remember { mutableStateOf(false) }
+    if (!deviceEntry) {
+        WebOnlyExpenses(vm, canUnlock = currentGuard?.role == "ADMIN") { deviceEntry = true }
+        return
+    }
     val purchases by vm.purchases.collectAsState()
     val purchaseCategories by vm.purchaseCategories.collectAsState()
     val costCodes by vm.costCodes.collectAsState()
@@ -4393,7 +4399,8 @@ fun MonthlyProfitReport(vm:PosViewModel){
     val monthPurchases=purchases.filter{it.purchasedAt in from until to}
     val initialCodes=setOf(ExpenseCategories.SETUP_COST,ExpenseCategories.INITIAL_INVESTMENT_SUNK,ExpenseCategories.CAPITAL_ASSET)
     val additional=monthPurchases.filter{it.expenseCategory==ExpenseCategories.ADDITIONAL_INVESTMENT}.sumOf{it.total}
-    val operating=monthPurchases.filter{it.expenseCategory !in initialCodes&&it.expenseCategory!=ExpenseCategories.ADDITIONAL_INVESTMENT}.sumOf{it.total}
+    val byCategory=ShareholderMonth.operatingByCategory(monthPurchases,from,to)
+    val operating=byCategory.sumOf{it.second}
     val activeAssets=linkedAssetsForPurchases(assets,purchases,allItems).filter{it.status=="ACTIVE"||it.status=="DAMAGED"||it.status=="TRANSFERRED"}
     fun assetValue(a:AssetEntity):AssetValue{val p=Calendar.getInstance().apply{timeInMillis=a.purchaseDate};val used=((month.get(Calendar.YEAR)-p.get(Calendar.YEAR))*12+month.get(Calendar.MONTH)-p.get(Calendar.MONTH)+1).coerceAtLeast(0);return calculateAssetValue(a.totalCost,a.residualValue,a.usefulLifeMonths,used)}
     val depreciation=activeAssets.filter{it.purchaseDate<to}.sumOf{assetValue(it).monthlyDepreciation}
@@ -4402,15 +4409,36 @@ fun MonthlyProfitReport(vm:PosViewModel){
     val reimbursements=movements.filter{it.type=="PAYER_REIMBURSEMENT"&&it.counterpartyName.isNotBlank()}.map{PayerReimbursement(it.counterpartyName,it.amount)}
     val payerLedger=calculatePayerLedger(purchases.filter{it.paidByName.isNotBlank()}.map{PayerAdvance(it.paidByName,it.total)},reimbursements)
     val initialInvestment=initialInvestmentFromPurchases(purchases)
-    val allBillIds=bills.map{it.id}.toSet();val allRevenue=payments.filter{it.billId in allBillIds}.sumOf{it.amount};val allOperating=purchases.filter{it.expenseCategory !in initialCodes}.sumOf{it.total};val cumulativeNet=allRevenue-allOperating;val payback=calculateCashPayback(initialInvestment,cumulativeNet)
-    fun periodResult(start:Long,end:Long):FinancialPeriodResult{val ids=bills.filter{it.closedAt!=null&&it.openedAt in start until end}.map{it.id}.toSet();val rev=payments.filter{it.billId in ids}.sumOf{it.amount};val ps=purchases.filter{it.purchasedAt in start until end};val add=ps.filter{it.expenseCategory==ExpenseCategories.ADDITIONAL_INVESTMENT}.sumOf{it.total};val op=ps.filter{it.expenseCategory !in initialCodes&&it.expenseCategory!=ExpenseCategories.ADDITIONAL_INVESTMENT}.sumOf{it.total};return calculateFinancialPeriod(FinancialPeriodInput(rev,op,add,0))}
+    val allBillIds=bills.map{it.id}.toSet();val allRevenue=payments.filter{it.billId in allBillIds}.sumOf{it.amount};val allOperating=purchases.filter{it.expenseCategory !in initialCodes&&it.expenseCategory !in ShareholderMonth.NON_EXPENSE}.sumOf{it.total};val cumulativeNet=allRevenue-allOperating;val payback=calculateCashPayback(initialInvestment,cumulativeNet)
+    fun periodResult(start:Long,end:Long):FinancialPeriodResult{val ids=bills.filter{it.closedAt!=null&&it.openedAt in start until end}.map{it.id}.toSet();val rev=payments.filter{it.billId in ids}.sumOf{it.amount};val ps=purchases.filter{it.purchasedAt in start until end};val add=ps.filter{it.expenseCategory==ExpenseCategories.ADDITIONAL_INVESTMENT}.sumOf{it.total};val op=ps.filter{ShareholderMonth.isOperating(it.expenseCategory)}.sumOf{it.total};return calculateFinancialPeriod(FinancialPeriodInput(rev,op,add,0))}
     val quarterStart=Calendar.getInstance().apply{timeInMillis=from;set(Calendar.MONTH,(get(Calendar.MONTH)/3)*3);set(Calendar.DAY_OF_MONTH,1)}.timeInMillis;val yearStart=Calendar.getInstance().apply{timeInMillis=from;set(Calendar.MONTH,0);set(Calendar.DAY_OF_MONTH,1)}.timeInMillis
     val quarter=periodResult(quarterStart,to);val year=periodResult(yearStart,to)
+    val openSessions by vm.sessions.collectAsState();val cloud by vm.cloudSyncState.collectAsState();val reportUser by vm.currentEmployee.collectAsState();val appSettings by vm.settings.collectAsState()
+    val reportContext=LocalContext.current
+    val monthKey=SimpleDateFormat("yyyy-MM",Locale.US).format(Date(from));val monthLabel=SimpleDateFormat("MM/yyyy",Locale.getDefault()).format(Date(from))
+    val now=System.currentTimeMillis()
+    val unclassified=byCategory.filter{it.first==ExpenseCategories.UNCLASSIFIED}.sumOf{it.second}
+    val warnings=ShareholderMonth.warnings(openSessions.count{it.dataScope=="LIVE"&&it.openedAt in from until to},cloud?.lastPullAt?:cloud?.lastSuccessAt,now,to,unclassified)
+    val closed=ShareholderMonth.decode(appSettings.firstOrNull{it.key==ShareholderMonth.settingKey(monthKey)}?.value)
+    val withdrawnThisMonth=movements.filter{it.type=="PROFIT_WITHDRAWAL"&&it.occurredAt in from until to}.sumOf{it.amount}
+    var confirmClose by remember(monthKey){mutableStateOf(false)}
     LazyColumn(Modifier.fillMaxSize().padding(12.dp)){
+      if(warnings.isNotEmpty())item{Card(Modifier.fillMaxWidth().padding(top=8.dp),colors=CardDefaults.cardColors(containerColor=Color(0xFFFFF1D6))){Column(Modifier.padding(12.dp)){Text("CHƯA NÊN CHỐT CHIA TIỀN",fontWeight=FontWeight.Black,color=Color(0xFF7A4B00));warnings.forEach{Text("• $it",fontSize=13.sp)}}}}
+      if(closed!=null)item{val diff=result.netCashResult-closed.net;Card(Modifier.fillMaxWidth().padding(top=8.dp),colors=CardDefaults.cardColors(containerColor=if(diff==0L)Color(0xFFE3F1DF) else Color(0xFFFFE0DC))){Column(Modifier.padding(12.dp)){Text("ĐÃ CHỐT SỐ: ${money(closed.net)}",fontWeight=FontWeight.Black);Text("Lúc ${SimpleDateFormat("HH:mm dd/MM/yyyy",Locale.getDefault()).format(Date(closed.closedAt))} · ${closed.closedBy}",fontSize=12.sp);if(diff!=0L)Text("Số hiện tại khác bản chốt ${money(diff)}: có phiếu chi hoặc bill được sửa sau khi chốt.",fontWeight=FontWeight.Bold,color=Color(0xFF9A2B1F),fontSize=13.sp)}}}
       item{Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){OutlinedButton({monthOffset--}){Text("‹")};Text(SimpleDateFormat("MM / yyyy",Locale.getDefault()).format(Date(from)),Modifier.weight(1f),textAlign=TextAlign.Center,fontWeight=FontWeight.Black,fontSize=20.sp);OutlinedButton({monthOffset++}){Text("›")}}}
       item{Text("KẾT QUẢ TIỀN THÁNG",Modifier.padding(top=12.dp,bottom=4.dp),fontWeight=FontWeight.Black,fontSize=18.sp);AccountingCard(listOf("Tiền thu bán hàng" to revenue,"Chi vận hành" to -operating,"DƯ TRƯỚC ĐẦU TƯ BỔ SUNG" to result.operatingResultBeforeAdditionalInvestment,"Đầu tư bổ sung" to -additional,"DÒNG TIỀN RÒNG THÁNG" to result.netCashResult,"Khấu hao tham khảo" to -depreciation));Text("Khấu hao chỉ để theo dõi tài sản, không trừ lần hai khỏi tiền chia.",Modifier.padding(8.dp),fontSize=12.sp,fontWeight=FontWeight.Bold)}
+      item{Text("CHI VẬN HÀNH THEO NHÓM",Modifier.padding(top=10.dp,bottom=4.dp),fontWeight=FontWeight.Black,fontSize=16.sp);if(byCategory.isEmpty())Text("Chưa có chi phí trong tháng.",Modifier.padding(8.dp)) else AccountingCard(byCategory.map{ExpenseCategories.label(it.first) to -it.second})}
+      if(withdrawnThisMonth>0)item{MetricCard("Đã ghi nhận rút lợi nhuận trong tháng",money(withdrawnThisMonth))}
       item{Text("CHIA TIỀN",Modifier.padding(top=10.dp),fontWeight=FontWeight.Black,fontSize=18.sp);OutlinedButton({vm.screen.value="FINANCE_PEOPLE"},Modifier.fillMaxWidth().padding(vertical=6.dp)){Text("CẤU HÌNH NGƯỜI & TỶ LỆ CHIA")};if(result.netCashResult<=0)Text("Tháng này không có số dư dương để chia.",Modifier.padding(8.dp),fontWeight=FontWeight.Bold) else if(shares.isEmpty())Text("Cần cấu hình tỷ lệ người chia đủ 100%.",Modifier.padding(8.dp),color=Color(0xFF9A4B3D),fontWeight=FontWeight.Bold)}
       items(shares){p->MetricCard("${p.name} · ${p.shareBasisPoints/100.0}%",money(p.amount))}
+      item{Row(Modifier.fillMaxWidth().padding(vertical=6.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+        OutlinedButton(onClick={
+          val text=ShareholderMonth.summaryText(monthLabel,revenue,byCategory,additional,result.netCashResult,shares.map{it.name to it.amount},warnings,closed)
+          val intent=Intent(Intent.ACTION_SEND).apply{type="text/plain";putExtra(Intent.EXTRA_TEXT,text);putExtra(Intent.EXTRA_SUBJECT,"Báo cáo tháng $monthLabel · 0210")}
+          reportContext.startActivity(Intent.createChooser(intent,"Gửi báo cáo tháng cho cổ đông"))
+        },Modifier.weight(1f)){Text("GỬI CỔ ĐÔNG")}
+        if(reportUser?.role=="ADMIN")Button(onClick={confirmClose=true},Modifier.weight(1f)){Text(if(closed==null)"CHỐT SỐ THÁNG" else "CHỐT LẠI")}
+      }}
       item{Text("CÔNG NỢ NGƯỜI ỨNG",Modifier.padding(top=12.dp,bottom=4.dp),fontWeight=FontWeight.Black,fontSize=18.sp)}
       if(payerLedger.isEmpty())item{Text("Chưa có khoản người cá nhân ứng tiền.",Modifier.padding(8.dp))} else items(payerLedger){row->Card(Modifier.fillMaxWidth().padding(vertical=3.dp)){Column(Modifier.padding(12.dp)){Text(row.payer,fontWeight=FontWeight.Black);Text("Đã ứng ${money(row.advanced)} · Đã hoàn ${money(row.reimbursed)}");Text("Quán còn nợ ${money(row.outstanding)}",fontWeight=FontWeight.Bold);if(row.outstanding>0)OutlinedButton({reimbursementPayer=row.payer},Modifier.fillMaxWidth().padding(top=5.dp)){Text("GHI HOÀN ỨNG")}}}}
       item{Text("ĐẦU TƯ & HOÀN VỐN",Modifier.padding(top=12.dp,bottom=4.dp),fontWeight=FontWeight.Black,fontSize=18.sp);AccountingCard(listOf("Đầu tư ban đầu" to initialInvestment,"Dòng tiền kinh doanh tích lũy" to cumulativeNet,"Còn để hoàn vốn" to payback.remaining));Text("Tiến độ hoàn vốn: ${payback.paybackBasisPoints/100.0}%",Modifier.padding(8.dp),fontWeight=FontWeight.Bold)}
@@ -4418,8 +4446,51 @@ fun MonthlyProfitReport(vm:PosViewModel){
       item{Text("BIẾN ĐỘNG MÃ CHI PHÍ",Modifier.padding(top=12.dp,bottom=4.dp),fontWeight=FontWeight.Black,fontSize=18.sp)}
       items(costCodes){cc->val rows=purchases.filter{it.costCodeId==cc.id}.sortedBy{it.purchasedAt};val latest=rows.lastOrNull();val prev=if(rows.size>1)rows[rows.lastIndex-1] else null;val latestItem=latest?.let{p->allItems.firstOrNull{it.purchaseId==p.id}};val prevItem=prev?.let{p->allItems.firstOrNull{it.purchaseId==p.id}};val monthSpend=monthPurchases.filter{it.costCodeId==cc.id}.sumOf{it.total};Card(Modifier.fillMaxWidth().padding(vertical=3.dp)){Column(Modifier.padding(12.dp)){Text("${cc.code} · ${cc.name}",fontWeight=FontWeight.Black);Text("Chi tháng: ${money(monthSpend)}");if(latestItem!=null)Text("Lần gần nhất: ${latestItem.qty} ${latestItem.unit} × ${money(latestItem.unitPrice)}",fontSize=12.sp);if(latestItem!=null&&prevItem!=null){val v=calculateCostVariance(CostObservation(prevItem.qty,prevItem.unitPrice),CostObservation(latestItem.qty,latestItem.unitPrice));Text("Đơn giá ${"%+.1f".format(v.unitPriceChangePct)}% · Sử dụng ${"%+.1f".format(v.quantityChangePct)}%",fontSize=12.sp,fontWeight=FontWeight.Bold)}}}}
     }
+    if(confirmClose)AlertDialog(onDismissRequest={confirmClose=false},title={Text("Chốt số tháng $monthLabel?")},
+      text={Column{Text("Lưu lại dòng tiền ròng ${money(result.netCashResult)} và số chia cho từng người để đối chiếu về sau. Không sửa hay xoá dữ liệu nào.");if(warnings.isNotEmpty())Text("Còn ${warnings.size} cảnh báo ở trên.",Modifier.padding(top=8.dp),fontWeight=FontWeight.Bold,color=Color(0xFF9A2B1F))}},
+      confirmButton={Button(onClick={vm.closeShareholderMonth(ShareholderMonth.Close(monthKey,revenue,operating,additional,result.netCashResult,System.currentTimeMillis(),reportUser?.name.orEmpty(),shares.map{it.name to it.amount}));confirmClose=false}){Text("CHỐT")}},
+      dismissButton={TextButton(onClick={confirmClose=false}){Text("HUỶ")}})
     reimbursementPayer?.let{payer->PayerReimbursementDialog(payer,{reimbursementPayer=null}){amount,method,note->vm.reimbursePayer(payer,amount,method,note);reimbursementPayer=null}}
 }
+/** Chi phí đã nhập (từ web và máy), chỉ xem. Form nhập trên máy chỉ mở khi ADMIN chọn nhập khẩn cấp. */
+@Composable
+fun WebOnlyExpenses(vm: PosViewModel, canUnlock: Boolean, onUnlock: () -> Unit) {
+    val purchases by vm.purchases.collectAsState()
+    val fmt = remember { SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()) }
+    var confirm by remember { mutableStateOf(false) }
+    Column {
+        Header("Chi phí") { vm.screen.value = "MANAGE" }
+        Card(Modifier.fillMaxWidth().padding(12.dp), colors = CardDefaults.cardColors(containerColor = Tint)) {
+            Column(Modifier.padding(12.dp)) {
+                Text("CHI PHÍ NHẬP TRÊN WEB", fontWeight = FontWeight.Black)
+                Text("Phiếu mua hàng: web → Tài chính → + CHI PHÍ MUA HÀNG. Lương, điện, nước, mặt bằng: web → Giao dịch khác. Máy tự kéo về khi đồng bộ.", fontSize = 13.sp)
+            }
+        }
+        Text("Gần đây · ${purchases.size} phiếu", Modifier.padding(horizontal = 14.dp), fontWeight = FontWeight.Bold)
+        LazyColumn(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+            items(purchases.take(60), key = { it.id }) { p ->
+                Card(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(ExpenseCategories.label(p.expenseCategory), fontWeight = FontWeight.Bold)
+                            Text(listOf(fmt.format(Date(p.purchasedAt)), p.paidByName, p.note).filter { it.isNotBlank() }.joinToString(" · "), fontSize = 12.sp, maxLines = 2)
+                        }
+                        Text(money(p.total), fontWeight = FontWeight.Black)
+                    }
+                }
+            }
+        }
+        if (canUnlock) TextButton(onClick = { confirm = true }, modifier = Modifier.fillMaxWidth().padding(8.dp)) { Text("NHẬP KHẨN CẤP TRÊN MÁY (khi không dùng được web)") }
+    }
+    if (confirm) AlertDialog(
+        onDismissRequest = { confirm = false },
+        title = { Text("Nhập chi phí trên máy?") },
+        text = { Text("Chỉ dùng khi không vào được web. Phiếu nhập trên máy vẫn được đẩy lên web, nhưng không có danh mục vật tư chuẩn nên giá vốn món sẽ kém chính xác hơn.") },
+        confirmButton = { Button(onClick = { confirm = false; onUnlock() }) { Text("MỞ FORM") } },
+        dismissButton = { TextButton(onClick = { confirm = false }) { Text("THÔI") } }
+    )
+}
+
 @Composable
 fun PeakHoursChart(
     hourlyCounts: Map<Int, Int>,

@@ -1619,6 +1619,15 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    if(n==1){dao.markCloudDirty();autoBackup();done(null)} else done("Không sửa được: bill chưa thanh toán, đã hoàn tiền hoặc đã đúng hình thức này")
   }
  }
+ /** Lưu bản chốt số tháng (một dòng cài đặt riêng). Không đụng dữ liệu bán hàng hay chi phí. */
+ fun closeShareholderMonth(c:ShareholderMonth.Close){
+  if(currentEmployee.value?.role!="ADMIN")return
+  viewModelScope.launch(Dispatchers.IO){
+   dao.saveSetting(AppSettingEntity(ShareholderMonth.settingKey(c.monthKey),ShareholderMonth.encode(c)))
+   audit("REPORT",c.monthKey,"MONTH_CLOSED","net=${c.net},revenue=${c.revenue},operating=${c.operating},additional=${c.additional}")
+   autoBackup()
+  }
+ }
  fun settleFrozenRefund(id:String,note:String,onDone:(String?)->Unit){
   val e=currentEmployee.value
   viewModelScope.launch(Dispatchers.IO){

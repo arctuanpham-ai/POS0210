@@ -44,15 +44,17 @@ fun PrepaidOrders(vm: PosViewModel) {
         if (msg.isNotBlank()) Text(msg, Modifier.padding(horizontal = 16.dp), fontWeight = FontWeight.Bold, color = Color(0xFF9A2B1F))
         FrozenRefundBanner(frozen) { vm.screen.value = "FROZEN_REFUNDS" }
         if (orders.isEmpty()) {
-            Text("Chưa có đơn trả trước nào hôm nay.", Modifier.padding(20.dp))
+            Text("Chưa có bill nào hôm nay.", Modifier.padding(20.dp))
         } else {
             LazyColumn(Modifier.fillMaxSize().padding(12.dp)) {
-                items(orders, key = { it.batchId }) { o ->
+                items(orders, key = { it.sessionId }) { o ->
                     val refunded = o.billStatus == "REFUNDED" || o.batchStatus == "CANCELLED"
+                    val postpaid = o.flow != "prepaid"
                     Card(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
                         Column(Modifier.padding(14.dp)) {
                             Row {
                                 Text("${o.tableName.ifBlank { "Trả trước" }.uppercase()} · ${PaymentFlowRules.orderNoLabel(o.serviceNo)}", fontSize = 22.sp, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
+                                if (postpaid) Text("TRẢ SAU  ", fontWeight = FontWeight.Black, color = Color(0xFF7A4B00))
                                 Text(PaymentFlowRules.statusLabel(o.billStatus, o.batchStatus), fontWeight = FontWeight.Bold,
                                     color = if (refunded) Color(0xFF9A2B1F) else Color(0xFF41633A))
                             }
@@ -74,7 +76,7 @@ fun PrepaidOrders(vm: PosViewModel) {
                                     if (o.batchStatus == "WAITING") Button(onClick = {
                                         vm.markDelivered(vn.ecohome.pos0210.data.OrderBatchEntity(o.batchId,o.sessionId,1,"",o.openedAt,null,o.batchStatus,o.serviceNo))
                                     }) { Text("ĐÃ GIAO") }
-                                    OutlinedButton(onClick = { reason = ""; mgrPin = ""; msg = ""; refundTarget = o }) { Text("HUỶ & HOÀN TIỀN") }
+                                    if (!postpaid) OutlinedButton(onClick = { reason = ""; mgrPin = ""; msg = ""; refundTarget = o }) { Text("HUỶ & HOÀN TIỀN") }
                                 }
                             }
                         }

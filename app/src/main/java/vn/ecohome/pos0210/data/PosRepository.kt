@@ -479,6 +479,7 @@ class PosRepository(private val db:PosDatabase){
         check(dao.markBillRefunded(bill.id)==1){"ORDER_ALREADY_REFUNDED_OR_NOT_PAID"}
         dao.insertRefund(refund)
         dao.cancelPaidBatch(batchId)
+        dao.cancelPaidBatchesOfSession(sessionId)
         dao.touchActiveShift(now)
         dao.audit(AuditEventEntity(UUID.randomUUID().toString(),"BILL",bill.id,"REFUND",actorId,null,now,"amount=${payment.amount},method=${payment.method},reason=${reason.trim()},approver=${approverId?:"self"},frozen=$frozen"))
         refund

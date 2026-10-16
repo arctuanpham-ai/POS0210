@@ -20,7 +20,7 @@ data class ComboSuggestion(
 /**
  * Gợi ý combo từ giỏ hàng, không đổi giỏ cho tới khi nhân viên bấm áp dụng.
  * - FULL: các món lẻ trong giỏ đã đủ một combo (bất kể combo từng được gọi chưa) và combo rẻ hơn gọi lẻ.
- * - PARTIAL: giỏ có một phần món của combo đã từng được gọi, còn thiếu tối đa 2 loại món; thêm món thiếu là rẻ hơn.
+ * - PARTIAL: giỏ có một phần món của combo đã từng được gọi (thiếu tối đa 2 loại), hoặc combo bất kỳ chỉ còn thiếu đúng 1 phần; thêm món thiếu là rẻ hơn.
  */
 object ComboSuggestions {
     const val COMBO_PREFIX = "combo:"
@@ -49,7 +49,9 @@ object ComboSuggestions {
             }
             val covered = combo.parts.count { (id, _) -> (loose[id] ?: 0) > 0 }
             val missing = combo.parts.mapNotNull { (id, q) -> (q - (loose[id] ?: 0)).takeIf { it > 0 }?.let { id to it } }.toMap()
-            if (covered >= 1 && missing.size <= MAX_MISSING_KINDS && (history[COMBO_PREFIX + combo.id] ?: 0) >= 1) {
+            // Combo từng được gọi: gợi ý khi thiếu ≤ 2 loại món. Combo chưa ai gọi: chỉ gợi ý khi thiếu đúng 1 phần (dễ chốt, ít làm phiền).
+            val nearlyFull = missing.values.sum() == 1
+            if (covered >= 1 && missing.size <= MAX_MISSING_KINDS && ((history[COMBO_PREFIX + combo.id] ?: 0) >= 1 || nearlyFull)) {
                 out += ComboSuggestion(combo.id, combo.name, ComboSuggestion.Kind.PARTIAL, 1, missing, saving)
             }
         }

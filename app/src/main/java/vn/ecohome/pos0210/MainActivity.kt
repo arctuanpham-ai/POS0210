@@ -304,6 +304,35 @@ fun Tables(vm: PosViewModel) {
             }
         }
         KitchenWarningBanner(vm)
+        run {
+            // Cảnh báo phục vụ: món chờ lâu, bàn mở mà chưa gửi món, giỏ món chưa gửi. Chỉ đọc dữ liệu trên máy.
+            val drafts by vm.cartDrafts.collectAsState()
+            val alerts = remember(ts, ss, waiting, serviceTimings, drafts, timerNow) {
+                ServiceAlerts.compute(
+                    ts.map { ServiceAlerts.Table(it.id, it.name) },
+                    ss.map { o -> ServiceAlerts.OpenSession(o.id, o.tableId, o.openedAt, serviceTimings.firstOrNull { it.sessionId == o.id }?.sentBatchCount ?: 0) },
+                    waiting.map { ServiceAlerts.WaitingBatch(it.sessionId, it.sentAt ?: it.createdAt) },
+                    drafts, timerNow,
+                )
+            }
+            if (alerts.isNotEmpty()) Surface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), color = Color(0xFFFFF1D6), shape = RoundedCornerShape(8.dp)) {
+                Column(Modifier.padding(10.dp)) {
+                    alerts.take(4).forEach { a ->
+                        Text(when (a.kind) {
+                            ServiceAlert.Kind.SLOW_DISH -> "⏰ ${a.tableName}: ${a.count} lần gọi món chờ ${a.minutes} phút chưa lên"
+                            ServiceAlert.Kind.NOTHING_SENT -> "⚠ ${a.tableName}: mở bàn ${a.minutes} phút chưa gửi món nào"
+                            ServiceAlert.Kind.UNSENT_DRAFT -> "✎ ${a.tableName}: còn ${a.count} món chọn rồi CHƯA GỬI bếp"
+                        }, color = Color(0xFF7A4B00), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                    if (alerts.size > 4) Text("… và ${alerts.size - 4} cảnh báo khác", fontSize = 12.sp, color = Color(0xFF7A4B00))
+                }
+            }
+            if (canReport) {
+                val forecast by vm.revenueForecast.collectAsState()
+                LaunchedEffect(timerNow / 300_000L) { vm.refreshForecast() }
+                forecast?.let { f -> Text("📈 Dự báo cuối ngày ~${money(f.total)} · đã bán ${money(f.soFar)} · thêm ~${money(f.expectedRest)} (theo ${f.basis})", Modifier.padding(horizontal = 16.dp, vertical = 2.dp), fontSize = 12.sp, color = Color(0xFF41633A), fontWeight = FontWeight.Bold) }
+            }
+        }
         if(testMode) Surface(Modifier.fillMaxWidth(),color=Color(0xFFFFD8D8)){Text("TEST MODE · KHÔNG TÍNH DOANH THU",Modifier.fillMaxWidth().padding(8.dp),textAlign=TextAlign.Center,fontWeight=FontWeight.Black,color=Color.Red)}
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp),
@@ -318,6 +347,7 @@ fun Tables(vm: PosViewModel) {
             }
         }
 
+        val draftCounts by vm.cartDrafts.collectAsState()
         val tableCards = ts.map { tb ->
                     val open = ss.firstOrNull { it.tableId == tb.id }
                     val areaName = areas.firstOrNull { it.id == tb.areaId }?.name ?: tb.areaId
@@ -329,7 +359,7 @@ fun Tables(vm: PosViewModel) {
                             serviceTimerPresentation(timing.firstOrderAt, timing.lastOrderSentAt, timing.sentBatchCount, timing.waitingBatchCount, timerNow)
                         }
                     }
-                    TableCardUi(tb.id,tb.name,areaName,open!=null,nextService?.serviceNo,priorityRank,serviceTimer)
+                    TableCardUi(tb.id,tb.name,areaName,open!=null,nextService?.serviceNo,priorityRank,serviceTimer,draftCounts[tb.id]?.let{"✎ $it món chưa gửi"})
         }
         val waitingOrders by vm.waitingOrders.collectAsState()
         var postpaidException by remember { mutableStateOf(false) }
@@ -382,6 +412,7 @@ fun Order(vm: PosViewModel, t: DiningTableEntity) {
     val cats by vm.categories.collectAsState()
     val cart by vm.cart.collectAsState()
     val cartNotes by vm.cartNotes.collectAsState()
+    val sendingNow by vm.sendingBatch.collectAsState()
     val selectedVoucher by vm.selectedVoucher.collectAsState()
     val voucherMessage by vm.voucherMessage.collectAsState()
     var voucherDialog by remember { mutableStateOf(false) }
@@ -402,7 +433,8 @@ fun Order(vm: PosViewModel, t: DiningTableEntity) {
     }
 
     Column {
-        Header(t.name) { vm.screen.value = "TABLES" }
+        androidx.activity.compose.BackHandler { vm.leaveOrder() }
+        Header(t.name) { vm.leaveOrder() }
         if(orderMessage.isNotBlank()) {
             Text(orderMessage,Modifier.padding(horizontal=14.dp,vertical=4.dp),fontWeight=FontWeight.Bold)
             TextButton(onClick={vm.cart.value=emptyMap();vm.cartNotes.value=emptyMap();vm.orderMessage.value=""}){Text("XÓA GIỎ ĐỂ CHỌN LẠI")}
@@ -526,7 +558,7 @@ fun Order(vm: PosViewModel, t: DiningTableEntity) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { }, modifier = Modifier.weight(1f), enabled=false) { Text("VOUCHER TẠM KHÓA") }
             OutlinedButton(onClick = { showCart = true }, modifier = Modifier.weight(1f)) { Text("GIỎ HÀNG") }
-            Button(onClick = { if (orderIsPrepaid) vm.reviewPrepaid() else vm.sendBatch() }, modifier = Modifier.weight(1f), enabled = (cart.isNotEmpty()||selectedVoucher!=null) && !orderBlocked) { Text(if (orderBlocked) "ĐÃ KHOÁ" else if (orderIsPrepaid) "THANH TOÁN" else "GỬI BẾP") }
+            Button(onClick = { if (orderIsPrepaid) vm.reviewPrepaid() else vm.sendBatch() }, modifier = Modifier.weight(1f), enabled = (cart.isNotEmpty()||selectedVoucher!=null) && !orderBlocked && !sendingNow) { Text(if (orderBlocked) "ĐÃ KHOÁ" else if (orderIsPrepaid) "THANH TOÁN" else "GỬI BẾP") }
         }
     }
     if (showCart) OrderCartNotesDialog(vm) { showCart = false }
@@ -924,22 +956,22 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                 }
                 Text("Bill trên màn hình và mã QR luôn khả dụng. Nếu máy in lỗi, vẫn có thể xác nhận sau khi nhận đủ tiền.", Modifier.padding(top=6.dp),fontSize=11.sp)
             }
-            if (isPrepaid) {
-                OutlinedTextField(
+            run {
+                if (isPrepaid) OutlinedTextField(
                     value = cashGiven,
                     onValueChange = { cashGiven = it.filter(Char::isDigit).take(9) },
                     modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
                     label = { Text("Tiền khách đưa (chỉ cho tiền mặt)") },
                     singleLine = true
                 )
-                Row(Modifier.fillMaxWidth().padding(bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    AssistChip(onClick = { cashGiven = preview.total.toString() }, label = { Text("Vừa đủ") })
-                    listOf(50_000L, 100_000L, 200_000L, 500_000L).forEach { v ->
-                        AssistChip(onClick = { cashGiven = v.toString() }, label = { Text("${v / 1000}k") })
+                // Gợi ý mệnh giá theo đúng số tiền bill (vừa đủ, tròn 10k/50k/100k, tờ 200k/500k): bấm là ra tiền thối, đỡ tính nhầm.
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    CashSuggest.amounts(preview.total).forEach { v ->
+                        FilterChip(selected = cashValue == v, onClick = { cashGiven = if (cashValue == v) "" else v.toString() }, label = { Text(if (v == preview.total) "Vừa đủ" else money(v)) })
                     }
                 }
                 val ch = cashValue?.let { PaymentFlowRules.change(preview.total, it) }
-                Text(
+                if (isPrepaid || cashValue != null) Text(
                     if (cashValue == null) "Nhập tiền khách đưa để xác nhận tiền mặt" else if (ch == null) "Khách đưa chưa đủ · thiếu ${money(preview.total - cashValue)}" else "TIỀN THỐI: ${money(ch)}",
                     fontWeight = FontWeight.Black, fontSize = 18.sp,
                     color = if (ch == null) Color(0xFF9A2B1F) else Color(0xFF41633A),
@@ -1227,7 +1259,7 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
             if (!isPrepaid) payControls()
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)){
                 OutlinedButton(
-                    onClick={vm.close("CASH",preview,qrInfo,customerPhone,customerName,if(applyReward)billReward?.id else null,if(isPrepaid)cashValue else null)},
+                    onClick={vm.close("CASH",preview,qrInfo,customerPhone,customerName,if(applyReward)billReward?.id else null,cashValue)},
                     modifier=Modifier.weight(1f),
                     enabled=!checkoutPrinting&&preview.total>0&&pendingDelivery.isEmpty()&&validPaymentSession!=null&&cashOk
                 ){Text((if(isPrepaid)"XÁC NHẬN TIỀN MẶT\\n& IN PHIẾU BẾP" else "XÁC NHẬN\\nTIỀN MẶT").replace("\\n","\n"),textAlign=TextAlign.Center)}
@@ -1662,7 +1694,7 @@ fun Manage(vm: PosViewModel) {
                 Rowx("TEST MODE", "Test order · bếp · thanh toán · in bill nhưng KHÔNG tính doanh thu") { vm.screen.value = "TEST_MODE" }
                 // Đã khai trương: ẩn "Dọn dữ liệu trước khai trương" để không bấm nhầm (màn vẫn còn trong code).
                 Rowx("Cloud & Manager realtime", "Firebase backup · trạng thái bàn · doanh thu trực tiếp") { vm.screen.value = "CLOUD" }
-                Rowx("Nhật ký hệ thống", "Audit thao tác · người thực hiện · thời điểm · dữ liệu thay đổi") { vm.screen.value = "SETTINGS" }
+                Rowx("Nhật ký & thao tác nhạy cảm", "Ai huỷ món, hoàn tiền, đổi phương thức, sửa đơn, in lại bill, chỉnh tiền ca…") { vm.screen.value = "SETTINGS" }
             }
             HorizontalDivider(Modifier.padding(vertical = 12.dp))
             Text("POS0210 v${packageInfo.versionName} · versionCode ${packageInfo.longVersionCode}", fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -4811,15 +4843,24 @@ fun Settings(vm: PosViewModel) {
         }
         return
     }
+    var sensitiveOnly by remember { mutableStateOf(true) }
+    val shown = remember(a, sensitiveOnly) { if (sensitiveOnly) a.filter { SensitiveAudit.isSensitive(it.entityType, it.action, it.payload) } else a }
+    val weekAgo = System.currentTimeMillis() - 7L * 86_400_000L
+    val byPerson = remember(a) { a.filter { it.occurredAt >= weekAgo && SensitiveAudit.isSensitive(it.entityType, it.action, it.payload) }.groupBy { it.actorId }.mapValues { it.value.size }.toList().sortedByDescending { it.second } }
     Column {
-        Header("Nhật ký hệ thống") { vm.screen.value = "MANAGE" }
-        Text("Các thao tác gần nhất · không sửa/xóa từ giao diện", Modifier.padding(horizontal = 16.dp), fontSize = 11.sp)
+        Header("Nhật ký & thao tác nhạy cảm") { vm.screen.value = "MANAGE" }
+        Text("Chỉ ghi thêm, không sửa / xoá được · không ảnh hưởng dữ liệu bán hàng", Modifier.padding(horizontal = 16.dp), fontSize = 11.sp)
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FilterChip(sensitiveOnly, { sensitiveOnly = true }, { Text("NHẠY CẢM") })
+            FilterChip(!sensitiveOnly, { sensitiveOnly = false }, { Text("TẤT CẢ") })
+        }
+        if (byPerson.isNotEmpty()) Text("7 ngày qua: " + byPerson.joinToString(" · ") { (id, n) -> "${employees.firstOrNull { it.id == id }?.name ?: id ?: "Hệ thống"} $n" }, Modifier.padding(horizontal = 16.dp), fontSize = 12.sp, fontWeight = FontWeight.Bold)
         LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
-            items(a) { event ->
+            items(shown) { event ->
                 val actor = employees.firstOrNull { it.id == event.actorId }?.name ?: event.actorId ?: "SYSTEM"
                 Card(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
                     Column(Modifier.padding(12.dp)) {
-                        Text("${time(event.occurredAt)} · ${event.action}", fontWeight = FontWeight.Black)
+                        Text("${time(event.occurredAt)} · ${SensitiveAudit.label(event.entityType, event.action)}", fontWeight = FontWeight.Black)
                         Text("Người thực hiện: $actor", fontSize = 12.sp)
                         Text("${event.entityType} · ${event.entityId}", fontSize = 11.sp)
                         if (event.payload.isNotBlank()) {

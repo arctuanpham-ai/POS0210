@@ -39,8 +39,10 @@ object PaymentFlowRules {
     /** Tiền thối; null nếu khách đưa chưa đủ. */
     fun change(total: Long, received: Long): Long? = if (received >= total) received - total else null
 
+    /** Trả trước: bắt buộc nhập đủ tiền khách đưa. Trả sau: không bắt buộc, nhưng đã nhập thì phải đủ. */
     fun canConfirmCash(flow: String, total: Long, received: Long?): Boolean =
-        normalize(flow) != PREPAID || (received != null && change(total, received) != null)
+        if (normalize(flow) == PREPAID) received != null && change(total, received) != null
+        else received == null || change(total, received) != null
 
     fun historyLine(at: Long, by: String, old: String, new: String): String =
         listOf(at.toString(), by, normalize(old), normalize(new)).joinToString("|") { it.replace('|', '/').replace('\n', ' ') }

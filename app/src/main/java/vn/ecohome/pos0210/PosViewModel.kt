@@ -43,6 +43,48 @@ data class PurchaseReceiptLine(
 class PosViewModel(app:Application):AndroidViewModel(app){
  private val db=PosDatabase.get(app);private val repo=PosRepository(db);private val dao=db.dao();private val masterMutex=Mutex();private val attendanceMutex=Mutex()
  val orderMessage=MutableStateFlow("")
+ // ---- Giỏ món chưa gửi theo bàn: lưu nháp trên máy (SharedPreferences, không đồng bộ cloud), thoát ra vào lại không mất món ----
+ private val draftPrefs by lazy { getApplication<Application>().getSharedPreferences("pos0210_cart_drafts_v1", android.content.Context.MODE_PRIVATE) }
+ val cartDrafts=MutableStateFlow<Map<String,Int>>(emptyMap())
+ private fun loadDraftCounts(){cartDrafts.value=draftPrefs.all.mapNotNull{(k,v)->runCatching{val o=org.json.JSONObject(v as String);val c=o.getJSONObject("cart");k to c.keys().asSequence().sumOf{c.getInt(it)}}.getOrNull()}.filter{it.second>0}.toMap()}
+ fun saveDraft(tableId:String){
+  val c=cart.value.filterValues{it>0}
+  if(c.isEmpty()){draftPrefs.edit().remove(tableId).apply()}
+  else{
+   val o=org.json.JSONObject().put("cart",org.json.JSONObject(c as Map<*,*>)).put("notes",org.json.JSONObject(cartNotes.value as Map<*,*>)).put("at",System.currentTimeMillis()).put("by",currentEmployee.value?.name.orEmpty())
+   draftPrefs.edit().putString(tableId,o.toString()).apply()
+  }
+  loadDraftCounts()
+ }
+ /** Khôi phục giỏ nháp của bàn (nếu có). Trả về số món khôi phục. */
+ fun restoreDraft(tableId:String):Int{
+  val raw=draftPrefs.getString(tableId,null)?:return 0
+  return runCatching{
+   val o=org.json.JSONObject(raw);val c=o.getJSONObject("cart");val n=o.optJSONObject("notes")
+   val menuIds=menu.value.map{it.id}.toSet()+combos.value.map{"combo:"+it.id}
+   val restored=c.keys().asSequence().filter{it in menuIds}.associateWith{c.getInt(it)}.filterValues{it>0}
+   cart.value=restored
+   cartNotes.value=n?.keys()?.asSequence()?.filter{key->restored.keys.any{key.startsWith(it)}}?.associateWith{n.getString(it)}?:emptyMap()
+   restored.values.sum()
+  }.getOrDefault(0).also{if(it>0)orderMessage.value="ĐÃ KHÔI PHỤC $it MÓN CHƯA GỬI CỦA BÀN NÀY · kiểm tra rồi bấm gửi"}
+ }
+ fun clearDraft(tableId:String){draftPrefs.edit().remove(tableId).apply();loadDraftCounts()}
+ /** Rời màn order: còn món chưa gửi thì lưu nháp cho bàn, không mất. */
+ fun leaveOrder(){
+  val t=currentTable.value
+  if(t!=null&&cart.value.isNotEmpty()){saveDraft(t.id);orderMessage.value="Đã lưu nháp ${cart.value.values.sum()} món chưa gửi của ${t.name}"}
+  screen.value="TABLES"
+ }
+ // ---- Chống bấm gửi order 2 lần ----
+ private val sending=java.util.concurrent.atomic.AtomicBoolean(false)
+ val sendingBatch=MutableStateFlow(false)
+ // ---- Dự báo doanh thu cuối ngày (chỉ dữ liệu bill trên máy) ----
+ val revenueForecast=MutableStateFlow<RevenueForecast?>(null)
+ fun refreshForecast(){viewModelScope.launch(Dispatchers.IO){runCatching{
+  val since=System.currentTimeMillis()-29L*86_400_000L
+  val sales=dao.cloudBillsSnapshot().filter{it.status=="PAID"&&it.dataScope=="LIVE"&&it.closedAt!=null&&it.openedAt>=since}.map{RevenueForecaster.Sale(it.openedAt,it.total)}
+  revenueForecast.value=RevenueForecaster.forecast(sales,System.currentTimeMillis())
+ }}}
  val allPurchaseItems=dao.allPurchaseItems().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
  val salesReport=repo.salesReportData().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),SalesReportData())
  /** Phiếu chi web chưa duyệt / bị trả lại (chưa tính chi phí). */
@@ -85,6 +127,7 @@ class PosViewModel(app:Application):AndroidViewModel(app){
  // true khi máy còn nhớ syncedUid nhưng FirebaseAuth đã mất phiên: UI hiện "Đăng nhập lại, giữ nguyên UID" thay vì bắt đăng xuất.
  val firebaseSessionMissing=MutableStateFlow(false)
  init{
+  loadDraftCounts()
   viewModelScope.launch{bootstrap()}
   viewModelScope.launch{openAttendances.collect{refreshPayroll()}}
   payrollRefreshJob=viewModelScope.launch{
@@ -324,6 +367,7 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
    resetPrepaidEdit()
    currentTable.value=t
    cart.value=emptyMap();cartNotes.value=emptyMap()
+   if(existing==null)restoreDraft(t.id)
    if(existing!=null){
     currentSession.value=existing
     screen.value="SENT"
@@ -333,7 +377,7 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
    }
   }
  }
- fun addMore(){val e=currentEmployee.value?:return;if(!e.canOrder&&e.role!="ADMIN")return;if(currentSession.value==null||currentTable.value==null)return;cart.value=emptyMap();cartNotes.value=emptyMap();screen.value="ORDER"}
+ fun addMore(){val e=currentEmployee.value?:return;if(!e.canOrder&&e.role!="ADMIN")return;if(currentSession.value==null||currentTable.value==null)return;cart.value=emptyMap();cartNotes.value=emptyMap();restoreDraft(currentTable.value!!.id);screen.value="ORDER"}
  fun addTable(areaId:String,name:String=""){
   val e=currentEmployee.value?:return
   if(e.role!="ADMIN"&&!e.canManageSystem)return
@@ -1510,6 +1554,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    orderFlowOverride.value=null
    resetPrepaidEdit()
    cart.value=emptyMap();cartNotes.value=emptyMap();currentSession.value=null;currentTable.value=t
+   restoreDraft(t.id)
    screen.value="ORDER"
   }
  }
@@ -1704,7 +1749,9 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
   val lines=cart.value
   if(selectedVoucher.value!=null){orderMessage.value="ĐỔI VOUCHER ĐÃ TẠM KHÓA";clearSelectedVoucher();return}
   if(lines.isEmpty()&&selectedVoucher.value==null)return
-  viewModelScope.launch{
+  if(!sending.compareAndSet(false,true))return
+  sendingBatch.value=true
+  viewModelScope.launch{ try {
    val runningShift=dao.activeShift()
    val sessionScope=currentSession.value?.dataScope?:if(businessTestMode.value)"TEST" else "LIVE"
    if(sessionScope=="LIVE"&&!ShiftRules.canPay(runningShift?.staffId,e.id)){orderMessage.value="ĐANG TRONG CA CỦA ${runningShift?.staffName} · CHỈ ${runningShift?.staffName} ĐƯỢC ORDER";return@launch}
@@ -1784,6 +1831,8 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    cart.value=emptyMap();cartNotes.value=emptyMap();clearSelectedVoucher()
    autoBackup()
    screen.value=if(s.flow==PaymentFlowRules.PREPAID)"PAY" else "SENT"
+   clearDraft(t.id)
+  } finally { sending.set(false); sendingBatch.value=false }
   }
  }
  fun markBatchSent(b:OrderBatchEntity){
@@ -2241,7 +2290,7 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
   if(session.dataScope=="LIVE"&&!ShiftRules.canPay(runningShift?.staffId,employee.id)){printerMessage.value="ĐANG TRONG CA CỦA ${runningShift?.staffName} · CHỈ ${runningShift?.staffName} ĐƯỢC THANH TOÁN (hoặc chờ ra ca)";return}
   if(checkoutPrinting.value){printerMessage.value="ĐANG IN BILL · Vui lòng chờ in hoàn tất";return}
   val prepaidCash=session.flow==PaymentFlowRules.PREPAID&&method=="CASH"
-  if(prepaidCash&&!PaymentFlowRules.canConfirmCash(session.flow,preview.total,cashReceived)){printerMessage.value="KHÁCH ĐƯA CHƯA ĐỦ TIỀN";return}
+  if(method=="CASH"&&!PaymentFlowRules.canConfirmCash(session.flow,preview.total,cashReceived)){printerMessage.value="KHÁCH ĐƯA CHƯA ĐỦ TIỀN";return}
   val skipKitchen=resumedPrepaid.value&&skipKitchenPrint.value
   val checkoutKey=CheckoutPrintPolicy.key(session.id,preview.total,qrInfo)
   if(!CheckoutPrintPolicy.canConfirm(checkoutKey,printedCheckoutKey.value,checkoutPrintAttemptedKey.value)){printerMessage.value="BILL/QR ĐÃ THAY ĐỔI · VUI LÒNG IN LẠI TRƯỚC KHI XÁC NHẬN";return}
@@ -2261,8 +2310,9 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
      vvipMinPoints=setting("vvip_min_points").toIntOrNull() ?: 500,
      loyaltyRewardId=loyaltyRewardId,
      pointUnitVnd=setting("loyalty_vnd_per_point").toLongOrNull() ?: 10000L,
-     cashReceived=if(prepaidCash)cashReceived else null,
-     change=if(prepaidCash)cashReceived?.let{PaymentFlowRules.change(preview.total,it)} else null
+     // Lưu tiền khách đưa / tiền thối cho mọi bill tiền mặt có nhập (trả sau không bắt buộc nhập): đối soát tiền mặt chính xác hơn.
+     cashReceived=if(method=="CASH")cashReceived else null,
+     change=if(method=="CASH")cashReceived?.let{PaymentFlowRules.change(preview.total,it)} else null
     )
    }.getOrElse { err ->
     printerMessage.value=when(err.message){
@@ -2274,6 +2324,8 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
     return@launch
    }
    val bill=commit.bill
+   // Nhật ký nhạy cảm: bill có giảm giá (chương trình, voucher, mua X tặng Y) ghi ai thu, giảm bao nhiêu. Chỉ ghi thêm, không đổi bill.
+   if(preview.discount>0L&&session.dataScope=="LIVE")runCatching{audit("BILL",bill.id,"DISCOUNT_APPLIED","bill=${bill.billNo},subtotal=${preview.subtotal},discount=${preview.discount},total=${preview.total},rule=${preview.discountRule?.name.orEmpty()},auto=${preview.discountRule?.autoApply==true&&preview.buyGetDiscount==0L},method=$method")}
    if(session.flow==PaymentFlowRules.PREPAID){val t0=System.currentTimeMillis();dao.batches(session.id).first().filter{it.status=="DRAFT"}.forEach{dao.transitionBatch(it.id,"DRAFT","WAITING",t0)}}
    if(method=="TRANSFER"&&pendingPaymentSession!=null)dao.confirmPaymentSession(pendingPaymentSession.id,bill.id)
    else dao.cancelPaymentSessions(session.id)

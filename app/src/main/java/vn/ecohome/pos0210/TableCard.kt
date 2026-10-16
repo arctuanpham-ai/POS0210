@@ -65,7 +65,9 @@ fun TableCard(card:TableCardUi,spec:TableGridSpec,onClick:(String)->Unit={}) {
             Text(card.areaName,Modifier.testTag("table-area-${card.id}"),fontSize=if(spec.compact)9.sp else 10.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
             Spacer(Modifier.height(if(spec.compact)2.dp else 4.dp))
             if(!card.occupied) {
-                Text("Trống",Modifier.testTag("table-status-${card.id}"),fontSize=if(spec.compact)11.sp else 13.sp,maxLines=1)
+                // Bàn trống nhưng có giỏ món chọn rồi chưa gửi (nháp): nhắc ngay trên ô bàn.
+                if(card.busyLabel!=null)Text(card.busyLabel,Modifier.testTag("table-status-${card.id}"),color=Color(0xFFA65E2E),fontWeight=FontWeight.Bold,fontSize=if(spec.compact)10.sp else 11.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
+                else Text("Trống",Modifier.testTag("table-status-${card.id}"),fontSize=if(spec.compact)11.sp else 13.sp,maxLines=1)
                 Spacer(Modifier.height(if(spec.compact)4.dp else 8.dp))
             } else {
                 Text(card.busyLabel?:"● CÓ KHÁCH",Modifier.testTag("table-status-${card.id}"),fontWeight=FontWeight.Bold,fontSize=if(spec.compact)10.sp else 11.sp,maxLines=1)

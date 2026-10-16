@@ -32,6 +32,8 @@ class PaymentFlowRulesTest {
         assertFalse(PaymentFlowRules.canConfirmCash("prepaid", 30_000, 20_000))
         assertTrue(PaymentFlowRules.canConfirmCash("prepaid", 30_000, 50_000))
         assertTrue(PaymentFlowRules.canConfirmCash("postpaid", 30_000, null))
+        assertFalse(PaymentFlowRules.canConfirmCash("postpaid", 30_000, 20_000))
+        assertTrue(PaymentFlowRules.canConfirmCash("postpaid", 30_000, 50_000))
     }
 
     @Test fun historyKeepsOldAndNewMode() {

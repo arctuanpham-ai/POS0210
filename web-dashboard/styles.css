@@ -350,3 +350,18 @@ button.paylist-row { width: 100%; font: inherit; color: inherit; cursor: pointer
 .mini-bar { height: 6px; width: 100%; max-width: 120px; background: var(--line, #e5ded5); border-radius: 3px; margin-bottom: 2px; }
 .mini-bar span { display: block; height: 100%; border-radius: 3px; background: #6b4a3a; }
 .mini-bar.read span { background: #3a6b8a; }
+
+/* Menu quán */
+.menu-group { margin: 14px 0 6px; font-size: 1rem; }
+.menu-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.menu-card { border: 1px solid var(--line, #e5ded5); border-radius: 12px; overflow: hidden; background: var(--card, #fff); display: flex; flex-direction: column; }
+.menu-card img, .menu-noimg { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block; background: #f3ece4; }
+.menu-noimg { display: grid; place-items: center; font-size: 2rem; opacity: .5; }
+.menu-card > div { padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.menu-card strong { font-size: .92rem; line-height: 1.25; }
+.menu-card span { font-weight: 700; }
+.menu-card.off { opacity: .5; }
+.tb-photo { position: relative; flex: 0 0 auto; animation: tb-bounce 1.6s ease-in-out infinite; }
+.tb-photo img { width: 76px; height: 76px; border-radius: 50%; object-fit: cover; border: 3px solid rgba(255,255,255,.9); box-shadow: 0 6px 16px rgba(0,0,0,.25); display: block; }
+.tb-photo span { position: absolute; right: -6px; bottom: -4px; font-size: 1.6rem; }
+@media (prefers-reduced-motion: reduce) { .tb-photo { animation: none !important; } }

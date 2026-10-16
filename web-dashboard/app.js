@@ -32,7 +32,7 @@ import { menuCsv } from "./menu-export.js?v=20261015-1";
 import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-1";
 import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-2";
 import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261016-4";
-import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261016-7";
+import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261016-8";
 import { otherCostRows } from "./other-costs.js?v=20261016-2";
 import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-2";
 import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261014-9";
@@ -1723,6 +1723,8 @@ $("#count-form").addEventListener("submit", saveCount);
 
 /* ---------- Hoàn ứng: mỗi người một tài khoản, cảnh báo theo người, QR động từ tài khoản ngân hàng người mua ---------- */
 const isBuyer = () => state.role === ROLE_BUYER;
+/** Phiếu của chính mình, đã có thủ quỹ / chủ quán khác: không tự duyệt, không tự hoàn. */
+const selfBlocked = (r) => selfReviewBlocked(r, state.me?.id, people());
 const myId = () => state.me?.id || "";
 const myName = () => state.me?.name || "Quản lý";
 /** Mọi người có thể là người mua: thành viên đã thêm và chính mình. */
@@ -1953,8 +1955,8 @@ function renderReimbursements() {
     const bank = bankOf(sample, people(), state.payees);
     const account = memberOf(sample, people());
     return `<article class="reimb-card"><header><strong>${escapeHtml(q.payer)}</strong><span>${bank ? `${escapeHtml(bank.bank)} · ${escapeHtml(bank.account)}${bank.from === "payee" ? " (danh sách cũ)" : ""}` : `<span class="warn-text">${account ? "chưa nhập tài khoản ngân hàng" : "chưa có tài khoản web"}</span>`}</span></header>
-      ${q.PENDING.length ? `<p class="reimb-sub">Chờ duyệt · ${q.PENDING.length} phiếu · ${money(q.pendingTotal)}</p>${q.PENDING.map((r) => receiptLine(r, dups.get(r.id), `<button type="button" class="btn" data-approve="${escapeHtml(r.id)}">Duyệt</button><button type="button" class="btn ghost" data-reject="${escapeHtml(r.id)}">Không duyệt</button>`)).join("")}` : ""}
-      ${q.APPROVED.length ? `<p class="reimb-sub">Đã duyệt · chờ hoàn · ${q.APPROVED.length} phiếu · ${money(q.approvedTotal)}</p>${q.APPROVED.map((r) => receiptLine(r, dups.get(r.id))).join("")}<div class="tool-row"><button type="button" class="btn strong" data-pay="${escapeHtml(q.payer)}">Hoàn ${money(q.approvedTotal)} cho ${escapeHtml(q.payer)}</button></div>` : ""}
+      ${q.PENDING.length ? `<p class="reimb-sub">Chờ duyệt · ${q.PENDING.length} phiếu · ${money(q.pendingTotal)}</p>${q.PENDING.map((r) => receiptLine(r, dups.get(r.id), selfBlocked(r) ? '<span class="muted">Phiếu của bạn: chờ thủ quỹ duyệt</span>' : `<button type="button" class="btn" data-approve="${escapeHtml(r.id)}">Duyệt</button><button type="button" class="btn ghost" data-reject="${escapeHtml(r.id)}">Không duyệt</button>`)).join("")}` : ""}
+      ${q.APPROVED.length ? `<p class="reimb-sub">Đã duyệt · chờ hoàn · ${q.APPROVED.length} phiếu · ${money(q.approvedTotal)}</p>${q.APPROVED.map((r) => receiptLine(r, dups.get(r.id))).join("")}${q.APPROVED.some(selfBlocked) ? '<p class="muted">Tiền hoàn cho bạn: thủ quỹ chuyển, bạn bấm "Tôi đã nhận tiền" ở mục Của tôi.</p>' : `<div class="tool-row"><button type="button" class="btn strong" data-pay="${escapeHtml(q.payer)}">Hoàn ${money(q.approvedTotal)} cho ${escapeHtml(q.payer)}</button></div>`}` : ""}
       ${q.REJECTED.length ? `<p class="reimb-sub">Đã trả lại · chờ người mua sửa · ${q.REJECTED.length} phiếu</p>${q.REJECTED.map((r) => receiptLine(r, null)).join("")}` : ""}</article>`;
   }).join("") || '<p class="muted">Không có phiếu nào chờ duyệt hoặc chờ hoàn.</p>';
   $("#reimb-paid").innerHTML = waiting.map(batchCard).join("") || '<p class="muted">Không có khoản nào chờ xác nhận.</p>';
@@ -1976,7 +1978,7 @@ async function updateReceiptReimb(id, patch) {
 let reimbDraft = null;
 function openReimbDialog(payer) {
   const approved = reimbReceipts().filter((r) => r.enteredByName === payer && reimbursementStatus(r) === "APPROVED");
-  if (!approved.length) return;
+  if (!approved.length || approved.some(selfBlocked)) return;
   const payerId = approved.find((r) => r.payerId)?.payerId || memberOf(approved[0], people())?.id || "";
   reimbDraft = { payer, payerId, receipts: approved, selected: new Set(approved.map((r) => r.id)), bank: bankOf({ payerId, enteredByName: payer }, people(), state.payees) };
   $("#reimb-title").textContent = `Hoàn cho ${payer}`;
@@ -2093,6 +2095,8 @@ $("#reimb-receipts").addEventListener("change", (e) => { const id = e.target.dat
 $("[data-page=hoanung]").addEventListener("click", (e) => {
   const t = e.target.closest("button");
   if (!t) return;
+  const target = reimbReceipts().find((r) => r.id === (t.dataset.approve || t.dataset.reject));
+  if (target && selfBlocked(target)) { flashNote("Phiếu của chính bạn: để thủ quỹ duyệt."); return; }
   if (t.dataset.approve) updateReceiptReimb(t.dataset.approve, { reimbursement: { status: "APPROVED", approvedAt: Date.now(), rejectReason: "" } });
   else if (t.dataset.reject) { const reason = window.prompt("Lý do không duyệt (người mua sẽ thấy trên tài khoản của họ):"); if (reason && reason.trim()) updateReceiptReimb(t.dataset.reject, { reimbursement: { status: "REJECTED", rejectReason: reason.trim() } }); }
   else if (t.dataset.fund) updateReceiptReimb(t.dataset.fund, { fundSource: t.dataset.value, reimbursement: { status: t.dataset.value === FUND_PERSONAL ? "PENDING" : "NONE" } });

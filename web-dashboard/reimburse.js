@@ -133,6 +133,9 @@ export const ROLE_BUYER = "NGUOI_MUA";     // chỉ nhập phiếu của mình, 
 export const ROLE_LABELS = { CHU_QUAN: "Chủ quán", THU_QUY: "Thủ quỹ", NGUOI_MUA: "Người mua" };
 /** Duyệt và hoàn tiền: chủ quán hoặc thủ quỹ. */
 export const canTreasure = (role) => role === ROLE_OWNER || role === ROLE_TREASURER;
+/** Không tự duyệt / tự hoàn phiếu của mình khi đã có người khác làm được việc đó (thủ quỹ hoặc chủ quán khác). */
+export const reviewerOtherThan = (myId, members = []) => members.some((m) => m.id !== myId && m.active !== false && canTreasure(m.role));
+export const selfReviewBlocked = (receipt, myId, members = []) => isMine(receipt, myId) && reviewerOtherThan(myId, members);
 /** PIN 4–6 chữ số. */
 export const validPin = (pin) => /^\d{4,6}$/.test(String(pin ?? ""));
 /** Băm PIN (không lưu PIN gốc trên Firestore). */
@@ -188,12 +191,13 @@ export const myAlerts = ({ myId, role, me = null, receipts = [], batches = [], m
   if (waitingMine.length) out.push({ key: "waiting", level: "info", count: 0, text: `${waitingMine.length} phiếu của bạn đang chờ thủ quỹ (${vnd(sum(waitingMine, "total"))}).` });
   if (myId && (!me?.bank || !me?.account) && (waitingMine.length || role === ROLE_BUYER)) out.push({ key: "bank", level: "warn", count: waitingMine.length ? 1 : 0, text: "Bạn chưa nhập tài khoản ngân hàng: vào Tài khoản để thủ quỹ tạo được QR hoàn tiền." });
   if (!canTreasure(role)) return { items: out, badge: out.reduce((s, x) => s + x.count, 0) };
-  // Phần của thủ quỹ.
-  const pending = receipts.filter((r) => reimbursementStatus(r) === "PENDING");
+  // Phần của thủ quỹ: phiếu của chính mình do người khác duyệt nên không tính vào việc của mình.
+  const review = receipts.filter((r) => !selfReviewBlocked(r, myId, members));
+  const pending = review.filter((r) => reimbursementStatus(r) === "PENDING");
   if (pending.length) out.push({ key: "approve", level: "warn", count: pending.length, text: `${pending.length} phiếu mới chờ duyệt (${vnd(sum(pending, "total"))}).` });
-  const approved = receipts.filter((r) => reimbursementStatus(r) === "APPROVED");
+  const approved = review.filter((r) => reimbursementStatus(r) === "APPROVED");
   if (approved.length) out.push({ key: "pay", level: "warn", count: approved.length, text: `${approved.length} phiếu đã duyệt chờ hoàn tiền (${vnd(sum(approved, "total"))}).` });
-  const unknown = receipts.filter((r) => reimbursementStatus(r) === "UNKNOWN");
+  const unknown = review.filter((r) => reimbursementStatus(r) === "UNKNOWN");
   if (unknown.length) out.push({ key: "unknown", level: "warn", count: unknown.length, text: `${unknown.length} phiếu chưa rõ nguồn tiền (tiền cá nhân hay tiền quán).` });
   const noBank = [...new Set(approved.filter((r) => !bankOf(r, members, payees)).map((r) => r.enteredByName || "Chưa rõ"))];
   if (noBank.length) out.push({ key: "nobank", level: "info", count: 0, text: `Chưa có tài khoản ngân hàng của: ${noBank.join(", ")} (chưa tạo được QR).` });

@@ -129,8 +129,8 @@ export const vietQrPayload = ({ bank, account, holder, amount, info }) => {
 // ---------- Người dùng web: một tài khoản Firebase dùng chung, mỗi người vào bằng PIN riêng ----------
 export const ROLE_OWNER = "CHU_QUAN";      // quản lý thành viên, toàn quyền
 export const ROLE_TREASURER = "THU_QUY";   // duyệt, hoàn tiền, xem toàn bộ
-export const ROLE_BUYER = "NGUOI_MUA";     // chỉ nhập phiếu của mình, xem hoàn ứng của mình, xác nhận đã nhận
-export const ROLE_LABELS = { CHU_QUAN: "Chủ quán", THU_QUY: "Thủ quỹ", NGUOI_MUA: "Người mua" };
+export const ROLE_BUYER = "NGUOI_MUA";     // xem và nhập mọi tab; phiếu nhập là phiếu của chính mình; không duyệt / chi hoàn / lưu đối soát
+export const ROLE_LABELS = { CHU_QUAN: "Chủ quán", THU_QUY: "Thủ quỹ", NGUOI_MUA: "Thành viên" };
 /** Duyệt và hoàn tiền: chủ quán hoặc thủ quỹ. */
 export const canTreasure = (role) => role === ROLE_OWNER || role === ROLE_TREASURER;
 /** Không tự duyệt / tự hoàn phiếu của mình khi đã có người khác làm được việc đó (thủ quỹ hoặc chủ quán khác). */

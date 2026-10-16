@@ -19,29 +19,29 @@ import {
   setDoc as rawSetDoc,
   writeBatch as rawWriteBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261016-23";
-import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261016-23";
-import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261016-23";
-import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261016-23";
-import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261016-23";
-import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261016-23";
-import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261016-23";
-import { buildSimulation } from "./sim-data.js?v=20261016-23";
-import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261016-23";
-import { menuCsv } from "./menu-export.js?v=20261016-23";
-import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-23";
-import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-23";
-import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261016-23";
-import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261016-23";
-import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261016-23";
-import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261016-23";
-import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261016-23";
-import { otherCostRows } from "./other-costs.js?v=20261016-23";
-import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-23";
-import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261016-23";
-import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261016-23";
-import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261016-23";
-import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261016-23";
+import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261016-24";
+import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261016-24";
+import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261016-24";
+import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261016-24";
+import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261016-24";
+import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261016-24";
+import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261016-24";
+import { buildSimulation } from "./sim-data.js?v=20261016-24";
+import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261016-24";
+import { menuCsv } from "./menu-export.js?v=20261016-24";
+import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-24";
+import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-24";
+import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261016-24";
+import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261016-24";
+import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261016-24";
+import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261016-24";
+import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261016-24";
+import { otherCostRows } from "./other-costs.js?v=20261016-24";
+import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-24";
+import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261016-24";
+import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261016-24";
+import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261016-24";
+import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261016-24";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",
@@ -913,7 +913,7 @@ async function saveExpenseReceipt(event) {
     for (const p of payloads) batch.set(doc(db, ...root, receiptCollection(), p.id), p);
     await batch.commit();
     rememberMaterials(items.filter(isMat));
-    for (const rule of state.demo || isBuyer() ? [] : learnList) { // đang xem demo: không học quy tắc từ phiếu demo
+    for (const rule of state.demo ? [] : learnList) { // đang xem demo: không học quy tắc từ phiếu demo
       try {
         const learned = { id: rule.id, name: rule.name, group: rule.group, updatedAt: now, updatedByName: myName() };
         await setDoc(doc(db, ...root, "expenseRules", rule.id), learned);
@@ -986,7 +986,6 @@ async function cancelReceipt(id) {
 }
 
 function render() {
-  if (isBuyer()) { renderReimbursements(); return; }
   renderCumulativeSummary();
   renderPeriodSummary();
   renderTables();
@@ -1009,7 +1008,6 @@ async function loadClosedMonths() {
 async function refreshDashboard() {
   if (!state.user || !state.role) return;
   await loadClosedMonths();
-  if (isBuyer()) { await loadReimbursements(); return; }
   if (state.simulation) { $("#sync-status").textContent = "Đang ở chế độ mô phỏng. Tắt mô phỏng để đọc dữ liệu thật."; return; }
   if (state.demo) { $("#sync-status").textContent = "Đang xem dữ liệu DEMO. Tắt xem demo để đọc dữ liệu thật."; return; }
   $("#sync-status").textContent = "Đang đọc snapshot…";
@@ -2091,45 +2089,23 @@ $("#switch-person").addEventListener("click", async () => {
   await loadMembers();
   showPinView();
 });
-const BUYER_TABS = ["hoanung", "taikhoan"];
 function applyRoleUi() {
-  const buyer = isBuyer();
-  document.querySelectorAll("#tabbar [data-tab]").forEach((a) => { a.hidden = buyer && !BUYER_TABS.includes(a.dataset.tab); });
-  $("#request-sync").hidden = buyer;
+  // Mọi người xem và nhập đầy đủ mọi tab. Riêng chủ quán / thủ quỹ: duyệt phiếu, chi hoàn tiền, lưu đối soát quỹ; chủ quán: quản lý người dùng, đăng xuất tài khoản chung.
+  document.querySelectorAll("#tabbar [data-tab]").forEach((a) => { a.hidden = false; });
+  $("#request-sync").hidden = false;
   $("#logout-button").hidden = state.role !== ROLE_OWNER;
   $("#reimb-treasurer-zone").hidden = !canTreasure(state.role);
-  // Người mua chỉ nhập phiếu chi; phiếu tổng và thu chi khác (lương, vốn, rút tiền) dành cho thủ quỹ / chủ quán.
-  $("#open-summary").hidden = buyer;
-  $("#open-entry").hidden = buyer;
+  $("#open-summary").hidden = false;
+  $("#open-entry").hidden = false;
+  if ($("#fund-save")) $("#fund-save").hidden = !canTreasure(state.role);
   $("#members-zone").hidden = state.role !== ROLE_OWNER;
   $("#me-title").textContent = myName();
   $("#me-role").textContent = `${ROLE_LABELS[state.role] || ""} · vào web bằng PIN riêng`;
 }
-/** Người mua chỉ đọc phiếu và đợt hoàn của chính mình (quy tắc Firestore chặn phần còn lại). */
-async function loadBuyerData() {
-  $("#sync-status").textContent = "Đang đọc phiếu của bạn…";
-  try {
-    const [mine, batches] = await Promise.all([
-      getDocs(query(collection(db, ...root, "expenseReceipts"), where("payerId", "==", myId()), limit(300))).then(rows),
-      getDocs(query(collection(db, ...root, "reimbursements"), where("payerId", "==", myId()), limit(100))).then(rows),
-    ]);
-    state.expenseReceipts = mine.sort((a, b) => Number(b.purchaseDate || 0) - Number(a.purchaseDate || 0));
-    state.reimbBatches = batches.sort((a, b) => Number(b.paidAt) - Number(a.paidAt));
-    state.openReceipts = [];
-    state.reimbLoaded = true;
-    state.reimbError = "";
-  } catch (error) { state.reimbError = error.code === "permission-denied" ? permissionHint : (error.message || "lỗi không rõ"); }
-  try { state.expenseRules = rows(await getDocs(query(collection(db, ...root, "expenseRules"), limit(2000)))); } catch { state.expenseRules = []; }
-  try { const c = await getDoc(doc(db, ...root, "config", "expenseDetail")); state.detailCutoff = c.exists() && Number(c.data().cutoffAt) > 0 ? Number(c.data().cutoffAt) : null; } catch { state.detailCutoff = null; }
-  $("#sync-status").textContent = `${myName()} · ${ROLE_LABELS[state.role]}`;
-  renderReimbursements();
-  renderAccount();
-}
-
 let reimbLoading = null;
 /** Một lần đọc tại một thời điểm: mở tab trong lúc đang đọc không tốn thêm lượt đọc Firestore. */
 function loadReimbursements() {
-  if (!reimbLoading) reimbLoading = (isBuyer() ? loadBuyerData() : loadReimbursementsNow()).finally(() => { reimbLoading = null; });
+  if (!reimbLoading) reimbLoading = loadReimbursementsNow().finally(() => { reimbLoading = null; });
   return reimbLoading;
 }
 async function loadReimbursementsNow() {
@@ -2185,8 +2161,8 @@ function batchCard(b) {
 function renderMine() {
   const host = $("#reimb-mine");
   const me = myId();
-  const shopMine = reimbReceipts().filter((r) => (isBuyer() || isMine(r, me)) && reimbursementStatus(r) === "NONE" && ["PENDING", "REJECTED"].includes(reviewStatus(r)));
-  const mine = reimbReceipts().filter((r) => (isBuyer() || isMine(r, me)) && reimbursementStatus(r) !== "NONE").sort((a, b) => Number(b.purchaseDate || 0) - Number(a.purchaseDate || 0));
+  const shopMine = reimbReceipts().filter((r) => isMine(r, me) && reimbursementStatus(r) === "NONE" && ["PENDING", "REJECTED"].includes(reviewStatus(r)));
+  const mine = reimbReceipts().filter((r) => isMine(r, me) && reimbursementStatus(r) !== "NONE").sort((a, b) => Number(b.purchaseDate || 0) - Number(a.purchaseDate || 0));
   const myBatches = state.reimbBatches.filter((b) => isMine(b, me));
   const paid = myBatches.filter((b) => b.status === "PAID");
   const by = (st) => mine.filter((r) => reimbursementStatus(r) === st);
@@ -2207,7 +2183,7 @@ function renderReimbursements() {
   const names = [...new Set([...people().map((m) => m.name), ...all.map((r) => r.enteredByName), ...state.payees.map((p) => p.name)].filter(Boolean))].sort((a, b) => a.localeCompare(b));
   $("#payee-names").innerHTML = names.map((n) => `<option value="${escapeHtml(n)}"></option>`).join("");
   $("#bank-choices").innerHTML = BANK_CHOICES.map((b) => `<option value="${b}"></option>`).join("");
-  $("#reimb-note").textContent = state.reimbError || (isBuyer() ? `Phiếu của ${myName()}.` : `${state.demo ? "DEMO · " : ""}Phiếu từ ${dateTime(state.receiptsFrom)} và mọi phiếu còn mở.`);
+  $("#reimb-note").textContent = state.reimbError || (`${state.demo ? "DEMO · " : ""}Phiếu từ ${dateTime(state.receiptsFrom)} và mọi phiếu còn mở.`);
   renderMine();
   renderAlerts();
   if (!canTreasure(state.role)) return;
@@ -2671,7 +2647,7 @@ async function ensureReceiptsLoaded() {
 const TABS = ["ban", "doanhthu", "bill", "taichinh", "giavon", "hoanung", "taikhoan"];
 function showTab() {
   if (location.hash === "#thanhtoan") history.replaceState(null, "", "#bill"); // tab cũ đã gộp vào Lịch sử bill
-  const allowed = isBuyer() ? BUYER_TABS : TABS;
+  const allowed = TABS;
   const name = allowed.includes(location.hash.slice(1)) ? location.hash.slice(1) : allowed[0];
   document.querySelectorAll(".page").forEach((page) => { page.hidden = page.dataset.page !== name; });
   document.querySelectorAll("#tabbar [data-tab]").forEach((link) => link.classList.toggle("active", link.dataset.tab === name));

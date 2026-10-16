@@ -186,4 +186,16 @@ class ExpenseReceiptTranslatorTest {
         assertNull(WebEditOfAndroidReceipt.apply(purchase(updatedAt = 20L), remote(updatedAt = 10L, lines = listOf(line))))
         assertNull(WebEditOfAndroidReceipt.apply(purchase().copy(id = "web:p1"), remote(lines = listOf(line))))
     }
+
+    @Test fun shopMoneyPurchaseIsNotAPersonalAdvance() {
+        fun r(fund: String) = RemoteExpenseReceipt("r-$fund", 1L, "u", "Hương", "", "ACTIVE", 2L,
+            listOf(RemoteExpenseLine("l", "Gà", "THIT-1", "Thịt, gia cầm", 1.0, "kg", 100L, 100L)), fund)
+        assertEquals("", ExpenseReceiptTranslator.translate(r("SHOP_CASH")).purchase.paidByName)
+        assertEquals("", ExpenseReceiptTranslator.translate(r("SHOP_BANK")).purchase.paidByName)
+        assertEquals("Hương", ExpenseReceiptTranslator.translate(r("PERSONAL")).purchase.paidByName)
+        assertEquals("Hương", ExpenseReceiptTranslator.translate(r("")).purchase.paidByName)
+        val parsed = ExpenseReceiptParser.parse("x", mapOf("purchaseDate" to 1L, "updatedAt" to 2L, "enteredByName" to "Hương", "fundSource" to "SHOP_CASH",
+            "items" to listOf(mapOf("id" to "l", "materialName" to "Gà", "qty" to 1.0, "unit" to "kg", "unitPrice" to 100L, "amount" to 100L))))
+        assertEquals("SHOP_CASH", parsed?.fundSource)
+    }
 }

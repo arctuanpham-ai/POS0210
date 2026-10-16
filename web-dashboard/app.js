@@ -30,6 +30,7 @@ import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson,
 import { menuCsv } from "./menu-export.js?v=20261015-1";
 import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-1";
 import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-2";
+import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261016-4";
 import { otherCostRows } from "./other-costs.js?v=20261016-2";
 import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-2";
 import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261014-9";
@@ -300,6 +301,28 @@ function renderPaymentFlow() {
   holder.replaceChildren(...nodes);
 }
 
+/* ---------- Doanh thu: giờ cao điểm và món bán nhiều (cột ngang, một màu, giá trị ghi ở đầu cột) ---------- */
+function hbarRows(rows) {
+  const max = Math.max(1, ...rows.map((r) => r.value));
+  return rows.map((r) => `<div class="hbar-row${r.strong ? " strong" : ""}" title="${escapeHtml(r.tip)}"><span class="hbar-label">${escapeHtml(r.label)}</span><span class="hbar-track"><span class="hbar-fill" style="width:${Math.max(2, (r.value / max) * 100).toFixed(1)}%"></span></span><span class="hbar-value">${escapeHtml(r.valueText)}</span></div>`).join("");
+}
+function renderSalesBars(keys) {
+  const hours = hourlyTotals(state.dailyDocs, keys);
+  const peakHost = $("#peak-hours");
+  if (!hours) peakHost.innerHTML = '<p class="muted">Chưa có số liệu theo giờ. Cần máy POS bản v158 trở lên đồng bộ lại (mở app một lần là đủ).</p>';
+  else {
+    const rows = hourRows(hours.total);
+    const peak = rows.find((r) => r.peak);
+    peakHost.innerHTML = rows.length
+      ? `<p class="hbar-caption">Cao điểm ${String(peak.hour).padStart(2, "0")}:00–${String(peak.hour + 1).padStart(2, "0")}:00 · ${peak.count} bill trong ${hours.days} ngày có số liệu</p>${hbarRows(rows.map((r) => ({ label: `${String(r.hour).padStart(2, "0")}:00`, value: r.count, valueText: String(r.count), strong: r.peak, tip: `${String(r.hour).padStart(2, "0")}:00–${String(r.hour + 1).padStart(2, "0")}:00 · ${r.count} bill` })))}`
+      : '<p class="muted">Chưa có bill trong giai đoạn này.</p>';
+  }
+  const items = topItems(aggregateItems(state.dailyDocs, keys, "combined"), 10);
+  $("#top-items").innerHTML = items.length
+    ? hbarRows(items.map((r, i) => ({ label: r.name, value: Number(r.qty), valueText: `${Number(r.qty)} phần`, strong: i === 0, tip: `${r.name} · ${Number(r.qty)} phần · ${money(r.revenue)}` })))
+    : '<p class="muted">Chưa có món đã bán trong giai đoạn này.</p>';
+}
+
 function renderSalesSnapshots() {
   if (!state.salesLoaded) {
     $("#live-revenue-today").textContent = "—";
@@ -339,6 +362,7 @@ function renderSalesSnapshots() {
     return node;
   }));
 
+  renderSalesBars(keys);
   const max = Math.max(1, ...summary.days.filter((day) => day.available).map((day) => day.revenue));
   $("#sales-chart").innerHTML = summary.days.map((day) => {
     const bar = day.available

@@ -17,7 +17,7 @@
         <p class="eyebrow">0210 · BREAKFAST · COFFEE · DRINKS</p>
         <h1 id="login-title">Manager realtime</h1>
         <p class="muted">Theo dõi quán và nhập phiếu tài chính từ xa.</p>
-        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.16.3 · Đồng bộ đơn vị</p>
+        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.16.4 · Giao diện tài chính</p>
         <label>Email Firebase<input id="email" type="email" autocomplete="username" inputmode="email" /></label>
         <label>Mật khẩu<input id="password" type="password" autocomplete="current-password" /></label>
         <label class="show-password"><input id="show-password" type="checkbox" /> Hiện mật khẩu để kiểm tra khi gõ</label>
@@ -31,10 +31,10 @@
             <p class="eyebrow">0210 · MANAGER</p>
             <h1>Quản lý realtime</h1>
           </div>
-          <div class="heading-actions"><button id="refresh-dashboard" class="secondary">Làm mới</button><button id="request-sync" class="secondary" title="Yêu cầu máy POS ở quán đồng bộ ngay">Yêu cầu đồng bộ</button><button id="logout-button" class="text-button">Đăng xuất</button></div>
+          <div class="heading-actions"><button id="refresh-dashboard" class="btn">Làm mới</button><button id="request-sync" class="btn" title="Yêu cầu máy POS ở quán đồng bộ ngay">Yêu cầu đồng bộ</button><button id="logout-button" class="btn ghost">Đăng xuất</button></div>
         </header>
 
-        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.16.3 · Đồng bộ đơn vị</p>
+        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.16.4 · Giao diện tài chính</p>
 
         <nav class="tabbar" id="tabbar" aria-label="Các trang">
           <a href="#ban" data-tab="ban">Bàn</a>
@@ -71,6 +71,16 @@
         <section id="sales-chart" class="sales-chart" aria-label="Biểu đồ doanh thu theo ngày"></section>
 
         <section class="section-heading compact">
+          <div><p class="eyebrow">GIỜ CAO ĐIỂM</p><h2>Số bill theo giờ mở bàn</h2></div>
+        </section>
+        <section id="peak-hours" class="hbar-chart" aria-label="Biểu đồ số bill theo giờ"></section>
+
+        <section class="section-heading compact">
+          <div><p class="eyebrow">MÓN BÁN NHIỀU</p><h2>Top 10 theo số phần</h2></div>
+        </section>
+        <section id="top-items" class="hbar-chart" aria-label="Biểu đồ món bán nhiều"></section>
+
+        <section class="section-heading compact">
           <div><p class="eyebrow">THỐNG KÊ MÓN</p><h2>Món đã bán</h2></div>
         </section>
         <div class="filter-row" id="sales-item-modes">
@@ -104,7 +114,7 @@
         <div class="page" data-page="giavon" hidden>
         <section class="section-heading first-section">
           <div><p class="eyebrow">GIÁ VỐN MÓN</p><h2>Công thức và cost theo giá nhập</h2></div>
-          <div class="heading-actions"><button id="reload-recipes" type="button" class="secondary">Tải lại</button></div>
+          <div class="heading-actions"><button id="reload-recipes" type="button" class="btn">Tải lại</button></div>
         </section>
         <p class="muted">Giá vật tư lấy từ phiếu chi CHI TIẾT chưa huỷ (bình quân 30 ngày, không có thì lấy lần mua gần nhất). Phiếu tổng không cho ra giá vật tư. Bấm một món để kéo tăng giảm định lượng rồi lưu.</p>
         <p id="recipe-note" class="muted" role="status"></p>
@@ -133,30 +143,35 @@
         </div>
 
         <div class="page" data-page="taichinh" hidden>
-        <section class="section-heading report-heading">
+        <section class="section-heading first-section">
           <div><p class="eyebrow">TÀI CHÍNH</p><h2>Tình hình quán</h2></div>
-          <div class="heading-actions"><button id="open-expense" class="secondary">+ CHI PHÍ MUA HÀNG</button><button id="open-summary" class="secondary">+ PHIẾU TỔNG (hóa đơn cũ)</button><button id="open-entry" class="text-button">Giao dịch khác</button></div>
         </section>
-
-        <div class="filter-row" id="period-filters">
-          <button data-period="today" class="filter active">Hôm nay</button>
-          <button data-period="yesterday" class="filter">Hôm qua</button>
-          <button data-period="7d" class="filter">7 ngày</button>
-          <button data-period="month" class="filter">Tháng này</button>
-          <button data-period="all" class="filter">Tất cả</button>
-          <button data-period="custom" class="filter">Tùy chọn</button>
-        </div>
-        <div id="custom-range" class="custom-range" hidden>
-          <label>Từ ngày<input id="from-date" type="date" /></label>
-          <label>Đến ngày<input id="to-date" type="date" /></label>
-          <button id="apply-range" class="secondary">Áp dụng</button>
-        </div>
-        <div class="payer-filter-block">
-          <span>Người chi</span>
-          <select id="payer-filter"><option value="ALL">Tất cả người chi</option></select>
-          <strong id="payer-total"></strong>
+        <div class="action-grid">
+          <button id="open-expense" type="button" class="action-btn main"><strong>+ Phiếu mua hàng</strong><small>Nguyên liệu, bao bì, vật tư</small></button>
+          <button id="open-summary" type="button" class="action-btn"><strong>+ Phiếu tổng</strong><small>Hoá đơn cũ không nhớ chi tiết</small></button>
+          <button id="open-entry" type="button" class="action-btn"><strong>+ Thu chi khác</strong><small>Lương, điện, nước, vốn, rút tiền</small></button>
         </div>
 
+        <div class="panel">
+          <div class="filter-row" id="period-filters">
+            <button data-period="today" class="filter active">Hôm nay</button>
+            <button data-period="yesterday" class="filter">Hôm qua</button>
+            <button data-period="7d" class="filter">7 ngày</button>
+            <button data-period="month" class="filter">Tháng này</button>
+            <button data-period="all" class="filter">Tất cả</button>
+            <button data-period="custom" class="filter">Tùy chọn</button>
+          </div>
+          <div id="custom-range" class="custom-range" hidden>
+            <label>Từ ngày<input id="from-date" type="date" /></label>
+            <label>Đến ngày<input id="to-date" type="date" /></label>
+            <button id="apply-range" type="button" class="btn">Áp dụng</button>
+          </div>
+          <div class="field-row">
+            <label for="payer-filter">Người chi</label>
+            <select id="payer-filter"><option value="ALL">Tất cả người chi</option></select>
+          </div>
+          <p id="payer-total" class="panel-total"></p>
+        </div>
         <section id="period-summary" class="summary-grid" aria-label="Tổng quan theo kỳ"></section>
 
         <section class="section-heading compact">
@@ -165,30 +180,33 @@
         <section id="summary" class="summary-grid cumulative-grid" aria-label="Chỉ số tích lũy"></section>
 
         <section class="section-heading compact">
-          <div><p class="eyebrow">DỮ LIỆU DEMO</p><h2>Phiếu chi thử trước khi nhập thật</h2></div>
-        </section>
-        <p class="muted">Bộ phiếu chi demo 30 ngày, sinh từ menu, công thức và lượng bán. Phiếu demo nằm ở mục riêng, máy POS không đọc, mỗi phiếu đều mang dấu DEMO và xoá được hết một lần. Khi đang xem demo, phiếu nhập tay cũng đi vào mục demo.</p>
-        <div class="payer-filter-block"><button id="demo-toggle" type="button" class="secondary">Xem dữ liệu demo</button><button id="demo-create" type="button" class="secondary">Tạo bộ phiếu demo 30 ngày</button><button id="demo-delete" type="button" class="text-button">Xoá toàn bộ phiếu demo</button></div>
-        <p id="demo-note" class="muted" role="status"></p>
-        <p id="demo-banner" class="sim-banner" role="status" hidden>ĐANG XEM DỮ LIỆU DEMO: số liệu phiếu chi ở tab Tài chính và Giá vốn là phiếu demo. Bấm "Tắt xem demo" để quay về dữ liệu thật.</p>
-        <div class="payer-filter-block"><button id="sim-toggle" type="button" class="secondary">Chạy mô phỏng (không ghi dữ liệu)</button></div>
-        <p id="sim-banner" class="sim-banner" role="status" hidden>ĐANG MÔ PHỎNG: mọi số liệu trong tab này là dữ liệu giả, chỉ nằm trong trình duyệt. Không có gì được ghi lên Firestore. Tải lại trang hoặc bấm "Tắt mô phỏng" để quay về dữ liệu thật.</p>
-
-        <section class="section-heading compact">
           <div><p class="eyebrow">NHẬP HÀNG THEO THÁNG</p><h2>So với doanh thu tháng</h2></div>
         </section>
-        <p class="muted">Tổng phiếu chi chưa huỷ theo ngày mua, đặt cạnh doanh thu bill thật cùng tháng. Doanh thu từng tháng do máy POS gửi lên; tháng nào chưa có sẽ ghi "chưa có dữ liệu", không tính là 0.</p>
-        <div class="payer-filter-block"><button id="export-monthly-csv" type="button" class="secondary">Tải CSV</button><button id="export-monthly-json" type="button" class="secondary">Tải JSON quy tắc</button><button id="export-menu" type="button" class="secondary">Tải menu</button></div>
+        <p class="muted">Phiếu mua hàng theo ngày mua, đặt cạnh doanh thu cùng tháng. Lương, điện, nước… tách riêng ở dòng Chi phí khác. Tháng chưa có doanh thu ghi "chưa có dữ liệu", không tính là 0.</p>
+        <div class="tool-row">
+          <button id="export-monthly-csv" type="button" class="btn">Tải CSV</button>
+          <button id="export-monthly-json" type="button" class="btn">Tải JSON quy tắc</button>
+          <button id="export-menu" type="button" class="btn">Tải menu</button>
+        </div>
         <p id="monthly-note" class="muted" role="status"></p>
         <section id="monthly-report" class="month-list" aria-live="polite"></section>
 
         <section class="section-heading compact">
           <div><p class="eyebrow">RÀ SOÁT PHÂN LOẠI</p><h2>Phân nhóm vật tư đã đúng chưa</h2></div>
         </section>
-        <p class="muted">So nhóm đã ghi với quy tắc từ khoá và quy tắc nhóm đã học. Dòng khác gợi ý hoặc mơ hồ hiện ở dưới để bạn mở phiếu sửa.</p>
-        <div class="payer-filter-block"><span>Ngày mốc bắt buộc chi tiết</span><input id="cutoff-date" type="date" /><button id="save-cutoff" type="button" class="secondary">Lưu mốc</button><button id="clear-cutoff" type="button" class="text-button">Bỏ mốc</button></div>
-        <p id="cutoff-note" class="muted"></p>
-        <p id="detail-level-note" class="muted"></p>
+        <p class="muted">So nhóm đã ghi với danh mục vật tư và quy tắc đã học. Dòng khác gợi ý hoặc mơ hồ hiện ở dưới để mở phiếu sửa.</p>
+        <div class="panel">
+          <div class="field-row">
+            <label for="cutoff-date">Ngày mốc bắt buộc chi tiết</label>
+            <input id="cutoff-date" type="date" />
+          </div>
+          <div class="tool-row">
+            <button id="save-cutoff" type="button" class="btn">Lưu mốc</button>
+            <button id="clear-cutoff" type="button" class="btn ghost">Bỏ mốc</button>
+          </div>
+          <p id="cutoff-note" class="muted"></p>
+          <p id="detail-level-note" class="muted"></p>
+        </div>
         <section id="review-summary" class="summary-grid" aria-label="Tổng kết rà soát phân loại"></section>
         <section id="review-list" class="review-list" aria-live="polite"></section>
 
@@ -201,6 +219,21 @@
           <button data-kind="MOVEMENT" class="filter">Thu / vốn / hoàn ứng</button>
         </div>
         <section id="transactions" class="transaction-list"></section>
+
+        <p id="demo-banner" class="sim-banner" role="status" hidden>ĐANG XEM DỮ LIỆU DEMO: số liệu phiếu chi ở tab Tài chính và Giá vốn là phiếu demo. Bấm "Tắt xem demo" để quay về dữ liệu thật.</p>
+        <p id="sim-banner" class="sim-banner" role="status" hidden>ĐANG MÔ PHỎNG: mọi số liệu trong tab này là dữ liệu giả, chỉ nằm trong trình duyệt. Không có gì được ghi lên Firestore. Tải lại trang hoặc bấm "Tắt mô phỏng" để quay về dữ liệu thật.</p>
+        <details class="tools-panel">
+          <summary>Công cụ thử: phiếu demo · mô phỏng</summary>
+          <p class="muted">Phiếu demo 30 ngày sinh từ menu, công thức và lượng bán; nằm ở mục riêng, máy POS không đọc, xoá được hết một lần. Khi đang xem demo, phiếu nhập tay cũng vào mục demo.</p>
+          <div class="tool-row">
+            <button id="demo-toggle" type="button" class="btn">Xem dữ liệu demo</button>
+            <button id="demo-create" type="button" class="btn">Tạo bộ phiếu demo 30 ngày</button>
+            <button id="demo-delete" type="button" class="btn danger">Xoá toàn bộ phiếu demo</button>
+          </div>
+          <p id="demo-note" class="muted" role="status"></p>
+          <p class="muted">Mô phỏng 6 tháng chỉ chạy trong trình duyệt, không ghi gì.</p>
+          <div class="tool-row"><button id="sim-toggle" type="button" class="btn">Chạy mô phỏng (không ghi dữ liệu)</button></div>
+        </details>
         </div>
       </section>
     </main>
@@ -358,6 +391,6 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261016-3"></script>
+    <script type="module" src="app.js?v=20261016-4"></script>
   </body>
 </html>

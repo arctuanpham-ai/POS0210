@@ -1899,6 +1899,8 @@ fun CloudSyncSettings(vm:PosViewModel){
             if(state?.syncedUid==null||sessionMissing)Button({vm.firebaseSignIn(email,password);password=""},Modifier.fillMaxWidth(),enabled=email.isNotBlank()&&password.length>=6){Text(if(sessionMissing&&state?.syncedUid!=null)"ĐĂNG NHẬP LẠI · GIỮ NGUYÊN UID" else "ĐĂNG NHẬP & BẬT ĐỒNG BỘ")}
             else OutlinedButton({vm.firebaseSignOut()},Modifier.fillMaxWidth()){Text("ĐĂNG XUẤT FIREBASE")}
             Button({vm.syncFirebase()},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null&&!sessionMissing&&!realtimeBusy){Text(if(realtimeBusy)"TÁC VỤ CLOUD ĐANG CHẠY…" else "ĐỒNG BỘ REALTIME NGAY")}
+            Button({vm.syncFullMenuToWeb()},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null){Text("ĐỒNG BỘ TOÀN BỘ MENU + ẢNH LÊN WEB")}
+            Text("Làm một lần trên máy gốc: đẩy lại mọi nhóm món, món, ảnh và ảnh nhỏ cho web. Không sửa menu trên máy.",fontSize=11.sp)
             Button({vm.transferCloudMedia(true)},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null){Text("ĐẨY TOÀN BỘ ẢNH LÊN CLOUD (MÁY GỐC)")}
             OutlinedButton({vm.transferCloudMedia(false)},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null){Text("TẢI ẢNH TỪ CLOUD (MÁY ORDER)")}
             Text("Chỉ bấm ĐẨY trên máy còn ảnh gốc. Màn hình sẽ báo số file và lỗi đầu tiên nếu Storage/URI không đọc được.",fontSize=11.sp)

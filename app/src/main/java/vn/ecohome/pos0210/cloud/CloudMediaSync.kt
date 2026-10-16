@@ -62,6 +62,38 @@ object CloudMediaSync {
         } finally {decoded.recycle()}
     }
 
+    /** Ảnh nhỏ cho web xem menu (cạnh dài 240px, ~10–20 KB): web không phải tải ảnh gốc 1280px. */
+    private const val THUMB_EDGE=240
+    private fun thumbnail(bytes:ByteArray):ByteArray {
+        val bounds=BitmapFactory.Options().apply{inJustDecodeBounds=true}
+        BitmapFactory.decodeByteArray(bytes,0,bytes.size,bounds)
+        require(bounds.outWidth>0&&bounds.outHeight>0){"MEDIA_DECODE_FAILED"}
+        var sample=1
+        while(maxOf(bounds.outWidth,bounds.outHeight)/(sample*2)>=THUMB_EDGE)sample*=2
+        val decoded=BitmapFactory.decodeByteArray(bytes,0,bytes.size,BitmapFactory.Options().apply{inSampleSize=sample})?:error("MEDIA_DECODE_FAILED")
+        val scale=THUMB_EDGE.toFloat()/maxOf(decoded.width,decoded.height)
+        val scaled=if(scale<1f)Bitmap.createScaledBitmap(decoded,(decoded.width*scale).toInt().coerceAtLeast(1),(decoded.height*scale).toInt().coerceAtLeast(1),true) else decoded
+        try {
+            for(quality in listOf(72,60,45)){
+                val out=ByteArrayOutputStream()
+                scaled.compress(Bitmap.CompressFormat.JPEG,quality,out)
+                if(out.size()<=60_000)return out.toByteArray()
+            }
+            error("THUMB_TOO_LARGE")
+        } finally {if(scaled!==decoded)scaled.recycle();decoded.recycle()}
+    }
+    private fun thumbs(fs:FirebaseFirestore,uid:String)=fs.collection("users").document(uid).collection("stores").document(STORE_ID).collection("menuThumbs")
+    /** Ghi ảnh nhỏ khi chưa có hoặc ảnh gốc đã đổi. Chỉ ghi lên Cloud, không đụng ảnh / menu trên máy. */
+    private suspend fun ensureThumb(fs:FirebaseFirestore,uid:String,type:String,id:String,source:ByteArray,sourceHash:String):Boolean {
+        val doc=thumbs(fs,uid).document("${type}_${id}")
+        val old=withTimeout(TIMEOUT_MS){doc.get().await()}
+        if(old.getString("sourceSha256")==sourceHash&&old.getString("thumb")?.isNotBlank()==true)return false
+        val bytes=thumbnail(source)
+        withTimeout(TIMEOUT_MS){FirestoreServerWriter.set(doc,mapOf("id" to "${type}_${id}","entityType" to type,"entityId" to id,"sourceSha256" to sourceHash,
+            "thumb" to "data:image/jpeg;base64,"+Base64.encodeToString(bytes,Base64.NO_WRAP),"bytes" to bytes.size,"updatedAt" to System.currentTimeMillis()))}
+        return true
+    }
+
     suspend fun cloudManifestCount(context:Context,fs:FirebaseFirestore,uid:String):Int =
         withTimeout(TIMEOUT_MS){collection(fs,uid).get().await().size()}
 
@@ -78,6 +110,7 @@ object CloudMediaSync {
                 val source=readLocal(context,uri)
                 if(source==null){skipped++;continue}
                 val sourceHash=sha256(source)
+                runCatching{ensureThumb(fs,uid,type,id,source,sourceHash)}.onFailure{if(it is kotlinx.coroutines.CancellationException)throw it;if(firstError==null)firstError="Ảnh nhỏ: ${it.message}"}
                 val doc=manifest.document("${type}_${id}")
                 val old=withTimeout(TIMEOUT_MS){doc.get().await()}
                 // File local chính là bản đã nén lấy từ Cloud (sha256 trùng): không nén và đẩy lại, tránh ghi đè qua lại giữa các máy.

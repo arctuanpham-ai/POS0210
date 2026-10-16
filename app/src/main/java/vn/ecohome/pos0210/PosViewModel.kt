@@ -712,6 +712,14 @@ fun syncFirebase(){
    .onFailure{if(it.message?.contains("AUTH_SESSION_MISSING")==true)firebaseSessionMissing.value=true;cloudMessage.value=if(it.message?.contains("MUTEX_BUSY")==true)"Tác vụ Cloud khác đang chạy · lần bấm này chưa bắt đầu; theo dõi các bước bên dưới" else "Đồng bộ chưa hoàn tất: ${it.message} · giữ dữ liệu và hàng đợi local"}
  }
 }
+/** Một lần: đẩy lại toàn bộ nhóm món + món (chỉ đọc menu trên máy, ghi bản sao lên Cloud) rồi đẩy ảnh + ảnh nhỏ cho web. */
+fun syncFullMenuToWeb(){val e=currentEmployee.value?:return;if(e.role!="ADMIN")return;viewModelScope.launch(Dispatchers.IO){runCatching{
+  val cats=dao.allCategoriesSnapshot();val items=dao.allMenuSnapshot()
+  cats.forEach{queueCatalogChange("MENU_CATEGORY",it.id)};items.forEach{queueCatalogChange("MENU_ITEM",it.id)}
+  audit("MENU","ALL","CLOUD_FULL_SYNC","categories=${cats.size} items=${items.size} | actor:${e.id}")
+  publishCatalogChange()
+  cloudMessage.value="Đã xếp ${cats.size} nhóm, ${items.size} món để đẩy lên web · đang đẩy ảnh…"
+ }.onFailure{cloudMessage.value="Lỗi đồng bộ menu: ${it.message}"};transferCloudMedia(true)}}
 fun transferCloudMedia(upload:Boolean){val e=currentEmployee.value?:return;if(e.role!="ADMIN")return;viewModelScope.launch(Dispatchers.IO){cloudMessage.value=if(upload)"Đang đẩy ảnh lên Cloud…" else "Đang tải ảnh từ Cloud…";runCatching{val uid=FirebaseCloudSync.currentUid(getApplication())?:error("Chưa đăng nhập Firebase");val cfg=FirebaseCloudSync.config(getApplication());val app=FirebaseCloudSync.firebaseApp(getApplication(),cfg);val fs=com.google.firebase.firestore.FirebaseFirestore.getInstance(app);val r=if(upload)CloudMediaSync.uploadLocal(getApplication(),fs,uid) else CloudMediaSync.restoreMissing(getApplication(),fs,uid);val count=CloudMediaSync.cloudManifestCount(getApplication(),fs,uid);cloudMessage.value="Media: upload ${r.uploaded} · tải ${r.downloaded} · bỏ qua ${r.skipped} · lỗi ${r.errors} · Cloud ${count} file"+(r.firstError?.let{" · Lỗi đầu: $it"}?:"")}.onFailure{cloudMessage.value="Lỗi Media: ${it.message}"}}}
 fun reconcileFirebaseSession(){
  viewModelScope.launch(Dispatchers.IO){

@@ -35,7 +35,9 @@ data class DailySalesSnapshot(
     val paidBills: Int,
     val averageBill: Long,
     val items: List<DailyItemSnapshot>,
-    val finalized: Boolean
+    val finalized: Boolean,
+    /** Số bill theo giờ MỞ bill (0–23), để web vẽ giờ cao điểm. */
+    val hourlyBills: List<Int> = List(24) { 0 }
 ) {
     /** updatedAt do nơi ghi thêm vào; không nằm trong fingerprint. */
     fun toMap(updatedAt: Long): Map<String, Any?> = mapOf(
@@ -46,6 +48,7 @@ data class DailySalesSnapshot(
         "averageBill" to averageBill,
         "items" to items.map { it.toMap() },
         "finalized" to finalized,
+        "hourlyBills" to hourlyBills,
         "schemaVersion" to 1
     )
 }
@@ -141,7 +144,8 @@ object DashboardSalesSnapshot {
             paidBills = paid.size,
             averageBill = if (paid.isEmpty()) 0L else revenue / paid.size,
             items = rows,
-            finalized = dateKey < todayKey
+            finalized = dateKey < todayKey,
+            hourlyBills = List(24) { h -> paid.count { java.time.Instant.ofEpochMilli(it.openedAt).atZone(zone).hour == h } }
         )
     }
 

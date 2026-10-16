@@ -196,4 +196,17 @@ class DashboardSalesSnapshotTest {
         val oct = DashboardSalesSnapshot.composeMonthly("2026-10", "2026-11", listOf(bill("m", "s1", 50_000L, at(2026, 11, 1, 8, 0), openedAt = at(2026, 10, 31, 22, 0))), zone)
         assertEquals(50_000L, oct.revenue)
     }
+
+    @Test fun hourlyBillsCountByOpenHour() {
+        val d = DashboardSalesSnapshot.composeDaily("2026-10-15", "2026-10-16", listOf(
+            bill("a", "s1", 10L, at(2026, 10, 15, 7, 10), openedAt = at(2026, 10, 15, 7, 5)),
+            bill("b", "s1", 10L, at(2026, 10, 15, 8, 0), openedAt = at(2026, 10, 15, 7, 55)),
+            bill("c", "s1", 10L, at(2026, 10, 15, 12, 0), openedAt = at(2026, 10, 15, 11, 50))
+        ), emptyList(), emptyList(), zone)
+        assertEquals(24, d.hourlyBills.size)
+        assertEquals(2, d.hourlyBills[7])
+        assertEquals(1, d.hourlyBills[11])
+        assertEquals(3, d.hourlyBills.sum())
+        assertEquals(d.hourlyBills, d.toMap(0L)["hourlyBills"])
+    }
 }

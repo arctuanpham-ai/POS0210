@@ -28,7 +28,7 @@ import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, norma
 import { buildSimulation } from "./sim-data.js?v=20261014-10";
 import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261014-9";
 import { menuCsv } from "./menu-export.js?v=20261015-1";
-import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, materialById, materialCosts, recipeCost, sliderSpec, usageVsPurchase } from "./cost-recipe.js?v=20261016-1";
+import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-1";
 import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-2";
 import { otherCostRows } from "./other-costs.js?v=20261016-2";
 import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-2";
@@ -572,7 +572,8 @@ function recalcEntryTotal() {
   $("#entry-total").textContent = money(Math.round(qty * price));
 }
 const MATERIAL_GROUPS = [["THIT","Thịt, gia cầm"],["RAU","Rau, củ, quả"],["BUN","Bún, bánh đa, tinh bột"],["BANH","Bánh mì, nguyên liệu bánh"],["SUA","Trứng, sữa, bơ"],["GIAVI","Gia vị, nước dùng"],["CAPHE","Cà phê"],["TRA","Trà, nguyên liệu pha trà"],["MUT","Siro, mứt, nguyên liệu bổ sung"],["NUOC","Đồ uống đóng chai"],["DA","Đá, nước tinh khiết"],["BAOBI","Bao bì, vật tư phục vụ"],["VESINH","Vệ sinh, vật tư tiêu hao"],["KHAC","Vật tư khác"]];
-const MATERIAL_UNITS = ["kg","gam","lít","ml","con","quả","bó","túi","hộp","chai","lon","gói","cái","thùng","bình","ổ","suất"];
+// Cùng bộ đơn vị với danh mục vật tư chuẩn (giá vốn quy đổi theo đúng các đơn vị này).
+const MATERIAL_UNITS = ["kg","g","lít","ml","hộp","thùng","chai","can","quả","vỉ","khay","bó","túi","gói","cái","ổ","cây","bao","bình","con","lon","suất"];
 function savedMaterials() { try { return JSON.parse(localStorage.getItem(`pos0210.materials.${state.user?.uid}`) || "[]"); } catch { return []; } }
 function rememberMaterials(items) { const records = savedMaterials(); for (const item of items) { const name = String(item.materialName || "").trim(); if (!name) continue; const index = records.findIndex((r) => normalizeMaterial(r.materialName) === normalizeMaterial(name)); const record = { materialName: name, materialCode: item.materialCode, expenseGroup: item.expenseGroup, unit: item.unit }; if (index >= 0) records[index] = record; else records.push(record); } localStorage.setItem(`pos0210.materials.${state.user?.uid}`, JSON.stringify(records.slice(-500))); }
 function materialOptions(field, search) {
@@ -610,10 +611,14 @@ function refreshRuleHint(line) {
   if (s.status === "learned" || s.status === "matched") {
     const label = groupLabelOf(s.group);
     if (!chosen) text = `Gợi ý: ${label}`;
-    else if (chosen === s.group) text = `✓ Khớp quy tắc${s.status === "matched" ? ` (từ khoá “${s.matched}”)` : " đã học"}: ${label}`;
+    else if (chosen === s.group) text = `✓ Khớp quy tắc${s.status === "matched" ? ` (từ khoá “${s.matched}”)` : " (danh mục vật tư / đã học)"}: ${label}`;
     else { text = `Khác gợi ý (${label}). Lựa chọn của bạn sẽ được ghi nhớ cho lần sau.`; warn = true; }
   } else if (s.status === "ambiguous") { text = `Tên này có thể thuộc: ${s.groups.map(groupLabelOf).join(" hoặc ")}. Hãy chọn đúng nhóm.`; warn = true; }
   else { text = chosen ? "Chưa có quy tắc cho tên này; lựa chọn của bạn sẽ được ghi nhớ." : "Chưa khớp quy tắc nào, hãy chọn nhóm vật tư."; warn = true; }
+  // Đơn vị phải quy đổi được thì mới ra giá vốn vật tư.
+  const std = matchMaterial({ materialName: name });
+  const unit = line.querySelector("[data-field=unit]")?.value;
+  if (std && unit && !unitFactor(std, unit)) { text += ` · Đơn vị “${unit}” chưa quy đổi được cho ${std.name}: dùng ${std.units.map((u) => u.unit).join(", ")}.`; warn = true; }
   hint.textContent = text;
   hint.className = warn ? "rule-hint warn" : "rule-hint";
 }
@@ -1009,12 +1014,15 @@ $("#expense-lines").addEventListener("change", (event) => {
   const input = event.target;
   const line = input.closest(".expense-line");
   if (!line) return;
+  if (input.matches("[data-field=unit]")) { applyExpenseInputs(); refreshRuleHint(line); return; }
   if (input.matches("[data-field=materialName]")) {
     const suggestion = classifyMaterial(input.value, allRules());
     // Nhóm tự điền không được sót lại khi đổi tên: gợi ý rõ thì điền, mơ hồ hoặc chưa khớp thì xoá để buộc người nhập chọn.
     if (line.dataset.groupTouched !== "1") line.querySelector("[data-field=expenseGroup]").value = suggestion.group ? groupLabelOf(suggestion.group) : "";
     const known = savedMaterials().find((item) => normalizeMaterial(item.materialName) === normalizeMaterial(input.value));
+    const std = matchMaterial({ materialName: input.value });
     if (known?.unit) line.querySelector("[data-field=unit]").value = known.unit;
+    else if (std && normalizeMaterial(std.name) === normalizeMaterial(input.value)) line.querySelector("[data-field=unit]").value = std.units[0].unit;
     line.querySelector("[data-field=materialCode]").value = "";
     applyExpenseInputs(); refreshRuleHint(line);
     return;

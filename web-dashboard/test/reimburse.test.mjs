@@ -86,29 +86,38 @@ test("VietQR đúng chuẩn EMVCo (CRC16 và chuỗi mẫu tính độc lập)",
   assert.throws(() => vietQrPayload({ bank: "MB", account: "1", amount: 0, info: "" }), /Số tiền/);
 });
 
-import { bankOf, canTreasure, isMine, legacyOpenReceipts, memberOf, myAlerts } from "../reimburse.js";
+import { bankOf, canTreasure, hashPin, isMine, legacyOpenReceipts, memberByPinHash, memberId, memberOf, myAlerts, validPin } from "../reimburse.js";
 
 const members = [
-  { email: "huong@x.vn", name: "Phạm Thị Hương", role: "NGUOI_MUA", bank: "MB", account: "0909", holder: "PHAM THI HUONG" },
-  { email: "tq@x.vn", name: "Lan", role: "THU_QUY" },
+  { id: "huong-a1b2", name: "Phạm Thị Hương", role: "NGUOI_MUA", bank: "MB", account: "0909", holder: "PHAM THI HUONG" },
+  { id: "lan-c3d4", name: "Lan", role: "THU_QUY" },
 ];
-test("người mua: theo email trước, phiếu cũ khớp theo tên", () => {
-  assert.equal(memberOf({ payerEmail: "HUONG@x.vn" }, members).name, "Phạm Thị Hương");
-  assert.equal(memberOf({ enteredByName: "pham thi huong" }, members).email, "huong@x.vn");
+test("PIN: 4–6 số, băm cố định, tìm đúng người đang hoạt động", async () => {
+  assert.ok(validPin("1234") && validPin("123456") && !validPin("123") && !validPin("12a4") && !validPin("1234567"));
+  const h = await hashPin("1234");
+  assert.equal(h.length, 64); assert.equal(h, await hashPin("1234")); assert.notEqual(h, await hashPin("1235"));
+  const list = [{ id: "a", pinHash: h }, { id: "b", pinHash: await hashPin("9999"), active: false }];
+  assert.equal(memberByPinHash(list, h).id, "a");
+  assert.equal(memberByPinHash(list, await hashPin("9999")), null);
+  assert.equal(memberId("Phạm Thị Hương", "x1y2"), "pham-thi-huong-x1y2");
+});
+test("người mua: theo mã người dùng trước, phiếu cũ khớp theo tên", () => {
+  assert.equal(memberOf({ payerId: "huong-a1b2" }, members).name, "Phạm Thị Hương");
+  assert.equal(memberOf({ enteredByName: "pham thi huong" }, members).id, "huong-a1b2");
   assert.equal(memberOf({ enteredByName: "Ai đó" }, members), null);
-  assert.ok(isMine({ payerEmail: "Huong@X.vn" }, "huong@x.vn"));
-  assert.ok(!isMine({ payerEmail: "" }, ""));
+  assert.ok(isMine({ payerId: "lan-c3d4" }, "lan-c3d4"));
+  assert.ok(!isMine({ payerId: "" }, ""));
   assert.ok(canTreasure("THU_QUY") && canTreasure("CHU_QUAN") && !canTreasure("NGUOI_MUA"));
 });
 test("tài khoản nhận: hồ sơ người dùng trước, danh sách cũ sau", () => {
-  assert.equal(bankOf({ payerEmail: "huong@x.vn" }, members, []).from, "member");
+  assert.equal(bankOf({ payerId: "huong-a1b2" }, members, []).from, "member");
   assert.equal(bankOf({ enteredByName: "Lan" }, members, [{ name: "Lan", bank: "VCB", account: "1" }]).from, "payee");
   assert.equal(bankOf({ enteredByName: "Lan" }, members, []), null);
 });
-test("phiếu cũ chưa gắn email còn mở được gắn theo tên", () => {
+test("phiếu cũ chưa gắn người dùng còn mở được gắn theo tên", () => {
   const rs = [
     { id: "1", enteredByName: "Phạm Thị Hương", fundSource: "PERSONAL" },
-    { id: "2", enteredByName: "Phạm Thị Hương", fundSource: "PERSONAL", payerEmail: "huong@x.vn" },
+    { id: "2", enteredByName: "Phạm Thị Hương", fundSource: "PERSONAL", payerId: "huong-a1b2" },
     { id: "3", enteredByName: "Phạm Thị Hương", fundSource: "SHOP_CASH" },
     { id: "4", enteredByName: "Phạm Thị Hương", fundSource: "PERSONAL", reimbursement: { status: "CONFIRMED" } },
   ];
@@ -117,16 +126,16 @@ test("phiếu cũ chưa gắn email còn mở được gắn theo tên", () => {
 test("cảnh báo người mua: bị trả lại, chờ xác nhận, thiếu tài khoản", () => {
   const now = 10 * 86400000;
   const receipts = [
-    { id: "a", payerEmail: "lan@x.vn", fundSource: "PERSONAL", total: 100, reimbursement: { status: "REJECTED", rejectReason: "mờ" } },
-    { id: "b", payerEmail: "lan@x.vn", fundSource: "PERSONAL", total: 50 },
-    { id: "c", payerEmail: "khac@x.vn", fundSource: "PERSONAL", total: 70 },
+    { id: "a", payerId: "lan", fundSource: "PERSONAL", total: 100, reimbursement: { status: "REJECTED", rejectReason: "mờ" } },
+    { id: "b", payerId: "lan", fundSource: "PERSONAL", total: 50 },
+    { id: "c", payerId: "khac", fundSource: "PERSONAL", total: 70 },
   ];
-  const batches = [{ id: "z", status: "PAID", payerEmail: "lan@x.vn", amount: 200, paidAt: now - 2 * 86400000, payer: "Lan" }];
-  const a = myAlerts({ email: "lan@x.vn", role: "NGUOI_MUA", me: {}, receipts, batches, now });
+  const batches = [{ id: "z", status: "PAID", payerId: "lan", amount: 200, paidAt: now - 2 * 86400000, payer: "Lan" }];
+  const a = myAlerts({ myId: "lan", role: "NGUOI_MUA", me: {}, receipts, batches, now });
   assert.deepEqual(a.items.map((x) => x.key), ["rejected", "confirm", "waiting", "bank"]);
   assert.equal(a.badge, 3);
   assert.match(a.items[1].text, /quá 1 ngày/);
-  const ok = myAlerts({ email: "lan@x.vn", role: "NGUOI_MUA", me: { bank: "MB", account: "1" }, receipts: [], batches: [], now });
+  const ok = myAlerts({ myId: "lan", role: "NGUOI_MUA", me: { bank: "MB", account: "1" }, receipts: [], batches: [], now });
   assert.equal(ok.badge, 0); assert.equal(ok.items.length, 0);
 });
 test("cảnh báo thủ quỹ: chờ duyệt, chờ hoàn, chưa rõ nguồn, thiếu tài khoản, chưa xác nhận", () => {
@@ -136,8 +145,8 @@ test("cảnh báo thủ quỹ: chờ duyệt, chờ hoàn, chưa rõ nguồn, th
     { id: "b", enteredByName: "Tú", fundSource: "PERSONAL", total: 50, reimbursement: { status: "APPROVED" } },
     { id: "c", enteredByName: "Tú", total: 70 },
   ];
-  const batches = [{ id: "z", status: "PAID", payerEmail: "huong@x.vn", payer: "Hương", amount: 1, paidAt: now - 3 * 86400000 }];
-  const a = myAlerts({ email: "tq@x.vn", role: "THU_QUY", me: { bank: "MB", account: "1" }, receipts, batches, members, now });
+  const batches = [{ id: "z", status: "PAID", payerId: "huong-a1b2", payer: "Hương", amount: 1, paidAt: now - 3 * 86400000 }];
+  const a = myAlerts({ myId: "lan-c3d4", role: "THU_QUY", me: { bank: "MB", account: "1" }, receipts, batches, members, now });
   assert.deepEqual(a.items.map((x) => x.key), ["approve", "pay", "unknown", "nobank", "late"]);
   assert.equal(a.badge, 3);
 });

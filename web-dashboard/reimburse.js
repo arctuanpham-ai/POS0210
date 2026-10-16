@@ -126,24 +126,35 @@ export const vietQrPayload = ({ bank, account, holder, amount, info }) => {
   return raw + crc16(raw).toString(16).toUpperCase().padStart(4, "0");
 };
 
-// ---------- Tài khoản từng người: vai trò, tài khoản ngân hàng, cảnh báo việc cần làm ----------
-export const ROLE_OWNER = "CHU_QUAN";      // tài khoản chủ quán (toàn quyền)
+// ---------- Người dùng web: một tài khoản Firebase dùng chung, mỗi người vào bằng PIN riêng ----------
+export const ROLE_OWNER = "CHU_QUAN";      // quản lý thành viên, toàn quyền
 export const ROLE_TREASURER = "THU_QUY";   // duyệt, hoàn tiền, xem toàn bộ
 export const ROLE_BUYER = "NGUOI_MUA";     // chỉ nhập phiếu của mình, xem hoàn ứng của mình, xác nhận đã nhận
 export const ROLE_LABELS = { CHU_QUAN: "Chủ quán", THU_QUY: "Thủ quỹ", NGUOI_MUA: "Người mua" };
-export const normEmail = (v) => String(v ?? "").trim().toLowerCase();
 /** Duyệt và hoàn tiền: chủ quán hoặc thủ quỹ. */
 export const canTreasure = (role) => role === ROLE_OWNER || role === ROLE_TREASURER;
+/** PIN 4–6 chữ số. */
+export const validPin = (pin) => /^\d{4,6}$/.test(String(pin ?? ""));
+/** Băm PIN (không lưu PIN gốc trên Firestore). */
+export const hashPin = async (pin) => {
+  const bytes = new TextEncoder().encode(`pos0210-web:${pin}`);
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+};
+/** Người có PIN này (chỉ người đang hoạt động). */
+export const memberByPinHash = (members, hash) => members.find((m) => m.pinHash === hash && m.active !== false) || null;
+/** Mã người dùng ngắn, cố định: tên không dấu + 4 ký tự ngẫu nhiên. */
+export const memberId = (name, rand) => `${asciiUpper(name).toLowerCase().replace(/ /g, "-") || "nguoi"}-${rand}`;
 
-/** Người mua của phiếu: theo email nếu có, phiếu cũ thì khớp theo tên. */
+/** Người mua của phiếu / đợt hoàn: theo mã người dùng nếu có, phiếu cũ thì khớp theo tên. */
 export const memberOf = (receiptOrBatch, members = []) => {
-  const email = normEmail(receiptOrBatch?.payerEmail);
-  if (email) { const m = members.find((x) => normEmail(x.email) === email); if (m) return m; }
+  const id = receiptOrBatch?.payerId;
+  if (id) { const m = members.find((x) => x.id === id); if (m) return m; }
   const name = asciiUpper(receiptOrBatch?.enteredByName ?? receiptOrBatch?.payer);
   return name ? members.find((x) => asciiUpper(x.name) === name) || null : null;
 };
-/** Phiếu / đợt hoàn là của tài khoản đang đăng nhập. */
-export const isMine = (receiptOrBatch, email) => Boolean(normEmail(email)) && normEmail(receiptOrBatch?.payerEmail) === normEmail(email);
+/** Phiếu / đợt hoàn là của người đang dùng web. */
+export const isMine = (receiptOrBatch, myId) => Boolean(myId) && receiptOrBatch?.payerId === myId;
 /** Tài khoản nhận hoàn để tạo QR: hồ sơ người dùng trước, danh sách cũ (payees) theo tên sau. */
 export const bankOf = (receiptOrBatch, members = [], payees = []) => {
   const m = memberOf(receiptOrBatch, members);
@@ -152,31 +163,30 @@ export const bankOf = (receiptOrBatch, members = [], payees = []) => {
   const p = payees.find((x) => asciiUpper(x.name) === name);
   return p ? { bank: p.bank, account: p.account, holder: p.holder || p.name, name: p.name, from: "payee" } : null;
 };
-/** Phiếu cũ chưa gắn email (nhập trước khi có tài khoản riêng) còn đang mở, trùng tên với thành viên. */
-export const legacyOpenReceipts = (member, receipts) => receipts.filter((r) => !normEmail(r.payerEmail) && asciiUpper(r.enteredByName) === asciiUpper(member?.name) && asciiUpper(member?.name)
+/** Phiếu cũ chưa gắn người dùng (nhập trước khi có PIN) còn đang mở, trùng tên với thành viên. */
+export const legacyOpenReceipts = (member, receipts) => receipts.filter((r) => !r.payerId && asciiUpper(r.enteredByName) === asciiUpper(member?.name) && asciiUpper(member?.name)
   && ["PENDING", "APPROVED", "REJECTED", "PAID"].includes(reimbursementStatus(r)));
 
 const sum = (list, key) => list.reduce((s, x) => s + Number(x[key] || 0), 0);
 /**
- * Việc cần làm của người đang đăng nhập. Mỗi mục: { key, level: "warn" | "info", count, text }.
- * `badge` = số việc phải tự tay xử lý (hiện chấm đỏ ở tab Hoàn ứng).
+ * Việc cần làm của người đang dùng web. Mỗi mục: { key, level: "warn" | "info", count, text }.
+ * `badge` = số việc phải tự tay xử lý (hiện chấm đỏ ở tab).
  */
-export const myAlerts = ({ email, role, me = null, receipts = [], batches = [], members = [], payees = [], now = Date.now() }) => {
+export const myAlerts = ({ myId, role, me = null, receipts = [], batches = [], members = [], payees = [], now = Date.now() }) => {
   const out = [];
   const vnd = (n) => `${Number(n || 0).toLocaleString("vi-VN")}đ`;
   // Phần của người mua (chủ quán / thủ quỹ cũng có thể là người mua).
-  const mine = receipts.filter((r) => isMine(r, email));
+  const mine = receipts.filter((r) => isMine(r, myId));
   const rejected = mine.filter((r) => reimbursementStatus(r) === "REJECTED");
   if (rejected.length) out.push({ key: "rejected", level: "warn", count: rejected.length, text: `${rejected.length} phiếu của bạn bị trả lại: xem lý do, sửa rồi lưu để gửi duyệt lại.` });
-  const paidMine = batches.filter((b) => b.status === "PAID" && isMine(b, email));
+  const paidMine = batches.filter((b) => b.status === "PAID" && isMine(b, myId));
   if (paidMine.length) {
     const late = paidMine.filter((b) => needsReminder(b, now)).length;
     out.push({ key: "confirm", level: "warn", count: paidMine.length, text: `Bạn đã được hoàn ${vnd(sum(paidMine, "amount"))} (${paidMine.length} đợt): kiểm tra tài khoản rồi bấm "Tôi đã nhận tiền".${late ? ` ${late} đợt đã quá 1 ngày.` : ""}` });
   }
   const waitingMine = mine.filter((r) => ["PENDING", "APPROVED"].includes(reimbursementStatus(r)));
   if (waitingMine.length) out.push({ key: "waiting", level: "info", count: 0, text: `${waitingMine.length} phiếu của bạn đang chờ thủ quỹ (${vnd(sum(waitingMine, "total"))}).` });
-  const openMine = mine.some((r) => ["PENDING", "APPROVED"].includes(reimbursementStatus(r)));
-  if (normEmail(email) && (!me?.bank || !me?.account) && (openMine || role === ROLE_BUYER)) out.push({ key: "bank", level: "warn", count: openMine ? 1 : 0, text: "Bạn chưa nhập tài khoản ngân hàng: vào Tài khoản để thủ quỹ tạo được QR hoàn tiền." });
+  if (myId && (!me?.bank || !me?.account) && (waitingMine.length || role === ROLE_BUYER)) out.push({ key: "bank", level: "warn", count: waitingMine.length ? 1 : 0, text: "Bạn chưa nhập tài khoản ngân hàng: vào Tài khoản để thủ quỹ tạo được QR hoàn tiền." });
   if (!canTreasure(role)) return { items: out, badge: out.reduce((s, x) => s + x.count, 0) };
   // Phần của thủ quỹ.
   const pending = receipts.filter((r) => reimbursementStatus(r) === "PENDING");
@@ -187,7 +197,7 @@ export const myAlerts = ({ email, role, me = null, receipts = [], batches = [], 
   if (unknown.length) out.push({ key: "unknown", level: "warn", count: unknown.length, text: `${unknown.length} phiếu chưa rõ nguồn tiền (tiền cá nhân hay tiền quán).` });
   const noBank = [...new Set(approved.filter((r) => !bankOf(r, members, payees)).map((r) => r.enteredByName || "Chưa rõ"))];
   if (noBank.length) out.push({ key: "nobank", level: "info", count: 0, text: `Chưa có tài khoản ngân hàng của: ${noBank.join(", ")} (chưa tạo được QR).` });
-  const late = batches.filter((b) => needsReminder(b, now) && !isMine(b, email));
+  const late = batches.filter((b) => needsReminder(b, now) && !isMine(b, myId));
   if (late.length) out.push({ key: "late", level: "info", count: 0, text: `${late.length} khoản đã hoàn quá 1 ngày người nhận chưa xác nhận: ${[...new Set(late.map((b) => b.payer))].join(", ")}.` });
   return { items: out, badge: out.reduce((s, x) => s + x.count, 0) };
 };

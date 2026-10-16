@@ -1,6 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
 import {
-  createUserWithEmailAndPassword,
   getAuth,
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -33,7 +32,7 @@ import { menuCsv } from "./menu-export.js?v=20261015-1";
 import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-1";
 import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-2";
 import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261016-4";
-import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, isMine, legacyOpenReceipts, memberOf, myAlerts, needsReminder, normEmail, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, vietQrPayload } from "./reimburse.js?v=20261016-6";
+import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261016-7";
 import { otherCostRows } from "./other-costs.js?v=20261016-2";
 import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-2";
 import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261014-9";
@@ -733,14 +732,14 @@ async function saveExpenseReceipt(event) {
   const payload0 = editingReceipt
     ? { ...buildEditedReceipt(editingReceipt, expenseDraft, { now, uid: state.user.uid }), enteredByName: expenseDraft.enteredByName, fundSource: expenseDraft.fundSource, ...(upgradeFrom ? { detailLevel: DETAIL_ITEMIZED } : {}) }
     : { ...expenseDraft, total: check.total, status: "ACTIVE", updatedAt: now, updatedByUid: state.user.uid, source: "WEB_MANAGER", items: expenseDraft.items.map((item) => ({ ...item, materialGroup: item.expenseGroup, amount: Math.round(item.qty * item.unitPrice) })) };
-  const { payerChosen: _pc, ...payload1 } = { ...payload0, payerEmail: payerEmailFor(expenseDraft.enteredByName, editingReceipt) };
+  const { payerChosen: _pc, ...payload1 } = { ...payload0, payerId: payerIdFor(expenseDraft.enteredByName, editingReceipt) };
   const payload = withReimbursement(payload1, editingReceipt, now);
   try {
     await setDoc(doc(db, ...root, receiptCollection(), expenseDraft.id), withDemoFlags(payload));
     rememberMaterials(expenseDraft.items);
     for (const rule of state.demo || isBuyer() ? [] : learnList) { // đang xem demo: không học quy tắc từ phiếu demo
       try {
-        const learned = { id: rule.id, name: rule.name, group: rule.group, updatedAt: now, updatedByName: state.user.displayName || state.user.email || "" };
+        const learned = { id: rule.id, name: rule.name, group: rule.group, updatedAt: now, updatedByName: myName() };
         await setDoc(doc(db, ...root, "expenseRules", rule.id), learned);
         state.expenseRules = [...state.expenseRules.filter((x) => x.id !== rule.id), learned];
       } catch { /* học quy tắc là phụ: phiếu đã lưu, lần sau sẽ thử lại khi người nhập chọn nhóm khác gợi ý */ }
@@ -849,7 +848,6 @@ async function refreshDashboard() {
     $("#sync-status").textContent = state.dashboard.lastUpdatedAt ? `Snapshot POS: ${dateTime(state.dashboard.lastUpdatedAt)}${stale ? " · cần kiểm tra máy POS" : ""}` : "POS chưa gửi snapshot.";
     render();
     loadBillHistory(state.historyDay, true);
-    await loadMembers();
     loadReimbursements();
   } catch (error) { $("#sync-status").textContent = `Không đọc được dữ liệu: ${error.message}`; }
 }
@@ -1160,7 +1158,7 @@ async function requestRemoteSync() {
   lastSyncRequestAt = now;
   const ref = doc(db, ...root, "commands", "sync");
   try {
-    await setDoc(ref, { requestedAt: now, requestedBy: state.user.email || "" }, { merge: true });
+    await setDoc(ref, { requestedAt: now, requestedBy: myName() }, { merge: true });
   } catch (error) {
     lastSyncRequestAt = NaN;
     status.textContent = error.code === "permission-denied" ? "Không có quyền ghi lệnh (cần mở quy tắc Firestore cho commands)." : `Không gửi được lệnh: ${error.message}`;
@@ -1252,7 +1250,7 @@ async function saveSummaryBlocks(event) {
   for (const { block, purchaseDate, total } of prepared) {
     const items = buildSummaryLines(block.lines, () => uuid());
     const base = editingSummary ? { ...editingSummary } : { id: block.id, createdAt: now, source: "WEB_MANAGER" };
-    const payload = withReimbursement({ ...base, purchaseDate, note: block.place, enteredByUid: state.user.uid, enteredByName: block.payer || myName(), payerEmail: payerEmailFor(block.payer || myName(), editingSummary), fundSource: $("#summary-fund").value,
+    const payload = withReimbursement({ ...base, purchaseDate, note: block.place, enteredByUid: state.user.uid, enteredByName: block.payer || myName(), payerId: payerIdFor(block.payer || myName(), editingSummary), fundSource: $("#summary-fund").value,
       items, total, status: "ACTIVE", detailLevel: "SUMMARY", updatedAt: Math.max(now, Number(editingSummary?.updatedAt || 0) + 1), updatedByUid: state.user.uid }, editingSummary, now);
     try { await setDoc(doc(db, ...root, receiptCollection(), payload.id), withDemoFlags(payload)); replaceLocalReceipt(withDemoFlags(payload)); saved += 1; }
     catch (e) { failed.push({ block, message: e.message || String(e) }); }
@@ -1311,7 +1309,7 @@ async function saveCutoff(clear) {
   if (!clear && !value) { $("#cutoff-note").textContent = "Chọn ngày mốc trước."; return; }
   const cutoffAt = clear ? null : new Date(`${value}T00:00:00`).getTime();
   try {
-    await setDoc(doc(db, ...root, "config", "expenseDetail"), { cutoffAt, updatedAt: Date.now(), updatedBy: state.user.email || "" });
+    await setDoc(doc(db, ...root, "config", "expenseDetail"), { cutoffAt, updatedAt: Date.now(), updatedBy: myName() });
     state.detailCutoff = cutoffAt;
     renderDetailLevel();
   } catch (error) { $("#cutoff-note").textContent = error.code === "permission-denied" ? "Không có quyền ghi mốc (cần mở quy tắc Firestore cho config/expenseDetail)." : `Không lưu được mốc: ${error.message}`; }
@@ -1524,7 +1522,7 @@ function updateRecipeTotal() {
 }
 async function saveRecipe() {
   const lines = recipeEdit.lines.filter((l) => Number(l.qty) > 0).map((l) => ({ materialId: l.materialId, qty: Math.round(Number(l.qty) * 100) / 100 }));
-  const payload = { id: recipeEdit.item.id, menuItemId: recipeEdit.item.id, menuName: recipeEdit.item.name, lines, updatedAt: Date.now(), updatedBy: state.user?.email || "" };
+  const payload = { id: recipeEdit.item.id, menuItemId: recipeEdit.item.id, menuName: recipeEdit.item.name, lines, updatedAt: Date.now(), updatedBy: myName() };
   try {
     await setDoc(doc(db, ...root, "recipes", recipeEdit.item.id), payload);
     state.recipes[recipeEdit.item.id] = payload;
@@ -1713,7 +1711,7 @@ async function saveCount(event) {
   if (!Object.keys(items).length) { err.textContent = "Chưa nhập số đếm nào."; return; }
   const d = new Date(at);
   const id = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  const payload = { id, countedAt: at, countedBy: state.user?.email || "", items, updatedAt: Date.now(), ...(state.demo ? { demo: true, demoBatch: "manual" } : {}) };
+  const payload = { id, countedAt: at, countedBy: myName(), items, updatedAt: Date.now(), ...(state.demo ? { demo: true, demoBatch: "manual" } : {}) };
   try {
     await setDoc(doc(db, ...root, countCollection(), id), payload);
     document.querySelectorAll("#count-form-items input").forEach((x) => { x.value = ""; });
@@ -1725,15 +1723,15 @@ $("#count-form").addEventListener("submit", saveCount);
 
 /* ---------- Hoàn ứng: mỗi người một tài khoản, cảnh báo theo người, QR động từ tài khoản ngân hàng người mua ---------- */
 const isBuyer = () => state.role === ROLE_BUYER;
-const myEmail = () => normEmail(state.user?.email);
-const myName = () => state.me?.name || state.user?.displayName || state.user?.email || "Quản lý";
+const myId = () => state.me?.id || "";
+const myName = () => state.me?.name || "Quản lý";
 /** Mọi người có thể là người mua: thành viên đã thêm và chính mình. */
-const people = () => { const list = [...state.members]; if (state.me && !list.some((m) => normEmail(m.email) === myEmail())) list.push({ ...state.me, email: myEmail() }); return list; };
-/** Email người mua gắn vào phiếu: người mua tự nhập là chính mình; thủ quỹ nhập hộ thì khớp theo tên thành viên. */
-function payerEmailFor(name, original) {
-  if (isBuyer()) return myEmail();
-  if (original && asciiUpper(original.enteredByName) === asciiUpper(name) && original.payerEmail) return original.payerEmail;
-  return normEmail(memberOf({ enteredByName: name }, people())?.email);
+const people = () => state.members.filter((m) => m.active !== false);
+/** Mã người mua gắn vào phiếu: người mua tự nhập là chính mình; thủ quỹ nhập hộ thì khớp theo tên thành viên. */
+function payerIdFor(name, original) {
+  if (isBuyer()) return myId();
+  if (original && asciiUpper(original.enteredByName) === asciiUpper(name) && original.payerId) return original.payerId;
+  return memberOf({ enteredByName: name }, people())?.id || "";
 }
 const reimbCollection = () => (state.demo ? "demoReimbursements" : "reimbursements");
 /** Gắn mã phiếu và trạng thái hoàn ứng. Phiếu đã hoàn không bị đổi trạng thái khi sửa; chênh tiền hiện ở màn thủ quỹ. */
@@ -1758,42 +1756,93 @@ function flashNote(text) {
   clearTimeout(flashTimer);
   flashTimer = setTimeout(() => { delete bar.dataset.flash; renderAlerts(); }, 8000);
 }
-const permissionHint = "Tài khoản này chưa được mở quyền trên Firestore (chủ quán cần dán quy tắc mới ở Firebase Console → Firestore → Rules).";
+const permissionHint = "Không có quyền ghi Firestore: kiểm tra máy này đang đăng nhập đúng tài khoản quán.";
 
-/* ---- Vai trò khi đăng nhập ---- */
-async function resolveRole(user) {
-  state.role = null; state.me = null; state.members = [];
-  const email = normEmail(user.email);
-  let profile = null;
-  try { if (email) { const d = await getDoc(doc(db, ...root, "webMembers", email)); if (d.exists()) profile = { id: d.id, ...d.data() }; } } catch { profile = null; }
-  if (user.uid === STORE_OWNER_UID) { state.role = ROLE_OWNER; state.me = profile || { email, name: user.displayName || "Chủ quán", role: ROLE_OWNER }; return true; }
-  if (profile && profile.active !== false && [ROLE_TREASURER, ROLE_BUYER].includes(profile.role)) { state.role = profile.role; state.me = profile; return true; }
-  return false;
+/* ---- Đăng nhập: tài khoản quán dùng chung + PIN từng người ---- */
+const PERSON_KEY = "pos0210.webPerson";
+const savedPerson = () => { try { return localStorage.getItem(PERSON_KEY) || ""; } catch { return ""; } };
+const rememberPerson = (id) => { try { if (id) localStorage.setItem(PERSON_KEY, id); else localStorage.removeItem(PERSON_KEY); } catch { /* bỏ qua */ } };
+async function loadMembers() {
+  try { state.members = rows(await getDocs(collection(db, ...root, "webMembers"))); state.membersError = ""; }
+  catch (error) { state.members = []; state.membersError = error.message || "lỗi không rõ"; }
+  if (state.me) state.me = state.members.find((m) => m.id === state.me.id) || state.me;
 }
+/** Chưa có chủ quán nào có PIN: lần đầu vào thì tạo PIN chủ quán. */
+const needsBootstrap = () => !state.members.some((m) => m.role === ROLE_OWNER && m.pinHash && m.active !== false);
+function showPinView() {
+  const boot = needsBootstrap();
+  $("#login-view").hidden = true;
+  $("#dashboard-view").hidden = true;
+  $("#pin-view").hidden = false;
+  $("#pin-title").textContent = boot ? "Tạo PIN chủ quán" : "Nhập mã PIN";
+  $("#pin-hint").textContent = state.membersError ? `Không đọc được danh sách người dùng: ${state.membersError}` : boot ? "Lần đầu dùng: đặt tên và PIN cho chủ quán. Sau đó thêm thủ quỹ, người mua ở trang Tài khoản." : "Mỗi người một PIN riêng (4–6 số).";
+  $("#pin-name-row").hidden = !boot;
+  $("#pin-again-row").hidden = !boot;
+  $("#pin-input").value = ""; $("#pin-again").value = "";
+  $("#pin-error").textContent = "";
+  setTimeout(() => $(boot ? "#pin-name" : "#pin-input").focus(), 50);
+}
+function enterAs(member) {
+  state.me = member;
+  state.role = member.role;
+  rememberPerson(member.id);
+  delete $("#my-alerts").dataset.flash;
+  state.reimbLoaded = false;
+  state.expenseReceipts = []; state.openReceipts = []; state.reimbBatches = [];
+  $("#pin-view").hidden = true;
+  $("#login-view").hidden = true;
+  $("#dashboard-view").hidden = false;
+  renderAccount();
+  showTab();
+  refreshDashboard();
+}
+async function submitPin() {
+  const err = $("#pin-error");
+  err.textContent = "";
+  const pin = $("#pin-input").value.trim();
+  if (!validPin(pin)) { err.textContent = "PIN gồm 4–6 chữ số."; return; }
+  const hash = await hashPin(pin);
+  if (needsBootstrap()) {
+    const name = $("#pin-name").value.trim();
+    if (!name) { err.textContent = "Nhập tên của bạn."; return; }
+    if ($("#pin-again").value.trim() !== pin) { err.textContent = "Hai lần nhập PIN không khớp."; return; }
+    const id = memberId(name, uuid().replace(/[^a-z0-9]/gi, "").slice(-4).toLowerCase());
+    const owner = { id, name, role: ROLE_OWNER, pinHash: hash, active: true, createdAt: Date.now(), updatedAt: Date.now() };
+    try { await setDoc(doc(db, ...root, "webMembers", id), owner); state.members.push(owner); enterAs(owner); }
+    catch (error) { err.textContent = `Chưa lưu được: ${error.message}`; }
+    return;
+  }
+  const m = memberByPinHash(state.members, hash);
+  if (!m) { err.textContent = "PIN không đúng."; $("#pin-input").value = ""; return; }
+  enterAs(m);
+}
+$("#pin-button").addEventListener("click", submitPin);
+$("#pin-input").addEventListener("keydown", (e) => { if (e.key === "Enter") { if (needsBootstrap()) $("#pin-again").focus(); else submitPin(); } });
+$("#pin-again").addEventListener("keydown", (e) => { if (e.key === "Enter") submitPin(); });
+$("#pin-logout").addEventListener("click", () => { rememberPerson(""); signOut(auth); });
+$("#switch-person").addEventListener("click", async () => {
+  rememberPerson(""); state.me = null; state.role = null;
+  await loadMembers();
+  showPinView();
+});
 const BUYER_TABS = ["hoanung", "taikhoan"];
 function applyRoleUi() {
   const buyer = isBuyer();
   document.querySelectorAll("#tabbar [data-tab]").forEach((a) => { a.hidden = buyer && !BUYER_TABS.includes(a.dataset.tab); });
   $("#request-sync").hidden = buyer;
+  $("#logout-button").hidden = state.role !== ROLE_OWNER;
   $("#reimb-treasurer-zone").hidden = !canTreasure(state.role);
   $("#members-zone").hidden = state.role !== ROLE_OWNER;
   $("#me-title").textContent = myName();
-  $("#me-role").textContent = `${state.user?.email || ""} · ${ROLE_LABELS[state.role] || ""}`;
-}
-async function loadMembers() {
-  if (!canTreasure(state.role)) return;
-  try { state.members = rows(await getDocs(collection(db, ...root, "webMembers"))); } catch { state.members = []; }
-  const mine = state.members.find((m) => normEmail(m.email) === myEmail());
-  if (mine) state.me = { ...state.me, ...mine };
-  renderAccount();
+  $("#me-role").textContent = `${ROLE_LABELS[state.role] || ""} · vào web bằng PIN riêng`;
 }
 /** Người mua chỉ đọc phiếu và đợt hoàn của chính mình (quy tắc Firestore chặn phần còn lại). */
 async function loadBuyerData() {
   $("#sync-status").textContent = "Đang đọc phiếu của bạn…";
   try {
     const [mine, batches] = await Promise.all([
-      getDocs(query(collection(db, ...root, "expenseReceipts"), where("payerEmail", "==", myEmail()), limit(300))).then(rows),
-      getDocs(query(collection(db, ...root, "reimbursements"), where("payerEmail", "==", myEmail()), limit(100))).then(rows),
+      getDocs(query(collection(db, ...root, "expenseReceipts"), where("payerId", "==", myId()), limit(300))).then(rows),
+      getDocs(query(collection(db, ...root, "reimbursements"), where("payerId", "==", myId()), limit(100))).then(rows),
     ]);
     state.expenseReceipts = mine.sort((a, b) => Number(b.purchaseDate || 0) - Number(a.purchaseDate || 0));
     state.reimbBatches = batches.sort((a, b) => Number(b.paidAt) - Number(a.paidAt));
@@ -1840,7 +1889,7 @@ function reimbReceipts() {
 function renderAlerts() {
   const bar = $("#my-alerts");
   if (!bar || !state.user || !state.role) return;
-  const a = myAlerts({ email: myEmail(), role: state.role, me: state.me, receipts: reimbReceipts(), batches: state.reimbBatches, members: people(), payees: state.payees });
+  const a = myAlerts({ myId: myId(), role: state.role, me: state.me, receipts: reimbReceipts(), batches: state.reimbBatches, members: people(), payees: state.payees });
   const flash = bar.dataset.flash ? `<p class="alert-flash">${escapeHtml(bar.dataset.flash)}</p>` : "";
   bar.hidden = !a.items.length && !flash;
   bar.innerHTML = flash + (a.items.length ? `<strong>Việc của ${escapeHtml(myName())}</strong><ul>${a.items.map((x) => `<li class="${x.level}"><a href="#${x.key === "bank" ? "taikhoan" : "hoanung"}">${escapeHtml(x.text)}</a></li>`).join("")}</ul>` : "");
@@ -1854,16 +1903,16 @@ function receiptLine(r, dup, extra = "", showEdit = true) {
   const diff = changedAfterPaid(r);
   return `<div class="reimb-receipt"><div><strong>${escapeHtml(receiptCode(r))}</strong> · ${dateTime(r.purchaseDate)} · <b>${money(r.total)}</b><small>${escapeHtml(items)}${r.note ? ` · ${escapeHtml(r.note)}` : ""}</small>${dup ? `<small class="warn-text">Nghi trùng với ${escapeHtml(dup.join(", "))}: kiểm tra hoá đơn trước khi duyệt</small>` : ""}${diff ? `<small class="warn-text">Phiếu bị sửa sau khi hoàn: chênh ${money(diff)}</small>` : ""}${reimbursementStatus(r) === "REJECTED" && r.reimbursement?.rejectReason ? `<small class="warn-text">Lý do không duyệt: ${escapeHtml(r.reimbursement.rejectReason)}</small>` : ""}</div><div class="row-actions">${extra}${showEdit ? `<button type="button" class="text-button" data-edit-receipt="${escapeHtml(r.id)}">Xem / sửa</button>` : ""}</div></div>`;
 }
-const confirmLabel = (b) => (isMine(b, myEmail()) ? "Tôi đã nhận tiền" : `Xác nhận hộ ${b.payer}`);
+const confirmLabel = (b) => (isMine(b, myId()) ? "Tôi đã nhận tiền" : `Xác nhận hộ ${b.payer}`);
 function batchCard(b) {
-  return `<article class="reimb-card"><header><strong>${escapeHtml(b.payer)} · ${money(b.amount)}</strong><span>${escapeHtml(b.code)} · ${b.method === "CASH" ? "tiền mặt" : "CK"} · ${dateTime(b.paidAt)}</span></header><p class="muted">${b.receiptCodes?.length || b.receiptIds.length} phiếu: ${escapeHtml((b.receiptCodes || []).join(", "))} · nội dung CK "${escapeHtml(b.transferNote || "")}" · người hoàn ${escapeHtml(b.treasurer || "")}</p>${needsReminder(b) ? '<p class="warn-text">Đã quá 1 ngày chưa xác nhận.</p>' : ""}${isMine(b, myEmail()) || canTreasure(state.role) ? `<div class="tool-row"><button type="button" class="btn strong" data-confirm="${escapeHtml(b.id)}">${escapeHtml(confirmLabel(b))}</button></div>` : ""}</article>`;
+  return `<article class="reimb-card"><header><strong>${escapeHtml(b.payer)} · ${money(b.amount)}</strong><span>${escapeHtml(b.code)} · ${b.method === "CASH" ? "tiền mặt" : "CK"} · ${dateTime(b.paidAt)}</span></header><p class="muted">${b.receiptCodes?.length || b.receiptIds.length} phiếu: ${escapeHtml((b.receiptCodes || []).join(", "))} · nội dung CK "${escapeHtml(b.transferNote || "")}" · người hoàn ${escapeHtml(b.treasurer || "")}</p>${needsReminder(b) ? '<p class="warn-text">Đã quá 1 ngày chưa xác nhận.</p>' : ""}${isMine(b, myId()) || canTreasure(state.role) ? `<div class="tool-row"><button type="button" class="btn strong" data-confirm="${escapeHtml(b.id)}">${escapeHtml(confirmLabel(b))}</button></div>` : ""}</article>`;
 }
 /** Phần "của tôi": ai cũng có, kể cả chủ quán / thủ quỹ khi tự ứng tiền. */
 function renderMine() {
   const host = $("#reimb-mine");
-  const email = myEmail();
-  const mine = reimbReceipts().filter((r) => (isBuyer() || isMine(r, email)) && reimbursementStatus(r) !== "NONE").sort((a, b) => Number(b.purchaseDate || 0) - Number(a.purchaseDate || 0));
-  const myBatches = state.reimbBatches.filter((b) => isMine(b, email));
+  const me = myId();
+  const mine = reimbReceipts().filter((r) => (isBuyer() || isMine(r, me)) && reimbursementStatus(r) !== "NONE").sort((a, b) => Number(b.purchaseDate || 0) - Number(a.purchaseDate || 0));
+  const myBatches = state.reimbBatches.filter((b) => isMine(b, me));
   const paid = myBatches.filter((b) => b.status === "PAID");
   const by = (st) => mine.filter((r) => reimbursementStatus(r) === st);
   const editable = (st) => ["PENDING", "APPROVED", "REJECTED", "UNKNOWN"].includes(st);
@@ -1916,7 +1965,7 @@ async function updateReceiptReimb(id, patch) {
   if (!r) return;
   const now = Date.now();
   const next = { ...r, ...(patch.fundSource ? { fundSource: patch.fundSource } : {}), code: receiptCode(r), reimbursement: { ...(r.reimbursement || {}), ...patch.reimbursement, updatedAt: now, by: myName() }, updatedAt: Math.max(now, Number(r.updatedAt || 0) + 1), ...(r.source === "ANDROID_POS" ? { editedBy: "WEB_MANAGER" } : {}) };
-  if (!next.payerEmail) { const email = normEmail(memberOf(next, people())?.email); if (email) next.payerEmail = email; }
+  if (!next.payerId) { const id = memberOf(next, people())?.id; if (id) next.payerId = id; }
   try {
     await setDoc(doc(db, ...root, receiptCollection(), id), next);
     replaceLocalReceipt(next);
@@ -1928,8 +1977,8 @@ let reimbDraft = null;
 function openReimbDialog(payer) {
   const approved = reimbReceipts().filter((r) => r.enteredByName === payer && reimbursementStatus(r) === "APPROVED");
   if (!approved.length) return;
-  const payerEmail = normEmail(approved.find((r) => r.payerEmail)?.payerEmail || memberOf(approved[0], people())?.email);
-  reimbDraft = { payer, payerEmail, receipts: approved, selected: new Set(approved.map((r) => r.id)), bank: bankOf({ payerEmail, enteredByName: payer }, people(), state.payees) };
+  const payerId = approved.find((r) => r.payerId)?.payerId || memberOf(approved[0], people())?.id || "";
+  reimbDraft = { payer, payerId, receipts: approved, selected: new Set(approved.map((r) => r.id)), bank: bankOf({ payerId, enteredByName: payer }, people(), state.payees) };
   $("#reimb-title").textContent = `Hoàn cho ${payer}`;
   $("#reimb-error").textContent = "";
   renderReimbDialog();
@@ -1980,7 +2029,7 @@ async function payBatch(method) {
   const now = Date.now();
   const batchId = uuid();
   const total = sel.reduce((s, r) => s + Number(r.total || 0), 0);
-  const batch = { id: batchId, code: reimbDraft.code, payer: reimbDraft.payer, payerEmail: reimbDraft.payerEmail || "", amount: total, method, transferNote: reimbDraft.note, receiptIds: sel.map((r) => r.id), receiptCodes: sel.map(receiptCode), treasurer, treasurerEmail: myEmail(), paidAt: now, status: "PAID", ...(state.demo ? { demo: true } : {}) };
+  const batch = { id: batchId, code: reimbDraft.code, payer: reimbDraft.payer, payerId: reimbDraft.payerId || "", amount: total, method, transferNote: reimbDraft.note, receiptIds: sel.map((r) => r.id), receiptCodes: sel.map(receiptCode), treasurer, treasurerId: myId(), paidAt: now, status: "PAID", ...(state.demo ? { demo: true } : {}) };
   const paidInfo = (f) => ({ ...(f.reimbursement || {}), status: "PAID", batchId, batchCode: batch.code, paidAt: now, paidAmount: Number(f.total), paidBy: treasurer, updatedAt: now });
   try {
     await runTransaction(db, async (tx) => {
@@ -1989,14 +2038,14 @@ async function payBatch(method) {
       for (const ref of refs) { const snap = await tx.get(ref); if (snap.exists()) fresh.push({ id: snap.id, ...snap.data() }); }
       const check = validateBatchSelection(sel, fresh);
       if (!check.ok) throw new Error(check.problems.join("; "));
-      // Gắn email người mua vào phiếu cũ để người mua tự thấy và tự xác nhận được trên tài khoản của họ.
-      fresh.forEach((f, i) => tx.set(refs[i], { ...f, ...(batch.payerEmail && !f.payerEmail ? { payerEmail: batch.payerEmail } : {}), code: receiptCode(f), reimbursement: paidInfo(f), updatedAt: Math.max(now, Number(f.updatedAt || 0) + 1), ...(f.source === "ANDROID_POS" ? { editedBy: "WEB_MANAGER" } : {}) }));
+      // Gắn người mua vào phiếu cũ để người mua tự thấy và tự xác nhận được trên tài khoản của họ.
+      fresh.forEach((f, i) => tx.set(refs[i], { ...f, ...(batch.payerId && !f.payerId ? { payerId: batch.payerId } : {}), code: receiptCode(f), reimbursement: paidInfo(f), updatedAt: Math.max(now, Number(f.updatedAt || 0) + 1), ...(f.source === "ANDROID_POS" ? { editedBy: "WEB_MANAGER" } : {}) }));
       tx.set(doc(db, ...root, reimbCollection(), batchId), batch);
       // Ghi hoàn ứng vào sổ để công nợ người ứng trên máy POS khớp (không ghi khi đang xem demo).
       if (!state.demo) tx.set(doc(db, ...root, "financialMovements", batchId), { id: batchId, type: "PAYER_REIMBURSEMENT", amount: total, occurredAt: now, partnerId: null, method: method === "CASH" ? "CASH" : "TRANSFER", note: `${batch.code} · ${batch.receiptCodes.join(", ")}`, counterpartyName: batch.payer, source: "WEB_MANAGER", createdAt: now, createdBy: state.user.uid });
     });
     $("#reimb-dialog").close();
-    for (const r of sel) { const prev = reimbReceipts().find((x) => x.id === r.id); if (prev) replaceLocalReceipt({ ...prev, ...(batch.payerEmail && !prev.payerEmail ? { payerEmail: batch.payerEmail } : {}), reimbursement: paidInfo(prev) }); }
+    for (const r of sel) { const prev = reimbReceipts().find((x) => x.id === r.id); if (prev) replaceLocalReceipt({ ...prev, ...(batch.payerId && !prev.payerId ? { payerId: batch.payerId } : {}), reimbursement: paidInfo(prev) }); }
     state.reimbLoaded = false;
     await loadReimbursements();
     flashNote(`Đã ghi hoàn ${money(total)} cho ${batch.payer} (${batch.code}). ${batch.payer} sẽ thấy cảnh báo để xác nhận khi mở web.`);
@@ -2005,12 +2054,12 @@ async function payBatch(method) {
 async function confirmBatch(id) {
   const b = state.reimbBatches.find((x) => x.id === id);
   if (!b) return;
-  const mine = isMine(b, myEmail());
+  const mine = isMine(b, myId());
   if (!mine && !canTreasure(state.role)) return;
   const question = mine ? `Bạn đã kiểm tra và nhận đủ ${money(b.amount)} (${b.code})?` : `${b.payer} đã báo nhận đủ ${money(b.amount)} (${b.code})? Xác nhận hộ sẽ ghi tên bạn.`;
   if (!window.confirm(question)) return;
   const now = Date.now();
-  const stamp = { status: "CONFIRMED", confirmedAt: now, confirmedBy: myName(), confirmedByEmail: myEmail(), ...(mine ? {} : { confirmedOnBehalf: true }) };
+  const stamp = { status: "CONFIRMED", confirmedAt: now, confirmedBy: myName(), confirmedById: myId(), ...(mine ? {} : { confirmedOnBehalf: true }) };
   try {
     // Đọc lại ngay lúc xác nhận để không ghi đè bằng bản cũ trong trình duyệt.
     await runTransaction(db, async (tx) => {
@@ -2053,26 +2102,35 @@ $("[data-page=hoanung]").addEventListener("click", (e) => {
   else if (t.dataset.editReceipt) openReceiptEditor(t.dataset.editReceipt);
 });
 
-/* ---------- Tài khoản: thông tin cá nhân + ngân hàng của mỗi người, chủ quán quản lý thành viên ---------- */
+/* ---------- Tài khoản: thông tin cá nhân + ngân hàng + PIN của mỗi người, chủ quán quản lý thành viên ---------- */
 function renderAccount() {
   if (!state.role) return;
   applyRoleUi();
   const me = state.me || {};
   const form = $("#me-form");
   if (!form.contains(document.activeElement)) {
-    $("#me-name").value = me.name || myName();
+    $("#me-name").value = me.name || "";
     $("#me-bank").value = me.bank || "";
     $("#me-account").value = me.account || "";
     $("#me-holder").value = me.holder || "";
+    $("#me-pin").value = "";
   }
   if (state.role !== ROLE_OWNER) return;
   const receipts = reimbReceipts();
-  $("#member-list").innerHTML = state.members.filter((m) => normEmail(m.email) !== myEmail()).sort((a, b) => String(a.name).localeCompare(String(b.name))).map((m) => {
+  $("#member-list").innerHTML = state.members.filter((m) => m.id !== myId()).sort((a, b) => String(a.name).localeCompare(String(b.name))).map((m) => {
     const legacy = legacyOpenReceipts(m, receipts).length;
-    return `<div class="reimb-receipt"><div><strong>${escapeHtml(m.name || m.email)}</strong><small>${escapeHtml(m.email)} · ${ROLE_LABELS[m.role] || m.role}${m.active === false ? " · <b>đã khoá</b>" : ""}</small><small>${m.bank && m.account ? `${escapeHtml(m.bank)} · ${escapeHtml(m.account)}` : '<span class="warn-text">chưa nhập tài khoản ngân hàng</span>'}</small></div><div class="row-actions">${legacy ? `<button type="button" class="btn" data-link-legacy="${escapeHtml(m.email)}">Gắn ${legacy} phiếu cũ</button>` : ""}<button type="button" class="text-button" data-edit-member="${escapeHtml(m.email)}">Sửa</button><button type="button" class="text-button" data-toggle-member="${escapeHtml(m.email)}">${m.active === false ? "Mở lại" : "Khoá"}</button></div></div>`;
-  }).join("") || '<p class="muted">Chưa có thành viên. Thêm email cho thủ quỹ và từng người mua.</p>';
+    return `<div class="reimb-receipt"><div><strong>${escapeHtml(m.name)}</strong><small>${ROLE_LABELS[m.role] || m.role}${m.pinHash ? "" : " · <b>chưa có PIN</b>"}${m.active === false ? " · <b>đã khoá</b>" : ""}</small><small>${m.bank && m.account ? `${escapeHtml(m.bank)} · ${escapeHtml(m.account)}` : '<span class="warn-text">chưa nhập tài khoản ngân hàng</span>'}</small></div><div class="row-actions">${legacy ? `<button type="button" class="btn" data-link-legacy="${escapeHtml(m.id)}">Gắn ${legacy} phiếu cũ</button>` : ""}<button type="button" class="text-button" data-edit-member="${escapeHtml(m.id)}">Sửa / đổi PIN</button><button type="button" class="text-button" data-toggle-member="${escapeHtml(m.id)}">${m.active === false ? "Mở lại" : "Khoá"}</button></div></div>`;
+  }).join("") || '<p class="muted">Chưa có thành viên. Thêm thủ quỹ và từng người mua, mỗi người một PIN.</p>';
 }
 const stripId = ({ id: _id, ...rest }) => rest;
+/** PIN không được trùng với người khác (vì vào web chỉ bằng PIN). */
+async function pinHashFor(pin, exceptId) {
+  if (!validPin(pin)) throw new Error("PIN gồm 4–6 chữ số.");
+  const hash = await hashPin(pin);
+  if (state.members.some((m) => m.id !== exceptId && m.pinHash === hash)) throw new Error("PIN này đã có người dùng, chọn PIN khác.");
+  return hash;
+}
+function upsertMember(m) { state.members = [...state.members.filter((x) => x.id !== m.id), m]; }
 $("#me-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const err = $("#me-error");
@@ -2080,73 +2138,65 @@ $("#me-form").addEventListener("submit", async (e) => {
   const p = { name: $("#me-name").value.trim(), bank: $("#me-bank").value.trim(), account: $("#me-account").value.replace(/\s+/g, ""), holder: $("#me-holder").value.trim() };
   if (!p.name) { err.textContent = "Nhập tên hiển thị."; return; }
   if (p.bank || p.account) { try { vietQrPayload({ ...p, amount: 1000, info: "KIEM TRA" }); } catch (error) { err.textContent = error.message; return; } }
-  const email = myEmail();
-  if (!email) { err.textContent = "Tài khoản đăng nhập không có email."; return; }
-  const next = { ...stripId(state.me || {}), email, ...p, updatedAt: Date.now(), ...(state.role === ROLE_OWNER ? { role: ROLE_OWNER } : {}) };
+  if (!state.me?.id) return;
   try {
-    await setDoc(doc(db, ...root, "webMembers", email), next);
-    state.me = { ...next, id: email };
-    state.members = [...state.members.filter((m) => normEmail(m.email) !== email), state.me];
-    err.textContent = "";
+    const pin = $("#me-pin").value.trim();
+    const next = { ...stripId(state.me), ...p, ...(pin ? { pinHash: await pinHashFor(pin, state.me.id) } : {}), updatedAt: Date.now() };
+    await setDoc(doc(db, ...root, "webMembers", state.me.id), next);
+    state.me = { ...next, id: state.me.id };
+    upsertMember(state.me);
+    $("#me-pin").value = "";
     renderAccount(); renderReimbursements();
-    flashNote("Đã lưu thông tin tài khoản.");
-  } catch (error) { err.textContent = error.code === "permission-denied" ? permissionHint : error.message; }
+    flashNote(pin ? "Đã lưu thông tin và PIN mới." : "Đã lưu thông tin tài khoản.");
+  } catch (error) { err.textContent = error.message; }
 });
-let memberAuth = null;
-/** Tạo tài khoản đăng nhập cho thành viên bằng một phiên Firebase phụ: chủ quán không bị đăng xuất. */
-async function createLogin(email, password) {
-  if (!memberAuth) memberAuth = getAuth(initializeApp(firebaseConfig, "member-create"));
-  try { await createUserWithEmailAndPassword(memberAuth, email, password); await signOut(memberAuth); return "Đã tạo tài khoản đăng nhập."; }
-  catch (error) {
-    if (error.code === "auth/email-already-in-use") return "Email đã có tài khoản đăng nhập: dùng mật khẩu cũ.";
-    throw new Error(error.code === "auth/weak-password" ? "Mật khẩu tối thiểu 6 ký tự." : error.code === "auth/operation-not-allowed" ? "Firebase chưa cho tạo tài khoản từ web: tạo ở Firebase Console → Authentication → Add user, rồi lưu lại ở đây với ô mật khẩu để trống." : (error.message || error.code));
-  }
-}
 $("#member-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const err = $("#member-error");
   err.textContent = "";
-  const email = normEmail($("#member-email").value);
+  const editId = $("#member-id").value;
   const name = $("#member-name").value.trim();
   const role = $("#member-role").value;
-  const password = $("#member-password").value.trim();
-  if (!email || !name) { err.textContent = "Nhập email và tên."; return; }
-  if (email === myEmail()) { err.textContent = "Đây là tài khoản chủ quán: sửa ở mục Thông tin cá nhân phía trên."; return; }
+  const pin = $("#member-pin").value.trim();
+  if (!name) { err.textContent = "Nhập tên."; return; }
+  const prev = state.members.find((m) => m.id === editId);
+  if (!prev && !pin) { err.textContent = "Người mới cần có PIN (4–6 số)."; return; }
+  if (state.members.some((m) => m.id !== editId && asciiUpper(m.name) === asciiUpper(name))) { err.textContent = "Đã có người trùng tên: thêm họ hoặc chữ phân biệt để phiếu không bị nhầm."; return; }
   try {
-    const note = password ? await createLogin(email, password) : "";
-    const prev = state.members.find((m) => normEmail(m.email) === email);
-    const next = { ...(prev ? stripId(prev) : { createdAt: Date.now() }), email, name, role, active: prev?.active ?? true, updatedAt: Date.now() };
-    await setDoc(doc(db, ...root, "webMembers", email), next);
-    state.members = [...state.members.filter((m) => normEmail(m.email) !== email), { ...next, id: email }];
-    e.target.reset();
+    const id = prev?.id || memberId(name, uuid().replace(/[^a-z0-9]/gi, "").slice(-4).toLowerCase());
+    const next = { ...(prev ? stripId(prev) : { createdAt: Date.now(), active: true }), name, role, ...(pin ? { pinHash: await pinHashFor(pin, id) } : {}), updatedAt: Date.now() };
+    await setDoc(doc(db, ...root, "webMembers", id), next);
+    upsertMember({ ...next, id });
+    e.target.reset(); $("#member-id").value = "";
     renderAccount(); renderReimbursements();
-    err.textContent = `${note} Đã lưu ${name} (${ROLE_LABELS[role]}).`.trim();
+    err.textContent = `Đã lưu ${name} (${ROLE_LABELS[role]})${pin ? ", PIN mới đã có hiệu lực" : ""}.`;
   } catch (error) { err.textContent = error.message; }
 });
+$("#member-clear").addEventListener("click", () => { $("#member-form").reset(); $("#member-id").value = ""; $("#member-error").textContent = ""; $("#member-name").focus(); });
 $("#members-zone").addEventListener("click", async (e) => {
   const t = e.target.closest("button");
   if (!t) return;
-  const m = state.members.find((x) => normEmail(x.email) === (t.dataset.editMember || t.dataset.toggleMember || t.dataset.linkLegacy));
+  const m = state.members.find((x) => x.id === (t.dataset.editMember || t.dataset.toggleMember || t.dataset.linkLegacy));
   if (!m) return;
-  if (t.dataset.editMember) { $("#member-email").value = m.email; $("#member-name").value = m.name || ""; $("#member-role").value = m.role || ROLE_BUYER; $("#member-password").value = ""; $("#member-name").focus(); return; }
+  if (t.dataset.editMember) { $("#member-id").value = m.id; $("#member-name").value = m.name || ""; $("#member-role").value = m.role || ROLE_BUYER; $("#member-pin").value = ""; $("#member-pin").placeholder = "Để trống nếu giữ PIN cũ"; $("#member-name").focus(); return; }
   try {
     if (t.dataset.toggleMember) {
       const next = { ...stripId(m), active: m.active === false, updatedAt: Date.now() };
-      await setDoc(doc(db, ...root, "webMembers", normEmail(m.email)), next);
-      state.members = state.members.map((x) => (x === m ? { ...next, id: x.id } : x));
+      await setDoc(doc(db, ...root, "webMembers", m.id), next);
+      upsertMember({ ...next, id: m.id });
     } else {
-      // Phiếu cũ nhập trước khi có tài khoản riêng: gắn email để người mua thấy được trên tài khoản của họ.
+      // Phiếu cũ nhập trước khi có PIN: gắn người dùng để người mua thấy được trên tài khoản của họ.
       const list = legacyOpenReceipts(m, reimbReceipts());
-      if (!window.confirm(`Gắn ${list.length} phiếu đang mở mang tên "${m.name}" vào tài khoản ${m.email}?`)) return;
+      if (!window.confirm(`Gắn ${list.length} phiếu đang mở mang tên "${m.name}" vào tài khoản của ${m.name}?`)) return;
       const batch = writeBatch(db);
       const now = Date.now();
-      const updated = list.map((r) => ({ ...r, payerEmail: normEmail(m.email), updatedAt: Math.max(now, Number(r.updatedAt || 0) + 1), ...(r.source === "ANDROID_POS" ? { editedBy: "WEB_MANAGER" } : {}) }));
+      const updated = list.map((r) => ({ ...r, payerId: m.id, updatedAt: Math.max(now, Number(r.updatedAt || 0) + 1), ...(r.source === "ANDROID_POS" ? { editedBy: "WEB_MANAGER" } : {}) }));
       updated.forEach((r) => batch.set(doc(db, ...root, receiptCollection(), r.id), r));
       await batch.commit();
       updated.forEach((r) => { replaceLocalReceipt(r); state.openReceipts = state.openReceipts.map((x) => (x.id === r.id ? r : x)); });
     }
     renderAccount(); renderReimbursements();
-  } catch (error) { $("#member-error").textContent = error.code === "permission-denied" ? permissionHint : error.message; }
+  } catch (error) { $("#member-error").textContent = error.message; }
 });
 
 /* ---------- Tải phiếu cũ hơn 7 ngày khi chọn kỳ xem xa hơn (tối đa 500 phiếu) ---------- */
@@ -2172,27 +2222,20 @@ function showTab() {
   document.querySelectorAll(".page").forEach((page) => { page.hidden = page.dataset.page !== name; });
   document.querySelectorAll("#tabbar [data-tab]").forEach((link) => link.classList.toggle("active", link.dataset.tab === name));
   window.scrollTo(0, 0);
-  if (name === "giavon" && state.user && !state.recipesLoaded) loadRecipes();
-  if (name === "hoanung" && state.user && !state.reimbLoaded) loadReimbursements();
-  if (name === "taikhoan" && state.user) renderAccount();
+  if (name === "giavon" && state.role && !state.recipesLoaded) loadRecipes();
+  if (name === "hoanung" && state.role && !state.reimbLoaded) loadReimbursements();
+  if (name === "taikhoan" && state.role) renderAccount();
 }
 window.addEventListener("hashchange", showTab);
 showTab();
 
 onAuthStateChanged(auth, async (user) => {
   state.user = user || null;
-  state.role = null;
-  if (user && !(await resolveRole(user))) {
-    // Đăng nhập được nhưng chủ quán chưa thêm email này vào danh sách thành viên.
-    const email = user.email || "";
-    await signOut(auth);
-    $("#login-error").textContent = `Tài khoản ${email} chưa được chủ quán cấp quyền (hoặc đã bị khoá). Nhờ chủ quán thêm email này ở trang Tài khoản.`;
-    return;
-  }
-  $("#login-view").hidden = Boolean(user);
-  $("#dashboard-view").hidden = !user;
-  if (!user) return;
-  renderAccount();
-  showTab();
-  refreshDashboard();
+  state.role = null; state.me = null;
+  if (!user) { $("#pin-view").hidden = true; $("#dashboard-view").hidden = true; $("#login-view").hidden = false; return; }
+  $("#login-view").hidden = true;
+  await loadMembers();
+  // Máy này đã có người vào trước đó thì vào luôn; muốn đổi thì bấm "Đổi người".
+  const last = state.members.find((m) => m.id === savedPerson() && m.active !== false && m.pinHash);
+  if (last) enterAs(last); else showPinView();
 });

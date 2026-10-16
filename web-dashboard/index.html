@@ -17,12 +17,25 @@
         <p class="eyebrow">0210 · BREAKFAST · COFFEE · DRINKS</p>
         <h1 id="login-title">Manager realtime</h1>
         <p class="muted">Theo dõi quán và nhập phiếu tài chính từ xa.</p>
-        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.16.6 · Tài khoản riêng</p>
-        <label>Email Firebase<input id="email" type="email" autocomplete="username" inputmode="email" /></label>
+        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.16.7 · Đăng nhập PIN</p>
+        <p class="muted">Đăng nhập tài khoản quán một lần trên mỗi máy, sau đó mỗi người vào bằng PIN riêng.</p>
+        <label>Email tài khoản quán<input id="email" type="email" autocomplete="username" inputmode="email" /></label>
         <label>Mật khẩu<input id="password" type="password" autocomplete="current-password" /></label>
         <label class="show-password"><input id="show-password" type="checkbox" /> Hiện mật khẩu để kiểm tra khi gõ</label>
         <button id="login-button" class="primary">Đăng nhập</button>
         <p id="login-error" class="error" role="alert"></p>
+      </section>
+
+      <section id="pin-view" class="login-card" aria-labelledby="pin-title" hidden>
+        <p class="eyebrow">0210 · MANAGER</p>
+        <h1 id="pin-title">Nhập mã PIN</h1>
+        <p id="pin-hint" class="muted">Mỗi người một PIN riêng (4–6 số).</p>
+        <label id="pin-name-row" hidden>Tên của bạn<input id="pin-name" maxlength="60" /></label>
+        <label>Mã PIN<input id="pin-input" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="6" /></label>
+        <label id="pin-again-row" hidden>Nhập lại PIN<input id="pin-again" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="6" /></label>
+        <button id="pin-button" class="primary">Vào</button>
+        <p id="pin-error" class="error" role="alert"></p>
+        <button id="pin-logout" type="button" class="text-button">Đăng xuất tài khoản quán khỏi máy này</button>
       </section>
 
       <section id="dashboard-view" hidden>
@@ -31,10 +44,10 @@
             <p class="eyebrow">0210 · MANAGER</p>
             <h1>Quản lý realtime</h1>
           </div>
-          <div class="heading-actions"><button id="refresh-dashboard" class="btn">Làm mới</button><button id="request-sync" class="btn" title="Yêu cầu máy POS ở quán đồng bộ ngay">Yêu cầu đồng bộ</button><button id="logout-button" class="btn ghost">Đăng xuất</button></div>
+          <div class="heading-actions"><button id="refresh-dashboard" class="btn">Làm mới</button><button id="request-sync" class="btn" title="Yêu cầu máy POS ở quán đồng bộ ngay">Yêu cầu đồng bộ</button><button id="switch-person" class="btn">Đổi người</button><button id="logout-button" class="btn ghost">Đăng xuất</button></div>
         </header>
 
-        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><section id="my-alerts" class="my-alerts" aria-live="polite" hidden></section><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.16.6 · Tài khoản riêng</p>
+        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><section id="my-alerts" class="my-alerts" aria-live="polite" hidden></section><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.16.7 · Đăng nhập PIN</p>
 
         <nav class="tabbar" id="tabbar" aria-label="Các trang">
           <a href="#ban" data-tab="ban">Bàn</a>
@@ -181,20 +194,21 @@
           <div class="field-row"><label for="me-bank">Ngân hàng</label><input id="me-bank" list="bank-choices" maxlength="30" placeholder="VD Vietcombank, MB, Techcombank" /></div>
           <div class="field-row"><label for="me-account">Số tài khoản</label><input id="me-account" inputmode="numeric" maxlength="19" /></div>
           <div class="field-row"><label for="me-holder">Tên chủ TK</label><input id="me-holder" maxlength="50" placeholder="Viết như trên thẻ, không cần dấu" /></div>
+          <div class="field-row"><label for="me-pin">Đổi PIN</label><input id="me-pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="Để trống nếu giữ PIN cũ" /></div>
           <p id="me-error" class="error" role="alert"></p>
           <div class="tool-row"><button type="submit" class="btn strong">Lưu thông tin</button></div>
         </form>
         <div id="members-zone" hidden>
         <section class="section-heading compact"><div><p class="eyebrow">CHỦ QUÁN</p><h2>Thành viên dùng web</h2></div></section>
-        <p class="muted">Mỗi người một email đăng nhập riêng. <strong>Thủ quỹ</strong>: duyệt phiếu, hoàn tiền, xem toàn bộ. <strong>Người mua</strong>: chỉ thấy tab Hoàn ứng và Tài khoản, nhập phiếu của mình, xác nhận đã nhận tiền.</p>
+        <p class="muted">Mọi người dùng chung tài khoản quán, vào bằng PIN riêng. <strong>Thủ quỹ</strong>: duyệt phiếu, hoàn tiền, xem toàn bộ. <strong>Người mua</strong>: chỉ thấy tab Hoàn ứng và Tài khoản, nhập phiếu của mình, xác nhận đã nhận tiền. <strong>Chủ quán</strong>: như thủ quỹ và quản lý thành viên.</p>
         <section id="member-list" class="reimb-list"></section>
         <form id="member-form" class="panel">
-          <div class="field-row"><label for="member-email">Email đăng nhập</label><input id="member-email" type="email" maxlength="80" required /></div>
+          <input id="member-id" type="hidden" />
           <div class="field-row"><label for="member-name">Tên</label><input id="member-name" maxlength="60" required /></div>
-          <div class="field-row"><label for="member-role">Vai trò</label><select id="member-role"><option value="NGUOI_MUA">Người mua</option><option value="THU_QUY">Thủ quỹ</option></select></div>
-          <div class="field-row"><label for="member-password">Mật khẩu ban đầu</label><input id="member-password" type="text" minlength="6" maxlength="40" placeholder="Để trống nếu email đã có tài khoản" autocomplete="off" /></div>
+          <div class="field-row"><label for="member-role">Vai trò</label><select id="member-role"><option value="NGUOI_MUA">Người mua</option><option value="THU_QUY">Thủ quỹ</option><option value="CHU_QUAN">Chủ quán</option></select></div>
+          <div class="field-row"><label for="member-pin">PIN (4–6 số)</label><input id="member-pin" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="Bắt buộc khi thêm người mới" /></div>
           <p id="member-error" class="error" role="alert"></p>
-          <div class="tool-row"><button type="submit" class="btn">Lưu thành viên</button></div>
+          <div class="tool-row"><button type="submit" class="btn">Lưu thành viên</button><button id="member-clear" type="button" class="btn ghost">Thêm người mới</button></div>
         </form>
         </div>
         </div>
@@ -462,6 +476,6 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261016-6"></script>
+    <script type="module" src="app.js?v=20261016-7"></script>
   </body>
 </html>

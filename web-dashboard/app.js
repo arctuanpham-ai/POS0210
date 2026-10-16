@@ -10,6 +10,7 @@ import {
   doc,
   getFirestore,
   getDoc,
+  runTransaction,
   getDocs,
   query,
   where,
@@ -30,6 +31,8 @@ import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson,
 import { menuCsv } from "./menu-export.js?v=20261015-1";
 import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-1";
 import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-2";
+import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261016-4";
+import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261016-7";
 import { otherCostRows } from "./other-costs.js?v=20261016-2";
 import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-2";
 import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261014-9";
@@ -58,7 +61,7 @@ const state = {
   purchaseCategories: [], profitPartners: [], assetCategories: [], suppliers: [],
   unsubs: [], paymentFlowDoc: null, refunds: [], frozenRefundDocs: [], flowError: "", dailyDocs: {}, dailyError: "", salesLoaded: false, salesDays: 7, itemMode: "combined", period: "today", customFrom: null, customTo: null,
   transactionKind: "ALL", payerFilter: "ALL", user: null,
-  expenseRules: [], rulesError: "", simulation: null, demo: null, otherPurchases: [], stockCounts: [], countsLoaded: false, menuItems: [], menuCats: [], recipes: {}, recipesLoaded: false, recipeError: "", monthlyDocs: {}, monthlyError: "", reportFrom: 0, receiptsNote: "", detailCutoff: null, receiptsFrom: 0, summaryBlocks: [], historyDay: "today", historyDocs: {}, historyTables: null, historyError: "", historyLoading: false, billDetailCache: {},
+  expenseRules: [], rulesError: "", simulation: null, demo: null, reimbBatches: [], payees: [], role: null, me: null, members: [], openReceipts: [], reimbLoaded: false, reimbPerson: "", otherPurchases: [], stockCounts: [], countsLoaded: false, menuItems: [], menuCats: [], recipes: {}, recipesLoaded: false, recipeError: "", monthlyDocs: {}, monthlyError: "", reportFrom: 0, receiptsNote: "", detailCutoff: null, receiptsFrom: 0, summaryBlocks: [], historyDay: "today", historyDocs: {}, historyTables: null, historyError: "", historyLoading: false, billDetailCache: {},
 };
 let expenseDraft = null;
 let editingReceipt = null;
@@ -300,6 +303,28 @@ function renderPaymentFlow() {
   holder.replaceChildren(...nodes);
 }
 
+/* ---------- Doanh thu: giờ cao điểm và món bán nhiều (cột ngang, một màu, giá trị ghi ở đầu cột) ---------- */
+function hbarRows(rows) {
+  const max = Math.max(1, ...rows.map((r) => r.value));
+  return rows.map((r) => `<div class="hbar-row${r.strong ? " strong" : ""}" title="${escapeHtml(r.tip)}"><span class="hbar-label">${escapeHtml(r.label)}</span><span class="hbar-track"><span class="hbar-fill" style="width:${Math.max(2, (r.value / max) * 100).toFixed(1)}%"></span></span><span class="hbar-value">${escapeHtml(r.valueText)}</span></div>`).join("");
+}
+function renderSalesBars(keys) {
+  const hours = hourlyTotals(state.dailyDocs, keys);
+  const peakHost = $("#peak-hours");
+  if (!hours) peakHost.innerHTML = '<p class="muted">Chưa có số liệu theo giờ. Cần máy POS bản v158 trở lên đồng bộ lại (mở app một lần là đủ).</p>';
+  else {
+    const rows = hourRows(hours.total);
+    const peak = rows.find((r) => r.peak);
+    peakHost.innerHTML = rows.length
+      ? `<p class="hbar-caption">Cao điểm ${String(peak.hour).padStart(2, "0")}:00–${String(peak.hour + 1).padStart(2, "0")}:00 · ${peak.count} bill trong ${hours.days} ngày có số liệu</p>${hbarRows(rows.map((r) => ({ label: `${String(r.hour).padStart(2, "0")}:00`, value: r.count, valueText: String(r.count), strong: r.peak, tip: `${String(r.hour).padStart(2, "0")}:00–${String(r.hour + 1).padStart(2, "0")}:00 · ${r.count} bill` })))}`
+      : '<p class="muted">Chưa có bill trong giai đoạn này.</p>';
+  }
+  const items = topItems(aggregateItems(state.dailyDocs, keys, "combined"), 10);
+  $("#top-items").innerHTML = items.length
+    ? hbarRows(items.map((r, i) => ({ label: r.name, value: Number(r.qty), valueText: `${Number(r.qty)} phần`, strong: i === 0, tip: `${r.name} · ${Number(r.qty)} phần · ${money(r.revenue)}` })))
+    : '<p class="muted">Chưa có món đã bán trong giai đoạn này.</p>';
+}
+
 function renderSalesSnapshots() {
   if (!state.salesLoaded) {
     $("#live-revenue-today").textContent = "—";
@@ -339,6 +364,7 @@ function renderSalesSnapshots() {
     return node;
   }));
 
+  renderSalesBars(keys);
   const max = Math.max(1, ...summary.days.filter((day) => day.available).map((day) => day.revenue));
   $("#sales-chart").innerHTML = summary.days.map((day) => {
     const bar = day.available
@@ -651,6 +677,10 @@ function renderExpenseDraft() {
   if (!expenseDraft) return;
   $("#expense-date").value = localDateTimeInput(new Date(expenseDraft.purchaseDate));
   $("#expense-note").value = expenseDraft.note || "";
+  if (isBuyer()) expenseDraft.enteredByName = myName();
+  $("#expense-payer").value = expenseDraft.enteredByName || myName();
+  $("#expense-payer").readOnly = isBuyer();
+  $("#expense-fund").value = expenseDraft.fundSource ?? FUND_PERSONAL;
   $("#expense-lines").innerHTML = expenseDraft.items.map(expenseLineMarkup).join("");
   setupMaterialSuggestions();
   document.querySelectorAll("#expense-lines .expense-line").forEach(refreshRuleHint);
@@ -662,6 +692,9 @@ function applyExpenseInputs() {
   if (!expenseDraft) return;
   expenseDraft.purchaseDate = new Date($("#expense-date").value).getTime();
   expenseDraft.note = $("#expense-note").value.trim();
+  expenseDraft.enteredByName = $("#expense-payer").value.trim();
+  expenseDraft.payerChosen = true;
+  expenseDraft.fundSource = $("#expense-fund").value;
   const allocated = new Set(expenseDraft.items.map((item) => item.materialCode).filter(Boolean));
   expenseDraft.items = [...$("#expense-lines").querySelectorAll(".expense-line")].map((node) => {
     const existing = expenseDraft.items.find((x) => x.id === node.dataset.lineId) || { id: node.dataset.lineId };
@@ -684,6 +717,8 @@ function applyExpenseInputs() {
 async function saveExpenseReceipt(event) {
   event.preventDefault(); applyExpenseInputs(); const error = $("#expense-error"); error.textContent = "";
   const check = validateReceipt(expenseDraft); if (!check.ok) { error.textContent = check.error; return; }
+  if (!expenseDraft.enteredByName) { error.textContent = "Ghi tên người mua (người ứng tiền)."; return; }
+  if (!expenseDraft.fundSource) { error.textContent = "Chọn nguồn tiền: tiền cá nhân (cần hoàn) hay tiền quán."; return; }
   const missingGroup = expenseDraft.items.findIndex((item) => !groupCodeOrNull(item.expenseGroup));
   if (missingGroup >= 0) { error.textContent = `Dòng ${missingGroup + 1}: hãy chọn nhóm vật tư.`; return; }
   const learnList = rulesToLearn(expenseDraft.items, state.expenseRules);
@@ -694,22 +729,26 @@ async function saveExpenseReceipt(event) {
     return { ...item, ...normalizeQuantity(item.qty, item.unit), classification: { source, suggestedGroup: suggestion.group, status: suggestion.status } };
   });
   const now = Date.now();
-  const payload = editingReceipt
-    ? { ...buildEditedReceipt(editingReceipt, expenseDraft, { now, uid: state.user.uid }), ...(upgradeFrom ? { detailLevel: DETAIL_ITEMIZED } : {}) }
+  const payload0 = editingReceipt
+    ? { ...buildEditedReceipt(editingReceipt, expenseDraft, { now, uid: state.user.uid }), enteredByName: expenseDraft.enteredByName, fundSource: expenseDraft.fundSource, ...(upgradeFrom ? { detailLevel: DETAIL_ITEMIZED } : {}) }
     : { ...expenseDraft, total: check.total, status: "ACTIVE", updatedAt: now, updatedByUid: state.user.uid, source: "WEB_MANAGER", items: expenseDraft.items.map((item) => ({ ...item, materialGroup: item.expenseGroup, amount: Math.round(item.qty * item.unitPrice) })) };
+  const { payerChosen: _pc, ...payload1 } = { ...payload0, payerId: payerIdFor(expenseDraft.enteredByName, editingReceipt) };
+  const payload = withReimbursement(payload1, editingReceipt, now);
   try {
     await setDoc(doc(db, ...root, receiptCollection(), expenseDraft.id), withDemoFlags(payload));
     rememberMaterials(expenseDraft.items);
-    for (const rule of state.demo ? [] : learnList) { // đang xem demo: không học quy tắc từ phiếu demo
+    for (const rule of state.demo || isBuyer() ? [] : learnList) { // đang xem demo: không học quy tắc từ phiếu demo
       try {
-        const learned = { id: rule.id, name: rule.name, group: rule.group, updatedAt: now, updatedByName: state.user.displayName || state.user.email || "" };
+        const learned = { id: rule.id, name: rule.name, group: rule.group, updatedAt: now, updatedByName: myName() };
         await setDoc(doc(db, ...root, "expenseRules", rule.id), learned);
         state.expenseRules = [...state.expenseRules.filter((x) => x.id !== rule.id), learned];
       } catch { /* học quy tắc là phụ: phiếu đã lưu, lần sau sẽ thử lại khi người nhập chọn nhóm khác gợi ý */ }
     }
+    const wasNew = !editingReceipt;
     if (editingReceipt) { replaceLocalReceipt(payload); editingReceipt = null; upgradeFrom = null; render(); }
-    else localStorage.removeItem(`pos0210.expense-draft.${state.user.uid}`);
+    else { localStorage.removeItem(`pos0210.expense-draft.${state.user.uid}`); replaceLocalReceipt(payload); render(); }
     expenseDraft = null; $("#expense-dialog").close();
+    if (reimbursementStatus(payload) === "PENDING") flashNote(`${wasNew ? "Đã gửi" : "Đã gửi lại"} phiếu ${receiptCode(payload)} chờ duyệt: thủ quỹ sẽ thấy cảnh báo khi mở web.`);
   }
   catch (e) { error.textContent = editingReceipt ? `Chưa lưu được thay đổi: ${e.message || e}` : `Chưa đồng bộ được; bản nháp đã giữ lại: ${e.message || e}`; }
 }
@@ -720,12 +759,13 @@ function replaceLocalReceipt(receipt) {
 }
 
 function openReceiptEditor(id) {
-  const receipt = state.expenseReceipts.find((item) => item.id === id);
+  const receipt = state.expenseReceipts.find((item) => item.id === id) || state.openReceipts.find((item) => item.id === id);
+  if (receipt && !state.expenseReceipts.some((item) => item.id === id)) state.expenseReceipts.push(receipt);
   if (!receipt || !state.user) return;
   if (isSummaryReceipt(receipt)) { openSummaryDialog(receipt); return; }
   upgradeFrom = null;
   editingReceipt = receipt;
-  expenseDraft = receiptToDraft(receipt, MATERIAL_GROUPS);
+  expenseDraft = { ...receiptToDraft(receipt, MATERIAL_GROUPS), fundSource: receipt.fundSource || "", payerChosen: true };
   $("#expense-title").textContent = "Sửa phiếu";
   $("#expense-submit").textContent = "LƯU THAY ĐỔI";
   $("#expense-error").textContent = "";
@@ -744,6 +784,7 @@ async function cancelReceipt(id) {
 }
 
 function render() {
+  if (isBuyer()) { renderReimbursements(); return; }
   renderCumulativeSummary();
   renderPeriodSummary();
   renderTables();
@@ -753,12 +794,14 @@ function render() {
   renderClassificationReview();
   renderDetailLevel();
   renderMonthlyReport();
+  if (state.reimbLoaded) renderReimbursements();
   if (state.recipesLoaded) { renderRecipes(); renderUsageCheck(); if (state.countsLoaded) renderCounts(); }
   renderFinanceMetadata();
   renderTransactions();
 }
 async function refreshDashboard() {
-  if (!state.user) return;
+  if (!state.user || !state.role) return;
+  if (isBuyer()) { await loadReimbursements(); return; }
   if (state.simulation) { $("#sync-status").textContent = "Đang ở chế độ mô phỏng. Tắt mô phỏng để đọc dữ liệu thật."; return; }
   if (state.demo) { $("#sync-status").textContent = "Đang xem dữ liệu DEMO. Tắt xem demo để đọc dữ liệu thật."; return; }
   $("#sync-status").textContent = "Đang đọc snapshot…";
@@ -805,6 +848,7 @@ async function refreshDashboard() {
     $("#sync-status").textContent = state.dashboard.lastUpdatedAt ? `Snapshot POS: ${dateTime(state.dashboard.lastUpdatedAt)}${stale ? " · cần kiểm tra máy POS" : ""}` : "POS chưa gửi snapshot.";
     render();
     loadBillHistory(state.historyDay, true);
+    loadReimbursements();
   } catch (error) { $("#sync-status").textContent = `Không đọc được dữ liệu: ${error.message}`; }
 }
 
@@ -984,18 +1028,22 @@ $("#open-entry").addEventListener("click", () => {
   $("#entry-dialog").showModal();
 });
 $("#close-entry").addEventListener("click", () => $("#entry-dialog").close());
-$("#open-expense").addEventListener("click", () => {
+function openNewExpense() {
   if (!state.user) return;
   editingReceipt = null;
   upgradeFrom = null;
   $("#expense-title").textContent = "Phiếu nhiều vật tư";
   $("#expense-submit").textContent = "LƯU VÀ ĐỒNG BỘ";
   expenseDraft = createStableDraft(localStorage, state.user, uuid);
+  // Mỗi người đăng nhập tài khoản riêng: bản nháp mới mặc định người mua là chính mình.
+  if (!expenseDraft.payerChosen || isBuyer()) { expenseDraft.enteredByName = myName(); expenseDraft.fundSource = expenseDraft.fundSource || FUND_PERSONAL; }
   expenseDraft.items = expenseDraft.items.map(item => ({ ...item, expenseGroup: item.materialName ? groupLabel(item.expenseGroup) : "" }));
   $("#expense-error").textContent = "";
   renderExpenseDraft();
   $("#expense-dialog").showModal();
-});
+}
+$("#open-expense").addEventListener("click", openNewExpense);
+$("#reimb-new-receipt").addEventListener("click", () => { if (state.demo) { window.alert("Đang xem DEMO: phiếu sẽ vào dữ liệu demo."); } openNewExpense(); });
 $("#close-expense").addEventListener("click", () => {
   if (editingReceipt) { editingReceipt = null; upgradeFrom = null; expenseDraft = null; $("#expense-dialog").close(); updateGapNote(); return; }
   applyExpenseInputs(); renderExpenseDraft(); $("#expense-dialog").close();
@@ -1110,7 +1158,7 @@ async function requestRemoteSync() {
   lastSyncRequestAt = now;
   const ref = doc(db, ...root, "commands", "sync");
   try {
-    await setDoc(ref, { requestedAt: now, requestedBy: state.user.email || "" }, { merge: true });
+    await setDoc(ref, { requestedAt: now, requestedBy: myName() }, { merge: true });
   } catch (error) {
     lastSyncRequestAt = NaN;
     status.textContent = error.code === "permission-denied" ? "Không có quyền ghi lệnh (cần mở quy tắc Firestore cho commands)." : `Không gửi được lệnh: ${error.message}`;
@@ -1202,8 +1250,8 @@ async function saveSummaryBlocks(event) {
   for (const { block, purchaseDate, total } of prepared) {
     const items = buildSummaryLines(block.lines, () => uuid());
     const base = editingSummary ? { ...editingSummary } : { id: block.id, createdAt: now, source: "WEB_MANAGER" };
-    const payload = { ...base, purchaseDate, note: block.place, enteredByUid: state.user.uid, enteredByName: block.payer || state.user.displayName || state.user.email || "Quản lý",
-      items, total, status: "ACTIVE", detailLevel: "SUMMARY", updatedAt: Math.max(now, Number(editingSummary?.updatedAt || 0) + 1), updatedByUid: state.user.uid };
+    const payload = withReimbursement({ ...base, purchaseDate, note: block.place, enteredByUid: state.user.uid, enteredByName: block.payer || myName(), payerId: payerIdFor(block.payer || myName(), editingSummary), fundSource: $("#summary-fund").value,
+      items, total, status: "ACTIVE", detailLevel: "SUMMARY", updatedAt: Math.max(now, Number(editingSummary?.updatedAt || 0) + 1), updatedByUid: state.user.uid }, editingSummary, now);
     try { await setDoc(doc(db, ...root, receiptCollection(), payload.id), withDemoFlags(payload)); replaceLocalReceipt(withDemoFlags(payload)); saved += 1; }
     catch (e) { failed.push({ block, message: e.message || String(e) }); }
   }
@@ -1261,7 +1309,7 @@ async function saveCutoff(clear) {
   if (!clear && !value) { $("#cutoff-note").textContent = "Chọn ngày mốc trước."; return; }
   const cutoffAt = clear ? null : new Date(`${value}T00:00:00`).getTime();
   try {
-    await setDoc(doc(db, ...root, "config", "expenseDetail"), { cutoffAt, updatedAt: Date.now(), updatedBy: state.user.email || "" });
+    await setDoc(doc(db, ...root, "config", "expenseDetail"), { cutoffAt, updatedAt: Date.now(), updatedBy: myName() });
     state.detailCutoff = cutoffAt;
     renderDetailLevel();
   } catch (error) { $("#cutoff-note").textContent = error.code === "permission-denied" ? "Không có quyền ghi mốc (cần mở quy tắc Firestore cho config/expenseDetail)." : `Không lưu được mốc: ${error.message}`; }
@@ -1474,7 +1522,7 @@ function updateRecipeTotal() {
 }
 async function saveRecipe() {
   const lines = recipeEdit.lines.filter((l) => Number(l.qty) > 0).map((l) => ({ materialId: l.materialId, qty: Math.round(Number(l.qty) * 100) / 100 }));
-  const payload = { id: recipeEdit.item.id, menuItemId: recipeEdit.item.id, menuName: recipeEdit.item.name, lines, updatedAt: Date.now(), updatedBy: state.user?.email || "" };
+  const payload = { id: recipeEdit.item.id, menuItemId: recipeEdit.item.id, menuName: recipeEdit.item.name, lines, updatedAt: Date.now(), updatedBy: myName() };
   try {
     await setDoc(doc(db, ...root, "recipes", recipeEdit.item.id), payload);
     state.recipes[recipeEdit.item.id] = payload;
@@ -1527,6 +1575,7 @@ async function setDemo(on) {
   }
   document.body.classList.toggle("demo-view", !!state.demo);
   if (state.countsLoaded) loadCounts();
+  if (state.reimbLoaded) loadReimbursements();
   $("#demo-banner").hidden = !state.demo;
   $("#demo-toggle").textContent = state.demo ? "Tắt xem demo" : "Xem dữ liệu demo";
   render();
@@ -1662,7 +1711,7 @@ async function saveCount(event) {
   if (!Object.keys(items).length) { err.textContent = "Chưa nhập số đếm nào."; return; }
   const d = new Date(at);
   const id = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  const payload = { id, countedAt: at, countedBy: state.user?.email || "", items, updatedAt: Date.now(), ...(state.demo ? { demo: true, demoBatch: "manual" } : {}) };
+  const payload = { id, countedAt: at, countedBy: myName(), items, updatedAt: Date.now(), ...(state.demo ? { demo: true, demoBatch: "manual" } : {}) };
   try {
     await setDoc(doc(db, ...root, countCollection(), id), payload);
     document.querySelectorAll("#count-form-items input").forEach((x) => { x.value = ""; });
@@ -1671,6 +1720,484 @@ async function saveCount(event) {
   } catch (error) { err.textContent = error.code === "permission-denied" ? `Không có quyền lưu vào ${countCollection()} (cần mở quy tắc Firestore).` : error.message; }
 }
 $("#count-form").addEventListener("submit", saveCount);
+
+/* ---------- Hoàn ứng: mỗi người một tài khoản, cảnh báo theo người, QR động từ tài khoản ngân hàng người mua ---------- */
+const isBuyer = () => state.role === ROLE_BUYER;
+const myId = () => state.me?.id || "";
+const myName = () => state.me?.name || "Quản lý";
+/** Mọi người có thể là người mua: thành viên đã thêm và chính mình. */
+const people = () => state.members.filter((m) => m.active !== false);
+/** Mã người mua gắn vào phiếu: người mua tự nhập là chính mình; thủ quỹ nhập hộ thì khớp theo tên thành viên. */
+function payerIdFor(name, original) {
+  if (isBuyer()) return myId();
+  if (original && asciiUpper(original.enteredByName) === asciiUpper(name) && original.payerId) return original.payerId;
+  return memberOf({ enteredByName: name }, people())?.id || "";
+}
+const reimbCollection = () => (state.demo ? "demoReimbursements" : "reimbursements");
+/** Gắn mã phiếu và trạng thái hoàn ứng. Phiếu đã hoàn không bị đổi trạng thái khi sửa; chênh tiền hiện ở màn thủ quỹ. */
+function withReimbursement(payload, original, now) {
+  const fund = payload.fundSource;
+  const code = original?.code || payload.code || receiptCode(payload);
+  const prev = original?.reimbursement;
+  if (prev && (prev.status === "PAID" || prev.status === "CONFIRMED")) return { ...payload, code, reimbursement: prev };
+  if (!fund) return { ...payload, code };
+  if (fund !== FUND_PERSONAL) return { ...payload, code, reimbursement: { status: "NONE", updatedAt: now } };
+  // Sửa phiếu đã duyệt hoặc bị trả lại thì gửi duyệt lại.
+  return { ...payload, code, reimbursement: { status: "PENDING", requestedAt: prev?.requestedAt || now, updatedAt: now } };
+}
+let flashTimer = null;
+function flashNote(text) {
+  const el = $("#reimb-note");
+  if (el) el.textContent = text;
+  const bar = $("#my-alerts");
+  if (!bar) return;
+  bar.dataset.flash = text;
+  renderAlerts();
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => { delete bar.dataset.flash; renderAlerts(); }, 8000);
+}
+const permissionHint = "Không có quyền ghi Firestore: kiểm tra máy này đang đăng nhập đúng tài khoản quán.";
+
+/* ---- Đăng nhập: tài khoản quán dùng chung + PIN từng người ---- */
+const PERSON_KEY = "pos0210.webPerson";
+const savedPerson = () => { try { return localStorage.getItem(PERSON_KEY) || ""; } catch { return ""; } };
+const rememberPerson = (id) => { try { if (id) localStorage.setItem(PERSON_KEY, id); else localStorage.removeItem(PERSON_KEY); } catch { /* bỏ qua */ } };
+async function loadMembers() {
+  try { state.members = rows(await getDocs(collection(db, ...root, "webMembers"))); state.membersError = ""; }
+  catch (error) { state.members = []; state.membersError = error.message || "lỗi không rõ"; }
+  if (state.me) state.me = state.members.find((m) => m.id === state.me.id) || state.me;
+}
+/** Chưa có chủ quán nào có PIN: lần đầu vào thì tạo PIN chủ quán. */
+const needsBootstrap = () => !state.members.some((m) => m.role === ROLE_OWNER && m.pinHash && m.active !== false);
+function showPinView() {
+  const boot = needsBootstrap();
+  $("#login-view").hidden = true;
+  $("#dashboard-view").hidden = true;
+  $("#pin-view").hidden = false;
+  $("#pin-title").textContent = boot ? "Tạo PIN chủ quán" : "Nhập mã PIN";
+  $("#pin-hint").textContent = state.membersError ? `Không đọc được danh sách người dùng: ${state.membersError}` : boot ? "Lần đầu dùng: đặt tên và PIN cho chủ quán. Sau đó thêm thủ quỹ, người mua ở trang Tài khoản." : "Mỗi người một PIN riêng (4–6 số).";
+  $("#pin-name-row").hidden = !boot;
+  $("#pin-again-row").hidden = !boot;
+  $("#pin-input").value = ""; $("#pin-again").value = "";
+  $("#pin-error").textContent = "";
+  setTimeout(() => $(boot ? "#pin-name" : "#pin-input").focus(), 50);
+}
+function enterAs(member) {
+  state.me = member;
+  state.role = member.role;
+  rememberPerson(member.id);
+  delete $("#my-alerts").dataset.flash;
+  state.reimbLoaded = false;
+  state.expenseReceipts = []; state.openReceipts = []; state.reimbBatches = [];
+  $("#pin-view").hidden = true;
+  $("#login-view").hidden = true;
+  $("#dashboard-view").hidden = false;
+  renderAccount();
+  showTab();
+  refreshDashboard();
+}
+async function submitPin() {
+  const err = $("#pin-error");
+  err.textContent = "";
+  const pin = $("#pin-input").value.trim();
+  if (!validPin(pin)) { err.textContent = "PIN gồm 4–6 chữ số."; return; }
+  const hash = await hashPin(pin);
+  if (needsBootstrap()) {
+    const name = $("#pin-name").value.trim();
+    if (!name) { err.textContent = "Nhập tên của bạn."; return; }
+    if ($("#pin-again").value.trim() !== pin) { err.textContent = "Hai lần nhập PIN không khớp."; return; }
+    const id = memberId(name, uuid().replace(/[^a-z0-9]/gi, "").slice(-4).toLowerCase());
+    const owner = { id, name, role: ROLE_OWNER, pinHash: hash, active: true, createdAt: Date.now(), updatedAt: Date.now() };
+    try { await setDoc(doc(db, ...root, "webMembers", id), owner); state.members.push(owner); enterAs(owner); }
+    catch (error) { err.textContent = `Chưa lưu được: ${error.message}`; }
+    return;
+  }
+  const m = memberByPinHash(state.members, hash);
+  if (!m) { err.textContent = "PIN không đúng."; $("#pin-input").value = ""; return; }
+  enterAs(m);
+}
+$("#pin-button").addEventListener("click", submitPin);
+$("#pin-input").addEventListener("keydown", (e) => { if (e.key === "Enter") { if (needsBootstrap()) $("#pin-again").focus(); else submitPin(); } });
+$("#pin-again").addEventListener("keydown", (e) => { if (e.key === "Enter") submitPin(); });
+$("#pin-logout").addEventListener("click", () => { rememberPerson(""); signOut(auth); });
+$("#switch-person").addEventListener("click", async () => {
+  rememberPerson(""); state.me = null; state.role = null;
+  await loadMembers();
+  showPinView();
+});
+const BUYER_TABS = ["hoanung", "taikhoan"];
+function applyRoleUi() {
+  const buyer = isBuyer();
+  document.querySelectorAll("#tabbar [data-tab]").forEach((a) => { a.hidden = buyer && !BUYER_TABS.includes(a.dataset.tab); });
+  $("#request-sync").hidden = buyer;
+  $("#logout-button").hidden = state.role !== ROLE_OWNER;
+  $("#reimb-treasurer-zone").hidden = !canTreasure(state.role);
+  $("#members-zone").hidden = state.role !== ROLE_OWNER;
+  $("#me-title").textContent = myName();
+  $("#me-role").textContent = `${ROLE_LABELS[state.role] || ""} · vào web bằng PIN riêng`;
+}
+/** Người mua chỉ đọc phiếu và đợt hoàn của chính mình (quy tắc Firestore chặn phần còn lại). */
+async function loadBuyerData() {
+  $("#sync-status").textContent = "Đang đọc phiếu của bạn…";
+  try {
+    const [mine, batches] = await Promise.all([
+      getDocs(query(collection(db, ...root, "expenseReceipts"), where("payerId", "==", myId()), limit(300))).then(rows),
+      getDocs(query(collection(db, ...root, "reimbursements"), where("payerId", "==", myId()), limit(100))).then(rows),
+    ]);
+    state.expenseReceipts = mine.sort((a, b) => Number(b.purchaseDate || 0) - Number(a.purchaseDate || 0));
+    state.reimbBatches = batches.sort((a, b) => Number(b.paidAt) - Number(a.paidAt));
+    state.openReceipts = [];
+    state.reimbLoaded = true;
+    state.reimbError = "";
+  } catch (error) { state.reimbError = error.code === "permission-denied" ? permissionHint : (error.message || "lỗi không rõ"); }
+  try { state.expenseRules = rows(await getDocs(query(collection(db, ...root, "expenseRules"), limit(2000)))); } catch { state.expenseRules = []; }
+  try { const c = await getDoc(doc(db, ...root, "config", "expenseDetail")); state.detailCutoff = c.exists() && Number(c.data().cutoffAt) > 0 ? Number(c.data().cutoffAt) : null; } catch { state.detailCutoff = null; }
+  $("#sync-status").textContent = `${myName()} · ${ROLE_LABELS[state.role]}`;
+  renderReimbursements();
+  renderAccount();
+}
+
+let reimbLoading = null;
+/** Một lần đọc tại một thời điểm: mở tab trong lúc đang đọc không tốn thêm lượt đọc Firestore. */
+function loadReimbursements() {
+  if (!reimbLoading) reimbLoading = (isBuyer() ? loadBuyerData() : loadReimbursementsNow()).finally(() => { reimbLoading = null; });
+  return reimbLoading;
+}
+async function loadReimbursementsNow() {
+  $("#reimb-note").textContent = "Đang đọc…";
+  try {
+    const [open, batches, payees] = await Promise.all([
+      getDocs(query(collection(db, ...root, receiptCollection()), where("reimbursement.status", "in", ["PENDING", "APPROVED", "REJECTED", "PAID"]), limit(500))).then(rows).catch(() => []),
+      getDocs(query(collection(db, ...root, reimbCollection()), orderBy("paidAt", "desc"), limit(100))).then(rows),
+      getDocs(collection(db, ...root, "payees")).then(rows).catch(() => []), // danh sách tài khoản cũ: chỉ dùng dự phòng khi người mua chưa tự nhập
+    ]);
+    state.openReceipts = open;
+    state.reimbBatches = batches.sort((a, b) => Number(b.paidAt) - Number(a.paidAt));
+    state.payees = payees;
+    state.reimbLoaded = true;
+    state.reimbError = "";
+  } catch (error) { state.reimbError = error.code === "permission-denied" ? permissionHint : (error.message || "lỗi không rõ"); }
+  renderReimbursements();
+}
+/** Phiếu dùng cho màn hoàn ứng: phiếu đã tải + phiếu còn mở ngoài khoảng tải (không để sót). */
+function reimbReceipts() {
+  const byId = new Map(state.expenseReceipts.map((r) => [r.id, r]));
+  for (const r of state.openReceipts) if (!byId.has(r.id) && (!state.demo || r.demo)) byId.set(r.id, r);
+  return [...byId.values()];
+}
+/** Thanh cảnh báo việc cần làm của người đang đăng nhập: hiện ở mọi trang. */
+function renderAlerts() {
+  const bar = $("#my-alerts");
+  if (!bar || !state.user || !state.role) return;
+  const a = myAlerts({ myId: myId(), role: state.role, me: state.me, receipts: reimbReceipts(), batches: state.reimbBatches, members: people(), payees: state.payees });
+  const flash = bar.dataset.flash ? `<p class="alert-flash">${escapeHtml(bar.dataset.flash)}</p>` : "";
+  bar.hidden = !a.items.length && !flash;
+  bar.innerHTML = flash + (a.items.length ? `<strong>Việc của ${escapeHtml(myName())}</strong><ul>${a.items.map((x) => `<li class="${x.level}"><a href="#${x.key === "bank" ? "taikhoan" : "hoanung"}">${escapeHtml(x.text)}</a></li>`).join("")}</ul>` : "");
+  const bank = a.items.find((x) => x.key === "bank")?.count || 0;
+  const setBadge = (id, n) => { const el = $(id); if (el) { el.hidden = !n; el.textContent = String(n); } };
+  setBadge("#hoanung-badge", a.badge - bank);
+  setBadge("#taikhoan-badge", bank);
+}
+function receiptLine(r, dup, extra = "", showEdit = true) {
+  const items = (r.items || []).slice(0, 3).map((i) => i.materialName).join(", ") + ((r.items || []).length > 3 ? "…" : "");
+  const diff = changedAfterPaid(r);
+  return `<div class="reimb-receipt"><div><strong>${escapeHtml(receiptCode(r))}</strong> · ${dateTime(r.purchaseDate)} · <b>${money(r.total)}</b><small>${escapeHtml(items)}${r.note ? ` · ${escapeHtml(r.note)}` : ""}</small>${dup ? `<small class="warn-text">Nghi trùng với ${escapeHtml(dup.join(", "))}: kiểm tra hoá đơn trước khi duyệt</small>` : ""}${diff ? `<small class="warn-text">Phiếu bị sửa sau khi hoàn: chênh ${money(diff)}</small>` : ""}${reimbursementStatus(r) === "REJECTED" && r.reimbursement?.rejectReason ? `<small class="warn-text">Lý do không duyệt: ${escapeHtml(r.reimbursement.rejectReason)}</small>` : ""}</div><div class="row-actions">${extra}${showEdit ? `<button type="button" class="text-button" data-edit-receipt="${escapeHtml(r.id)}">Xem / sửa</button>` : ""}</div></div>`;
+}
+const confirmLabel = (b) => (isMine(b, myId()) ? "Tôi đã nhận tiền" : `Xác nhận hộ ${b.payer}`);
+function batchCard(b) {
+  return `<article class="reimb-card"><header><strong>${escapeHtml(b.payer)} · ${money(b.amount)}</strong><span>${escapeHtml(b.code)} · ${b.method === "CASH" ? "tiền mặt" : "CK"} · ${dateTime(b.paidAt)}</span></header><p class="muted">${b.receiptCodes?.length || b.receiptIds.length} phiếu: ${escapeHtml((b.receiptCodes || []).join(", "))} · nội dung CK "${escapeHtml(b.transferNote || "")}" · người hoàn ${escapeHtml(b.treasurer || "")}</p>${needsReminder(b) ? '<p class="warn-text">Đã quá 1 ngày chưa xác nhận.</p>' : ""}${isMine(b, myId()) || canTreasure(state.role) ? `<div class="tool-row"><button type="button" class="btn strong" data-confirm="${escapeHtml(b.id)}">${escapeHtml(confirmLabel(b))}</button></div>` : ""}</article>`;
+}
+/** Phần "của tôi": ai cũng có, kể cả chủ quán / thủ quỹ khi tự ứng tiền. */
+function renderMine() {
+  const host = $("#reimb-mine");
+  const me = myId();
+  const mine = reimbReceipts().filter((r) => (isBuyer() || isMine(r, me)) && reimbursementStatus(r) !== "NONE").sort((a, b) => Number(b.purchaseDate || 0) - Number(a.purchaseDate || 0));
+  const myBatches = state.reimbBatches.filter((b) => isMine(b, me));
+  const paid = myBatches.filter((b) => b.status === "PAID");
+  const by = (st) => mine.filter((r) => reimbursementStatus(r) === st);
+  const editable = (st) => ["PENDING", "APPROVED", "REJECTED", "UNKNOWN"].includes(st);
+  const block = (st, title) => { const list = by(st); return list.length ? `<p class="reimb-sub">${title} · ${list.length} phiếu · ${money(list.reduce((s, r) => s + Number(r.total || 0), 0))}</p>${list.slice(0, st === "CONFIRMED" ? 10 : 100).map((r) => receiptLine(r, null, editable(st) && st !== "APPROVED" ? `<button type="button" class="text-button" data-cancel-mine="${escapeHtml(r.id)}">Huỷ phiếu</button>` : "", editable(st))).join("")}` : ""; };
+  const html = [
+    paid.length ? `<p class="reimb-sub">Đã được hoàn · chờ bạn xác nhận</p>${paid.map(batchCard).join("")}` : "",
+    block("REJECTED", "Bị trả lại · sửa rồi lưu để gửi lại"), block("PENDING", STATUS_LABELS.PENDING), block("APPROVED", STATUS_LABELS.APPROVED),
+    block("PAID", "Đã hoàn"), block("CONFIRMED", "Đã nhận tiền (gần đây)"),
+  ].join("");
+  host.innerHTML = html ? `<article class="reimb-card">${html}</article>` : `<p class="muted">Chưa có phiếu nào ${isBuyer() ? "bạn" : `${escapeHtml(myName())}`} ứng tiền. Bấm <b>+ Phiếu chi</b> để nhập.</p>`;
+}
+function renderReimbursements() {
+  const host = $("#reimb-queues");
+  if (!host || !state.role) return;
+  const all = reimbReceipts();
+  const names = [...new Set([...people().map((m) => m.name), ...all.map((r) => r.enteredByName), ...state.payees.map((p) => p.name)].filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  $("#payee-names").innerHTML = names.map((n) => `<option value="${escapeHtml(n)}"></option>`).join("");
+  $("#bank-choices").innerHTML = BANK_CHOICES.map((b) => `<option value="${b}"></option>`).join("");
+  $("#reimb-note").textContent = state.reimbError || (isBuyer() ? `Phiếu của ${myName()}.` : `${state.demo ? "DEMO · " : ""}Phiếu từ ${dateTime(state.receiptsFrom)} và mọi phiếu còn mở.`);
+  renderMine();
+  renderAlerts();
+  if (!canTreasure(state.role)) return;
+  const person = state.reimbPerson;
+  const sel = $("#reimb-person");
+  sel.innerHTML = `<option value="">Tất cả</option>${[...new Set(all.map((r) => r.enteredByName).filter(Boolean))].sort((a, b) => a.localeCompare(b)).map((n) => `<option ${n === person ? "selected" : ""}>${escapeHtml(n)}</option>`).join("")}`;
+  const list = person ? all.filter((r) => r.enteredByName === person) : all;
+  const batches = person ? state.reimbBatches.filter((b) => b.payer === person) : state.reimbBatches;
+  const waiting = batches.filter((b) => b.status === "PAID");
+  const dups = duplicateSuspects(all.filter((r) => reimbursementStatus(r) !== "NONE"));
+  const pending = list.filter((r) => reimbursementStatus(r) === "PENDING");
+  const approved = list.filter((r) => reimbursementStatus(r) === "APPROVED");
+  $("#reimb-counters").innerHTML = [["Chờ duyệt", `${pending.length} phiếu · ${money(pending.reduce((s, r) => s + Number(r.total || 0), 0))}`], ["Chờ hoàn tiền", `${approved.length} phiếu · ${money(approved.reduce((s, r) => s + Number(r.total || 0), 0))}`], ["Đã hoàn, chờ xác nhận", `${waiting.length} đợt · ${money(waiting.reduce((s, b) => s + Number(b.amount || 0), 0))}`]]
+    .map(([k, v]) => `<article><span>${k}</span><strong>${v}</strong></article>`).join("");
+  const unknown = list.filter((r) => reimbursementStatus(r) === "UNKNOWN");
+  $("#reimb-unknown").innerHTML = unknown.length ? `<div class="panel warn-panel"><strong>${unknown.length} phiếu chưa rõ nguồn tiền</strong><p class="muted">Phiếu nhập trước khi có quy trình hoàn ứng hoặc nhập trên máy POS. Chọn nguồn tiền để không bị sót.</p>${unknown.slice(0, 30).map((r) => receiptLine(r, dups.get(r.id), `<button type="button" class="btn" data-fund="${escapeHtml(r.id)}" data-value="PERSONAL">Cần hoàn</button><button type="button" class="btn ghost" data-fund="${escapeHtml(r.id)}" data-value="SHOP_CASH">Tiền quán</button>`)).join("")}</div>` : "";
+  host.innerHTML = payerQueues(list).filter((q) => q.PENDING.length || q.APPROVED.length || q.REJECTED.length).map((q) => {
+    const sample = q.APPROVED[0] || q.PENDING[0] || q.REJECTED[0];
+    const bank = bankOf(sample, people(), state.payees);
+    const account = memberOf(sample, people());
+    return `<article class="reimb-card"><header><strong>${escapeHtml(q.payer)}</strong><span>${bank ? `${escapeHtml(bank.bank)} · ${escapeHtml(bank.account)}${bank.from === "payee" ? " (danh sách cũ)" : ""}` : `<span class="warn-text">${account ? "chưa nhập tài khoản ngân hàng" : "chưa có tài khoản web"}</span>`}</span></header>
+      ${q.PENDING.length ? `<p class="reimb-sub">Chờ duyệt · ${q.PENDING.length} phiếu · ${money(q.pendingTotal)}</p>${q.PENDING.map((r) => receiptLine(r, dups.get(r.id), `<button type="button" class="btn" data-approve="${escapeHtml(r.id)}">Duyệt</button><button type="button" class="btn ghost" data-reject="${escapeHtml(r.id)}">Không duyệt</button>`)).join("")}` : ""}
+      ${q.APPROVED.length ? `<p class="reimb-sub">Đã duyệt · chờ hoàn · ${q.APPROVED.length} phiếu · ${money(q.approvedTotal)}</p>${q.APPROVED.map((r) => receiptLine(r, dups.get(r.id))).join("")}<div class="tool-row"><button type="button" class="btn strong" data-pay="${escapeHtml(q.payer)}">Hoàn ${money(q.approvedTotal)} cho ${escapeHtml(q.payer)}</button></div>` : ""}
+      ${q.REJECTED.length ? `<p class="reimb-sub">Đã trả lại · chờ người mua sửa · ${q.REJECTED.length} phiếu</p>${q.REJECTED.map((r) => receiptLine(r, null)).join("")}` : ""}</article>`;
+  }).join("") || '<p class="muted">Không có phiếu nào chờ duyệt hoặc chờ hoàn.</p>';
+  $("#reimb-paid").innerHTML = waiting.map(batchCard).join("") || '<p class="muted">Không có khoản nào chờ xác nhận.</p>';
+  $("#reimb-history").innerHTML = batches.filter((b) => b.status === "CONFIRMED").slice(0, 20).map((b) => `<div class="reimb-receipt"><div><strong>${escapeHtml(b.code)}</strong> · ${escapeHtml(b.payer)} · <b>${money(b.amount)}</b><small>Hoàn ${dateTime(b.paidAt)} · xác nhận ${dateTime(b.confirmedAt)}${b.confirmedOnBehalf ? ` (${escapeHtml(b.confirmedBy || "thủ quỹ")} xác nhận hộ)` : ""} · ${b.receiptIds.length} phiếu</small></div></div>`).join("") || '<p class="muted">Chưa có.</p>';
+}
+async function updateReceiptReimb(id, patch) {
+  const r = reimbReceipts().find((x) => x.id === id);
+  if (!r) return;
+  const now = Date.now();
+  const next = { ...r, ...(patch.fundSource ? { fundSource: patch.fundSource } : {}), code: receiptCode(r), reimbursement: { ...(r.reimbursement || {}), ...patch.reimbursement, updatedAt: now, by: myName() }, updatedAt: Math.max(now, Number(r.updatedAt || 0) + 1), ...(r.source === "ANDROID_POS" ? { editedBy: "WEB_MANAGER" } : {}) };
+  if (!next.payerId) { const id = memberOf(next, people())?.id; if (id) next.payerId = id; }
+  try {
+    await setDoc(doc(db, ...root, receiptCollection(), id), next);
+    replaceLocalReceipt(next);
+    state.openReceipts = state.openReceipts.map((x) => (x.id === id ? next : x));
+    render(); renderReimbursements();
+  } catch (error) { $("#reimb-note").textContent = `Không lưu được: ${error.message}`; }
+}
+let reimbDraft = null;
+function openReimbDialog(payer) {
+  const approved = reimbReceipts().filter((r) => r.enteredByName === payer && reimbursementStatus(r) === "APPROVED");
+  if (!approved.length) return;
+  const payerId = approved.find((r) => r.payerId)?.payerId || memberOf(approved[0], people())?.id || "";
+  reimbDraft = { payer, payerId, receipts: approved, selected: new Set(approved.map((r) => r.id)), bank: bankOf({ payerId, enteredByName: payer }, people(), state.payees) };
+  $("#reimb-title").textContent = `Hoàn cho ${payer}`;
+  $("#reimb-error").textContent = "";
+  renderReimbDialog();
+  $("#reimb-dialog").showModal();
+}
+function reimbSelection() { return reimbDraft.receipts.filter((r) => reimbDraft.selected.has(r.id)); }
+function renderReimbDialog() {
+  $("#reimb-receipts").innerHTML = reimbDraft.receipts.map((r) => `<label class="reimb-check"><input type="checkbox" data-pick="${escapeHtml(r.id)}" ${reimbDraft.selected.has(r.id) ? "checked" : ""} /> <span>${escapeHtml(receiptCode(r))} · ${dateTime(r.purchaseDate)}</span><b>${money(r.total)}</b></label>`).join("");
+  const sel = reimbSelection();
+  const total = sel.reduce((s, r) => s + Number(r.total || 0), 0);
+  $("#reimb-total").textContent = money(total);
+  const code = batchCode(reimbDraft.payer, Date.now(), state.reimbBatches.map((b) => b.code));
+  reimbDraft.code = code;
+  reimbDraft.note = transferNote(code, sel.length);
+  const bank = reimbDraft.bank;
+  const host = $("#reimb-qr");
+  if (!sel.length) { host.innerHTML = '<p class="muted">Chọn ít nhất một phiếu.</p>'; return; }
+  if (!bank) { host.innerHTML = `<p class="warn-text">${escapeHtml(reimbDraft.payer)} chưa nhập tài khoản ngân hàng ở trang Tài khoản của họ nên chưa có QR. Vẫn có thể chuyển tay với nội dung: <b>${escapeHtml(reimbDraft.note)}</b></p>`; return; }
+  try {
+    const payload = vietQrPayload({ bank: bank.bank, account: bank.account, holder: bank.holder, amount: total, info: reimbDraft.note });
+    host.innerHTML = `<div id="reimb-qr-img" class="qr-box" aria-label="Mã QR chuyển khoản"></div><p class="qr-meta">${escapeHtml(bank.bank)} · ${escapeHtml(bank.account)} · ${escapeHtml(bank.holder)}<br>Số tiền <b>${money(total)}</b> · Nội dung <b>${escapeHtml(reimbDraft.note)}</b></p>`;
+    drawQr($("#reimb-qr-img"), payload);
+  } catch (error) { host.innerHTML = `<p class="warn-text">${escapeHtml(error.message)}</p>`; }
+}
+let qrLib = null;
+function loadQrLib() {
+  if (window.qrcode) return Promise.resolve(window.qrcode);
+  const urls = ["https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js", "https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"];
+  const tryLoad = (i) => new Promise((resolve, reject) => { const el = document.createElement("script"); el.src = urls[i]; el.onload = () => (window.qrcode ? resolve(window.qrcode) : reject(new Error("no qrcode"))); el.onerror = () => reject(new Error("load")); document.head.append(el); })
+    .catch((e) => (i + 1 < urls.length ? tryLoad(i + 1) : Promise.reject(e)));
+  if (!qrLib) qrLib = tryLoad(0).catch((e) => { qrLib = null; throw e; });
+  return qrLib;
+}
+async function drawQr(host, payload) {
+  try {
+    const qr = (await loadQrLib())(0, "M");
+    qr.addData(payload); qr.make();
+    host.innerHTML = `<img alt="Mã QR chuyển khoản" src="${qr.createDataURL(8, 2)}" />`;
+  } catch { host.innerHTML = `<p class="warn-text">Không vẽ được QR (mất mạng?). Chuyển tay theo thông tin bên dưới.</p>`; }
+}
+async function payBatch(method) {
+  const err = $("#reimb-error");
+  err.textContent = "";
+  const sel = reimbSelection();
+  const treasurer = myName();
+  if (!sel.length) { err.textContent = "Chọn ít nhất một phiếu."; return; }
+  if (state.simulation) { err.textContent = "Đang mô phỏng: không ghi."; return; }
+  const now = Date.now();
+  const batchId = uuid();
+  const total = sel.reduce((s, r) => s + Number(r.total || 0), 0);
+  const batch = { id: batchId, code: reimbDraft.code, payer: reimbDraft.payer, payerId: reimbDraft.payerId || "", amount: total, method, transferNote: reimbDraft.note, receiptIds: sel.map((r) => r.id), receiptCodes: sel.map(receiptCode), treasurer, treasurerId: myId(), paidAt: now, status: "PAID", ...(state.demo ? { demo: true } : {}) };
+  const paidInfo = (f) => ({ ...(f.reimbursement || {}), status: "PAID", batchId, batchCode: batch.code, paidAt: now, paidAmount: Number(f.total), paidBy: treasurer, updatedAt: now });
+  try {
+    await runTransaction(db, async (tx) => {
+      const refs = sel.map((r) => doc(db, ...root, receiptCollection(), r.id));
+      const fresh = [];
+      for (const ref of refs) { const snap = await tx.get(ref); if (snap.exists()) fresh.push({ id: snap.id, ...snap.data() }); }
+      const check = validateBatchSelection(sel, fresh);
+      if (!check.ok) throw new Error(check.problems.join("; "));
+      // Gắn người mua vào phiếu cũ để người mua tự thấy và tự xác nhận được trên tài khoản của họ.
+      fresh.forEach((f, i) => tx.set(refs[i], { ...f, ...(batch.payerId && !f.payerId ? { payerId: batch.payerId } : {}), code: receiptCode(f), reimbursement: paidInfo(f), updatedAt: Math.max(now, Number(f.updatedAt || 0) + 1), ...(f.source === "ANDROID_POS" ? { editedBy: "WEB_MANAGER" } : {}) }));
+      tx.set(doc(db, ...root, reimbCollection(), batchId), batch);
+      // Ghi hoàn ứng vào sổ để công nợ người ứng trên máy POS khớp (không ghi khi đang xem demo).
+      if (!state.demo) tx.set(doc(db, ...root, "financialMovements", batchId), { id: batchId, type: "PAYER_REIMBURSEMENT", amount: total, occurredAt: now, partnerId: null, method: method === "CASH" ? "CASH" : "TRANSFER", note: `${batch.code} · ${batch.receiptCodes.join(", ")}`, counterpartyName: batch.payer, source: "WEB_MANAGER", createdAt: now, createdBy: state.user.uid });
+    });
+    $("#reimb-dialog").close();
+    for (const r of sel) { const prev = reimbReceipts().find((x) => x.id === r.id); if (prev) replaceLocalReceipt({ ...prev, ...(batch.payerId && !prev.payerId ? { payerId: batch.payerId } : {}), reimbursement: paidInfo(prev) }); }
+    state.reimbLoaded = false;
+    await loadReimbursements();
+    flashNote(`Đã ghi hoàn ${money(total)} cho ${batch.payer} (${batch.code}). ${batch.payer} sẽ thấy cảnh báo để xác nhận khi mở web.`);
+  } catch (error) { err.textContent = error.code === "permission-denied" ? permissionHint : `Chưa hoàn được: ${error.message}`; }
+}
+async function confirmBatch(id) {
+  const b = state.reimbBatches.find((x) => x.id === id);
+  if (!b) return;
+  const mine = isMine(b, myId());
+  if (!mine && !canTreasure(state.role)) return;
+  const question = mine ? `Bạn đã kiểm tra và nhận đủ ${money(b.amount)} (${b.code})?` : `${b.payer} đã báo nhận đủ ${money(b.amount)} (${b.code})? Xác nhận hộ sẽ ghi tên bạn.`;
+  if (!window.confirm(question)) return;
+  const now = Date.now();
+  const stamp = { status: "CONFIRMED", confirmedAt: now, confirmedBy: myName(), confirmedById: myId(), ...(mine ? {} : { confirmedOnBehalf: true }) };
+  try {
+    // Đọc lại ngay lúc xác nhận để không ghi đè bằng bản cũ trong trình duyệt.
+    await runTransaction(db, async (tx) => {
+      const batchRef = doc(db, ...root, reimbCollection(), id);
+      const batchSnap = await tx.get(batchRef);
+      if (!batchSnap.exists()) throw new Error("Đợt hoàn không còn trên hệ thống");
+      const current = { ...batchSnap.data() };
+      if (current.status !== "PAID") throw new Error(`Đợt này đã ở trạng thái ${current.status === "CONFIRMED" ? "đã xác nhận" : current.status}`);
+      const refs = b.receiptIds.map((rid) => doc(db, ...root, receiptCollection(), rid));
+      const snaps = [];
+      for (const ref of refs) snaps.push(await tx.get(ref));
+      tx.set(batchRef, { ...current, ...stamp });
+      snaps.forEach((snap, i) => {
+        if (!snap.exists()) return;
+        const r = { ...snap.data() };
+        tx.set(refs[i], { ...r, reimbursement: { ...(r.reimbursement || {}), status: "CONFIRMED", confirmedAt: now, updatedAt: now }, updatedAt: Math.max(now, Number(r.updatedAt || 0) + 1), ...(r.source === "ANDROID_POS" ? { editedBy: "WEB_MANAGER" } : {}) });
+      });
+    });
+    for (const rid of b.receiptIds) { const prev = reimbReceipts().find((x) => x.id === rid); if (prev) replaceLocalReceipt({ ...prev, reimbursement: { ...(prev.reimbursement || {}), status: "CONFIRMED", confirmedAt: now } }); }
+    state.reimbLoaded = false;
+    await loadReimbursements();
+    flashNote(`Đã xác nhận ${b.code}.`);
+  } catch (error) { $("#reimb-note").textContent = error.code === "permission-denied" ? permissionHint : `Chưa xác nhận được: ${error.message}`; }
+}
+$("#reload-reimb").addEventListener("click", () => { state.reimbLoaded = false; loadReimbursements(); });
+$("#reimb-person").addEventListener("change", (e) => { state.reimbPerson = e.target.value; renderReimbursements(); });
+$("#close-reimb").addEventListener("click", () => $("#reimb-dialog").close());
+$("#reimb-paid-bank").addEventListener("click", () => payBatch("TRANSFER"));
+$("#reimb-paid-cash").addEventListener("click", () => payBatch("CASH"));
+$("#reimb-receipts").addEventListener("change", (e) => { const id = e.target.dataset.pick; if (!id) return; if (e.target.checked) reimbDraft.selected.add(id); else reimbDraft.selected.delete(id); renderReimbDialog(); });
+$("[data-page=hoanung]").addEventListener("click", (e) => {
+  const t = e.target.closest("button");
+  if (!t) return;
+  if (t.dataset.approve) updateReceiptReimb(t.dataset.approve, { reimbursement: { status: "APPROVED", approvedAt: Date.now(), rejectReason: "" } });
+  else if (t.dataset.reject) { const reason = window.prompt("Lý do không duyệt (người mua sẽ thấy trên tài khoản của họ):"); if (reason && reason.trim()) updateReceiptReimb(t.dataset.reject, { reimbursement: { status: "REJECTED", rejectReason: reason.trim() } }); }
+  else if (t.dataset.fund) updateReceiptReimb(t.dataset.fund, { fundSource: t.dataset.value, reimbursement: { status: t.dataset.value === FUND_PERSONAL ? "PENDING" : "NONE" } });
+  else if (t.dataset.pay) openReimbDialog(t.dataset.pay);
+  else if (t.dataset.confirm) confirmBatch(t.dataset.confirm);
+  else if (t.dataset.cancelMine) cancelReceipt(t.dataset.cancelMine).then(() => renderReimbursements());
+  else if (t.dataset.editReceipt) openReceiptEditor(t.dataset.editReceipt);
+});
+
+/* ---------- Tài khoản: thông tin cá nhân + ngân hàng + PIN của mỗi người, chủ quán quản lý thành viên ---------- */
+function renderAccount() {
+  if (!state.role) return;
+  applyRoleUi();
+  const me = state.me || {};
+  const form = $("#me-form");
+  if (!form.contains(document.activeElement)) {
+    $("#me-name").value = me.name || "";
+    $("#me-bank").value = me.bank || "";
+    $("#me-account").value = me.account || "";
+    $("#me-holder").value = me.holder || "";
+    $("#me-pin").value = "";
+  }
+  if (state.role !== ROLE_OWNER) return;
+  const receipts = reimbReceipts();
+  $("#member-list").innerHTML = state.members.filter((m) => m.id !== myId()).sort((a, b) => String(a.name).localeCompare(String(b.name))).map((m) => {
+    const legacy = legacyOpenReceipts(m, receipts).length;
+    return `<div class="reimb-receipt"><div><strong>${escapeHtml(m.name)}</strong><small>${ROLE_LABELS[m.role] || m.role}${m.pinHash ? "" : " · <b>chưa có PIN</b>"}${m.active === false ? " · <b>đã khoá</b>" : ""}</small><small>${m.bank && m.account ? `${escapeHtml(m.bank)} · ${escapeHtml(m.account)}` : '<span class="warn-text">chưa nhập tài khoản ngân hàng</span>'}</small></div><div class="row-actions">${legacy ? `<button type="button" class="btn" data-link-legacy="${escapeHtml(m.id)}">Gắn ${legacy} phiếu cũ</button>` : ""}<button type="button" class="text-button" data-edit-member="${escapeHtml(m.id)}">Sửa / đổi PIN</button><button type="button" class="text-button" data-toggle-member="${escapeHtml(m.id)}">${m.active === false ? "Mở lại" : "Khoá"}</button></div></div>`;
+  }).join("") || '<p class="muted">Chưa có thành viên. Thêm thủ quỹ và từng người mua, mỗi người một PIN.</p>';
+}
+const stripId = ({ id: _id, ...rest }) => rest;
+/** PIN không được trùng với người khác (vì vào web chỉ bằng PIN). */
+async function pinHashFor(pin, exceptId) {
+  if (!validPin(pin)) throw new Error("PIN gồm 4–6 chữ số.");
+  const hash = await hashPin(pin);
+  if (state.members.some((m) => m.id !== exceptId && m.pinHash === hash)) throw new Error("PIN này đã có người dùng, chọn PIN khác.");
+  return hash;
+}
+function upsertMember(m) { state.members = [...state.members.filter((x) => x.id !== m.id), m]; }
+$("#me-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const err = $("#me-error");
+  err.textContent = "";
+  const p = { name: $("#me-name").value.trim(), bank: $("#me-bank").value.trim(), account: $("#me-account").value.replace(/\s+/g, ""), holder: $("#me-holder").value.trim() };
+  if (!p.name) { err.textContent = "Nhập tên hiển thị."; return; }
+  if (p.bank || p.account) { try { vietQrPayload({ ...p, amount: 1000, info: "KIEM TRA" }); } catch (error) { err.textContent = error.message; return; } }
+  if (!state.me?.id) return;
+  try {
+    const pin = $("#me-pin").value.trim();
+    const next = { ...stripId(state.me), ...p, ...(pin ? { pinHash: await pinHashFor(pin, state.me.id) } : {}), updatedAt: Date.now() };
+    await setDoc(doc(db, ...root, "webMembers", state.me.id), next);
+    state.me = { ...next, id: state.me.id };
+    upsertMember(state.me);
+    $("#me-pin").value = "";
+    renderAccount(); renderReimbursements();
+    flashNote(pin ? "Đã lưu thông tin và PIN mới." : "Đã lưu thông tin tài khoản.");
+  } catch (error) { err.textContent = error.message; }
+});
+$("#member-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const err = $("#member-error");
+  err.textContent = "";
+  const editId = $("#member-id").value;
+  const name = $("#member-name").value.trim();
+  const role = $("#member-role").value;
+  const pin = $("#member-pin").value.trim();
+  if (!name) { err.textContent = "Nhập tên."; return; }
+  const prev = state.members.find((m) => m.id === editId);
+  if (!prev && !pin) { err.textContent = "Người mới cần có PIN (4–6 số)."; return; }
+  if (state.members.some((m) => m.id !== editId && asciiUpper(m.name) === asciiUpper(name))) { err.textContent = "Đã có người trùng tên: thêm họ hoặc chữ phân biệt để phiếu không bị nhầm."; return; }
+  try {
+    const id = prev?.id || memberId(name, uuid().replace(/[^a-z0-9]/gi, "").slice(-4).toLowerCase());
+    const next = { ...(prev ? stripId(prev) : { createdAt: Date.now(), active: true }), name, role, ...(pin ? { pinHash: await pinHashFor(pin, id) } : {}), updatedAt: Date.now() };
+    await setDoc(doc(db, ...root, "webMembers", id), next);
+    upsertMember({ ...next, id });
+    e.target.reset(); $("#member-id").value = "";
+    renderAccount(); renderReimbursements();
+    err.textContent = `Đã lưu ${name} (${ROLE_LABELS[role]})${pin ? ", PIN mới đã có hiệu lực" : ""}.`;
+  } catch (error) { err.textContent = error.message; }
+});
+$("#member-clear").addEventListener("click", () => { $("#member-form").reset(); $("#member-id").value = ""; $("#member-error").textContent = ""; $("#member-name").focus(); });
+$("#members-zone").addEventListener("click", async (e) => {
+  const t = e.target.closest("button");
+  if (!t) return;
+  const m = state.members.find((x) => x.id === (t.dataset.editMember || t.dataset.toggleMember || t.dataset.linkLegacy));
+  if (!m) return;
+  if (t.dataset.editMember) { $("#member-id").value = m.id; $("#member-name").value = m.name || ""; $("#member-role").value = m.role || ROLE_BUYER; $("#member-pin").value = ""; $("#member-pin").placeholder = "Để trống nếu giữ PIN cũ"; $("#member-name").focus(); return; }
+  try {
+    if (t.dataset.toggleMember) {
+      const next = { ...stripId(m), active: m.active === false, updatedAt: Date.now() };
+      await setDoc(doc(db, ...root, "webMembers", m.id), next);
+      upsertMember({ ...next, id: m.id });
+    } else {
+      // Phiếu cũ nhập trước khi có PIN: gắn người dùng để người mua thấy được trên tài khoản của họ.
+      const list = legacyOpenReceipts(m, reimbReceipts());
+      if (!window.confirm(`Gắn ${list.length} phiếu đang mở mang tên "${m.name}" vào tài khoản của ${m.name}?`)) return;
+      const batch = writeBatch(db);
+      const now = Date.now();
+      const updated = list.map((r) => ({ ...r, payerId: m.id, updatedAt: Math.max(now, Number(r.updatedAt || 0) + 1), ...(r.source === "ANDROID_POS" ? { editedBy: "WEB_MANAGER" } : {}) }));
+      updated.forEach((r) => batch.set(doc(db, ...root, receiptCollection(), r.id), r));
+      await batch.commit();
+      updated.forEach((r) => { replaceLocalReceipt(r); state.openReceipts = state.openReceipts.map((x) => (x.id === r.id ? r : x)); });
+    }
+    renderAccount(); renderReimbursements();
+  } catch (error) { $("#member-error").textContent = error.message; }
+});
 
 /* ---------- Tải phiếu cũ hơn 7 ngày khi chọn kỳ xem xa hơn (tối đa 500 phiếu) ---------- */
 async function ensureReceiptsLoaded() {
@@ -1688,20 +2215,27 @@ async function ensureReceiptsLoaded() {
 }
 
 /* ---------- Chia tab: mỗi tab là một trang riêng theo #hash, nút Back của trình duyệt hoạt động ---------- */
-const TABS = ["ban", "doanhthu", "bill", "thanhtoan", "taichinh", "giavon"];
+const TABS = ["ban", "doanhthu", "bill", "thanhtoan", "taichinh", "giavon", "hoanung", "taikhoan"];
 function showTab() {
-  const name = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "ban";
+  const allowed = isBuyer() ? BUYER_TABS : TABS;
+  const name = allowed.includes(location.hash.slice(1)) ? location.hash.slice(1) : allowed[0];
   document.querySelectorAll(".page").forEach((page) => { page.hidden = page.dataset.page !== name; });
   document.querySelectorAll("#tabbar [data-tab]").forEach((link) => link.classList.toggle("active", link.dataset.tab === name));
   window.scrollTo(0, 0);
-  if (name === "giavon" && state.user && !state.recipesLoaded) loadRecipes();
+  if (name === "giavon" && state.role && !state.recipesLoaded) loadRecipes();
+  if (name === "hoanung" && state.role && !state.reimbLoaded) loadReimbursements();
+  if (name === "taikhoan" && state.role) renderAccount();
 }
 window.addEventListener("hashchange", showTab);
 showTab();
 
-onAuthStateChanged(auth, (user) => {
+onAuthStateChanged(auth, async (user) => {
   state.user = user || null;
-  $("#login-view").hidden = Boolean(user);
-  $("#dashboard-view").hidden = !user;
-  if (user) refreshDashboard();
+  state.role = null; state.me = null;
+  if (!user) { $("#pin-view").hidden = true; $("#dashboard-view").hidden = true; $("#login-view").hidden = false; return; }
+  $("#login-view").hidden = true;
+  await loadMembers();
+  // Máy này đã có người vào trước đó thì vào luôn; muốn đổi thì bấm "Đổi người".
+  const last = state.members.find((m) => m.id === savedPerson() && m.active !== false && m.pinHash);
+  if (last) enterAs(last); else showPinView();
 });

@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20261014-8" />
+    <link rel="stylesheet" href="styles.css?v=20261016-6" />
     <title>0210 · Manager</title>
   </head>
   <body>
@@ -17,12 +17,25 @@
         <p class="eyebrow">0210 · BREAKFAST · COFFEE · DRINKS</p>
         <h1 id="login-title">Manager realtime</h1>
         <p class="muted">Theo dõi quán và nhập phiếu tài chính từ xa.</p>
-        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.16.3 · Đồng bộ đơn vị</p>
-        <label>Email Firebase<input id="email" type="email" autocomplete="username" inputmode="email" /></label>
+        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.16.7 · Đăng nhập PIN</p>
+        <p class="muted">Đăng nhập tài khoản quán một lần trên mỗi máy, sau đó mỗi người vào bằng PIN riêng.</p>
+        <label>Email tài khoản quán<input id="email" type="email" autocomplete="username" inputmode="email" /></label>
         <label>Mật khẩu<input id="password" type="password" autocomplete="current-password" /></label>
         <label class="show-password"><input id="show-password" type="checkbox" /> Hiện mật khẩu để kiểm tra khi gõ</label>
         <button id="login-button" class="primary">Đăng nhập</button>
         <p id="login-error" class="error" role="alert"></p>
+      </section>
+
+      <section id="pin-view" class="login-card" aria-labelledby="pin-title" hidden>
+        <p class="eyebrow">0210 · MANAGER</p>
+        <h1 id="pin-title">Nhập mã PIN</h1>
+        <p id="pin-hint" class="muted">Mỗi người một PIN riêng (4–6 số).</p>
+        <label id="pin-name-row" hidden>Tên của bạn<input id="pin-name" maxlength="60" /></label>
+        <label>Mã PIN<input id="pin-input" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="6" /></label>
+        <label id="pin-again-row" hidden>Nhập lại PIN<input id="pin-again" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="6" /></label>
+        <button id="pin-button" class="primary">Vào</button>
+        <p id="pin-error" class="error" role="alert"></p>
+        <button id="pin-logout" type="button" class="text-button">Đăng xuất tài khoản quán khỏi máy này</button>
       </section>
 
       <section id="dashboard-view" hidden>
@@ -31,10 +44,10 @@
             <p class="eyebrow">0210 · MANAGER</p>
             <h1>Quản lý realtime</h1>
           </div>
-          <div class="heading-actions"><button id="refresh-dashboard" class="secondary">Làm mới</button><button id="request-sync" class="secondary" title="Yêu cầu máy POS ở quán đồng bộ ngay">Yêu cầu đồng bộ</button><button id="logout-button" class="text-button">Đăng xuất</button></div>
+          <div class="heading-actions"><button id="refresh-dashboard" class="btn">Làm mới</button><button id="request-sync" class="btn" title="Yêu cầu máy POS ở quán đồng bộ ngay">Yêu cầu đồng bộ</button><button id="switch-person" class="btn">Đổi người</button><button id="logout-button" class="btn ghost">Đăng xuất</button></div>
         </header>
 
-        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.16.3 · Đồng bộ đơn vị</p>
+        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><section id="my-alerts" class="my-alerts" aria-live="polite" hidden></section><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.16.7 · Đăng nhập PIN</p>
 
         <nav class="tabbar" id="tabbar" aria-label="Các trang">
           <a href="#ban" data-tab="ban">Bàn</a>
@@ -43,6 +56,8 @@
           <a href="#thanhtoan" data-tab="thanhtoan">Thanh toán</a>
           <a href="#taichinh" data-tab="taichinh">Tài chính</a>
           <a href="#giavon" data-tab="giavon">Giá vốn</a>
+          <a href="#hoanung" data-tab="hoanung">Hoàn ứng<span id="hoanung-badge" class="tab-badge" hidden></span></a>
+          <a href="#taikhoan" data-tab="taikhoan">Tài khoản<span id="taikhoan-badge" class="tab-badge" hidden></span></a>
         </nav>
 
         <div class="page" data-page="ban" hidden>
@@ -69,6 +84,16 @@
         <p id="sales-notice" class="sales-notice" role="status"></p>
         <section id="sales-summary" class="summary-grid" aria-label="Tổng quan doanh thu theo ngày"></section>
         <section id="sales-chart" class="sales-chart" aria-label="Biểu đồ doanh thu theo ngày"></section>
+
+        <section class="section-heading compact">
+          <div><p class="eyebrow">GIỜ CAO ĐIỂM</p><h2>Số bill theo giờ mở bàn</h2></div>
+        </section>
+        <section id="peak-hours" class="hbar-chart" aria-label="Biểu đồ số bill theo giờ"></section>
+
+        <section class="section-heading compact">
+          <div><p class="eyebrow">MÓN BÁN NHIỀU</p><h2>Top 10 theo số phần</h2></div>
+        </section>
+        <section id="top-items" class="hbar-chart" aria-label="Biểu đồ món bán nhiều"></section>
 
         <section class="section-heading compact">
           <div><p class="eyebrow">THỐNG KÊ MÓN</p><h2>Món đã bán</h2></div>
@@ -104,7 +129,7 @@
         <div class="page" data-page="giavon" hidden>
         <section class="section-heading first-section">
           <div><p class="eyebrow">GIÁ VỐN MÓN</p><h2>Công thức và cost theo giá nhập</h2></div>
-          <div class="heading-actions"><button id="reload-recipes" type="button" class="secondary">Tải lại</button></div>
+          <div class="heading-actions"><button id="reload-recipes" type="button" class="btn">Tải lại</button></div>
         </section>
         <p class="muted">Giá vật tư lấy từ phiếu chi CHI TIẾT chưa huỷ (bình quân 30 ngày, không có thì lấy lần mua gần nhất). Phiếu tổng không cho ra giá vật tư. Bấm một món để kéo tăng giảm định lượng rồi lưu.</p>
         <p id="recipe-note" class="muted" role="status"></p>
@@ -132,31 +157,92 @@
         <section id="material-costs" class="material-costs"></section>
         </div>
 
-        <div class="page" data-page="taichinh" hidden>
-        <section class="section-heading report-heading">
-          <div><p class="eyebrow">TÀI CHÍNH</p><h2>Tình hình quán</h2></div>
-          <div class="heading-actions"><button id="open-expense" class="secondary">+ CHI PHÍ MUA HÀNG</button><button id="open-summary" class="secondary">+ PHIẾU TỔNG (hóa đơn cũ)</button><button id="open-entry" class="text-button">Giao dịch khác</button></div>
+        <div class="page" data-page="hoanung" hidden>
+        <section class="section-heading first-section">
+          <div><p class="eyebrow">HOÀN ỨNG</p><h2>Phiếu chi ứng tiền và hoàn tiền</h2></div>
+          <div class="heading-actions"><button id="reimb-new-receipt" type="button" class="btn strong">+ Phiếu chi</button><button id="reload-reimb" type="button" class="btn">Tải lại</button></div>
         </section>
+        <p class="muted">Người mua nhập phiếu bằng tài khoản của mình (nguồn tiền "Tiền cá nhân") → thủ quỹ thấy cảnh báo, <strong>Duyệt</strong> → <strong>Hoàn tiền</strong> bằng QR động tạo từ tài khoản ngân hàng người mua đã nhập, nội dung CK là mã đợt hoàn → người mua thấy cảnh báo, kiểm tra tài khoản và bấm <strong>Tôi đã nhận tiền</strong> (xác nhận chậm cũng được).</p>
+        <p id="reimb-note" class="panel-total" role="status"></p>
+        <section class="section-heading compact"><div><p class="eyebrow">CỦA TÔI</p><h2>Phiếu tôi đã ứng tiền</h2></div></section>
+        <section id="reimb-mine" class="reimb-list"></section>
+        <div id="reimb-treasurer-zone" hidden>
+        <section class="section-heading compact"><div><p class="eyebrow">THỦ QUỸ</p><h2>Tổng quan</h2></div></section>
+        <div class="panel">
+          <div class="field-row"><label for="reimb-person">Xem theo người</label><select id="reimb-person"><option value="">Tất cả</option></select></div>
+        </div>
+        <section id="reimb-counters" class="summary-grid"></section>
+        <section id="reimb-unknown"></section>
+        <section class="section-heading compact"><div><p class="eyebrow">CẦN XỬ LÝ</p><h2>Theo người mua</h2></div></section>
+        <section id="reimb-queues" class="reimb-list"></section>
+        <section class="section-heading compact"><div><p class="eyebrow">ĐÃ HOÀN</p><h2>Chờ người nhận xác nhận</h2></div></section>
+        <section id="reimb-paid" class="reimb-list"></section>
+        <section class="section-heading compact"><div><p class="eyebrow">LỊCH SỬ</p><h2>Đợt hoàn đã xác nhận</h2></div></section>
+        <section id="reimb-history" class="reimb-list"></section>
+        </div>
+        <datalist id="payee-names"></datalist><datalist id="bank-choices"></datalist>
+        </div>
 
-        <div class="filter-row" id="period-filters">
-          <button data-period="today" class="filter active">Hôm nay</button>
-          <button data-period="yesterday" class="filter">Hôm qua</button>
-          <button data-period="7d" class="filter">7 ngày</button>
-          <button data-period="month" class="filter">Tháng này</button>
-          <button data-period="all" class="filter">Tất cả</button>
-          <button data-period="custom" class="filter">Tùy chọn</button>
+        <div class="page" data-page="taikhoan" hidden>
+        <section class="section-heading first-section">
+          <div><p class="eyebrow">TÀI KHOẢN CỦA TÔI</p><h2 id="me-title">Thông tin cá nhân</h2></div>
+        </section>
+        <p id="me-role" class="muted"></p>
+        <form id="me-form" class="panel">
+          <div class="field-row"><label for="me-name">Tên hiển thị</label><input id="me-name" maxlength="60" required /></div>
+          <p class="muted">Tài khoản ngân hàng nhận tiền hoàn ứng: thủ quỹ dùng để tạo QR động, đúng số tiền và nội dung.</p>
+          <div class="field-row"><label for="me-bank">Ngân hàng</label><input id="me-bank" list="bank-choices" maxlength="30" placeholder="VD Vietcombank, MB, Techcombank" /></div>
+          <div class="field-row"><label for="me-account">Số tài khoản</label><input id="me-account" inputmode="numeric" maxlength="19" /></div>
+          <div class="field-row"><label for="me-holder">Tên chủ TK</label><input id="me-holder" maxlength="50" placeholder="Viết như trên thẻ, không cần dấu" /></div>
+          <div class="field-row"><label for="me-pin">Đổi PIN</label><input id="me-pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="Để trống nếu giữ PIN cũ" /></div>
+          <p id="me-error" class="error" role="alert"></p>
+          <div class="tool-row"><button type="submit" class="btn strong">Lưu thông tin</button></div>
+        </form>
+        <div id="members-zone" hidden>
+        <section class="section-heading compact"><div><p class="eyebrow">CHỦ QUÁN</p><h2>Thành viên dùng web</h2></div></section>
+        <p class="muted">Mọi người dùng chung tài khoản quán, vào bằng PIN riêng. <strong>Thủ quỹ</strong>: duyệt phiếu, hoàn tiền, xem toàn bộ. <strong>Người mua</strong>: chỉ thấy tab Hoàn ứng và Tài khoản, nhập phiếu của mình, xác nhận đã nhận tiền. <strong>Chủ quán</strong>: như thủ quỹ và quản lý thành viên.</p>
+        <section id="member-list" class="reimb-list"></section>
+        <form id="member-form" class="panel">
+          <input id="member-id" type="hidden" />
+          <div class="field-row"><label for="member-name">Tên</label><input id="member-name" maxlength="60" required /></div>
+          <div class="field-row"><label for="member-role">Vai trò</label><select id="member-role"><option value="NGUOI_MUA">Người mua</option><option value="THU_QUY">Thủ quỹ</option><option value="CHU_QUAN">Chủ quán</option></select></div>
+          <div class="field-row"><label for="member-pin">PIN (4–6 số)</label><input id="member-pin" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="Bắt buộc khi thêm người mới" /></div>
+          <p id="member-error" class="error" role="alert"></p>
+          <div class="tool-row"><button type="submit" class="btn">Lưu thành viên</button><button id="member-clear" type="button" class="btn ghost">Thêm người mới</button></div>
+        </form>
         </div>
-        <div id="custom-range" class="custom-range" hidden>
-          <label>Từ ngày<input id="from-date" type="date" /></label>
-          <label>Đến ngày<input id="to-date" type="date" /></label>
-          <button id="apply-range" class="secondary">Áp dụng</button>
-        </div>
-        <div class="payer-filter-block">
-          <span>Người chi</span>
-          <select id="payer-filter"><option value="ALL">Tất cả người chi</option></select>
-          <strong id="payer-total"></strong>
         </div>
 
+        <div class="page" data-page="taichinh" hidden>
+        <section class="section-heading first-section">
+          <div><p class="eyebrow">TÀI CHÍNH</p><h2>Tình hình quán</h2></div>
+        </section>
+        <div class="action-grid">
+          <button id="open-expense" type="button" class="action-btn main"><strong>+ Phiếu mua hàng</strong><small>Nguyên liệu, bao bì, vật tư</small></button>
+          <button id="open-summary" type="button" class="action-btn"><strong>+ Phiếu tổng</strong><small>Hoá đơn cũ không nhớ chi tiết</small></button>
+          <button id="open-entry" type="button" class="action-btn"><strong>+ Thu chi khác</strong><small>Lương, điện, nước, vốn, rút tiền</small></button>
+        </div>
+
+        <div class="panel">
+          <div class="filter-row" id="period-filters">
+            <button data-period="today" class="filter active">Hôm nay</button>
+            <button data-period="yesterday" class="filter">Hôm qua</button>
+            <button data-period="7d" class="filter">7 ngày</button>
+            <button data-period="month" class="filter">Tháng này</button>
+            <button data-period="all" class="filter">Tất cả</button>
+            <button data-period="custom" class="filter">Tùy chọn</button>
+          </div>
+          <div id="custom-range" class="custom-range" hidden>
+            <label>Từ ngày<input id="from-date" type="date" /></label>
+            <label>Đến ngày<input id="to-date" type="date" /></label>
+            <button id="apply-range" type="button" class="btn">Áp dụng</button>
+          </div>
+          <div class="field-row">
+            <label for="payer-filter">Người chi</label>
+            <select id="payer-filter"><option value="ALL">Tất cả người chi</option></select>
+          </div>
+          <p id="payer-total" class="panel-total"></p>
+        </div>
         <section id="period-summary" class="summary-grid" aria-label="Tổng quan theo kỳ"></section>
 
         <section class="section-heading compact">
@@ -165,30 +251,33 @@
         <section id="summary" class="summary-grid cumulative-grid" aria-label="Chỉ số tích lũy"></section>
 
         <section class="section-heading compact">
-          <div><p class="eyebrow">DỮ LIỆU DEMO</p><h2>Phiếu chi thử trước khi nhập thật</h2></div>
-        </section>
-        <p class="muted">Bộ phiếu chi demo 30 ngày, sinh từ menu, công thức và lượng bán. Phiếu demo nằm ở mục riêng, máy POS không đọc, mỗi phiếu đều mang dấu DEMO và xoá được hết một lần. Khi đang xem demo, phiếu nhập tay cũng đi vào mục demo.</p>
-        <div class="payer-filter-block"><button id="demo-toggle" type="button" class="secondary">Xem dữ liệu demo</button><button id="demo-create" type="button" class="secondary">Tạo bộ phiếu demo 30 ngày</button><button id="demo-delete" type="button" class="text-button">Xoá toàn bộ phiếu demo</button></div>
-        <p id="demo-note" class="muted" role="status"></p>
-        <p id="demo-banner" class="sim-banner" role="status" hidden>ĐANG XEM DỮ LIỆU DEMO: số liệu phiếu chi ở tab Tài chính và Giá vốn là phiếu demo. Bấm "Tắt xem demo" để quay về dữ liệu thật.</p>
-        <div class="payer-filter-block"><button id="sim-toggle" type="button" class="secondary">Chạy mô phỏng (không ghi dữ liệu)</button></div>
-        <p id="sim-banner" class="sim-banner" role="status" hidden>ĐANG MÔ PHỎNG: mọi số liệu trong tab này là dữ liệu giả, chỉ nằm trong trình duyệt. Không có gì được ghi lên Firestore. Tải lại trang hoặc bấm "Tắt mô phỏng" để quay về dữ liệu thật.</p>
-
-        <section class="section-heading compact">
           <div><p class="eyebrow">NHẬP HÀNG THEO THÁNG</p><h2>So với doanh thu tháng</h2></div>
         </section>
-        <p class="muted">Tổng phiếu chi chưa huỷ theo ngày mua, đặt cạnh doanh thu bill thật cùng tháng. Doanh thu từng tháng do máy POS gửi lên; tháng nào chưa có sẽ ghi "chưa có dữ liệu", không tính là 0.</p>
-        <div class="payer-filter-block"><button id="export-monthly-csv" type="button" class="secondary">Tải CSV</button><button id="export-monthly-json" type="button" class="secondary">Tải JSON quy tắc</button><button id="export-menu" type="button" class="secondary">Tải menu</button></div>
+        <p class="muted">Phiếu mua hàng theo ngày mua, đặt cạnh doanh thu cùng tháng. Lương, điện, nước… tách riêng ở dòng Chi phí khác. Tháng chưa có doanh thu ghi "chưa có dữ liệu", không tính là 0.</p>
+        <div class="tool-row">
+          <button id="export-monthly-csv" type="button" class="btn">Tải CSV</button>
+          <button id="export-monthly-json" type="button" class="btn">Tải JSON quy tắc</button>
+          <button id="export-menu" type="button" class="btn">Tải menu</button>
+        </div>
         <p id="monthly-note" class="muted" role="status"></p>
         <section id="monthly-report" class="month-list" aria-live="polite"></section>
 
         <section class="section-heading compact">
           <div><p class="eyebrow">RÀ SOÁT PHÂN LOẠI</p><h2>Phân nhóm vật tư đã đúng chưa</h2></div>
         </section>
-        <p class="muted">So nhóm đã ghi với quy tắc từ khoá và quy tắc nhóm đã học. Dòng khác gợi ý hoặc mơ hồ hiện ở dưới để bạn mở phiếu sửa.</p>
-        <div class="payer-filter-block"><span>Ngày mốc bắt buộc chi tiết</span><input id="cutoff-date" type="date" /><button id="save-cutoff" type="button" class="secondary">Lưu mốc</button><button id="clear-cutoff" type="button" class="text-button">Bỏ mốc</button></div>
-        <p id="cutoff-note" class="muted"></p>
-        <p id="detail-level-note" class="muted"></p>
+        <p class="muted">So nhóm đã ghi với danh mục vật tư và quy tắc đã học. Dòng khác gợi ý hoặc mơ hồ hiện ở dưới để mở phiếu sửa.</p>
+        <div class="panel">
+          <div class="field-row">
+            <label for="cutoff-date">Ngày mốc bắt buộc chi tiết</label>
+            <input id="cutoff-date" type="date" />
+          </div>
+          <div class="tool-row">
+            <button id="save-cutoff" type="button" class="btn">Lưu mốc</button>
+            <button id="clear-cutoff" type="button" class="btn ghost">Bỏ mốc</button>
+          </div>
+          <p id="cutoff-note" class="muted"></p>
+          <p id="detail-level-note" class="muted"></p>
+        </div>
         <section id="review-summary" class="summary-grid" aria-label="Tổng kết rà soát phân loại"></section>
         <section id="review-list" class="review-list" aria-live="polite"></section>
 
@@ -201,6 +290,21 @@
           <button data-kind="MOVEMENT" class="filter">Thu / vốn / hoàn ứng</button>
         </div>
         <section id="transactions" class="transaction-list"></section>
+
+        <p id="demo-banner" class="sim-banner" role="status" hidden>ĐANG XEM DỮ LIỆU DEMO: số liệu phiếu chi ở tab Tài chính và Giá vốn là phiếu demo. Bấm "Tắt xem demo" để quay về dữ liệu thật.</p>
+        <p id="sim-banner" class="sim-banner" role="status" hidden>ĐANG MÔ PHỎNG: mọi số liệu trong tab này là dữ liệu giả, chỉ nằm trong trình duyệt. Không có gì được ghi lên Firestore. Tải lại trang hoặc bấm "Tắt mô phỏng" để quay về dữ liệu thật.</p>
+        <details class="tools-panel">
+          <summary>Công cụ thử: phiếu demo · mô phỏng</summary>
+          <p class="muted">Phiếu demo 30 ngày sinh từ menu, công thức và lượng bán; nằm ở mục riêng, máy POS không đọc, xoá được hết một lần. Khi đang xem demo, phiếu nhập tay cũng vào mục demo.</p>
+          <div class="tool-row">
+            <button id="demo-toggle" type="button" class="btn">Xem dữ liệu demo</button>
+            <button id="demo-create" type="button" class="btn">Tạo bộ phiếu demo 30 ngày</button>
+            <button id="demo-delete" type="button" class="btn danger">Xoá toàn bộ phiếu demo</button>
+          </div>
+          <p id="demo-note" class="muted" role="status"></p>
+          <p class="muted">Mô phỏng 6 tháng chỉ chạy trong trình duyệt, không ghi gì.</p>
+          <div class="tool-row"><button id="sim-toggle" type="button" class="btn">Chạy mô phỏng (không ghi dữ liệu)</button></div>
+        </details>
         </div>
       </section>
     </main>
@@ -226,6 +330,17 @@
       </article>
     </dialog>
 
+    <dialog id="reimb-dialog">
+      <article>
+        <div class="dialog-header"><div><p class="eyebrow">HOÀN TIỀN</p><h2 id="reimb-title"></h2></div><button id="close-reimb" type="button" class="text-button">Đóng</button></div>
+        <div id="reimb-receipts" class="reimb-pick"></div>
+        <p class="entry-total">Tổng hoàn: <strong id="reimb-total">0đ</strong></p>
+        <div id="reimb-qr" class="reimb-qr"></div>
+        <p id="reimb-error" class="error" role="alert"></p>
+        <div class="tool-row"><button id="reimb-paid-bank" type="button" class="btn">Đã chuyển khoản</button><button id="reimb-paid-cash" type="button" class="btn">Đã đưa tiền mặt</button></div>
+      </article>
+    </dialog>
+
     <dialog id="bill-detail">
       <article>
         <div class="dialog-header"><div><p class="eyebrow">CHI TIẾT BILL</p><h2 id="bill-detail-title"></h2></div><button id="close-bill-detail" class="text-button">Đóng</button></div>
@@ -240,6 +355,7 @@
         <p class="muted">Mỗi khối là một hóa đơn: chỉ cần ngày, nhóm và số tiền. Phiếu tổng được cộng vào chi phí và báo cáo theo nhóm, nhưng không vào thống kê giá hay khối lượng theo vật tư.</p>
         <form id="summary-form" class="entry-form">
           <datalist id="summary-groups"></datalist>
+          <label>Nguồn tiền (cho tất cả hoá đơn bên dưới)<select id="summary-fund"><option value="PERSONAL">Tiền cá nhân · cần hoàn</option><option value="SHOP_CASH">Tiền mặt quỹ quán</option><option value="SHOP_BANK">CK từ tài khoản quán</option></select></label>
           <section id="summary-blocks" class="summary-blocks"></section>
           <button id="add-summary-block" type="button" class="secondary">+ Thêm hóa đơn</button>
           <button id="summary-to-detail" type="button" class="text-button" hidden>Nhập chi tiết thay thế phiếu này</button>
@@ -255,6 +371,8 @@
         <div class="dialog-header"><div><p class="eyebrow">CHI PHÍ MUA HÀNG</p><h2 id="expense-title">Phiếu nhiều vật tư</h2></div><button id="close-expense" class="text-button">Đóng</button></div>
         <form id="expense-form" class="entry-form">
           <label>Ngày mua<input id="expense-date" type="datetime-local" required /></label>
+          <div class="two-col"><label>Người mua (ứng tiền)<input id="expense-payer" list="payee-names" maxlength="60" required /></label>
+          <label>Nguồn tiền<select id="expense-fund" required><option value="">— chọn nguồn tiền —</option><option value="PERSONAL">Tiền cá nhân · cần hoàn</option><option value="SHOP_CASH">Tiền mặt quỹ quán</option><option value="SHOP_BANK">CK từ tài khoản quán</option></select></label></div>
           <label>Ghi chú<input id="expense-note" type="text" maxlength="240" /></label>
           <section id="expense-lines" class="expense-lines"></section>
           <button id="add-expense-line" type="button" class="secondary">+ Thêm vật tư</button>
@@ -358,6 +476,6 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261016-3"></script>
+    <script type="module" src="app.js?v=20261016-7"></script>
   </body>
 </html>

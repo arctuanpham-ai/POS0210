@@ -19,29 +19,29 @@ import {
   setDoc as rawSetDoc,
   writeBatch as rawWriteBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261016-24";
-import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261016-24";
-import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261016-24";
-import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261016-24";
-import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261016-24";
-import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261016-24";
-import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261016-24";
-import { buildSimulation } from "./sim-data.js?v=20261016-24";
-import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261016-24";
-import { menuCsv } from "./menu-export.js?v=20261016-24";
-import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-24";
-import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-24";
-import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261016-24";
-import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261016-24";
-import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261016-24";
-import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261016-24";
-import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261016-24";
-import { otherCostRows } from "./other-costs.js?v=20261016-24";
-import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-24";
-import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261016-24";
-import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261016-24";
-import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261016-24";
-import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261016-24";
+import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261016-25";
+import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261016-25";
+import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261016-25";
+import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261016-25";
+import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261016-25";
+import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261016-25";
+import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261016-25";
+import { buildSimulation } from "./sim-data.js?v=20261016-25";
+import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261016-25";
+import { menuCsv } from "./menu-export.js?v=20261016-25";
+import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-25";
+import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-25";
+import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261016-25";
+import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261016-25";
+import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261016-25";
+import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261016-25";
+import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261016-25";
+import { otherCostRows } from "./other-costs.js?v=20261016-25";
+import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-25";
+import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261016-25";
+import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261016-25";
+import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261016-25";
+import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261016-25";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",
@@ -2162,6 +2162,7 @@ function renderMine() {
   const host = $("#reimb-mine");
   const me = myId();
   const shopMine = reimbReceipts().filter((r) => isMine(r, me) && reimbursementStatus(r) === "NONE" && ["PENDING", "REJECTED"].includes(reviewStatus(r)));
+  const shopDone = reimbReceipts().filter((r) => isMine(r, me) && reimbursementStatus(r) === "NONE" && reviewStatus(r) === "APPROVED").sort((x, y) => Number(y.purchaseDate || 0) - Number(x.purchaseDate || 0));
   const mine = reimbReceipts().filter((r) => isMine(r, me) && reimbursementStatus(r) !== "NONE").sort((a, b) => Number(b.purchaseDate || 0) - Number(a.purchaseDate || 0));
   const myBatches = state.reimbBatches.filter((b) => isMine(b, me));
   const paid = myBatches.filter((b) => b.status === "PAID");
@@ -2173,6 +2174,7 @@ function renderMine() {
     block("REJECTED", "Bị trả lại · sửa rồi lưu để gửi lại"), block("PENDING", STATUS_LABELS.PENDING), block("APPROVED", STATUS_LABELS.APPROVED),
     ...[["REJECTED", "Quỹ quán · bị trả lại, sửa rồi lưu để gửi lại"], ["PENDING", "Quỹ quán · chờ duyệt (chưa tính chi phí)"]].map(([st, title]) => { const list = shopMine.filter((r) => reviewStatus(r) === st); return list.length ? `<p class="reimb-sub">${title} · ${list.length} phiếu · ${money(list.reduce((t, r) => t + Number(r.total || 0), 0))}</p>${list.map((r) => `${receiptLine(r, null, `<button type="button" class="text-button" data-cancel-mine="${escapeHtml(r.id)}">Huỷ phiếu</button>`)}${r.reviewReason ? `<small class="warn-text">Lý do: ${escapeHtml(r.reviewReason)}</small>` : ""}`).join("")}` : ""; }),
     block("PAID", "Đã hoàn"), block("CONFIRMED", "Đã nhận tiền (gần đây)"),
+    shopDone.length ? `<p class="reimb-sub">Quỹ quán · đã duyệt (gần đây) · ${shopDone.length} phiếu · ${money(shopDone.reduce((t, r) => t + Number(r.total || 0), 0))}</p>${shopDone.slice(0, 10).map((r) => receiptLine(r, null, "")).join("")}` : "",
   ].join("");
   host.innerHTML = html ? `<article class="reimb-card">${html}</article>` : `<p class="muted">Chưa có phiếu nào ${isBuyer() ? "bạn" : `${escapeHtml(myName())}`} ứng tiền. Bấm <b>+ Phiếu chi</b> để nhập.</p>`;
 }

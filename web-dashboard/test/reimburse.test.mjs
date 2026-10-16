@@ -163,3 +163,10 @@ test("chủ quán cũng là người mua: phiếu của mình để thủ quỹ 
   const tq = myAlerts({ myId: "lan", role: "THU_QUY", me: { bank: "MB", account: "2" }, receipts: [r], members: ms });
   assert.deepEqual(tq.items.map((x) => x.key), ["approve"]);
 });
+
+import { bankDeeplink } from "../reimburse.js";
+test("deeplink mở app ngân hàng người chuyển, điền sẵn người nhận / số tiền / nội dung", () => {
+  const url = bankDeeplink({ fromBank: "MB", toBank: "VietinBank", account: "0936 539 689", holder: "Phạm Anh Tuấn", amount: 4010000, info: "HU1610 TUAN 1 PHIEU" });
+  assert.equal(url, "https://dl.vietqr.io/pay?app=mb&ba=0936539689%40icb&am=4010000&tn=HU1610+TUAN+1+PHIEU&bn=PHAM+ANH+TUAN");
+  assert.equal(bankDeeplink({ fromBank: "Cake", toBank: "MB", account: "1", amount: 1, info: "x" }), null);
+});

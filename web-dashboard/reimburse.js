@@ -205,3 +205,20 @@ export const myAlerts = ({ myId, role, me = null, receipts = [], batches = [], m
   if (late.length) out.push({ key: "late", level: "info", count: 0, text: `${late.length} khoản đã hoàn quá 1 ngày người nhận chưa xác nhận: ${[...new Set(late.map((b) => b.payer))].join(", ")}.` });
   return { items: out, badge: out.reduce((s, x) => s + x.count, 0) };
 };
+
+// ---------- Mở thẳng app ngân hàng của người chuyển (deeplink VietQR) ----------
+// Mã app theo dl.vietqr.io; không phải app nào cũng tự điền số tiền / nội dung, nên luôn kèm ảnh QR để quét dự phòng.
+export const BANK_APP_IDS = {
+  VIETINBANK: "icb", ICB: "icb", VIETCOMBANK: "vcb", VCB: "vcb", BIDV: "bidv", AGRIBANK: "vba", MB: "mb", MBBANK: "mb",
+  TECHCOMBANK: "tcb", TCB: "tcb", ACB: "acb", VPBANK: "vpb", TPBANK: "tpb", OCB: "ocb", VIB: "vib", SHB: "shb", MSB: "msb", HDBANK: "hdb", SACOMBANK: "stb", LPBANK: "lpb", SEABANK: "seab",
+};
+export const bankAppId = (bank) => BANK_APP_IDS[asciiUpper(bank).replace(/ /g, "")] || null;
+/** Link mở app ngân hàng `fromBank` (của người chuyển) với sẵn người nhận, số tiền, nội dung. null nếu chưa hỗ trợ. */
+export const bankDeeplink = ({ fromBank, toBank, account, holder, amount, info }) => {
+  const app = bankAppId(fromBank);
+  const to = bankAppId(toBank);
+  const acc = asciiUpper(account).replace(/ /g, "");
+  if (!app || !to || !acc || !(Number(amount) > 0)) return null;
+  const q = new URLSearchParams({ app, ba: `${acc}@${to}`, am: String(Math.round(Number(amount))), tn: asciiUpper(info).slice(0, 50), bn: asciiUpper(holder).slice(0, 50) });
+  return `https://dl.vietqr.io/pay?${q.toString()}`;
+};

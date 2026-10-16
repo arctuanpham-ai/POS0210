@@ -33,6 +33,7 @@ import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchM
 import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-2";
 import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261016-4";
 import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261016-8";
+import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261016-10";
 import { otherCostRows } from "./other-costs.js?v=20261016-2";
 import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-2";
 import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261014-9";
@@ -61,7 +62,7 @@ const state = {
   purchaseCategories: [], profitPartners: [], assetCategories: [], suppliers: [],
   unsubs: [], paymentFlowDoc: null, refunds: [], frozenRefundDocs: [], flowError: "", dailyDocs: {}, dailyError: "", salesLoaded: false, salesDays: 7, itemMode: "combined", period: "today", customFrom: null, customTo: null,
   transactionKind: "ALL", payerFilter: "ALL", user: null,
-  expenseRules: [], rulesError: "", simulation: null, demo: null, reimbBatches: [], payees: [], role: null, me: null, members: [], openReceipts: [], reimbLoaded: false, reimbPerson: "", otherPurchases: [], stockCounts: [], countsLoaded: false, menuItems: [], menuCats: [], recipes: {}, recipesLoaded: false, recipeError: "", monthlyDocs: {}, monthlyError: "", reportFrom: 0, receiptsNote: "", detailCutoff: null, receiptsFrom: 0, summaryBlocks: [], historyDay: "today", historyDocs: {}, historyTables: null, historyError: "", historyLoading: false, billDetailCache: {},
+  expenseRules: [], rulesError: "", simulation: null, demo: null, reimbBatches: [], payees: [], role: null, me: null, members: [], closedMonths: [], closedLoaded: false, openReceipts: [], reimbLoaded: false, reimbPerson: "", otherPurchases: [], stockCounts: [], countsLoaded: false, menuItems: [], menuCats: [], recipes: {}, recipesLoaded: false, recipeError: "", monthlyDocs: {}, monthlyError: "", reportFrom: 0, receiptsNote: "", detailCutoff: null, receiptsFrom: 0, summaryBlocks: [], historyDay: "today", historyDocs: {}, historyTables: null, historyError: "", historyLoading: false, billDetailCache: {},
 };
 let expenseDraft = null;
 let editingReceipt = null;
@@ -718,7 +719,10 @@ async function saveExpenseReceipt(event) {
   event.preventDefault(); applyExpenseInputs(); const error = $("#expense-error"); error.textContent = "";
   const check = validateReceipt(expenseDraft); if (!check.ok) { error.textContent = check.error; return; }
   const dateProblem = purchaseDateProblem(expenseDraft.purchaseDate); if (dateProblem) { error.textContent = dateProblem; return; }
-  if (!confirmPastMonth([expenseDraft.purchaseDate])) return;
+  const sameDate = editingReceipt && Number(editingReceipt.purchaseDate) === Number(expenseDraft.purchaseDate);
+  const shift = sameDate ? { ts: Number(expenseDraft.purchaseDate), shifted: false } : bookingDate(expenseDraft.purchaseDate, state.closedMonths);
+  if (editingReceipt) { const p = closedMonthEditProblem(editingReceipt, { ...editingReceipt, total: check.total, purchaseDate: shift.ts }, state.closedMonths); if (p) { error.textContent = p; return; } }
+  if (!confirmBooking([shift])) return;
   if (!expenseDraft.enteredByName) { error.textContent = "Ghi tên người mua (người ứng tiền)."; return; }
   if (!expenseDraft.fundSource) { error.textContent = "Chọn nguồn tiền: tiền cá nhân (cần hoàn) hay tiền quán."; return; }
   const missingGroup = expenseDraft.items.findIndex((item) => !groupCodeOrNull(item.expenseGroup));
@@ -734,7 +738,9 @@ async function saveExpenseReceipt(event) {
   const payload0 = editingReceipt
     ? { ...buildEditedReceipt(editingReceipt, expenseDraft, { now, uid: state.user.uid }), enteredByName: expenseDraft.enteredByName, fundSource: expenseDraft.fundSource, ...(upgradeFrom ? { detailLevel: DETAIL_ITEMIZED } : {}) }
     : { ...expenseDraft, total: check.total, status: "ACTIVE", updatedAt: now, updatedByUid: state.user.uid, source: "WEB_MANAGER", items: expenseDraft.items.map((item) => ({ ...item, materialGroup: item.expenseGroup, amount: Math.round(item.qty * item.unitPrice) })) };
-  const { payerChosen: _pc, ...payload1 } = { ...payload0, payerId: payerIdFor(expenseDraft.enteredByName, editingReceipt) };
+  const { payerChosen: _pc, ...payload1 } = { ...payload0, payerId: payerIdFor(expenseDraft.enteredByName, editingReceipt),
+    // Tháng đã chốt chia cổ đông: ghi sổ vào tháng chưa chốt gần nhất, giữ ngày mua thật và mã phiếu theo ngày thật.
+    ...(shift.shifted ? { purchaseDate: shift.ts, originalPurchaseDate: shift.original, note: withShiftNote(payload0.note, shift), code: payload0.code || receiptCode({ ...payload0, purchaseDate: shift.original }) } : {}) };
   const payload = withReimbursement(payload1, editingReceipt, now);
   try {
     await setDoc(doc(db, ...root, receiptCollection(), expenseDraft.id), withDemoFlags(payload));
@@ -778,6 +784,8 @@ function openReceiptEditor(id) {
 async function cancelReceipt(id) {
   const receipt = state.expenseReceipts.find((item) => item.id === id);
   if (!receipt || !state.user) return;
+  const locked = closedMonthEditProblem(receipt, { ...receipt, status: "CANCELLED" }, state.closedMonths);
+  if (locked) { window.alert(locked); return; }
   const label = `${dateTime(receipt.purchaseDate)} · ${money(receipt.total)}`;
   if (!window.confirm(`Huỷ phiếu chi ${label}? Phiếu sẽ không còn tính vào chi phí. Dữ liệu vẫn được giữ lại.`)) return;
   const payload = buildCancelledReceipt(receipt, { now: Date.now(), uid: state.user.uid });
@@ -801,8 +809,14 @@ function render() {
   renderFinanceMetadata();
   renderTransactions();
 }
+/** Tháng đã chốt chia cổ đông (máy POS v160+ đẩy lên). */
+async function loadClosedMonths() {
+  try { state.closedMonths = rows(await getDocs(collection(db, ...root, "shareholderCloses"))).map((x) => x.monthKey || x.id); state.closedLoaded = true; }
+  catch { state.closedLoaded = false; }
+}
 async function refreshDashboard() {
   if (!state.user || !state.role) return;
+  await loadClosedMonths();
   if (isBuyer()) { await loadReimbursements(); return; }
   if (state.simulation) { $("#sync-status").textContent = "Đang ở chế độ mô phỏng. Tắt mô phỏng để đọc dữ liệu thật."; return; }
   if (state.demo) { $("#sync-status").textContent = "Đang xem dữ liệu DEMO. Tắt xem demo để đọc dữ liệu thật."; return; }
@@ -858,11 +872,17 @@ async function saveEntry(event) {
   event.preventDefault();
   const type = $("#entry-type").value;
   const cfg = TRANSACTION_TYPES[type] || TRANSACTION_TYPES.OPERATING_EXPENSE;
-  const occurredAt = new Date($("#entry-datetime").value).getTime();
-  const note = $("#entry-note").value.trim();
+  let occurredAt = new Date($("#entry-datetime").value).getTime();
+  let note = $("#entry-note").value.trim();
   const error = $("#entry-error");
   error.textContent = "";
   if (!Number.isFinite(occurredAt)) { error.textContent = "Ngày giờ không hợp lệ."; return; }
+  const dateProblem = purchaseDateProblem(occurredAt);
+  if (dateProblem) { error.textContent = dateProblem; return; }
+  // Tháng đã chốt chia cổ đông: ghi vào tháng chưa chốt gần nhất, ghi chú ngày thật.
+  const shift = bookingDate(occurredAt, state.closedMonths);
+  if (!confirmBooking([shift])) return;
+  if (shift.shifted) { occurredAt = shift.ts; note = withShiftNote(note, shift); }
   if (!state.user) { error.textContent = "Phiên đăng nhập đã hết."; return; }
   if (state.demo || state.simulation) { error.textContent = "Đang xem demo / mô phỏng: Giao dịch khác ghi vào dữ liệu thật nên tạm khoá. Tắt demo để nhập."; return; }
 
@@ -1233,12 +1253,17 @@ function purchaseDateProblem(ts) {
   const end = new Date(); end.setHours(23, 59, 59, 999);
   return Number(ts) > end.getTime() ? "Ngày mua ở tương lai: kiểm tra lại ngày tháng năm." : "";
 }
-/** Phiếu thuộc tháng trước: nhắc rằng báo cáo tháng đó (và bản chốt cổ đông nếu đã chốt) sẽ thay đổi. */
-function confirmPastMonth(dates) {
+/** Ngày rơi vào tháng đã chốt chia cổ đông: báo trước sẽ dời sang tháng chưa chốt. Chưa đọc được danh sách tháng chốt thì nhắc chung. */
+function confirmBooking(shifts) {
+  const moved = shifts.filter((x) => x.shifted);
+  if (moved.length) {
+    const pairs = [...new Set(moved.map((x) => `tháng ${monthLabel(x.fromKey)} → ${new Date(x.ts).toLocaleDateString("vi-VN")}`))];
+    return window.confirm(`Ngày mua thuộc tháng đã chốt chia cổ đông nên sẽ tính vào tháng chưa chốt gần nhất (${pairs.join("; ")}). Ngày mua thật được ghi trong ghi chú. Đồng ý?`);
+  }
+  if (state.closedLoaded) return true;
   const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
-  const old = [...new Set(dates.filter((d) => Number(d) < monthStart.getTime()).map((d) => { const x = new Date(Number(d)); return `${x.getMonth() + 1}/${x.getFullYear()}`; }))];
-  if (!old.length) return true;
-  return window.confirm(`Phiếu thuộc tháng ${old.join(", ")} (tháng đã qua). Chi phí và lãi tháng đó sẽ thay đổi. Nếu tháng đó đã CHỐT SỐ chia cổ đông trên app thì app sẽ báo lệch, cần chốt lại. Vẫn lưu?`);
+  const old = [...new Set(shifts.filter((x) => x.ts < monthStart.getTime()).map((x) => monthLabel(new Date(x.ts).getFullYear() + "-" + (new Date(x.ts).getMonth() + 1))))];
+  return !old.length || window.confirm(`Chưa đọc được danh sách tháng đã chốt chia cổ đông. Phiếu thuộc tháng ${old.join(", ")}: nếu tháng đó đã chốt thì báo cáo trên app sẽ báo lệch. Vẫn lưu?`);
 }
 async function saveSummaryBlocks(event) {
   event.preventDefault();
@@ -1256,18 +1281,21 @@ async function saveSummaryBlocks(event) {
     if (detailRequired(purchaseDate, state.detailCutoff)) { error.textContent = `${where}từ ngày ${new Date(state.detailCutoff).toLocaleDateString("vi-VN")} trở đi phải nhập chi tiết vật tư, không dùng phiếu tổng.`; return; }
     const dateProblem = purchaseDateProblem(purchaseDate);
     if (dateProblem) { error.textContent = `${where}${dateProblem}`; return; }
-    prepared.push({ block, purchaseDate, total: check.total });
+    const sameDate = editingSummary && Number(editingSummary.purchaseDate) === Number(purchaseDate);
+    const shift = sameDate ? { ts: purchaseDate, shifted: false } : bookingDate(purchaseDate, state.closedMonths);
+    if (editingSummary) { const p = closedMonthEditProblem(editingSummary, { ...editingSummary, total: check.total, purchaseDate: shift.ts }, state.closedMonths); if (p) { error.textContent = `${where}${p}`; return; } }
+    prepared.push({ block, purchaseDate: shift.ts, total: check.total, shift });
   }
-  if (!confirmPastMonth(prepared.map((p) => p.purchaseDate))) return;
+  if (!confirmBooking(prepared.map((p) => p.shift))) return;
   const now = Date.now();
   const button = $("#summary-submit");
   button.disabled = true;
   const failed = [];
   let saved = 0;
-  for (const { block, purchaseDate, total } of prepared) {
+  for (const { block, purchaseDate, total, shift } of prepared) {
     const items = buildSummaryLines(block.lines, () => uuid());
     const base = editingSummary ? { ...editingSummary } : { id: block.id, createdAt: now, source: "WEB_MANAGER" };
-    const payload = withReimbursement({ ...base, purchaseDate, note: block.place, enteredByUid: state.user.uid, enteredByName: block.payer || myName(), payerId: payerIdFor(block.payer || myName(), editingSummary), fundSource: $("#summary-fund").value,
+    const payload = withReimbursement({ ...base, purchaseDate, note: withShiftNote(block.place, shift), ...(shift.shifted ? { originalPurchaseDate: shift.original, code: base.code || receiptCode({ ...base, enteredByName: block.payer || myName(), purchaseDate: shift.original }) } : {}), enteredByUid: state.user.uid, enteredByName: block.payer || myName(), payerId: payerIdFor(block.payer || myName(), editingSummary), fundSource: $("#summary-fund").value,
       items, total, status: "ACTIVE", detailLevel: "SUMMARY", updatedAt: Math.max(now, Number(editingSummary?.updatedAt || 0) + 1), updatedByUid: state.user.uid }, editingSummary, now);
     try { await setDoc(doc(db, ...root, receiptCollection(), payload.id), withDemoFlags(payload)); replaceLocalReceipt(withDemoFlags(payload)); saved += 1; }
     catch (e) { failed.push({ block, message: e.message || String(e) }); }

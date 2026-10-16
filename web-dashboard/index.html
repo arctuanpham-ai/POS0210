@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20261016-28" />
+    <link rel="stylesheet" href="styles.css?v=20261016-30" />
     <title>0210 · Manager</title>
   </head>
   <body>
@@ -17,7 +17,7 @@
         <p class="eyebrow">0210 · BREAKFAST · COFFEE · DRINKS</p>
         <h1 id="login-title">Manager realtime</h1>
         <p class="muted">Theo dõi quán và nhập phiếu tài chính từ xa.</p>
-        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.16.28 · Chi vận hành gồm cả Thu chi khác</p>
+        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.16.30 · Xuất dữ liệu cho AI, banner món đỉnh</p>
         <p class="muted">Đăng nhập tài khoản quán một lần trên mỗi máy, sau đó mỗi người vào bằng PIN riêng.</p>
         <label>Email tài khoản quán<input id="email" type="email" autocomplete="username" inputmode="email" /></label>
         <label>Mật khẩu<input id="password" type="password" autocomplete="current-password" /></label>
@@ -47,7 +47,7 @@
           <div class="heading-actions"><button id="refresh-dashboard" class="btn">Làm mới</button><button id="request-sync" class="btn" title="Yêu cầu máy POS ở quán đồng bộ ngay">Yêu cầu đồng bộ</button><button id="switch-person" class="btn">Đổi người</button><button id="logout-button" class="btn ghost">Đăng xuất</button></div>
         </header>
 
-        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><section id="my-alerts" class="my-alerts" aria-live="polite" hidden></section><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.16.28 · Chi vận hành gồm cả Thu chi khác</p>
+        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><section id="my-alerts" class="my-alerts" aria-live="polite" hidden></section><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.16.30 · Xuất dữ liệu cho AI, banner món đỉnh</p>
 
         <nav class="tabbar" id="tabbar" aria-label="Các trang">
           <a href="#ban" data-tab="ban">Bàn</a>
@@ -73,6 +73,7 @@
         </div>
 
         <div class="page" data-page="doanhthu" hidden>
+        <section id="top-banner" class="top-banner" aria-live="polite" hidden></section>
         <section class="section-heading compact">
           <div><p class="eyebrow">DOANH THU ĐÃ CHỐT</p><h2>Kết quả theo kỳ</h2></div>
         </section>
@@ -230,6 +231,19 @@
         <section class="section-heading first-section">
           <div><p class="eyebrow">TÀI CHÍNH</p><h2>Tình hình quán</h2></div>
         </section>
+        <details class="panel ai-export" id="ai-export">
+          <summary><strong>🤖 Xuất dữ liệu cho AI phân tích</strong> <span class="muted">· ChatGPT, Claude, Gemini…</span></summary>
+          <p class="muted">Tạo một file chữ gồm <strong>lời nhắc sẵn</strong> (phân tích hiện tại, từ lần chốt sổ, so sánh tháng, món, bill → tư vấn chiến lược và vận hành) cùng toàn bộ số liệu dạng bảng. Gửi file cho AI là AI tự hiểu, không cần giải thích thêm.</p>
+          <div class="filter-row" id="ai-scope"></div>
+          <label class="inline-check"><input type="checkbox" id="ai-bills" checked /> Kèm từng bill (phân tích giờ, thời gian ngồi, tiền mặt / CK). Phạm vi dài đọc nhiều hơn.</label>
+          <div class="row-actions ai-actions">
+            <button type="button" class="btn primary" id="ai-share">Chia sẻ sang app AI</button>
+            <button type="button" class="btn" id="ai-copy">Sao chép</button>
+            <button type="button" class="btn" id="ai-download">Tải file .md</button>
+          </div>
+          <p class="muted ai-open">Mở app AI rồi dán / đính kèm: <a href="https://chatgpt.com/" target="_blank" rel="noopener">ChatGPT</a> · <a href="https://claude.ai/new" target="_blank" rel="noopener">Claude</a> · <a href="https://gemini.google.com/app" target="_blank" rel="noopener">Gemini</a></p>
+          <p class="muted" id="ai-status" role="status"></p>
+        </details>
         <p class="panel muted">Trang này chỉ để <strong>xem, theo dõi và phân tích</strong>. Mọi phiếu chi, phiếu tổng, thu chi khác nhập ở tab <a href="#hoanung"><strong>Phiếu chi</strong></a>.</p>
 
         <details class="panel fund-close" id="payback-panel">
@@ -295,9 +309,9 @@
         <section id="summary" class="summary-grid cumulative-grid" aria-label="Chỉ số tích lũy"></section>
 
         <section class="section-heading compact">
-          <div><p class="eyebrow">NHẬP HÀNG THEO THÁNG</p><h2>So với doanh thu tháng</h2></div>
+          <div><p class="eyebrow">THEO THÁNG</p><h2>Doanh thu, chi phí và phần còn lại</h2></div>
         </section>
-        <p class="muted">Phiếu mua hàng theo ngày mua, đặt cạnh doanh thu cùng tháng. Lương, điện, nước… tách riêng ở dòng Chi phí khác. Tháng chưa có doanh thu ghi "chưa có dữ liệu", không tính là 0.</p>
+        <p class="muted">Mỗi tháng đọc từ trên xuống: doanh thu trừ nhập hàng, trừ chi vận hành khác, trừ đầu tư bổ sung, còn lại là dòng tiền ròng (số dùng để chia cổ đông). Chỉ tính phiếu đã duyệt, tính theo ngày mua. % DT = phần đó chiếm bao nhiêu phần trăm doanh thu. Tháng chưa có doanh thu ghi "chưa có dữ liệu".</p>
         <div class="tool-row">
           <button id="export-monthly-csv" type="button" class="btn">Tải CSV</button>
           <button id="export-monthly-json" type="button" class="btn">Tải JSON quy tắc</button>
@@ -521,7 +535,7 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261016-28"></script>
+    <script type="module" src="app.js?v=20261016-30"></script>
     <script>
       // Trang không chạy được (thường do trình duyệt còn giữ file cũ): báo rõ thay vì để nút đăng nhập "chết".
       setTimeout(function () {

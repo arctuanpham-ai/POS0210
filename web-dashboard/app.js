@@ -19,29 +19,29 @@ import {
   setDoc as rawSetDoc,
   writeBatch as rawWriteBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261016-22";
-import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261016-22";
-import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261016-22";
-import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261016-22";
-import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261016-22";
-import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261016-22";
-import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261016-22";
-import { buildSimulation } from "./sim-data.js?v=20261016-22";
-import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261016-22";
-import { menuCsv } from "./menu-export.js?v=20261016-22";
-import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-22";
-import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-22";
-import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261016-22";
-import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261016-22";
-import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261016-22";
-import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261016-22";
-import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261016-22";
-import { otherCostRows } from "./other-costs.js?v=20261016-22";
-import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-22";
-import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261016-22";
-import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261016-22";
-import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261016-22";
-import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261016-22";
+import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261016-23";
+import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261016-23";
+import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261016-23";
+import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261016-23";
+import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261016-23";
+import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261016-23";
+import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261016-23";
+import { buildSimulation } from "./sim-data.js?v=20261016-23";
+import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261016-23";
+import { menuCsv } from "./menu-export.js?v=20261016-23";
+import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-23";
+import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-23";
+import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261016-23";
+import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261016-23";
+import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261016-23";
+import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261016-23";
+import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261016-23";
+import { otherCostRows } from "./other-costs.js?v=20261016-23";
+import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-23";
+import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261016-23";
+import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261016-23";
+import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261016-23";
+import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261016-23";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",
@@ -655,7 +655,7 @@ function renderTransactions() {
     const meta = [dateTime(r.at), r.person, r.kind === "EXPENSE" ? r.fund : ""].filter(Boolean).join(" · ");
     const rec = r.kind === "EXPENSE" && !r.readonly ? findReceipt(r.id) : null;
     const tag = REVIEW_TAG[r.review] ? ` <span class="bill-tag ${REVIEW_TAG[r.review][1]}">${REVIEW_TAG[r.review][0]}</span>` : "";
-    const actions = rec ? `<div class="row-actions"><button type="button" class="text-button" data-edit-receipt="${escapeHtml(r.id)}">${canEditReceipt(rec) ? "Xem / sửa" : "Xem chi tiết"}</button>${canEditReceipt(rec) ? `<button type="button" class="text-button danger" data-cancel-receipt="${escapeHtml(r.id)}">Huỷ phiếu</button>` : ""}</div>` : "";
+    const actions = rec ? `<div class="row-actions"><button type="button" class="text-button" data-edit-receipt="${escapeHtml(r.id)}">${canEditReceipt(rec) ? "Xem / sửa" : "Xem chi tiết"}</button>${canEditReceipt(rec) && !isPaidOut(rec) ? `<button type="button" class="text-button danger" data-cancel-receipt="${escapeHtml(r.id)}">Huỷ phiếu</button>` : ""}</div>` : "";
     node.innerHTML = `<div><strong>${escapeHtml(r.title)}</strong>${tag}<small>${escapeHtml(meta)}</small><p>${escapeHtml(r.note)}</p>${actions}</div><b${r.review !== "APPROVED" ? ' class="muted"' : ""}>${money(r.amount)}</b>`;
     return node;
   }));
@@ -866,6 +866,7 @@ async function saveExpenseReceipt(event) {
   if (!confirmBooking([shift])) return;
   if (!expenseDraft.enteredByName) { error.textContent = "Ghi tên người mua (người ứng tiền)."; return; }
   if (!expenseDraft.fundSource) { error.textContent = "Chọn nguồn tiền: tiền cá nhân (cần hoàn) hay tiền quán."; return; }
+  if (editingReceipt) { const p = paidEditProblem(editingReceipt, { ...expenseDraft, total: check.total }); if (p) { error.textContent = p; return; } }
   const isMat = (item) => !NON_MATERIAL.has(item.kind);
   const missingGroup = expenseDraft.items.findIndex((item) => isMat(item) && !groupCodeOrNull(item.expenseGroup));
   if (missingGroup >= 0) { error.textContent = `Dòng ${missingGroup + 1}: hãy chọn nhóm vật tư (hoặc đổi Loại chi nếu không phải mua hàng).`; return; }
@@ -880,6 +881,7 @@ async function saveExpenseReceipt(event) {
   });
   // Mỗi loại chi một phiếu. Phiếu đang sửa giữ phần cùng loại với nó; phần khác loại thành phiếu mới.
   const parts = splitByKind(items);
+  if (editingReceipt && isPaidOut(editingReceipt) && parts.length > 1) { error.textContent = "Phiếu đã hoàn tiền: không tách thành nhiều phiếu được, để các dòng cùng một loại chi."; return; }
   const keepKind = editingReceipt ? kindOf(editingReceipt) : parts[0].kind;
   parts.sort((x, y) => (x.kind === keepKind ? -1 : y.kind === keepKind ? 1 : 0));
   const now = Date.now();
@@ -903,8 +905,8 @@ async function saveExpenseReceipt(event) {
     const typed = part.kind === "MATERIAL" ? (() => { const { expenseCategory: _ec, ...rest } = withMeta; return rest; })() : { ...withMeta, expenseCategory: part.kind };
     const reimbursed = withReimbursement(typed, original, now);
     // Phiếu cần người khác duyệt mới tính vào chi phí; phiếu đã hoàn tiền giữ nguyên đã duyệt.
-    const done = ["PAID", "CONFIRMED"].includes(reimbursed.reimbursement?.status);
-    return withDemoFlags({ ...reimbursed, review: done ? "APPROVED" : initialReview(reimbursed.payerId || state.me?.id, people()), reviewReason: "" });
+    // Mọi lần sửa (kể cả phiếu đã hoàn tiền) đều phải được người khác duyệt lại.
+    return withDemoFlags({ ...reimbursed, review: initialReview(reimbursed.payerId || state.me?.id, people()), reviewReason: "", ...(original && isPaidOut(original) ? { editedAfterPaidAt: now } : {}) });
   });
   try {
     const batch = writeBatch(db);
@@ -973,6 +975,7 @@ async function cancelReceipt(id) {
   const receipt = state.expenseReceipts.find((item) => item.id === id);
   if (!receipt || !state.user) return;
   if (!canEditReceipt(receipt)) { window.alert("Chỉ người mua được huỷ phiếu của mình. Sai thì bấm Không duyệt và ghi lý do."); return; }
+  if (isPaidOut(receipt)) { window.alert("Phiếu đã hoàn tiền nên không huỷ được. Sai nội dung thì bấm Sửa (giữ nguyên tổng tiền); sai tiền thì nhập phiếu bổ sung hoặc người mua nộp lại phần thừa vào quỹ."); return; }
   const locked = closedMonthEditProblem(receipt, { ...receipt, status: "CANCELLED" }, state.closedMonths);
   if (locked) { window.alert(locked); return; }
   const label = `${dateTime(receipt.purchaseDate)} · ${money(receipt.total)}`;
@@ -1494,6 +1497,7 @@ async function saveSummaryBlocks(event) {
     if (detailRequired(purchaseDate, state.detailCutoff)) { error.textContent = `${where}từ ngày ${new Date(state.detailCutoff).toLocaleDateString("vi-VN")} trở đi phải nhập chi tiết vật tư, không dùng phiếu tổng.`; return; }
     const dateProblem = purchaseDateProblem(purchaseDate);
     if (dateProblem) { error.textContent = `${where}${dateProblem}`; return; }
+    if (editingSummary) { const p = paidEditProblem(editingSummary, { ...editingSummary, total: check.total, fundSource: $("#summary-fund").value, enteredByName: block.payer || editingSummary.enteredByName }); if (p) { error.textContent = `${where}${p}`; return; } }
     const sameDate = editingSummary && Number(editingSummary.purchaseDate) === Number(purchaseDate);
     const shift = sameDate ? { ts: purchaseDate, shifted: false } : bookingDate(purchaseDate, state.closedMonths);
     if (editingSummary) { const p = closedMonthEditProblem(editingSummary, { ...editingSummary, total: check.total, purchaseDate: shift.ts }, state.closedMonths); if (p) { error.textContent = `${where}${p}`; return; } }
@@ -1510,7 +1514,7 @@ async function saveSummaryBlocks(event) {
     const base = editingSummary ? { ...editingSummary } : { id: block.id, createdAt: now, source: "WEB_MANAGER" };
     const payload = withReimbursement({ ...base, purchaseDate, note: withShiftNote(block.place, shift), ...(shift.shifted ? { originalPurchaseDate: shift.original, code: base.code || receiptCode({ ...base, enteredByName: block.payer || myName(), purchaseDate: shift.original }) } : {}), enteredByUid: state.user.uid, enteredByName: block.payer || myName(), payerId: payerIdFor(block.payer || myName(), editingSummary), fundSource: $("#summary-fund").value,
       items, total, status: "ACTIVE", detailLevel: "SUMMARY", updatedAt: Math.max(now, Number(editingSummary?.updatedAt || 0) + 1), updatedByUid: state.user.uid }, editingSummary, now);
-    payload.review = ["PAID", "CONFIRMED"].includes(payload.reimbursement?.status) ? "APPROVED" : initialReview(payload.payerId || state.me?.id, people());
+    payload.review = initialReview(payload.payerId || state.me?.id, people());
     payload.reviewReason = "";
     try { await setDoc(doc(db, ...root, receiptCollection(), payload.id), withDemoFlags(payload)); replaceLocalReceipt(withDemoFlags(payload)); saved += 1; }
     catch (e) { failed.push({ block, message: e.message || String(e) }); }
@@ -2169,7 +2173,7 @@ function renderAlerts() {
 function receiptLine(r, dup, extra = "", showEdit = true) {
   const items = (r.items || []).slice(0, 3).map((i) => i.materialName).join(", ") + ((r.items || []).length > 3 ? "…" : "");
   const diff = changedAfterPaid(r);
-  return `<div class="reimb-receipt"><div><strong>${escapeHtml(receiptCode(r))}</strong> · ${dateTime(r.purchaseDate)} · <b>${money(r.total)}</b><small>${escapeHtml(items)}${r.note ? ` · ${escapeHtml(r.note)}` : ""}</small>${dup ? `<small class="warn-text">Nghi trùng với ${escapeHtml(dup.join(", "))}: kiểm tra hoá đơn trước khi duyệt</small>` : ""}${diff ? `<small class="warn-text">Phiếu bị sửa sau khi hoàn: chênh ${money(diff)}</small>` : ""}${reimbursementStatus(r) === "REJECTED" && r.reimbursement?.rejectReason ? `<small class="warn-text">Lý do không duyệt: ${escapeHtml(r.reimbursement.rejectReason)}</small>` : ""}</div><div class="row-actions">${extra}${showEdit ? `<button type="button" class="text-button" data-edit-receipt="${escapeHtml(r.id)}">${canEditReceipt(r) ? "Xem / sửa" : "Xem"}</button>` : ""}</div></div>`;
+  return `<div class="reimb-receipt"><div><strong>${escapeHtml(receiptCode(r))}</strong> · ${dateTime(r.purchaseDate)} · <b>${money(r.total)}</b><small>${escapeHtml(items)}${r.note ? ` · ${escapeHtml(r.note)}` : ""}</small>${dup ? `<small class="warn-text">Nghi trùng với ${escapeHtml(dup.join(", "))}: kiểm tra hoá đơn trước khi duyệt</small>` : ""}${diff ? `<small class="warn-text">Phiếu bị sửa sau khi hoàn: chênh ${money(diff)}</small>` : ""}${isPaidOut(r) && reviewStatus(r) === "PENDING" ? '<small class="warn-text">Đã hoàn tiền · vừa sửa nội dung (tổng tiền không đổi) · chờ duyệt lại</small>' : ""}${reimbursementStatus(r) === "REJECTED" && r.reimbursement?.rejectReason ? `<small class="warn-text">Lý do không duyệt: ${escapeHtml(r.reimbursement.rejectReason)}</small>` : ""}</div><div class="row-actions">${extra}${showEdit ? `<button type="button" class="text-button" data-edit-receipt="${escapeHtml(r.id)}">${canEditReceipt(r) ? "Xem / sửa" : "Xem"}</button>` : ""}</div></div>`;
 }
 
 function batchCard(b) {
@@ -2186,8 +2190,8 @@ function renderMine() {
   const myBatches = state.reimbBatches.filter((b) => isMine(b, me));
   const paid = myBatches.filter((b) => b.status === "PAID");
   const by = (st) => mine.filter((r) => reimbursementStatus(r) === st);
-  const editable = (st) => ["PENDING", "APPROVED", "REJECTED", "UNKNOWN"].includes(st);
-  const block = (st, title) => { const list = by(st); return list.length ? `<p class="reimb-sub">${title} · ${list.length} phiếu · ${money(list.reduce((s, r) => s + Number(r.total || 0), 0))}</p>${list.slice(0, st === "CONFIRMED" ? 10 : 100).map((r) => receiptLine(r, null, editable(st) && st !== "APPROVED" ? `<button type="button" class="text-button" data-cancel-mine="${escapeHtml(r.id)}">Huỷ phiếu</button>` : "", editable(st))).join("")}` : ""; };
+  const editable = () => true; // phiếu đã hoàn vẫn sửa được nội dung (giữ nguyên tổng tiền), sửa xong chờ duyệt lại
+  const block = (st, title) => { const list = by(st); return list.length ? `<p class="reimb-sub">${title} · ${list.length} phiếu · ${money(list.reduce((s, r) => s + Number(r.total || 0), 0))}</p>${list.slice(0, st === "CONFIRMED" ? 10 : 100).map((r) => receiptLine(r, null, ["PENDING", "REJECTED", "UNKNOWN"].includes(st) ? `<button type="button" class="text-button" data-cancel-mine="${escapeHtml(r.id)}">Huỷ phiếu</button>` : "", editable(st))).join("")}` : ""; };
   const html = [
     paid.length ? `<p class="reimb-sub">Đã được hoàn · chờ bạn xác nhận</p>${paid.map(batchCard).join("")}` : "",
     block("REJECTED", "Bị trả lại · sửa rồi lưu để gửi lại"), block("PENDING", STATUS_LABELS.PENDING), block("APPROVED", STATUS_LABELS.APPROVED),
@@ -2234,9 +2238,9 @@ function renderReimbursements() {
   const payTotal = payable.reduce((t, q) => t + q.approvedTotal, 0);
   $("#reimb-paylist").innerHTML = payable.length ? `<p class="reimb-sub">Cần hoàn · tổng ${money(payTotal)}</p>${payable.map((q) => `<div class="paylist-row"><span><strong>${escapeHtml(q.payer)}</strong> · ${q.APPROVED.length} phiếu · <b>${money(q.approvedTotal)}</b></span><button type="button" class="btn strong" data-pay="${escapeHtml(q.payer)}">Hoàn · QR</button></div>`).join("")}` : "";
   // Phiếu chi bằng quỹ quán: người nhập (thường là thủ quỹ) không tự duyệt; người còn lại duyệt thì phiếu mới tính vào chi phí.
-  const shopReview = all.filter((r) => reimbursementStatus(r) === "NONE" && reviewStatus(r) === "PENDING").sort((a, b) => Number(a.purchaseDate) - Number(b.purchaseDate));
+  const shopReview = all.filter((r) => (reimbursementStatus(r) === "NONE" || isPaidOut(r)) && reviewStatus(r) === "PENDING").sort((a, b) => Number(a.purchaseDate) - Number(b.purchaseDate));
   const shopDups = duplicateSuspects(all.filter((r) => reviewStatus(r) !== "NONE"));
-  $("#reimb-shopreview").innerHTML = shopReview.length ? `<p class="reimb-sub">Phiếu quỹ quán chờ duyệt · ${shopReview.length} phiếu · ${money(shopReview.reduce((t, r) => t + Number(r.total || 0), 0))}</p>${shopReview.map((r) => receiptLine(r, shopDups.get(r.id), selfBlocked(r) ? '<span class="muted">Phiếu của bạn: chờ người kia duyệt</span>' : `<span class="muted">${escapeHtml(r.enteredByName || "")}</span><button type="button" class="btn" data-review-ok="${escapeHtml(r.id)}">Duyệt</button><button type="button" class="btn ghost" data-review-no="${escapeHtml(r.id)}">Không duyệt</button>`)).join("")}` : '<p class="muted">Không có phiếu quỹ quán nào chờ duyệt.</p>';
+  $("#reimb-shopreview").innerHTML = shopReview.length ? `<p class="reimb-sub">Phiếu quỹ quán / phiếu sửa sau khi hoàn · chờ duyệt · ${shopReview.length} phiếu · ${money(shopReview.reduce((t, r) => t + Number(r.total || 0), 0))}</p>${shopReview.map((r) => receiptLine(r, shopDups.get(r.id), selfBlocked(r) ? '<span class="muted">Phiếu của bạn: chờ người kia duyệt</span>' : `<span class="muted">${escapeHtml(r.enteredByName || "")}</span><button type="button" class="btn" data-review-ok="${escapeHtml(r.id)}">Duyệt</button><button type="button" class="btn ghost" data-review-no="${escapeHtml(r.id)}">Không duyệt</button>`)).join("")}` : '<p class="muted">Không có phiếu quỹ quán nào chờ duyệt.</p>';
   $("#reimb-paid").innerHTML = waiting.map(batchCard).join("") || '<p class="muted">Không có khoản nào chờ xác nhận.</p>';
   $("#reimb-history").innerHTML = batches.filter((b) => b.status === "CONFIRMED").slice(0, 20).map((b) => `<div class="reimb-receipt"><div><strong>${escapeHtml(b.code)}</strong> · ${escapeHtml(b.payer)} · <b>${money(b.amount)}</b><small>Hoàn ${dateTime(b.paidAt)} · xác nhận ${dateTime(b.confirmedAt)}${b.confirmedOnBehalf ? ` (${escapeHtml(b.confirmedBy || "thủ quỹ")} xác nhận hộ)` : ""} · ${b.receiptIds.length} phiếu</small></div></div>`).join("") || '<p class="muted">Chưa có.</p>';
 }

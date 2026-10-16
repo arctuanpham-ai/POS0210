@@ -177,3 +177,14 @@ test("người nhận báo chưa nhận được tiền: thủ quỹ có cảnh 
   assert.deepEqual(a.items.map((x) => x.key), ["issue"]);
   assert.equal(a.badge, 1);
 });
+
+import { paidEditProblem } from "../reimburse.js";
+test("phiếu đã hoàn: sửa được nếu giữ nguyên tổng tiền, nguồn tiền, người mua", () => {
+  const paid = { id: "x7", purchaseDate: 0, enteredByName: "Trang", fundSource: "PERSONAL", total: 300000, reimbursement: { status: "PAID", paidAmount: 300000 } };
+  assert.equal(paidEditProblem(paid, { ...paid, items: [{ materialName: "Cà phê Robusta", qty: 2, unitPrice: 150000 }] }), "");
+  assert.match(paidEditProblem(paid, { ...paid, total: 350000 }), /PHIẾU MỚI phần chênh 50\.000đ/);
+  assert.match(paidEditProblem(paid, { ...paid, total: 280000 }), /nộp lại quỹ/);
+  assert.match(paidEditProblem(paid, { ...paid, fundSource: "SHOP_CASH" }), /nguồn tiền/);
+  assert.match(paidEditProblem(paid, { ...paid, enteredByName: "Tuấn" }), /người mua/);
+  assert.equal(paidEditProblem({ ...paid, reimbursement: { status: "APPROVED" } }, { ...paid, total: 1 }), "", "chưa hoàn thì sửa tự do");
+});

@@ -198,8 +198,8 @@ export const myAlerts = ({ myId, role, me = null, receipts = [], batches = [], m
   const approved = review.filter((r) => reimbursementStatus(r) === "APPROVED");
   if (approved.length) out.push({ key: "pay", level: "warn", count: approved.length, text: `${approved.length} phiếu đã duyệt chờ hoàn tiền (${vnd(sum(approved, "total"))}).` });
   const unknown = review.filter((r) => reimbursementStatus(r) === "UNKNOWN");
-  const shopPending = review.filter((r) => reimbursementStatus(r) === "NONE" && reviewStatus(r) === "PENDING");
-  if (shopPending.length) out.push({ key: "shopReview", level: "warn", count: shopPending.length, text: `${shopPending.length} phiếu quỹ quán chờ bạn duyệt (${vnd(sum(shopPending, "total"))}): chưa duyệt thì chưa tính vào chi phí.` });
+  const shopPending = review.filter((r) => (reimbursementStatus(r) === "NONE" || isPaidOut(r)) && reviewStatus(r) === "PENDING");
+  if (shopPending.length) out.push({ key: "shopReview", level: "warn", count: shopPending.length, text: `${shopPending.length} phiếu quỹ quán / phiếu sửa sau khi hoàn chờ bạn duyệt (${vnd(sum(shopPending, "total"))}): chưa duyệt thì chưa tính vào chi phí.` });
   if (unknown.length) out.push({ key: "unknown", level: "warn", count: unknown.length, text: `${unknown.length} phiếu chưa rõ nguồn tiền (tiền cá nhân hay tiền quán).` });
   const noBank = [...new Set(approved.filter((r) => !bankOf(r, members, payees)).map((r) => r.enteredByName || "Chưa rõ"))];
   if (noBank.length) out.push({ key: "nobank", level: "info", count: 0, text: `Chưa có tài khoản ngân hàng của: ${noBank.join(", ")} (chưa tạo được QR).` });
@@ -247,3 +247,22 @@ export const countsAsCost = (r) => reviewStatus(r) === "APPROVED";
  * (không thì không ai duyệt được phiếu).
  */
 export const initialReview = (entrantId, members = []) => (reviewerOtherThan(entrantId, members) ? "PENDING" : "APPROVED");
+
+// ---------- Sửa phiếu đã hoàn tiền ----------
+export const isPaidOut = (r) => ["PAID", "CONFIRMED"].includes(r?.reimbursement?.status);
+/**
+ * Phiếu đã hoàn tiền vẫn sửa được (tên vật tư, nhóm, số lượng / đơn giá, ghi chú…) nhưng KHÔNG đổi tổng tiền,
+ * nguồn tiền hay người mua, vì tiền đã chuyển. Sửa xong phải được duyệt lại.
+ * Trả về "" nếu hợp lệ, ngược lại là hướng dẫn xử lý phần chênh.
+ */
+export const paidEditProblem = (original, next) => {
+  if (!isPaidOut(original)) return "";
+  const paid = Number(original.reimbursement?.paidAmount ?? original.total ?? 0);
+  const diff = Number(next.total || 0) - paid;
+  const vnd = (n) => `${Math.abs(Number(n)).toLocaleString("vi-VN")}đ`;
+  if (next.fundSource && next.fundSource !== original.fundSource && !(original.fundSource === "SHOP_BANK" && next.fundSource === "SHOP_CASH")) return "Phiếu đã hoàn tiền: không đổi nguồn tiền được.";
+  if (asciiUpper(next.enteredByName) !== asciiUpper(original.enteredByName)) return "Phiếu đã hoàn tiền: không đổi người mua được.";
+  if (diff > 0) return `Phiếu đã hoàn ${vnd(paid)}: không tăng tổng tiền được. Mua thêm thì nhập PHIẾU MỚI phần chênh ${vnd(diff)} (ghi chú "bổ sung ${receiptCode(original)}"), phiếu đó duyệt và hoàn như thường.`;
+  if (diff < 0) return `Phiếu đã hoàn ${vnd(paid)}: không giảm tổng tiền được. Phần thừa ${vnd(diff)} người mua nộp lại quỹ, thủ quỹ ghi ở "Thu chi khác → Thu / điều chỉnh khác" (ghi chú "nộp lại ${receiptCode(original)}").`;
+  return "";
+};

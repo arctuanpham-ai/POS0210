@@ -150,3 +150,16 @@ test("cảnh báo thủ quỹ: chờ duyệt, chờ hoàn, chưa rõ nguồn, th
   assert.deepEqual(a.items.map((x) => x.key), ["approve", "pay", "unknown", "nobank", "late"]);
   assert.equal(a.badge, 3);
 });
+
+import { selfReviewBlocked } from "../reimburse.js";
+test("chủ quán cũng là người mua: phiếu của mình để thủ quỹ duyệt, không tự duyệt", () => {
+  const ms = [{ id: "tuan", role: "CHU_QUAN", bank: "MB", account: "1" }, { id: "lan", role: "THU_QUY" }];
+  const r = { id: "x", payerId: "tuan", fundSource: "PERSONAL", total: 90 };
+  assert.ok(selfReviewBlocked(r, "tuan", ms));
+  assert.ok(!selfReviewBlocked(r, "lan", ms));
+  assert.ok(!selfReviewBlocked(r, "tuan", [ms[0]]), "chưa có thủ quỹ thì chủ quán vẫn tự duyệt được");
+  const owner = myAlerts({ myId: "tuan", role: "CHU_QUAN", me: ms[0], receipts: [r], members: ms });
+  assert.deepEqual(owner.items.map((x) => x.key), ["waiting"]);
+  const tq = myAlerts({ myId: "lan", role: "THU_QUY", me: { bank: "MB", account: "2" }, receipts: [r], members: ms });
+  assert.deepEqual(tq.items.map((x) => x.key), ["approve"]);
+});

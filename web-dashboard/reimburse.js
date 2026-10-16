@@ -201,7 +201,9 @@ export const myAlerts = ({ myId, role, me = null, receipts = [], batches = [], m
   if (unknown.length) out.push({ key: "unknown", level: "warn", count: unknown.length, text: `${unknown.length} phiếu chưa rõ nguồn tiền (tiền cá nhân hay tiền quán).` });
   const noBank = [...new Set(approved.filter((r) => !bankOf(r, members, payees)).map((r) => r.enteredByName || "Chưa rõ"))];
   if (noBank.length) out.push({ key: "nobank", level: "info", count: 0, text: `Chưa có tài khoản ngân hàng của: ${noBank.join(", ")} (chưa tạo được QR).` });
-  const late = batches.filter((b) => needsReminder(b, now) && !isMine(b, myId));
+  const issues = batches.filter((b) => b.status === "PAID" && b.issue && !isMine(b, myId));
+  if (issues.length) out.push({ key: "issue", level: "warn", count: issues.length, text: `${issues.map((b) => `${b.payer} (${b.code})`).join(", ")} báo CHƯA NHẬN ĐƯỢC tiền hoàn: kiểm tra lại giao dịch.` });
+  const late = batches.filter((b) => needsReminder(b, now) && !isMine(b, myId) && !b.issue);
   if (late.length) out.push({ key: "late", level: "info", count: 0, text: `${late.length} khoản đã hoàn quá 1 ngày người nhận chưa xác nhận: ${[...new Set(late.map((b) => b.payer))].join(", ")}.` });
   return { items: out, badge: out.reduce((s, x) => s + x.count, 0) };
 };

@@ -2112,9 +2112,11 @@ function receiptLine(r, dup, extra = "", showEdit = true) {
   const diff = changedAfterPaid(r);
   return `<div class="reimb-receipt"><div><strong>${escapeHtml(receiptCode(r))}</strong> · ${dateTime(r.purchaseDate)} · <b>${money(r.total)}</b><small>${escapeHtml(items)}${r.note ? ` · ${escapeHtml(r.note)}` : ""}</small>${dup ? `<small class="warn-text">Nghi trùng với ${escapeHtml(dup.join(", "))}: kiểm tra hoá đơn trước khi duyệt</small>` : ""}${diff ? `<small class="warn-text">Phiếu bị sửa sau khi hoàn: chênh ${money(diff)}</small>` : ""}${reimbursementStatus(r) === "REJECTED" && r.reimbursement?.rejectReason ? `<small class="warn-text">Lý do không duyệt: ${escapeHtml(r.reimbursement.rejectReason)}</small>` : ""}</div><div class="row-actions">${extra}${showEdit ? `<button type="button" class="text-button" data-edit-receipt="${escapeHtml(r.id)}">${canEditReceipt(r) ? "Xem / sửa" : "Xem"}</button>` : ""}</div></div>`;
 }
-const confirmLabel = (b) => (isMine(b, myId()) ? "Tôi đã nhận tiền" : `Xác nhận hộ ${b.payer}`);
+
 function batchCard(b) {
-  return `<article class="reimb-card"><header><strong>${escapeHtml(b.payer)} · ${money(b.amount)}</strong><span>${escapeHtml(b.code)} · ${b.method === "CASH" ? "tiền mặt" : "CK"} · ${dateTime(b.paidAt)}</span></header><p class="muted">${b.receiptCodes?.length || b.receiptIds.length} phiếu: ${escapeHtml((b.receiptCodes || []).join(", "))} · nội dung CK "${escapeHtml(b.transferNote || "")}" · người hoàn ${escapeHtml(b.treasurer || "")}</p>${needsReminder(b) ? '<p class="warn-text">Đã quá 1 ngày chưa xác nhận.</p>' : ""}${isMine(b, myId()) || canTreasure(state.role) ? `<div class="tool-row"><button type="button" class="btn strong" data-confirm="${escapeHtml(b.id)}">${escapeHtml(confirmLabel(b))}</button></div>` : ""}</article>`;
+  return `<article class="reimb-card"><header><strong>${escapeHtml(b.payer)} · ${money(b.amount)}</strong><span>${escapeHtml(b.code)} · ${b.method === "CASH" ? "tiền mặt" : "CK"} · ${dateTime(b.paidAt)}</span></header><p class="muted">${b.receiptCodes?.length || b.receiptIds.length} phiếu: ${escapeHtml((b.receiptCodes || []).join(", "))} · nội dung CK "${escapeHtml(b.transferNote || "")}" · người hoàn ${escapeHtml(b.treasurer || "")}</p>${b.issue ? `<p class="warn-text">${escapeHtml(b.payer)} báo CHƯA NHẬN ĐƯỢC tiền (${dateTime(b.issue.at)})${b.issue.note ? `: ${escapeHtml(b.issue.note)}` : ""}. Kiểm tra lại giao dịch chuyển khoản.</p>` : ""}${needsReminder(b) ? '<p class="warn-text">Đã quá 1 ngày chưa xác nhận.</p>' : ""}${isMine(b, myId())
+    ? `<div class="tool-row"><button type="button" class="btn strong" data-confirm="${escapeHtml(b.id)}">Tôi đã nhận tiền</button><button type="button" class="btn ghost" data-not-received="${escapeHtml(b.id)}">Chưa nhận được</button></div>`
+    : `<p class="muted">Chỉ ${escapeHtml(b.payer)} tự xác nhận trên tài khoản của mình sau khi kiểm tra đã nhận tiền.</p>`}</article>`;
 }
 /** Phần "của tôi": ai cũng có, kể cả chủ quán / thủ quỹ khi tự ứng tiền. */
 function renderMine() {
@@ -2282,15 +2284,34 @@ async function payBatch(method) {
     flashNote(`Đã ghi hoàn ${money(total)} cho ${batch.payer} (${batch.code}). ${batch.payer} sẽ thấy cảnh báo để xác nhận khi mở web.`);
   } catch (error) { err.textContent = error.code === "permission-denied" ? permissionHint : `Chưa hoàn được: ${error.message}`; }
 }
+/** Người nhận báo chưa nhận được tiền: thủ quỹ thấy cảnh báo để kiểm tra lại giao dịch. */
+async function reportNotReceived(id) {
+  const b = state.reimbBatches.find((x) => x.id === id);
+  if (!b || !isMine(b, myId())) return;
+  const note = window.prompt(`Báo thủ quỹ: chưa nhận được ${money(b.amount)} (${b.code}). Ghi thêm nếu cần (VD: đã kiểm tra lúc 14h, chưa thấy tiền về):`, "");
+  if (note === null) return;
+  try {
+    await runTransaction(db, async (tx) => {
+      const ref = doc(db, ...root, reimbCollection(), id);
+      const snap = await tx.get(ref);
+      if (!snap.exists() || snap.data().status !== "PAID") throw new Error("Đợt này không còn ở trạng thái chờ xác nhận");
+      tx.set(ref, { ...snap.data(), issue: { at: Date.now(), note: note.trim().slice(0, 200), by: myName() } });
+    });
+    state.reimbLoaded = false;
+    await loadReimbursements();
+    flashNote(`Đã báo thủ quỹ: chưa nhận được ${b.code}.`);
+  } catch (error) { $("#reimb-note").textContent = `Chưa báo được: ${error.message}`; }
+}
 async function confirmBatch(id) {
   const b = state.reimbBatches.find((x) => x.id === id);
   if (!b) return;
+  // Chỉ người nhận tiền tự xác nhận: thủ quỹ không xác nhận hộ (người nhận có thể chưa nhận được do trục trặc).
   const mine = isMine(b, myId());
-  if (!mine && !canTreasure(state.role)) return;
-  const question = mine ? `Bạn đã kiểm tra và nhận đủ ${money(b.amount)} (${b.code})?` : `${b.payer} đã báo nhận đủ ${money(b.amount)} (${b.code})? Xác nhận hộ sẽ ghi tên bạn.`;
+  if (!mine) return;
+  const question = `Bạn đã kiểm tra tài khoản và nhận đủ ${money(b.amount)} (${b.code})?`;
   if (!window.confirm(question)) return;
   const now = Date.now();
-  const stamp = { status: "CONFIRMED", confirmedAt: now, confirmedBy: myName(), confirmedById: myId(), ...(mine ? {} : { confirmedOnBehalf: true }) };
+  const stamp = { status: "CONFIRMED", confirmedAt: now, confirmedBy: myName(), confirmedById: myId(), issue: null };
   try {
     // Đọc lại ngay lúc xác nhận để không ghi đè bằng bản cũ trong trình duyệt.
     await runTransaction(db, async (tx) => {
@@ -2337,6 +2358,7 @@ $("[data-page=hoanung]").addEventListener("click", (e) => {
   else if (t.dataset.fund) updateReceiptReimb(t.dataset.fund, { fundSource: t.dataset.value, reimbursement: { status: t.dataset.value === FUND_PERSONAL ? "PENDING" : "NONE" } });
   else if (t.dataset.pay) openReimbDialog(t.dataset.pay);
   else if (t.dataset.confirm) confirmBatch(t.dataset.confirm);
+  else if (t.dataset.notReceived) reportNotReceived(t.dataset.notReceived);
   else if (t.dataset.cancelMine) cancelReceipt(t.dataset.cancelMine).then(() => renderReimbursements());
   else if (t.dataset.editReceipt) openReceiptEditor(t.dataset.editReceipt);
 });

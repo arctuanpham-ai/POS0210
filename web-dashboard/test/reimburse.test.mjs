@@ -170,3 +170,10 @@ test("deeplink mở app ngân hàng người chuyển, điền sẵn người nh
   assert.equal(url, "https://dl.vietqr.io/pay?app=mb&ba=0936539689%40icb&am=4010000&tn=HU1610+TUAN+1+PHIEU&bn=PHAM+ANH+TUAN");
   assert.equal(bankDeeplink({ fromBank: "Cake", toBank: "MB", account: "1", amount: 1, info: "x" }), null);
 });
+
+test("người nhận báo chưa nhận được tiền: thủ quỹ có cảnh báo cần xử lý", () => {
+  const batches = [{ id: "z", status: "PAID", payerId: "lan", payer: "Lan", code: "HU1610-LAN", amount: 5, paidAt: 0, issue: { at: 1, note: "chưa thấy" } }];
+  const a = myAlerts({ myId: "tq", role: "THU_QUY", me: { bank: "MB", account: "1" }, receipts: [], batches, members: [], now: 10 * 86400000 });
+  assert.deepEqual(a.items.map((x) => x.key), ["issue"]);
+  assert.equal(a.badge, 1);
+});

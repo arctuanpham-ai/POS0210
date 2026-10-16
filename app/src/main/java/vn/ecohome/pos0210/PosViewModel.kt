@@ -1626,6 +1626,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    dao.saveSetting(AppSettingEntity(ShareholderMonth.settingKey(c.monthKey),ShareholderMonth.encode(c)))
    audit("REPORT",c.monthKey,"MONTH_CLOSED","net=${c.net},revenue=${c.revenue},operating=${c.operating},additional=${c.additional}")
    autoBackup()
+   runCatching{syncFirebase()} // đẩy tháng đã chốt lên cloud ngay để web biết
   }
  }
  fun settleFrozenRefund(id:String,note:String,onDone:(String?)->Unit){

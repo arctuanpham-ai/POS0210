@@ -200,6 +200,11 @@ object FirebaseCloudSync {
             writeMaps(fs,root.collection("config"),listOf("paymentFlow" to mapOf("current" to vn.ecohome.pos0210.PaymentFlowRules.normalize(st["payment_flow"]),"history" to hist)))
         }
         }.onFailure{e->android.util.Log.w("POS0210_SYNC","refunds/paymentFlow mirror skipped: "+e.message)}
+        // Tháng đã chốt chia cổ đông: web đọc để dời phiếu nhập bù sang tháng chưa chốt, không làm lệch tháng đã chia.
+        runCatching{
+            val closes=dao.allSettingsSnapshot().filter{it.key.startsWith("month_close_")}.mapNotNull{vn.ecohome.pos0210.ShareholderMonth.decode(it.value)}
+            writeMaps(fs,root.collection("shareholderCloses"),closes.map{c->c.monthKey to mapOf("monthKey" to c.monthKey,"revenue" to c.revenue,"operating" to c.operating,"additional" to c.additional,"net" to c.net,"closedAt" to c.closedAt,"closedBy" to c.closedBy)})
+        }.onFailure{e->android.util.Log.w("POS0210_SYNC","shareholderCloses mirror skipped: "+e.message)}
         writeMaps(fs,root.collection("shifts"),dao.shiftsSnapshot().filter{it.dataScope=="LIVE"}.map{sh->sh.id to mapOf("id" to sh.id,"date" to sh.date,"staffId" to sh.staffId,"staffName" to sh.staffName,"role" to sh.role,"checkInClient" to sh.checkInClient,"checkOutClient" to sh.checkOutClient,"checkOutSource" to sh.checkOutSource,"lastActivityAt" to sh.lastActivityAt,"cashExpected" to sh.cashExpected,"cashCounted" to sh.cashCounted,"diff" to sh.diff,"diffNote" to sh.diffNote,"transferTotal" to sh.transferTotal,"orderCount" to sh.orderCount,"status" to sh.status,"receivedBy" to sh.receivedBy,"receivedAt" to sh.receivedAt,"updatedAt" to sh.updatedAt,"workMinutes" to vn.ecohome.pos0210.ShiftRules.shiftMinutes(sh.checkInClient,sh.checkOutClient),"editLog" to sh.editLog.lines().filter{l->l.isNotBlank()})})
         run{
             val liveShifts=dao.shiftsSnapshot().filter{it.dataScope=="LIVE"}

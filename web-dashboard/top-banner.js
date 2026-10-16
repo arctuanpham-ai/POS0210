@@ -1,5 +1,5 @@
 // Banner "món đỉnh nhất": món bán nhiều nhất hôm nay / 7 ngày / tháng này, từ snapshot dashboardDaily. Hàm thuần.
-import { aggregateItems, dateKeyOf } from "./sales-snapshot-view.js?v=20261016-35";
+import { aggregateItems, dateKeyOf } from "./sales-snapshot-view.js?v=20261017-02";
 
 const keysBack = (now, days) => Array.from({ length: days }, (_, i) => dateKeyOf(new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1 - i))));
 const monthKeys = (now) => Array.from({ length: now.getDate() }, (_, i) => dateKeyOf(new Date(now.getFullYear(), now.getMonth(), i + 1)));
@@ -11,6 +11,6 @@ export function topSellers(docs, now = new Date()) {
     const rows = aggregateItems(docs, keys, "combined").slice().sort((a, b) => b.qty - a.qty || b.revenue - a.revenue);
     const totalQty = rows.reduce((t, r) => t + r.qty, 0);
     const [first, second] = rows;
-    return first && first.qty > 0 ? { id, label, name: first.name, qty: first.qty, revenue: first.revenue, share: totalQty ? first.qty / totalQty : 0, lead: second ? first.qty - second.qty : first.qty, runnerUp: second?.name || "", days: keys.filter((k) => docs?.[k]).length } : { id, label, name: "", qty: 0, revenue: 0, share: 0, lead: 0, runnerUp: "", days: keys.filter((k) => docs?.[k]).length };
+    return first && first.qty > 0 ? { id, label, itemId: first.itemId, name: first.name, qty: first.qty, revenue: first.revenue, share: totalQty ? first.qty / totalQty : 0, lead: second ? first.qty - second.qty : first.qty, runnerUp: second?.name || "", days: keys.filter((k) => docs?.[k]).length } : { id, label, name: "", qty: 0, revenue: 0, share: 0, lead: 0, runnerUp: "", days: keys.filter((k) => docs?.[k]).length };
   });
 }

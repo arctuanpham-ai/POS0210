@@ -92,5 +92,27 @@ object RemoteSyncCommand {
                 .build()
             WorkManager.getInstance(app).enqueueUniqueWork("pos0210-remote-sync", ExistingWorkPolicy.KEEP, request)
             doc.set(mapOf("receivedAt" to now, "receivedFor" to requestedAt, "device" to Build.MODEL), SetOptions.merge())
+            // Web yêu cầu thêm "menu": đẩy lại toàn bộ nhóm món + món và ảnh (kèm ảnh nhỏ) từ máy này. Chỉ đọc menu trên máy.
+            if (snapshot.getString("scope") == "menu") pushMenu(app, doc, requestedAt)
         }
+
+    private fun pushMenu(app: Application, doc: DocumentReference, requestedAt: Long) {
+        CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            val result = runCatching {
+                val dao = PosDatabase.get(app).dao()
+                val now = System.currentTimeMillis()
+                val cats = dao.allCategoriesSnapshot(); val items = dao.allMenuSnapshot()
+                cats.forEach { dao.enqueueSync(vn.ecohome.pos0210.data.SyncQueueEntity(java.util.UUID.randomUUID().toString(), "MENU_CATEGORY", it.id, "UPSERT", "", now, now)) }
+                items.forEach { dao.enqueueSync(vn.ecohome.pos0210.data.SyncQueueEntity(java.util.UUID.randomUUID().toString(), "MENU_ITEM", it.id, "UPSERT", "", now, now)) }
+                dao.audit(vn.ecohome.pos0210.data.AuditEventEntity(java.util.UUID.randomUUID().toString(), "MENU", "ALL", "CLOUD_FULL_SYNC_REMOTE", null, "WEB", now, "categories=${cats.size} items=${items.size}"))
+                FirebaseCloudSync.enqueueCatalog(app)
+                val uid = FirebaseCloudSync.currentUid(app) ?: error("Chưa đăng nhập Firebase")
+                val fs = FirebaseFirestore.getInstance(FirebaseCloudSync.firebaseApp(app, FirebaseCloudSync.config(app)))
+                val media = CloudMediaSync.uploadLocal(app, fs, uid)
+                mapOf("menuDoneFor" to requestedAt, "menuDoneAt" to System.currentTimeMillis(), "menuCategories" to cats.size, "menuItems" to items.size,
+                    "mediaUploaded" to media.uploaded, "mediaSkipped" to media.skipped, "mediaErrors" to media.errors, "menuError" to (media.firstError ?: ""))
+            }.getOrElse { mapOf("menuDoneFor" to requestedAt, "menuDoneAt" to System.currentTimeMillis(), "menuError" to (it.message ?: it.javaClass.simpleName)) }
+            runCatching { doc.set(result, SetOptions.merge()) }
+        }
+    }
 }

@@ -130,3 +130,11 @@ test("khoảng ngoài 7 ngày gần nhất hoặc không giới hạn thì khôn
   assert.equal(periodDailySummary({ from: -Infinity, to: Infinity }, {}, NOW), null);
   assert.equal(periodDailySummary(dayRange(2026, 8, 1, 3), {}, NOW), null);
 });
+
+test("thống kê món cộng chung món trùng tên khác mã", () => {
+  const docs = { "2026-10-13": { items: [{ itemId: "d", name: "Bún gà 40 ", qty: 2, revenue: 80000 }, { itemId: "e", name: "bún gà 40", qty: 3, revenue: 120000 }] }, "2026-10-14": { items: [{ itemId: "e", name: "Bún gà 40", qty: 1, revenue: 40000 }] } };
+  const rows = aggregateItems(docs, ["2026-10-13", "2026-10-14"], "combined");
+  assert.equal(rows.length, 1); assert.equal(rows[0].qty, 6); assert.equal(rows[0].revenue, 240000);
+  const byDay = aggregateItems(docs, ["2026-10-13"], "byDay");
+  assert.equal(byDay[0].rows.length, 1); assert.equal(byDay[0].rows[0].qty, 5);
+});

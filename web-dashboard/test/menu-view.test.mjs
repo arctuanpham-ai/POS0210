@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { menuGroups, nameIssues, soldNotInMenu } from "../menu-view.js";
+import { menuGroups, mergePlan, nameIssues, soldNotInMenu } from "../menu-view.js";
 
 const cats = [{ id: "c2", name: "Trà", sortOrder: 2 }, { id: "c1", name: "Cà phê", sortOrder: 1 }];
 const items = [
@@ -24,4 +24,18 @@ test("phát hiện trùng tên và khoảng trắng thừa", () => {
 test("món bán ra không có trong menu", () => {
   const r = soldNotInMenu({ d1: { items: [{ itemId: "a", name: "Bạc xỉu", qty: 3 }, { itemId: "zz", name: "Cơm gà", qty: 4 }] }, d2: { items: [{ itemId: "zz2", name: "cơm gà", qty: 1 }] } }, items);
   assert.deepEqual(r, [{ name: "Cơm gà", qty: 5 }]);
+});
+
+test("gộp món trùng: giữ món đang bán và bán nhiều, món kia ngừng bán + đổi tên, không đổi mã", () => {
+  const p = mergePlan([{ id: "d", name: "Bún gà 40 ", productCode: "AN-010", active: true }, { id: "e", name: "bún  gà 40", productCode: "AN-011", active: true }], { e: 30, d: 4 });
+  assert.equal(p.keep.id, "e");
+  assert.deepEqual(p.writes, [
+    { id: "e", data: { name: "bún gà 40", active: true } },
+    { id: "d", data: { name: "bún gà 40 (gộp vào AN-011)", active: false, mergedInto: "e" } },
+  ]);
+  assert.ok(p.writes.every((w) => !("productCode" in w.data)));
+});
+test("gộp ưu tiên món đang bán dù món ngừng bán bán nhiều hơn", () => {
+  const p = mergePlan([{ id: "a", name: "X", active: false }, { id: "b", name: "X", active: true }], { a: 100 });
+  assert.equal(p.keep.id, "b");
 });

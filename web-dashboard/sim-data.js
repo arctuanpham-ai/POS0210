@@ -1,7 +1,7 @@
 // Dữ liệu mô phỏng chạy hoàn toàn trong trình duyệt: không đọc, không ghi Firestore.
 // Có chủ ý trộn: phiếu tổng (giai đoạn đầu), phiếu chi tiết, phiếu huỷ, dòng sai nhóm, tên mơ hồ/không khớp,
 // và một tháng thiếu doanh thu, để kiểm tra báo cáo xử lý đúng các trường hợp thực tế.
-import { MATERIAL_GROUPS, buildSummaryLines, groupLabelOf } from "./expense-rules.js?v=20261017-02";
+import { MATERIAL_GROUPS, buildSummaryLines, groupLabelOf } from "./expense-rules.js?v=20261017-05";
 
 const mulberry32 = (seed) => () => { seed |= 0; seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 

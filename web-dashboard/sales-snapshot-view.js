@@ -54,12 +54,24 @@ const withShare = (rows) => {
     .sort((a, b) => b.revenue - a.revenue || String(a.itemId).localeCompare(String(b.itemId)));
 };
 
-const itemRows = (snapshot) => (Array.isArray(snapshot?.items) ? snapshot.items : []).map((item) => ({
+// Gộp theo TÊN món (bỏ hoa/thường, khoảng trắng thừa): món trùng tên khác mã trên máy POS (ví dụ 2 món "Bún gà 40") được cộng chung một dòng.
+const nameKey = (s) => String(s || "").toLocaleLowerCase("vi").normalize("NFC").replace(/\s+/g, " ").trim();
+const mergeRows = (rows) => {
+  const merged = new Map();
+  for (const row of rows) {
+    const k = nameKey(row.name) || row.itemId;
+    const cur = merged.get(k) || { itemId: row.itemId, name: row.name.trim(), qty: 0, revenue: 0 };
+    cur.qty += row.qty; cur.revenue += row.revenue;
+    merged.set(k, cur);
+  }
+  return [...merged.values()];
+};
+const itemRows = (snapshot) => mergeRows((Array.isArray(snapshot?.items) ? snapshot.items : []).map((item) => ({
   itemId: String(item.itemId ?? item.name ?? ""),
   name: String(item.name ?? "Món"),
   qty: Number(item.qty || 0),
   revenue: Number(item.revenue || 0),
-}));
+})));
 
 /**
  * Thống kê món. mode "combined": gộp mọi ngày có dữ liệu theo itemId.
@@ -72,10 +84,11 @@ export const aggregateItems = (docs, keys, mode = "combined") => {
   const merged = new Map();
   keys.forEach((key) => {
     itemRows(docs?.[key]).forEach((row) => {
-      const current = merged.get(row.itemId) || { itemId: row.itemId, name: row.name, qty: 0, revenue: 0 };
+      const k = nameKey(row.name) || row.itemId;
+      const current = merged.get(k) || { itemId: row.itemId, name: row.name, qty: 0, revenue: 0 };
       current.qty += row.qty;
       current.revenue += row.revenue;
-      merged.set(row.itemId, current);
+      merged.set(k, current);
     });
   });
   return withShare([...merged.values()]);

@@ -43,3 +43,25 @@ export function soldNotInMenu(dailyDocs = {}, items = []) {
   }
   return [...out.values()].sort((a, b) => b.qty - a.qty);
 }
+
+/**
+ * Kế hoạch gộp một nhóm món trùng tên: giữ 1 món (đang bán > bán nhiều nhất > có mã > thứ tự nhỏ), các món còn lại NGỪNG BÁN
+ * và đổi tên có ghi "đã gộp" để không còn trùng. KHÔNG đổi mã món (máy POS khoá mã duy nhất; đổi mã có thể đè mất món khác),
+ * KHÔNG xoá món (bill cũ vẫn trỏ tới món đó). Thống kê cũ theo tên tự cộng chung.
+ */
+export function mergePlan(items = [], soldById = {}) {
+  const live = items.filter((m) => m && m.deleted !== true);
+  const score = (m) => [m.active !== false ? 1 : 0, Number(soldById[m.id] || 0), m.productCode ? 1 : 0, -Number(m.sortOrder ?? 0)];
+  const sorted = live.slice().sort((a, b) => { const x = score(a), y = score(b); for (let i = 0; i < x.length; i += 1) if (x[i] !== y[i]) return y[i] - x[i]; return String(a.id).localeCompare(String(b.id)); });
+  const [keep, ...drop] = sorted;
+  if (!keep) return null;
+  const clean = String(keep.name || "").replace(/\s+/g, " ").trim();
+  const tag = keep.productCode ? `gộp vào ${keep.productCode}` : "đã gộp";
+  return {
+    keep, drop, cleanName: clean,
+    writes: [
+      { id: keep.id, data: { name: clean, active: true } },
+      ...drop.map((d) => ({ id: d.id, data: { name: `${clean} (${tag})`, active: false, mergedInto: keep.id } })),
+    ],
+  };
+}

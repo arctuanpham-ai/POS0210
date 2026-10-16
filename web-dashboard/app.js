@@ -717,6 +717,8 @@ function applyExpenseInputs() {
 async function saveExpenseReceipt(event) {
   event.preventDefault(); applyExpenseInputs(); const error = $("#expense-error"); error.textContent = "";
   const check = validateReceipt(expenseDraft); if (!check.ok) { error.textContent = check.error; return; }
+  const dateProblem = purchaseDateProblem(expenseDraft.purchaseDate); if (dateProblem) { error.textContent = dateProblem; return; }
+  if (!confirmPastMonth([expenseDraft.purchaseDate])) return;
   if (!expenseDraft.enteredByName) { error.textContent = "Ghi tên người mua (người ứng tiền)."; return; }
   if (!expenseDraft.fundSource) { error.textContent = "Chọn nguồn tiền: tiền cá nhân (cần hoàn) hay tiền quán."; return; }
   const missingGroup = expenseDraft.items.findIndex((item) => !groupCodeOrNull(item.expenseGroup));
@@ -1226,6 +1228,18 @@ function openSummaryDialog(receipt = null) {
   renderSummaryBlocks();
   $("#summary-dialog").showModal();
 }
+/** Nhập bù phiếu ngày cũ lúc nào cũng được; chỉ chặn ngày trong tương lai (gõ nhầm năm/tháng). */
+function purchaseDateProblem(ts) {
+  const end = new Date(); end.setHours(23, 59, 59, 999);
+  return Number(ts) > end.getTime() ? "Ngày mua ở tương lai: kiểm tra lại ngày tháng năm." : "";
+}
+/** Phiếu thuộc tháng trước: nhắc rằng báo cáo tháng đó (và bản chốt cổ đông nếu đã chốt) sẽ thay đổi. */
+function confirmPastMonth(dates) {
+  const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+  const old = [...new Set(dates.filter((d) => Number(d) < monthStart.getTime()).map((d) => { const x = new Date(Number(d)); return `${x.getMonth() + 1}/${x.getFullYear()}`; }))];
+  if (!old.length) return true;
+  return window.confirm(`Phiếu thuộc tháng ${old.join(", ")} (tháng đã qua). Chi phí và lãi tháng đó sẽ thay đổi. Nếu tháng đó đã CHỐT SỐ chia cổ đông trên app thì app sẽ báo lệch, cần chốt lại. Vẫn lưu?`);
+}
 async function saveSummaryBlocks(event) {
   event.preventDefault();
   readSummaryBlocks();
@@ -1240,8 +1254,11 @@ async function saveSummaryBlocks(event) {
     const check = validateSummaryReceipt({ purchaseDate, lines: block.lines });
     if (!check.ok) { error.textContent = where + check.error; return; }
     if (detailRequired(purchaseDate, state.detailCutoff)) { error.textContent = `${where}từ ngày ${new Date(state.detailCutoff).toLocaleDateString("vi-VN")} trở đi phải nhập chi tiết vật tư, không dùng phiếu tổng.`; return; }
+    const dateProblem = purchaseDateProblem(purchaseDate);
+    if (dateProblem) { error.textContent = `${where}${dateProblem}`; return; }
     prepared.push({ block, purchaseDate, total: check.total });
   }
+  if (!confirmPastMonth(prepared.map((p) => p.purchaseDate))) return;
   const now = Date.now();
   const button = $("#summary-submit");
   button.disabled = true;

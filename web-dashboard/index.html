@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20261017-08" />
+    <link rel="stylesheet" href="styles.css?v=20261017-09" />
     <title>0210 · Manager</title>
   </head>
   <body>
@@ -17,7 +17,7 @@
         <p class="eyebrow">0210 · BREAKFAST · COFFEE · DRINKS</p>
         <h1 id="login-title">Manager realtime</h1>
         <p class="muted">Theo dõi quán và nhập phiếu tài chính từ xa.</p>
-        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.17.08 · Sửa, thêm món và ảnh trên web</p>
+        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.17.09 · Nguyên liệu ngày mai, xếp hạng lãi gộp</p>
         <p class="muted">Đăng nhập tài khoản quán một lần trên mỗi máy, sau đó mỗi người vào bằng PIN riêng.</p>
         <label>Email tài khoản quán<input id="email" type="email" autocomplete="username" inputmode="email" /></label>
         <label>Mật khẩu<input id="password" type="password" autocomplete="current-password" /></label>
@@ -47,7 +47,7 @@
           <div class="heading-actions"><button id="refresh-dashboard" class="btn">Làm mới</button><button id="request-sync" class="btn" title="Yêu cầu máy POS ở quán đồng bộ ngay">Yêu cầu đồng bộ</button><button id="switch-person" class="btn">Đổi người</button><button id="logout-button" class="btn ghost">Đăng xuất</button></div>
         </header>
 
-        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><section id="my-alerts" class="my-alerts" aria-live="polite" hidden></section><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.17.08 · Sửa, thêm món và ảnh trên web</p>
+        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><section id="my-alerts" class="my-alerts" aria-live="polite" hidden></section><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.17.09 · Nguyên liệu ngày mai, xếp hạng lãi gộp</p>
 
         <nav class="tabbar" id="tabbar" aria-label="Các trang">
           <a href="#ban" data-tab="ban">Bàn</a>
@@ -144,6 +144,16 @@
           <div><p class="eyebrow">GIÁ VỐN MÓN</p><h2>Công thức và cost theo giá nhập</h2></div>
           <div class="heading-actions"><button id="reload-recipes" type="button" class="btn">Tải lại</button></div>
         </section>
+        <details class="panel plan-panel" id="prep-panel">
+          <summary><strong>🥡 Chuẩn bị nguyên liệu ngày mai</strong> <span class="muted" id="prep-badge"></span></summary>
+          <p class="muted">Ước lượng bán ngày mai theo lịch sử (ưu tiên cùng thứ các tuần trước) × định mức công thức món, cộng 10% dự phòng. Không cần kiểm kho; trừ đi phần còn trong tủ là ra lượng cần mua.</p>
+          <section id="prep-view"></section>
+        </details>
+        <details class="panel plan-panel" id="profit-panel">
+          <summary><strong>💰 Xếp hạng món theo lãi gộp</strong> <span class="muted" id="profit-badge"></span></summary>
+          <div class="filter-row" id="profit-period"></div>
+          <section id="profit-view"></section>
+        </details>
         <details class="panel menu-panel" id="menu-panel">
           <summary><strong>📋 Menu quán</strong> <span class="muted" id="menu-badge"></span></summary>
           <div class="menu-cats" id="menu-cats"></div>
@@ -574,7 +584,7 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261017-08"></script>
+    <script type="module" src="app.js?v=20261017-09"></script>
     <script>
       // Trang không chạy được (thường do trình duyệt còn giữ file cũ): báo rõ thay vì để nút đăng nhập "chết".
       setTimeout(function () {

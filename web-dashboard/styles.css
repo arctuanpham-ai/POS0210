@@ -388,3 +388,12 @@ button.paylist-row { width: 100%; font: inherit; color: inherit; cursor: pointer
 .menu-edit-photo { display: flex; align-items: center; gap: 12px; }
 .menu-edit-photo img { width: 72px; height: 72px; border-radius: 12px; object-fit: cover; }
 .menu-edit-photo span { width: 72px; height: 72px; border-radius: 12px; background: #efe5da; display: grid; place-items: center; font-size: .75rem; color: #6b4a3a; text-align: center; }
+/* Chuẩn bị nguyên liệu + lãi gộp */
+.plan-panel { grid-template-columns: minmax(0, 1fr); }
+.prep-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; }
+.prep-row { display: flex; justify-content: space-between; gap: 8px; padding: 5px 0; border-bottom: 1px dashed var(--line, #e5ded5); font-size: .88rem; min-width: 0; }
+.prep-row span { min-width: 0; overflow-wrap: anywhere; }
+.profit-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.profit-table th, .profit-table td { text-align: left; padding: 5px 4px; border-bottom: 1px solid var(--line, #e5ded5); vertical-align: top; }
+.profit-table tr.low td { background: rgba(224, 161, 0, .10); }
+@media (max-width: 420px) { .prep-list { grid-template-columns: minmax(0, 1fr); } }

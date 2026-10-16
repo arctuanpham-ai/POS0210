@@ -133,6 +133,28 @@ object CloudMediaSync {
         CloudMediaResult(uploaded=uploaded,skipped=skipped,errors=errors,firstError=firstError)
     }
 
+    /** Web đổi ảnh một món (menu.imageSha mới): tải đúng ảnh đó về máy, kiểm tra sha256 rồi gắn cho món. Không đụng món khác. */
+    suspend fun restoreOneFromCloud(context:Context,fs:FirebaseFirestore,uid:String,type:String,id:String,expectedSha:String):Boolean=withContext(Dispatchers.IO){
+        require(type=="menu"||type=="combo"){"MEDIA_TYPE_INVALID"}
+        require(id.matches(Regex("[a-zA-Z0-9_-]{1,120}"))){"MEDIA_ID_INVALID"}
+        val doc=withTimeout(TIMEOUT_MS){collection(fs,uid).document("${type}_${id}").get().await()}
+        if(!doc.exists()||doc.getString("encoding")!="jpeg-base64-v1")return@withContext false
+        val sha=doc.getString("sha256")?:return@withContext false
+        if(expectedSha.isNotBlank()&&sha!=expectedSha&&doc.getString("sourceSha256")!=expectedSha)return@withContext false
+        val payload=doc.getString("payload")?:return@withContext false
+        require(payload.length<=650_000){"MEDIA_PAYLOAD_TOO_LARGE"}
+        val bytes=Base64.decode(payload,Base64.DEFAULT)
+        require(bytes.isNotEmpty()&&bytes.size<=MAX_COMPRESSED_BYTES&&sha256(bytes)==sha){"MEDIA_HASH_MISMATCH"}
+        val dir=File(context.filesDir,"managed_media").apply{mkdirs()}
+        // Tên file theo sha: ảnh mới không ghi đè file ảnh gốc cũ trên máy.
+        val target=File(dir,"${type}_${id}_${sha.take(12)}.jpg")
+        if(!target.exists()){val tmp=File(dir,target.name+".tmp");tmp.writeBytes(bytes);require(tmp.renameTo(target)){"MEDIA_RENAME_FAILED"}}
+        val dao=PosDatabase.get(context).dao()
+        val uri=Uri.fromFile(target).toString()
+        if(type=="menu")dao.updateMenuImage(id,uri) else dao.updateComboImage(id,uri)
+        true
+    }
+
     suspend fun restoreMissing(context:Context,fs:FirebaseFirestore,uid:String):CloudMediaResult=withContext(Dispatchers.IO){
         val dao=PosDatabase.get(context).dao()
         val docs=withTimeout(TIMEOUT_MS){collection(fs,uid).get().await().documents}

@@ -714,6 +714,9 @@ fun syncFirebase(){
 }
 /** Một lần: đẩy lại toàn bộ nhóm món + món (chỉ đọc menu trên máy, ghi bản sao lên Cloud) rồi đẩy ảnh + ảnh nhỏ cho web. */
 fun syncFullMenuToWeb(){val e=currentEmployee.value?:return;if(e.role!="ADMIN")return;viewModelScope.launch(Dispatchers.IO){runCatching{
+  val uid=FirebaseCloudSync.currentUid(getApplication())?:error("Chưa đăng nhập Firebase")
+  val fs=com.google.firebase.firestore.FirebaseFirestore.getInstance(FirebaseCloudSync.firebaseApp(getApplication(),FirebaseCloudSync.config(getApplication())))
+  if(FirebaseCloudSync.cloudMenuNewer(getApplication(),fs,uid)){cloudMessage.value="Menu trên web mới hơn máy: bấm ĐỒNG BỘ REALTIME NGAY để kéo về trước, rồi mới đẩy.";return@launch}
   val cats=dao.allCategoriesSnapshot();val items=dao.allMenuSnapshot()
   cats.forEach{queueCatalogChange("MENU_CATEGORY",it.id)};items.forEach{queueCatalogChange("MENU_ITEM",it.id)}
   audit("MENU","ALL","CLOUD_FULL_SYNC","categories=${cats.size} items=${items.size} | actor:${e.id}")

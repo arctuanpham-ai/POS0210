@@ -300,7 +300,11 @@ object FirebaseCloudSync {
                         "active" to cat.active,"updatedAt" to System.currentTimeMillis()))
                 }
                 }
+                val bumped=System.currentTimeMillis()
+                writes.add(root.collection("config").document("menuVersion").path to mapOf("v" to bumped,"by" to "POS"))
                 stage("PUSH_PENDING_CATALOG count=${claimed.size}",60_000L){FirestoreServerWriter.commit(root.firestore,writes)}
+                // Máy này vừa là nguồn của thay đổi: ghi nhận phiên bản để không tải lại cả menu vô ích.
+                root.firestore.app.applicationContext.getSharedPreferences("pos0210_menu_pull_v1",Context.MODE_PRIVATE).edit().putLong("v",bumped).putLong("at",bumped).apply()
                 claimed.forEach{dao.completeSync(it.id)}
             }catch(e:CancellationException){ throw e
             }catch(e:Exception){
@@ -311,6 +315,13 @@ object FirebaseCloudSync {
     }
 
     private suspend fun pullCloudMenu(root:com.google.firebase.firestore.DocumentReference,dao:PosDao){
+        // Menu 2 chiều: web sửa menu thì tăng config/menuVersion. Mỗi lần đồng bộ chỉ đọc 1 document này;
+        // chỉ tải lại cả menu khi phiên bản đổi (hoặc đã quá 24 giờ chưa tải). Tiết kiệm lượt đọc gói Spark.
+        val context=root.firestore.app.applicationContext
+        val menuPrefs=context.getSharedPreferences("pos0210_menu_pull_v1",Context.MODE_PRIVATE)
+        val now=System.currentTimeMillis()
+        val version=runCatching{stage("MENU_VERSION"){root.collection("config").document("menuVersion").get(Source.SERVER).await().getLong("v")}}.getOrNull()?:0L
+        if(MenuPullPolicy.skip(version,menuPrefs.getLong("v",-1L),menuPrefs.getLong("at",0L),now))return
         val categoryDocs=stage("PULL_MENU_CATEGORIES"){root.collection("menuCategories").get(Source.SERVER).await().documents}
         val itemDocs=stage("PULL_MENU_ITEMS"){root.collection("menu").get(Source.SERVER).await().documents}
         if(categoryDocs.isEmpty() || itemDocs.isEmpty())return
@@ -325,6 +336,9 @@ object FirebaseCloudSync {
                 active=doc.getBoolean("active")?:true))
         }
         val local=dao.allMenuSnapshot().associateBy{it.id}
+        // Mã món là duy nhất trên máy: lưu món có mã trùng món KHÁC sẽ làm máy xoá đè món kia. Gặp trùng thì giữ mã cũ / bỏ qua món mới.
+        val idByCode=local.values.filter{it.productCode.isNotBlank()}.associate{it.productCode to it.id}.toMutableMap()
+        val imageUpdates=mutableListOf<Pair<String,String>>()
         // Cloud must not overwrite unsent local catalog edits after a timeout.
         val unsentItems=unsent.filter{it.entityType=="MENU_ITEM"}.map{it.entityId}.toSet()
         for(doc in itemDocs){
@@ -334,15 +348,30 @@ object FirebaseCloudSync {
             val name=doc.getString("name")?:continue
             val categoryId=doc.getString("categoryId")?:continue
             val old=local[id]
+            val wanted=doc.getString("productCode")?:old?.productCode.orEmpty()
+            val code=MenuPullPolicy.safeCode(wanted,idByCode[wanted],id,old?.productCode)
+            if(code==null||(code.isBlank()&&local.values.any{it.productCode.isBlank()&&it.id!=id})){CloudExecution.trace("MENU_PULL_SKIP_CODE_CLASH id=$id code=$wanted");continue}
+            old?.productCode?.takeIf{it.isNotBlank()&&it!=code}?.let{idByCode.remove(it)}
+            if(code.isNotBlank())idByCode[code]=id
             dao.saveMenuItem(vn.ecohome.pos0210.data.MenuItemEntity(
                 id=id,categoryId=categoryId,name=name,
                 price=doc.getLong("price")?:0L,
                 imageUri=old?.imageUri,
                 sortOrder=doc.getLong("sortOrder")?.toInt()?:0,
                 active=doc.getBoolean("active")?:true,
-                productCode=doc.getString("productCode")?:old?.productCode.orEmpty(),
+                productCode=code,
                 description=doc.getString("description")?:""))
+            doc.getString("imageSha")?.takeIf{it.isNotBlank()&&menuPrefs.getString("img_$id",null)!=it}?.let{imageUpdates+=id to it}
         }
+        // Ảnh web vừa đổi: tải riêng từng món có imageSha mới. Lỗi ảnh không làm hỏng lượt đồng bộ.
+        val uid=root.parent.parent?.id
+        val editor=menuPrefs.edit()
+        if(uid!=null)for((id,sha) in imageUpdates){
+            runCatching{CloudMediaSync.restoreOneFromCloud(context,root.firestore,uid,"menu",id,sha)}
+                .onSuccess{ok->if(ok)editor.putString("img_$id",sha)}
+                .onFailure{if(it is CancellationException)throw it;CloudExecution.trace("MENU_IMAGE_PULL_FAIL id=$id ${it.message}")}
+        }
+        editor.putLong("v",version).putLong("at",now).apply()
     }
 
     /** Pulls only browser-entered expense receipts. It never touches sales collections. */
@@ -670,6 +699,12 @@ object FirebaseCloudSync {
     fun enqueueImmediate(context:Context){
         val request=OneTimeWorkRequestBuilder<FirebaseRealtimeWorker>().setInitialDelay(3,TimeUnit.SECONDS).setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build()
         WorkManager.getInstance(context).enqueueUniqueWork("pos0210-firebase-immediate",ExistingWorkPolicy.KEEP,request)
+    }
+    /** Web đã sửa menu mà máy này chưa kéo về: KHÔNG được đẩy cả menu máy lên (sẽ đè mất bản sửa trên web). */
+    suspend fun cloudMenuNewer(context:Context,fs:FirebaseFirestore,uid:String):Boolean {
+        val v=fs.collection("users").document(uid).collection("stores").document("0210").collection("config").document("menuVersion").get(Source.SERVER).await().getLong("v")?:0L
+        val pulled=context.getSharedPreferences("pos0210_menu_pull_v1",Context.MODE_PRIVATE).getLong("v",-1L)
+        return v>0L&&v!=pulled
     }
     fun enqueueCatalog(context:Context){
         val request=OneTimeWorkRequestBuilder<FirebaseCatalogWorker>().setInitialDelay(30,TimeUnit.SECONDS).setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build()

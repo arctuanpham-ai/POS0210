@@ -101,6 +101,9 @@ object RemoteSyncCommand {
             val result = runCatching {
                 val dao = PosDatabase.get(app).dao()
                 val now = System.currentTimeMillis()
+                val uid0 = FirebaseCloudSync.currentUid(app) ?: error("Chưa đăng nhập Firebase")
+                val fs0 = FirebaseFirestore.getInstance(FirebaseCloudSync.firebaseApp(app, FirebaseCloudSync.config(app)))
+                if (FirebaseCloudSync.cloudMenuNewer(app, fs0, uid0)) error("Menu trên web mới hơn máy: máy sẽ kéo menu mới về ở lần đồng bộ này, không đẩy đè. Bấm lại sau 1–2 phút để đẩy ảnh.")
                 val cats = dao.allCategoriesSnapshot(); val items = dao.allMenuSnapshot()
                 cats.forEach { dao.enqueueSync(vn.ecohome.pos0210.data.SyncQueueEntity(java.util.UUID.randomUUID().toString(), "MENU_CATEGORY", it.id, "UPSERT", "", now, now)) }
                 items.forEach { dao.enqueueSync(vn.ecohome.pos0210.data.SyncQueueEntity(java.util.UUID.randomUUID().toString(), "MENU_ITEM", it.id, "UPSERT", "", now, now)) }

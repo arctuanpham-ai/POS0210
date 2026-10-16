@@ -19,30 +19,30 @@ import {
   setDoc as rawSetDoc,
   writeBatch as rawWriteBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261016-28";
-import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261016-28";
-import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261016-28";
-import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261016-28";
-import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261016-28";
-import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261016-28";
-import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261016-28";
-import { buildSimulation } from "./sim-data.js?v=20261016-28";
-import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261016-28";
-import { menuCsv } from "./menu-export.js?v=20261016-28";
-import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-28";
-import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-28";
-import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261016-28";
-import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261016-28";
-import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261016-28";
-import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261016-28";
-import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261016-28";
-import { otherCostRows } from "./other-costs.js?v=20261016-28";
-import { paybackStatus } from "./payback.js?v=20261016-28";
-import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-28";
-import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261016-28";
-import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261016-28";
-import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261016-28";
-import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261016-28";
+import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261016-29";
+import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261016-29";
+import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261016-29";
+import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261016-29";
+import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261016-29";
+import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261016-29";
+import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261016-29";
+import { buildSimulation } from "./sim-data.js?v=20261016-29";
+import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261016-29";
+import { menuCsv } from "./menu-export.js?v=20261016-29";
+import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261016-29";
+import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261016-29";
+import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261016-29";
+import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261016-29";
+import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261016-29";
+import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261016-29";
+import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261016-29";
+import { otherCostRows } from "./other-costs.js?v=20261016-29";
+import { paybackStatus } from "./payback.js?v=20261016-29";
+import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261016-29";
+import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261016-29";
+import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261016-29";
+import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261016-29";
+import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261016-29";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",
@@ -2607,7 +2607,7 @@ function renderPayback() {
     ${p.set ? row("Còn phải thu hồi", money(p.remaining), "total") : ""}
     ${p.set ? row("Tiến độ", `${p.percent.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}%`) : ""}
     ${p.set && p.monthsLeft !== null ? row("Ước tính còn", p.monthsLeft === 0 ? "đã hoàn vốn" : `~${Math.ceil(p.monthsLeft)} tháng (theo TB ${money(Math.round(p.avg))}/tháng)`) : ""}
-  </tbody></table>${p.months.some((m) => m.saved) ? "" : '<p class="muted">Chưa có tháng nào lưu đối soát: số đã thu hồi đang là tạm tính của tháng này. Cuối tháng lưu đối soát ở mục bên dưới để số được cố định.</p>'}`;
+  </tbody></table>${(() => { const key = monthKeyOf(Date.now()); const pend = state.expenseReceipts.filter((r) => reviewStatus(r) === "PENDING" && !isInitialReceipt(r) && monthKeyOf(Number(r.purchaseDate || 0)) === key); const amt = pend.reduce((t, r) => t + Number(r.total || 0), 0); const paid = pend.filter(isPaidOut); return pend.length ? `<p class="warn-text">⚠ Còn ${pend.length} phiếu chờ duyệt tháng này (${money(amt)}) chưa trừ vào số đã thu hồi${paid.length ? `; trong đó ${paid.length} phiếu ĐÃ HOÀN TIỀN (${money(paid.reduce((t, r) => t + Number(r.total || 0), 0))}): tiền đã ra khỏi quỹ nhưng chưa tính chi phí, nên số này đang cao hơn quỹ thực tế đúng bằng khoản đó` : ""}. Duyệt xong là khớp.</p>` : ""; })()}${p.months.some((m) => m.saved) ? "" : '<p class="muted">Chưa có tháng nào lưu đối soát: số đã thu hồi đang là tạm tính của tháng này. Cuối tháng lưu đối soát ở mục bên dưới để số được cố định.</p>'}`;
 }
 $("#payback-panel").addEventListener("toggle", (e) => { if (e.target.open) loadPayback(); });
 $("#invest-save").addEventListener("click", async () => {

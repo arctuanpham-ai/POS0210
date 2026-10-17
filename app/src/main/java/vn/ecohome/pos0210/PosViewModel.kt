@@ -1994,8 +1994,12 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    if(dao.setItemDelivered(item.id,q)!=1)return@launch
    audit("BATCH",b.id,"ITEM_DELIVERY","serviceNo=${b.serviceNo},item=${item.itemNameSnapshot.take(40)},delivered=$q/${item.qty},operator=${e.name}")
    val lines=dao.batchItemsOnce(b.id).map{DeliveryRules.Line(it.qty,it.deliveredQty,it.adjustmentOfItemId!=null)}
-   if(b.status=="WAITING"&&DeliveryRules.allDelivered(lines)){
+   val st=dao.batchStatus(b.id)
+   if(st=="WAITING"&&DeliveryRules.allDelivered(lines)){
     if(repo.markDeliveredAudited(b,e.id,e.name,"DELIVERED")){printerMessage.value="ĐƠN #${b.serviceNo.toString().padStart(3,'0')} ĐÃ GIAO ĐỦ"}
+   }else if(st=="DELIVERED"&&!DeliveryRules.allDelivered(lines)){
+    // Bấm nhầm "đã giao": bỏ tích một món thì đơn quay lại CHỜ GIAO (chỉ khi bàn chưa thanh toán).
+    if(dao.reopenDelivered(b.id)==1){audit("BATCH",b.id,"DELIVERY_REOPENED","serviceNo=${b.serviceNo},reason=ITEM_UNTICKED,operator=${e.name}");printerMessage.value="ĐƠN #${b.serviceNo.toString().padStart(3,'0')} QUAY LẠI CHỜ GIAO"}
    }
    autoBackup()
   }
@@ -2027,6 +2031,18 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    due.forEach{lastDeliveryReminder[it.key]=now}
    lastDeliveryReminder.keys.retainAll(waitingNow.map{it.id}.toSet())
    withContext(Dispatchers.Main){DeliveryAnnouncer.announce(getApplication(),DeliveryReminder.speech(due),speak)}
+  }
+ }
+ /** Bấm nhầm "ĐÃ GIAO ĐỦ": đưa đơn về CHỜ GIAO, mọi món về chưa giao (tích lại từng món). Chỉ khi bàn chưa thanh toán, có ghi nhật ký. */
+ fun reopenDelivered(b:OrderBatchEntity){
+  val e=currentEmployee.value?:return
+  viewModelScope.launch(Dispatchers.IO){
+   if(dao.reopenDelivered(b.id)==1){
+    dao.resetItemsDelivered(b.id)
+    audit("BATCH",b.id,"DELIVERY_REOPENED","serviceNo=${b.serviceNo},reason=MISTAKE,operator=${e.name}")
+    printerMessage.value="ĐÃ SỬA · ĐƠN #${b.serviceNo.toString().padStart(3,'0')} QUAY LẠI CHỜ GIAO"
+    autoBackup()
+   }else printerMessage.value="KHÔNG SỬA ĐƯỢC · bàn đã thanh toán hoặc đơn không ở trạng thái đã giao"
   }
  }
  fun markDelivered(b:OrderBatchEntity){

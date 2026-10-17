@@ -678,7 +678,7 @@ fun Sent(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
         LazyColumn(Modifier.weight(1f)) {
             items(bs) { b ->
                 val its by vm.items(b.id).collectAsState(initial = emptyList())
-                val canTick = b.status == "WAITING"
+                val canTick = b.status == "WAITING" || b.status == "DELIVERED"
                 val real = its.filter { it.adjustmentOfItemId == null && it.qty > 0 }
                 val doneQty = real.sumOf { it.deliveredQty.coerceAtMost(it.qty) }
                 val allQty = real.sumOf { it.qty }
@@ -708,7 +708,7 @@ fun Sent(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                             TextButton(onClick = { pv = b }) { Text("CHI TIẾT") }
                         }
                         its.filter { it.adjustmentOfItemId == null && it.qty > 0 }.forEach { item ->
-                            val d = if (b.status == "DELIVERED") item.qty else item.deliveredQty.coerceAtMost(item.qty)
+                            val d = item.deliveredQty.coerceAtMost(item.qty)
                             Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
                                     Text("${item.qty} × ${item.itemNameSnapshot}", fontSize = 15.sp, fontWeight = if (d >= item.qty) FontWeight.Normal else FontWeight.Bold,
@@ -723,7 +723,7 @@ fun Sent(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                                         Text("$d/${item.qty}", fontWeight = FontWeight.Black)
                                         TextButton(onClick = { vm.setItemDelivered(b, item, d + 1) }, enabled = d < item.qty, contentPadding = PaddingValues(4.dp)) { Text("＋", fontSize = 18.sp) }
                                     }
-                                } else if (b.status == "DELIVERED") Text("✓", color = Color(0xFF2F6B2A), fontWeight = FontWeight.Black)
+                                }
                             }
                         }
                         if (b.status == "DRAFT") {
@@ -734,6 +734,9 @@ fun Sent(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                             if (b.id in failedKitchen || printerMode != "BLUETOOTH") {
                                 OutlinedButton(onClick = { vm.skipKitchenPrintForBatch(b) }, Modifier.fillMaxWidth()) { Text("MÁY IN LỖI · BỎ QUA, BÁO BẾP TRỰC TIẾP") }
                             }
+                        }
+                        if (b.status == "DELIVERED") {
+                            OutlinedButton(onClick = { vm.reopenDelivered(b) }, Modifier.fillMaxWidth().padding(top = 6.dp)) { Text("↩ BẤM NHẦM · CHƯA GIAO ĐỦ") }
                         }
                         if (b.status == "WAITING") {
                             Text("Tích từng món khi đã mang ra. Đủ món thì đơn tự chuyển ĐÃ GIAO ĐỦ.", fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))

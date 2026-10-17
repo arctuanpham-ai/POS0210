@@ -2017,8 +2017,10 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    val pending=waitingNow.mapNotNull{b->
     val s=sessionsById[b.sessionId]?:return@mapNotNull null
     val label=if(s.flow==PaymentFlowRules.PREPAID)"Đơn số ${b.serviceNo}" else (tablesById[s.tableId]?.name?:"Bàn")
-    val remaining=DeliveryRules.remaining(dao.batchItemsOnce(b.id).map{DeliveryRules.Line(it.qty,it.deliveredQty,it.adjustmentOfItemId!=null)})
-    DeliveryReminder.Pending(b.id,label,b.sentAt?:b.createdAt,remaining)
+    val its=dao.batchItemsOnce(b.id)
+    val remaining=DeliveryRules.remaining(its.map{DeliveryRules.Line(it.qty,it.deliveredQty,it.adjustmentOfItemId!=null)})
+    val missing=its.filter{it.adjustmentOfItemId==null&&it.qty>it.deliveredQty}.map{(it.qty-it.deliveredQty) to it.itemNameSnapshot}
+    DeliveryReminder.Pending(b.id,label,b.sentAt?:b.createdAt,remaining,DeliveryReminder.detail(missing))
    }
    val due=DeliveryReminder.due(pending,now,first,repeat,lastDeliveryReminder)
    if(due.isEmpty())return@launch

@@ -29,8 +29,8 @@ object DeliveryRules {
 
 /** Nhắc giao đồ theo thời gian khách chờ: tính ra đơn nào đến hạn nhắc, không tự phát âm thanh. */
 object DeliveryReminder {
-    data class Pending(val key: String, val label: String, val sentAt: Long, val remaining: Int)
-    data class Due(val key: String, val label: String, val minutes: Long, val remaining: Int)
+    data class Pending(val key: String, val label: String, val sentAt: Long, val remaining: Int, val detail: String = "")
+    data class Due(val key: String, val label: String, val minutes: Long, val remaining: Int, val detail: String = "")
 
     fun due(pending: List<Pending>, now: Long, firstMinutes: Long, repeatMinutes: Long, lastReminded: Map<String, Long>): List<Due> =
         pending.mapNotNull { p ->
@@ -38,17 +38,28 @@ object DeliveryReminder {
             if (waited < firstMinutes * 60_000L) return@mapNotNull null
             val last = lastReminded[p.key]
             if (last != null && now - last < repeatMinutes * 60_000L) return@mapNotNull null
-            Due(p.key, p.label, waited / 60_000L, p.remaining)
+            Due(p.key, p.label, waited / 60_000L, p.remaining, p.detail)
         }.sortedByDescending { it.minutes }
 
-    /** Câu đọc bằng giọng tiếng Việt. */
+    /** Tên món đọc gọn: bỏ chữ COMBO và phần liệt kê trong ngoặc. */
+    fun spokenName(name: String) = name.substringBefore(" [").replace("COMBO ·", "combo").replace("🎁", "").trim()
+
+    /** "2 cà phê sữa, 1 bánh mì" (tối đa 4 món, còn lại gộp "và N món khác"). Dòng: qty còn thiếu + tên. */
+    fun detail(missing: List<Pair<Int, String>>): String {
+        val parts = missing.filter { it.first > 0 }.map { "${it.first} ${spokenName(it.second)}" }
+        return if (parts.size <= 4) parts.joinToString(", ") else parts.take(4).joinToString(", ") + " và ${parts.size - 4} món khác"
+    }
+
+    /** Câu đọc bằng giọng tiếng Việt, có tên và số lượng món còn thiếu. */
     fun speech(dues: List<Due>): String = when {
         dues.isEmpty() -> ""
         dues.size == 1 -> {
             val d = dues[0]
-            "${d.label} đã chờ ${d.minutes} phút" + (if (d.remaining > 0) ", còn ${d.remaining} món chưa giao" else "") + ". Vui lòng giao đồ cho khách."
+            "${d.label} đã chờ ${d.minutes} phút" + (if (d.detail.isNotBlank()) ", còn thiếu ${d.detail}" else if (d.remaining > 0) ", còn ${d.remaining} món chưa giao" else "") + ". Vui lòng giao đồ cho khách."
         }
-        else -> "Có ${dues.size} đơn chờ giao: " + dues.take(3).joinToString(", ") { "${it.label} ${it.minutes} phút" } + ". Vui lòng giao đồ cho khách."
+        else -> "Có ${dues.size} đơn chờ giao. " + dues.take(3).joinToString(". ") { d ->
+            "${d.label} chờ ${d.minutes} phút" + (if (d.detail.isNotBlank()) ", còn ${d.detail}" else "")
+        } + ". Vui lòng giao đồ cho khách."
     }
 }
 

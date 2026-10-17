@@ -41,4 +41,12 @@ class DeliveryRulesTest {
         assertFalse(PaymentFixPolicy.canFix("STAFF", "c", "c", paid, paid + 11 * min))
         assertFalse(PaymentFixPolicy.canFix("STAFF", "x", "c", paid, paid + 1 * min))
     }
+
+    @Test fun speechNamesMissingItemsWithQuantities() {
+        val d = DeliveryReminder.detail(listOf(2 to "Cà phê sữa", 1 to "COMBO · Trà Ngon [1×Trà chanh + 1×Cơm gà]", 0 to "Bánh"))
+        assertEquals("2 Cà phê sữa, 1 combo Trà Ngon", d)
+        val text = DeliveryReminder.speech(listOf(DeliveryReminder.Due("a", "Bàn 3", 10, 3, d)))
+        assertTrue(text.contains("còn thiếu 2 Cà phê sữa, 1 combo Trà Ngon"))
+        assertTrue(DeliveryReminder.detail(List(6) { 1 to "Món $it" }).endsWith("và 2 món khác"))
+    }
 }

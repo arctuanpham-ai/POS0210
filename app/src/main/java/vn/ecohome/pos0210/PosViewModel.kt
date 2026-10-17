@@ -709,7 +709,7 @@ fun saveSetting(key:String,value:String){
  val e=currentEmployee.value?:return
  val allowed=when(key){
   "storage_root_uri","master_config_uri","autoback_tree_uri" -> e.role=="ADMIN"||e.canManageSystem
-  "bank_name","bank_account","bank_holder","qr_prefix","payment_qr_mode","printer_mode","printer_mac","printer_name","kitchen_printer_mac","kitchen_printer_name","receipt_printer_mac","receipt_printer_name","printer_paper_mm","bank_notification_enabled","bank_notification_vibrate","bank_notification_tts","delivery_remind_on","delivery_remind_min","delivery_remind_repeat_min","delivery_remind_voice" -> e.role=="ADMIN"||e.role=="MANAGER"
+  "bank_name","bank_account","bank_holder","qr_prefix","payment_qr_mode","printer_mode","printer_mac","printer_name","kitchen_printer_mac","kitchen_printer_name","receipt_printer_mac","receipt_printer_name","printer_paper_mm","bank_notification_enabled","bank_notification_vibrate","bank_notification_tts","order_announce_on","delivery_remind_on","delivery_remind_min","delivery_remind_repeat_min","delivery_remind_voice" -> e.role=="ADMIN"||e.role=="MANAGER"
   else -> e.role=="ADMIN"
  }
  if(!allowed){viewModelScope.launch{audit("SECURITY",key,"SETTING_DENIED","role=${e.role}")};return}
@@ -1913,6 +1913,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
     val now=System.currentTimeMillis()
     if(repo.finalizeKitchenPrint(job.id,b.id,now)){
      audit("PRINT",b.id,"KITCHEN_TEST_CONFIRMED","operator=${e.name},job=${job.id}")
+     announceNewOrder(b.id,currentTable.value?.name?:"Bàn")
      printerMessage.value="TEST · Đã xác nhận phiếu bếp #${b.serviceNo.toString().padStart(3,'0')}"
      autoBackup()
     }
@@ -1936,6 +1937,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
     if(repo.finalizeKitchenPrint(job.id,b.id,now)){
      kitchenPrintFailed.value=kitchenPrintFailed.value-b.id
      audit("PRINT",b.id,"KITCHEN_PRINTED","printer=${kitchenPrinterName()},operator=${e.name},job=${job.id}")
+     announceNewOrder(b.id,currentTable.value?.name?:"Bàn")
      printerMessage.value="ĐÃ IN #${b.serviceNo.toString().padStart(3,'0')} · Đơn #${b.sequence}"
      autoBackup()
     }else{
@@ -1980,6 +1982,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
   viewModelScope.launch(Dispatchers.IO){
    if(dao.transitionBatch(b.id,"DRAFT","WAITING",System.currentTimeMillis())==1){
     audit("PRINT",b.id,"KITCHEN_PRINT_SKIPPED","serviceNo=${b.serviceNo},operator=${e.name},printerMsg=${printerMessage.value.take(80)}")
+    announceNewOrder(b.id,currentTable.value?.name?:"Bàn")
     kitchenPrintFailed.value=kitchenPrintFailed.value-b.id
     printerMessage.value="ĐÃ BỎ QUA IN PHIẾU BẾP #${b.serviceNo.toString().padStart(3,'0')} · báo bếp trực tiếp, đã ghi nhật ký"
     autoBackup()
@@ -2002,6 +2005,16 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
     if(dao.reopenDelivered(b.id)==1){audit("BATCH",b.id,"DELIVERY_REOPENED","serviceNo=${b.serviceNo},reason=ITEM_UNTICKED,operator=${e.name}");printerMessage.value="ĐƠN #${b.serviceNo.toString().padStart(3,'0')} QUAY LẠI CHỜ GIAO"}
    }
    autoBackup()
+  }
+ }
+ /** Chốt đơn / in phiếu bếp xong: đọc loa tên và số lượng món để bếp biết ngay. Tắt được trong Quản lý → Nhắc giao đồ. */
+ private fun announceNewOrder(batchId:String,label:String){
+  if(setting("order_announce_on")=="false")return
+  val speak=setting("delivery_remind_voice")!="false"
+  viewModelScope.launch(Dispatchers.IO){
+   val lines=dao.batchItemsOnce(batchId).filter{it.adjustmentOfItemId==null&&it.qty>0}.map{Triple(it.qty,it.itemNameSnapshot,it.note)}
+   val text=DeliveryReminder.newOrderSpeech(label,lines)
+   if(text.isNotBlank())withContext(Dispatchers.Main){DeliveryAnnouncer.announce(getApplication(),text,speak,vibrate=false)}
   }
  }
  private val lastDeliveryReminder=mutableMapOf<String,Long>()
@@ -2522,6 +2535,7 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
     }
     // Đơn đã ghi. Giữ màn hình ở lại cho tới khi in xong; lỗi thì để nhân viên chọn in lại hoặc tự báo bếp.
     // Chỉ chặn màn hình tối đa 5 giây. Máy in chậm hoặc lỗi thì đơn vẫn xong, app báo cảnh báo và cho order khách tiếp theo.
+    if(!skipKitchen)dao.batches(session.id).first().filter{it.status=="WAITING"&&it.id !in served}.forEach{announceNewOrder(it.id,"Đơn số ${it.serviceNo}")}
     kitchenOverlayOn=true
     val kitchenJob=kotlinx.coroutines.CoroutineScope(Dispatchers.IO).async(Dispatchers.IO){runPaidKitchenPrint(session.id,table?.name?:"Trả trước",employee.name)}
     kotlinx.coroutines.withTimeoutOrNull(5000L){kitchenJob.await()}

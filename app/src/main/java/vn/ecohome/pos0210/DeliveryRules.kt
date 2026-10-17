@@ -50,6 +50,14 @@ object DeliveryReminder {
         return if (parts.size <= 4) parts.joinToString(", ") else parts.take(4).joinToString(", ") + " và ${parts.size - 4} món khác"
     }
 
+    /** Thông báo đơn mới vừa chốt/in phiếu bếp: "Có đơn mới, Bàn 3: 2 Cà phê sữa, ít đường, 1 combo Trà Ngon." Mỗi dòng: (số lượng, tên, ghi chú). */
+    fun newOrderSpeech(label: String, lines: List<Triple<Int, String, String>>): String {
+        val real = lines.filter { it.first > 0 }
+        if (real.isEmpty()) return ""
+        val parts = real.take(6).map { (q, n, note) -> "$q ${spokenName(n)}" + (if (note.isNotBlank() && note.length <= 25) ", ${note.trim()}" else "") }
+        return "Có đơn mới, $label: " + parts.joinToString(", ") + (if (real.size > 6) " và ${real.size - 6} món khác" else "") + "."
+    }
+
     /** Câu đọc bằng giọng tiếng Việt, có tên và số lượng món còn thiếu. */
     fun speech(dues: List<Due>): String = when {
         dues.isEmpty() -> ""
@@ -73,8 +81,8 @@ object PaymentFixPolicy {
 
 /** Còi + rung + đọc giọng tiếng Việt (nếu máy có giọng vi-VN). Mọi lỗi đều bị nuốt để không ảnh hưởng bán hàng. */
 object DeliveryAnnouncer {
-    fun announce(context: Context, text: String, speak: Boolean) {
-        runCatching {
+    fun announce(context: Context, text: String, speak: Boolean, vibrate: Boolean = true) {
+        if (vibrate) runCatching {
             val vibrator = if (Build.VERSION.SDK_INT >= 31) context.getSystemService(VibratorManager::class.java).defaultVibrator
             else @Suppress("DEPRECATION") (context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator)
             val pattern = longArrayOf(0, 300, 150, 300, 150, 300)

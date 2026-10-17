@@ -49,4 +49,11 @@ class DeliveryRulesTest {
         assertTrue(text.contains("còn thiếu 2 Cà phê sữa, 1 combo Trà Ngon"))
         assertTrue(DeliveryReminder.detail(List(6) { 1 to "Món $it" }).endsWith("và 2 món khác"))
     }
+
+    @Test fun newOrderSpeechListsItemsQuantitiesAndShortNotes() {
+        val t = DeliveryReminder.newOrderSpeech("Bàn 3", listOf(Triple(2, "Cà phê sữa", "ít đường"), Triple(1, "COMBO · Trà Ngon [1×Trà chanh]", ""), Triple(0, "Bánh", "")))
+        assertEquals("Có đơn mới, Bàn 3: 2 Cà phê sữa, ít đường, 1 combo Trà Ngon.", t)
+        assertEquals("", DeliveryReminder.newOrderSpeech("Bàn 1", emptyList()))
+        assertTrue(DeliveryReminder.newOrderSpeech("Bàn 1", List(8) { Triple(1, "Món $it", "") }).contains("và 2 món khác"))
+    }
 }

@@ -5193,6 +5193,10 @@ fun DeliveryRemindSettings(vm: PosViewModel) {
                 Text("  Bật nhắc giao đồ", fontWeight = FontWeight.Bold)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(checked = v("order_announce_on") != "false", onCheckedChange = { vm.saveSetting("order_announce_on", it.toString()) })
+                Text("  Đọc loa tên + số lượng món khi chốt đơn / in phiếu bếp", fontWeight = FontWeight.Bold)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Switch(checked = voice, onCheckedChange = { vm.saveSetting("delivery_remind_voice", it.toString()) }, enabled = on)
                 Text("  Đọc giọng nói tiếng Việt (cần máy có giọng tiếng Việt)", fontWeight = FontWeight.Bold)
             }

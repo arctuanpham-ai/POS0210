@@ -34,12 +34,14 @@ object VietQrPayload {
 
     fun build(bankId: String, account: String, holder: String, amount: Long, info: String): Result<String> = runCatching {
         val bin = requireNotNull(resolveBin(bankId)) { "BANK_ID chưa được hỗ trợ offline: $bankId. Hãy nhập BANK_ID hoặc BIN 6 số của ngân hàng." }
-        val cleanAccount = account.filter(Char::isDigit)
+        // Số tài khoản hoặc mã định danh VietQR của ngân hàng (VD: mã MS00P… của QR merchant Techcombank) gồm chữ và số.
+        val cleanAccount = account.uppercase(Locale.US).filter(Char::isLetterOrDigit)
         require(cleanAccount.isNotBlank()) { "Thiếu số tài khoản VietQR" }
+        require(cleanAccount.length <= 19) { "Số tài khoản/mã VietQR tối đa 19 ký tự" }
         require(amount > 0) { "Số tiền thanh toán không hợp lệ" }
 
-        val consumer = tlv("00", bin) + tlv("01", cleanAccount) + tlv("02", "QRIBFTTA")
-        val merchantAccount = tlv("00", "A000000727") + tlv("01", consumer)
+        val consumer = tlv("00", bin) + tlv("01", cleanAccount)
+        val merchantAccount = tlv("00", "A000000727") + tlv("01", consumer) + tlv("02", "QRIBFTTA")
         val additional = tlv("08", ascii(info).take(50))
         val merchantName = ascii(holder).ifBlank { "0210" }.take(25)
         val raw = tlv("00", "01") + tlv("01", "12") + tlv("38", merchantAccount) +

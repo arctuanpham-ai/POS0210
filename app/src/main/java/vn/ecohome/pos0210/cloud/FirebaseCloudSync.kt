@@ -13,16 +13,21 @@ import androidx.work.WorkerParameters
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Source
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
 import vn.ecohome.pos0210.data.CloudSyncStateEntity
 import vn.ecohome.pos0210.data.PosDao
 import vn.ecohome.pos0210.data.PosDatabase
+import vn.ecohome.pos0210.data.PosRepository
 import vn.ecohome.pos0210.ExpenseCategories
 import vn.ecohome.pos0210.calculateAssetValue
 import java.util.Calendar
@@ -37,89 +42,427 @@ object CloudSyncPolicy{
     fun shouldUploadSetting(key:String)=key in safeSettingKeys
 }
 
-internal object CloudOperationGuard { val mutex=Mutex() }
+internal object CloudOperationGuard { val mutex=Mutex(); val backupMutex=Mutex() }
 
 object FirebaseCloudSync {
     private const val APP_NAME="pos0210-cloud"
     private const val WORK_NAME="pos0210-firebase-periodic"
     private const val BACKUP_WORK_NAME="pos0210-firebase-hourly-backup"
+    private const val EXPENSE_CURSOR_SETTING="expense_receipts_cursor_v1"
+    // Public Firebase client identifiers bundled so a fresh install can reach the production cloud.
+    // Local settings remain an explicit override for recovery/migration.
+    private const val DEFAULT_PROJECT_ID="pos0210-17ce4"
+    private const val DEFAULT_APPLICATION_ID="1:734292261602:android:c60646ce0c9ed4c3f67cbb"
+    private const val DASHBOARD_DAILY_MIN_INTERVAL_MS=600_000L
+    private const val DEFAULT_API_KEY="AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk"
+
+    fun defaultConfig()=FirebaseConfig(DEFAULT_PROJECT_ID,DEFAULT_APPLICATION_ID,DEFAULT_API_KEY)
 
     suspend fun config(context:Context):FirebaseConfig{
         val settings=PosDatabase.get(context).dao().allSettingsSnapshot().associate{it.key to it.value}
-        return FirebaseConfig(settings["firebase_project_id"].orEmpty(),settings["firebase_application_id"].orEmpty(),settings["firebase_api_key"].orEmpty())
+        return FirebaseConfig(
+            settings["firebase_project_id"].orEmpty().ifBlank{DEFAULT_PROJECT_ID},
+            settings["firebase_application_id"].orEmpty().ifBlank{DEFAULT_APPLICATION_ID},
+            settings["firebase_api_key"].orEmpty().ifBlank{DEFAULT_API_KEY}
+        )
     }
-    internal fun firebaseApp(context:Context,c:FirebaseConfig):FirebaseApp{
-        FirebaseApp.getApps(context).firstOrNull{it.name==APP_NAME}?.let{return it}
-        return FirebaseApp.initializeApp(context,FirebaseOptions.Builder().setProjectId(c.projectId).setApplicationId(c.applicationId).setApiKey(c.apiKey).build(),APP_NAME)
-            ?: error("Không thể khởi tạo Firebase")
+    internal fun firebaseApp(context:Context,c:FirebaseConfig):FirebaseApp = CloudAppLifecycle.getOrCreate(
+        find={FirebaseApp.getApps(context).firstOrNull{it.name==APP_NAME}},
+        create={FirebaseApp.initializeApp(context.applicationContext,FirebaseOptions.Builder().setProjectId(c.projectId).setApplicationId(c.applicationId).setApiKey(c.apiKey).setStorageBucket("${c.projectId}.firebasestorage.app").build(),APP_NAME)
+            ?: error("Không thể khởi tạo Firebase")}
+    )
+    internal suspend fun authenticatedUid(context:Context,app:FirebaseApp):String {
+        val auth=FirebaseAuth.getInstance(app)
+        val user=auth.currentUser?:error("AUTH_SESSION_MISSING: giữ nguyên UID đã lưu; cần xác thực lại tài khoản cũ")
+        val expected=PosDatabase.get(context).dao().cloudSyncStateSnapshot()?.syncedUid
+        require(expected==null||expected==user.uid){"AUTH_UID_MISMATCH: không đồng bộ sang UID khác"}
+        CloudQuotaGuard.check(FirebaseFirestore.getInstance(app))
+        stage("AUTH_TOKEN"){user.getIdToken(false).await()}
+        return user.uid
     }
     suspend fun signIn(context:Context,email:String,password:String):String{
         val c=config(context);require(c.valid){"Chưa cấu hình Firebase"}
-        return FirebaseAuth.getInstance(firebaseApp(context,c)).signInWithEmailAndPassword(email.trim(),password).await().user?.uid?:error("Firebase không trả UID")
+        val expected=PosDatabase.get(context).dao().cloudSyncStateSnapshot()?.syncedUid
+        val uid=stage("AUTH_SIGN_IN"){FirebaseAuth.getInstance(firebaseApp(context,c)).signInWithEmailAndPassword(email.trim(),password).await().user?.uid}?:error("Firebase không trả UID")
+        require(expected==null||expected==uid){"AUTH_UID_MISMATCH: giữ nguyên UID Cloud cũ, không đồng bộ tài khoản khác"}
+        return uid
     }
     fun signOut(context:Context){runCatching{FirebaseApp.getApps(context).firstOrNull{it.name==APP_NAME}?.let{FirebaseAuth.getInstance(it).signOut()}}}
-    fun reset(context:Context){runCatching{FirebaseApp.getApps(context).firstOrNull{it.name==APP_NAME}?.delete()}}
+    fun reset(context:Context){CloudAppLifecycle.mutate{runCatching{FirebaseApp.getApps(context).firstOrNull{it.name==APP_NAME}?.delete()}}}
     fun currentUid(context:Context):String?=runCatching{FirebaseApp.getApps(context).firstOrNull{it.name==APP_NAME}?.let{FirebaseAuth.getInstance(it).currentUser?.uid}}.getOrNull()
 
-    private suspend fun <T> stage(name:String,block:suspend()->T):T =
-        try{ block() }catch(e:Throwable){ throw IllegalStateException("$name: ${e.message}",e) }
+    private suspend fun <T> stage(name:String,timeoutMs:Long=25_000L,block:suspend()->T):T =
+        CloudExecution.stage(name,timeoutMs,block)
 
-    suspend fun backupNow(context:Context):Result<CloudBackupInfo> = CloudOperationGuard.mutex.withLock { runCatching{
+    suspend fun backupNow(context:Context):Result<CloudBackupInfo> = CloudExecution.operation("BACKUP",CloudOperationGuard.backupMutex) {
         val c=config(context);require(c.valid){"Chưa cấu hình Firebase"}
         val app=firebaseApp(context,c)
-        val uid=FirebaseAuth.getInstance(app).currentUser?.uid?:error("Chưa đăng nhập Firebase")
-        FirestorePrivateBackup.upload(context,FirebaseFirestore.getInstance(app),uid,System.currentTimeMillis())
-    }}
+        val uid=authenticatedUid(context,app)
+        val fs=FirebaseFirestore.getInstance(app)
+        val dao=PosDatabase.get(context).dao()
+        val coveredCombos=dao.pendingSync(System.currentTimeMillis(),500).filter{it.entityType=="COMBO"}
+        val backup=stage("PRIVATE_BACKUP",90_000L){FirestorePrivateBackup.upload(context,fs,uid,System.currentTimeMillis())}
+        coveredCombos.forEach{dao.completeSync(it.id)}
+        // Backup only: media upload/download is a separate explicit operation.
+        // Avoid holding CloudOperationGuard for another 120 seconds after DB backup.
+        PosDatabase.get(context).dao().saveSetting(vn.ecohome.pos0210.data.AppSettingEntity("cloud_backup_confirmed_at",backup.createdAt.toString()))
+        backup
+    }
 
-    suspend fun syncNow(context:Context):Result<Unit> = CloudOperationGuard.mutex.withLock { runCatching{
+    // Explicit catalog publication: called only after an authorized local menu edit.
+    // A secondary device running ordinary sync can only pull, never publish.
+    suspend fun publishMenu(context:Context):Result<Unit> = CloudExecution.operation("PUBLISH_MENU",CloudOperationGuard.mutex) {
+        val dao=PosDatabase.get(context).dao()
+        val cfg=config(context)
+        val app=firebaseApp(context,cfg)
+        val uid=authenticatedUid(context,app)
+        val fs=FirebaseFirestore.getInstance(app)
+        val root=fs.collection("users").document(uid).collection("stores").document("0210")
+        pushPendingCatalog(root,dao)
+        Unit
+    }
+
+    suspend fun syncNow(context:Context):Result<Unit> = CloudExecution.operation("REALTIME",CloudOperationGuard.mutex) {
         val db=PosDatabase.get(context);val dao=db.dao();val old=dao.cloudSyncStateSnapshot()?:CloudSyncStateEntity()
         dao.saveCloudSyncState(old.copy(lastAttemptAt=System.currentTimeMillis(),lastError=null))
-        val c=config(context);require(c.valid){"Chưa cấu hình Firebase"};val firebaseApp=firebaseApp(context,c);val uid=FirebaseAuth.getInstance(firebaseApp).currentUser?.uid?:error("Chưa đăng nhập Firebase")
+        val c=config(context);require(c.valid){"Chưa cấu hình Firebase"};val firebaseApp=firebaseApp(context,c);val uid=authenticatedUid(context,firebaseApp)
         val fs=FirebaseFirestore.getInstance(firebaseApp);val root=fs.collection("users").document(uid).collection("stores").document("0210")
-        stage("PULL_FINANCE"){pullCloudFinance(root,dao)}
-        stage("WRITE_FINANCE"){writeFinanceMirror(fs,root,dao)}
-        val tables=dao.cloudTablesSnapshot();val sessions=dao.cloudSessionsSnapshot();val bills=dao.cloudBillsSnapshot();val payments=dao.cloudPaymentsSnapshot()
+        // OFFLINE-FIRST bootstrap safety: a fresh/restored install must never publish
+        // bundled defaults or an empty local database before remote state is inspected.
+        // Full business-data bootstrap is handled by the restore/pull path; until that
+        // path marks READY we fail closed and leave local operation untouched.
+        when(old.bootstrapState){
+            "NEEDS_PULL" -> {
+                val remoteExists=stage("BOOTSTRAP_CHECK"){root.get(Source.SERVER).await().exists()}
+                if(remoteExists){
+                    error("BOOTSTRAP_RESTORE_REQUIRED: không tự ghi đè local; dùng Khôi phục Cloud trên máy mới sau khi bảo toàn dữ liệu")
+                }
+                val bootstrapNow=System.currentTimeMillis()
+                dao.updateBootstrapState("READY",bootstrapNow,bootstrapNow)
+            }
+            "LEGACY_LOCAL" -> {
+                // Upgrade from candidate31: local operational data is authoritative and must
+                // never be overwritten automatically. Mark reconciled and continue normal sync.
+                val bootstrapNow=System.currentTimeMillis()
+                dao.updateBootstrapState("READY",bootstrapNow,bootstrapNow)
+            }
+            "READY" -> Unit
+            else -> error("BOOTSTRAP_STATE_INVALID: undefined")
+        }
+        // Menu is cloud-authoritative for secondary devices. Never overwrite an existing
+        // cloud menu with a stale local snapshot during ordinary realtime sync.
+        // Flush locally edited menu entities BEFORE pulling remote state.
+        // Otherwise a remote snapshot can overwrite an offline edit before upload.
+        pushPendingCatalog(root,dao)
+        pushPendingExpenseReceipts(root,dao)
+        pullCloudMenu(root,dao)
+        stage("PULL_WEB_EXPENSES"){pullWebExpenseReceipts(root,db,dao)}
+        pullCloudFinance(root,dao)
+        writeFinanceMirror(fs,root,dao)
+        val tables=dao.cloudTablesSnapshot();val sessions=dao.cloudSessionsSnapshot();val bills=dao.cloudBillsSnapshot();val payments=dao.cloudPaymentsSnapshot();val paymentMirror=dao.cloudPaymentMirrorSnapshot()
+        val batches=dao.cloudOrderBatchesSnapshot();val orderItems=dao.cloudOrderItemsSnapshot()
         val today=Calendar.getInstance().apply{set(Calendar.HOUR_OF_DAY,0);set(Calendar.MINUTE,0);set(Calendar.SECOND,0);set(Calendar.MILLISECOND,0)}.timeInMillis
-        val paidToday=bills.filter{it.status=="PAID"&&(it.closedAt?:0)>=today};val open=sessions.filter{it.status=="OPEN"};val now=System.currentTimeMillis()
-        stage("STORE_ROOT"){root.set(mapOf("name" to "0210","updatedAt" to now,"schemaVersion" to 1)).await()}
+        val paidToday=bills.filter{it.status=="PAID"&&it.dataScope=="LIVE"&&it.closedAt!=null&&it.openedAt>=today};val open=sessions.filter{it.status=="OPEN"};val now=System.currentTimeMillis()
+        stage("STORE_ROOT",60_000L){FirestoreServerWriter.set(root,mapOf("name" to "0210","updatedAt" to now,"schemaVersion" to 1))}
         val openByTable=open.associateBy{it.tableId}
-        stage("DASHBOARD"){root.collection("dashboard").document("current").set(financialDashboard(dao,bills,payments,now)+mapOf("openTables" to open.size,"openTableNames" to tables.filter{openByTable.containsKey(it.id)}.map{it.name},"revenueToday" to paidToday.sumOf{it.total},"paidBillsToday" to paidToday.size,"lastUpdatedAt" to now)).await()}
-        writeMaps(fs,root.collection("tableStatus"),tables.map{t->t.id to mapOf("id" to t.id,"name" to t.name,"areaId" to t.areaId,"active" to t.active,"occupied" to openByTable.containsKey(t.id),"openedAt" to openByTable[t.id]?.openedAt,"updatedAt" to now)})
-        writeMaps(fs,root.collection("menu"),dao.allMenuSnapshot().map{m->m.id to mapOf("id" to m.id,"categoryId" to m.categoryId,"name" to m.name,"price" to m.price,"sortOrder" to m.sortOrder,"active" to m.active,"productCode" to m.productCode,"description" to m.description)})
+        // Một operation chung cho dashboard/current và dashboardDaily: cùng một lượt xuất, không bị cổng quota chặn lẫn nhau.
+        val dashboardOperation=java.util.UUID.randomUUID().toString()
+        val liveSnapshot=DashboardSalesSnapshot.composeCurrent(tables,sessions,batches,orderItems)
+        stage("DASHBOARD",60_000L){writeDashboard(root.collection("dashboard").document("current"),financialDashboard(dao,bills,payments,now)+mapOf("openTables" to open.size,"openTableNames" to tables.filter{openByTable.containsKey(it.id)}.map{it.name},"revenueToday" to paidToday.sumOf{it.total},"paidBillsToday" to paidToday.size,"provisionalOpenTotal" to liveSnapshot.provisionalOpenTotal,"liveTables" to liveSnapshot.liveTables.map{it.toMap()},"lastUpdatedAt" to now),dashboardOperation)}
+        publishDailySnapshots(fs,root,bills,batches,orderItems,now,dashboardOperation)
+        publishMonthlySnapshots(fs,root,bills,now,dashboardOperation)
+        writeMaps(fs,root.collection("tableStatus"),tables.map{t->
+            val session=openByTable[t.id]
+            val activeBatches=if(session==null) emptyList() else batches.filter{it.sessionId==session.id&&it.status!="CANCELLED"}
+            val batchIds=activeBatches.map{it.id}.toSet()
+            val currentTotal=orderItems.filter{it.batchId in batchIds}.sumOf{it.unitPriceSnapshot*it.qty}
+            t.id to mapOf("id" to t.id,"name" to t.name,"areaId" to t.areaId,"active" to t.active,"occupied" to (session!=null),"openedAt" to session?.openedAt,"currentTotal" to currentTotal,"serviceStatus" to activeBatches.map{it.status}.firstOrNull().orEmpty(),"updatedAt" to now)
+        })
+        // A full menu mirror is only seeded when no cloud menu exists. Edits must
+        // publish through an explicit versioned menu mutation, not generic sync.
+        val cloudMenuExists=stage("MENU_SEED_CHECK"){root.collection("menu").limit(1).get().await().isEmpty.not()}
+        if(!cloudMenuExists){
+            writeMaps(fs,root.collection("menu"),dao.allMenuSnapshot().map{m->m.id to mapOf("id" to m.id,"categoryId" to m.categoryId,"name" to m.name,"price" to m.price,"sortOrder" to m.sortOrder,"active" to m.active,"productCode" to m.productCode,"description" to m.description)})
+            writeMaps(fs,root.collection("menuCategories"),dao.allCategoriesSnapshot().map{cat->cat.id to mapOf("id" to cat.id,"name" to cat.name,"sortOrder" to cat.sortOrder,"active" to cat.active)})
+        }
         writeMaps(fs,root.collection("areas"),dao.allAreasSnapshot().map{a->a.id to mapOf("id" to a.id,"name" to a.name,"sortOrder" to a.sortOrder,"active" to a.active)})
-        writeMaps(fs,root.collection("menuCategories"),dao.allCategoriesSnapshot().map{c0->c0.id to mapOf("id" to c0.id,"name" to c0.name,"sortOrder" to c0.sortOrder,"active" to c0.active)})
-        writeMaps(fs,root.collection("sessions"),sessions.map{s->s.id to mapOf("id" to s.id,"tableId" to s.tableId,"openedAt" to s.openedAt,"openedBy" to s.openedBy,"status" to s.status,"version" to s.version)})
+        writeMaps(fs,root.collection("sessions"),sessions.map{s->s.id to mapOf("id" to s.id,"tableId" to s.tableId,"openedAt" to s.openedAt,"openedBy" to s.openedBy,"status" to s.status,"version" to s.version,"flow" to s.flow)})
         writeMaps(fs,root.collection("orderBatches"),dao.cloudOrderBatchesSnapshot().map{b->b.id to mapOf("id" to b.id,"sessionId" to b.sessionId,"sequence" to b.sequence,"ordererId" to b.ordererId,"createdAt" to b.createdAt,"sentAt" to b.sentAt,"status" to b.status,"serviceNo" to b.serviceNo,"deliveredAt" to b.deliveredAt,"deliveredBy" to b.deliveredBy)})
-        writeMaps(fs,root.collection("orderItems"),dao.cloudOrderItemsSnapshot().map{i->i.id to mapOf("id" to i.id,"batchId" to i.batchId,"menuItemId" to i.menuItemId,"itemName" to i.itemNameSnapshot,"unitPrice" to i.unitPriceSnapshot,"qty" to i.qty,"note" to i.note,"adjustmentOfItemId" to i.adjustmentOfItemId)})
+        writeMaps(fs,root.collection("orderItems"),dao.cloudOrderItemsSnapshot().map{i->i.id to mapOf("id" to i.id,"batchId" to i.batchId,"menuItemId" to i.menuItemId,"itemName" to i.itemNameSnapshot,"unitPrice" to i.unitPriceSnapshot,"qty" to i.qty,"note" to i.note,"adjustmentOfItemId" to i.adjustmentOfItemId,"categoryIdSnapshot" to i.categoryIdSnapshot,"categoryNameSnapshot" to i.categoryNameSnapshot,"comboPartsSnapshot" to i.comboPartsSnapshot,"loyaltyRewardId" to i.loyaltyRewardId,"buyGetPromotionId" to i.buyGetPromotionId)})
         writeMaps(fs,root.collection("bills"),bills.map{b->b.id to mapOf("id" to b.id,"sessionId" to b.sessionId,"billNo" to b.billNo,"openedAt" to b.openedAt,"closedAt" to b.closedAt,"subtotal" to b.subtotal,"total" to b.total,"status" to b.status)})
-        writeMaps(fs,root.collection("payments"),payments.map{p->p.id to mapOf("id" to p.id,"billId" to p.billId,"method" to p.method,"amount" to p.amount,"cashierId" to p.cashierId,"paidAt" to p.paidAt,"reference" to p.reference)})
-        val settings=dao.allSettingsSnapshot().filter{CloudSyncPolicy.shouldUploadSetting(it.key)}.associate{it.key to it.value};root.collection("config").document("safe").set(settings+mapOf("updatedAt" to now)).await()
-        // Realtime/business sync must not fail just because the independent private backup fails.
-        // Backup is handled separately and keeps its own status/error.
-        val backupError=runCatching{FirestorePrivateBackup.upload(context,fs,uid,now)}.exceptionOrNull()?.message?.take(240)
-        dao.saveCloudSyncState(old.copy(enabled=true,dirty=false,lastAttemptAt=now,lastSuccessAt=now,lastError=backupError?.let{"PRIVATE_BACKUP_ONLY: $it"},syncedUid=uid))
+        writeMaps(fs,root.collection("payments"),paymentMirror.map{p->p.id to mapOf("id" to p.id,"billId" to p.billId,"method" to p.method,"amount" to p.amount,"cashierId" to p.cashierId,"paidAt" to p.paidAt,"reference" to p.reference,"dataScope" to p.dataScope,"cashReceived" to p.cashReceived,"change" to p.change)})
+        // Refund/payment-flow mirrors are best effort: a rules or quota failure here must never block shifts/days/config below.
+        runCatching{
+        writeMaps(fs,root.collection("refunds"),dao.refundsSnapshot().map{r->r.id to mapOf("id" to r.id,"billId" to r.billId,"sessionId" to r.sessionId,"batchId" to r.batchId,"amount" to r.amount,"method" to r.method,"reason" to r.reason,"actorId" to r.actorId,"shiftId" to r.shiftId,"createdAt" to r.createdAt,"dataScope" to r.dataScope,"status" to r.status,"approvedBy" to r.approvedBy,"settledAt" to r.settledAt,"settleNote" to r.settleNote)})
+        run{
+            val st=dao.allSettingsSnapshot().associate{it.key to it.value}
+            val hist=(st["payment_flow_history"]?:"").lines().filter{l->l.isNotBlank()}.mapNotNull{l->l.split("|").takeIf{x->x.size>=4}?.let{x->mapOf("at" to (x[0].toLongOrNull()?:0L),"by" to x[1],"from" to x[2],"to" to x[3])}}
+            writeMaps(fs,root.collection("config"),listOf("paymentFlow" to mapOf("current" to vn.ecohome.pos0210.PaymentFlowRules.normalize(st["payment_flow"]),"history" to hist)))
+        }
+        }.onFailure{e->android.util.Log.w("POS0210_SYNC","refunds/paymentFlow mirror skipped: "+e.message)}
+        // Tháng đã chốt chia cổ đông: web đọc để dời phiếu nhập bù sang tháng chưa chốt, không làm lệch tháng đã chia.
+        runCatching{
+            val closes=dao.allSettingsSnapshot().filter{it.key.startsWith("month_close_")}.mapNotNull{vn.ecohome.pos0210.ShareholderMonth.decode(it.value)}
+            writeMaps(fs,root.collection("shareholderCloses"),closes.map{c->c.monthKey to mapOf("monthKey" to c.monthKey,"revenue" to c.revenue,"operating" to c.operating,"additional" to c.additional,"net" to c.net,"closedAt" to c.closedAt,"closedBy" to c.closedBy)})
+        }.onFailure{e->android.util.Log.w("POS0210_SYNC","shareholderCloses mirror skipped: "+e.message)}
+        writeMaps(fs,root.collection("shifts"),dao.shiftsSnapshot().filter{it.dataScope=="LIVE"}.map{sh->sh.id to mapOf("id" to sh.id,"date" to sh.date,"staffId" to sh.staffId,"staffName" to sh.staffName,"role" to sh.role,"checkInClient" to sh.checkInClient,"checkOutClient" to sh.checkOutClient,"checkOutSource" to sh.checkOutSource,"lastActivityAt" to sh.lastActivityAt,"cashExpected" to sh.cashExpected,"cashCounted" to sh.cashCounted,"diff" to sh.diff,"diffNote" to sh.diffNote,"transferTotal" to sh.transferTotal,"orderCount" to sh.orderCount,"status" to sh.status,"receivedBy" to sh.receivedBy,"receivedAt" to sh.receivedAt,"updatedAt" to sh.updatedAt,"workMinutes" to vn.ecohome.pos0210.ShiftRules.shiftMinutes(sh.checkInClient,sh.checkOutClient),"editLog" to sh.editLog.lines().filter{l->l.isNotBlank()})})
+        run{
+            val liveShifts=dao.shiftsSnapshot().filter{it.dataScope=="LIVE"}
+            val settingsNow=dao.allSettingsSnapshot().associate{it.key to it.value}
+            writeMaps(fs,root.collection("days"),liveShifts.groupBy{it.date}.map{(d,l)->
+                val closeInfo=settingsNow["day_closed_$d"]?.takeIf{it.isNotBlank()}?.split("|")
+                d to mapOf("date" to d,"status" to (if(closeInfo!=null)"closed" else "open"),"closedBy" to closeInfo?.getOrNull(0),"closedAt" to closeInfo?.getOrNull(1)?.toLongOrNull(),"note" to closeInfo?.getOrNull(2),
+                    "shiftCount" to l.size,"cashCounted" to l.sumOf{it.cashCounted?:0L},"cashExpected" to l.sumOf{it.cashExpected?:0L},"transferTotal" to l.sumOf{it.transferTotal},
+                    "shifts" to l.map{sh->mapOf("shiftId" to sh.id,"staffName" to sh.staffName,"status" to sh.status,"cashCounted" to sh.cashCounted,"cashExpected" to sh.cashExpected,"transferTotal" to sh.transferTotal)})
+            })
+        }
+        val settings=dao.allSettingsSnapshot().filter{CloudSyncPolicy.shouldUploadSetting(it.key)}.associate{it.key to it.value};stage("WRITE_CONFIG",60_000L){FirestoreServerWriter.set(root.collection("config").document("safe"),settings+mapOf("updatedAt" to now))}
+        // Heavy private backup and media transfer are handled by a separate worker.
+        // They must never block the foreground "Sync now" action.
+        enqueueBackup(context)
+        dao.recoverInflightSync()
+        val queued=dao.pendingSync(System.currentTimeMillis(),500)
+        queued.filter { it.entityType != "MEDIA" }.forEach { q ->
+            if(dao.claimSync(q.id,System.currentTimeMillis())==1){
+                val ok=when(q.entityType){
+                    "MENU_ITEM" -> false // Only pushPendingCatalog can acknowledge the exact queued edit.
+                    "COMBO" -> false // A pending combo is acknowledged only after its backup is server-confirmed.
+                    "MEDIA" -> false
+                    else -> false
+                }
+                if(ok) dao.completeSync(q.id) else {
+                    val attempts=(q.attempts+1).coerceAtMost(10)
+                    val delayMs=(15_000L shl attempts.coerceAtMost(8)).coerceAtMost(60L*60L*1000L)
+                    dao.retrySync(q.id,System.currentTimeMillis()+delayMs,System.currentTimeMillis(),
+                        "SYNC_QUEUE_UNSUPPORTED_OR_RETRY")
+                }
+            }
+        }
+        val currentState=dao.cloudSyncStateSnapshot()?:old
+        dao.saveCloudSyncState(currentState.copy(dirty=false,lastAttemptAt=now,lastSuccessAt=now,lastError=null,syncedUid=uid))
     }.onFailure{e->
+        if(e is Exception)CloudQuotaGuard.recordFailure(context,e)
+        if(e.message?.contains("MUTEX_BUSY")==true)return@onFailure
         val dao=PosDatabase.get(context).dao();val old=dao.cloudSyncStateSnapshot()?:CloudSyncStateEntity();dao.saveCloudSyncState(old.copy(lastAttemptAt=System.currentTimeMillis(),lastError=e.message?.take(300)))
-    }}
+        dao.saveSetting(vn.ecohome.pos0210.data.AppSettingEntity("cloud_sync_last_trace",CloudExecution.history.value.joinToString("\n")))
+    }
 
-    suspend fun syncDashboardNow(context:Context):Result<Unit> = CloudOperationGuard.mutex.withLock { runCatching{
-        val db=PosDatabase.get(context);val dao=db.dao();val c=config(context);require(c.valid){"Chưa cấu hình Firebase"};val firebaseApp=firebaseApp(context,c);val uid=FirebaseAuth.getInstance(firebaseApp).currentUser?.uid?:error("Chưa đăng nhập Firebase")
+    suspend fun syncDashboardNow(context:Context):Result<Unit> = CloudExecution.operation("DASHBOARD",CloudOperationGuard.mutex) {
+        val db=PosDatabase.get(context);val dao=db.dao();val c=config(context);require(c.valid){"Chưa cấu hình Firebase"};val firebaseApp=firebaseApp(context,c);val uid=authenticatedUid(context,firebaseApp)
         val fs=FirebaseFirestore.getInstance(firebaseApp);val root=fs.collection("users").document(uid).collection("stores").document("0210")
-        stage("PULL_FINANCE"){pullCloudFinance(root,dao)}
-        stage("WRITE_FINANCE"){writeFinanceMirror(fs,root,dao)}
+        // Immediate worker is lightweight: finance reconciliation belongs to full sync.
         val tables=dao.cloudTablesSnapshot();val sessions=dao.cloudSessionsSnapshot();val batches=dao.cloudOrderBatchesSnapshot();val items=dao.cloudOrderItemsSnapshot();val bills=dao.cloudBillsSnapshot();val open=sessions.filter{it.status=="OPEN"};val openByTable=open.associateBy{it.tableId}
-        val today=Calendar.getInstance().apply{set(Calendar.HOUR_OF_DAY,0);set(Calendar.MINUTE,0);set(Calendar.SECOND,0);set(Calendar.MILLISECOND,0)}.timeInMillis;val paidToday=bills.filter{it.status=="PAID"&&(it.closedAt?:0)>=today};val now=System.currentTimeMillis()
-        root.collection("dashboard").document("current").set(financialDashboard(dao,bills,dao.cloudPaymentsSnapshot(),now)+mapOf("openTables" to open.size,"openTableNames" to tables.filter{openByTable.containsKey(it.id)}.map{it.name},"revenueToday" to paidToday.sumOf{it.total},"paidBillsToday" to paidToday.size,"lastUpdatedAt" to now)).await()
-        writeMaps(fs,root.collection("tableStatus"),tables.map{t->t.id to mapOf("id" to t.id,"name" to t.name,"areaId" to t.areaId,"active" to t.active,"occupied" to openByTable.containsKey(t.id),"openedAt" to openByTable[t.id]?.openedAt,"updatedAt" to now)})
+        val today=Calendar.getInstance().apply{set(Calendar.HOUR_OF_DAY,0);set(Calendar.MINUTE,0);set(Calendar.SECOND,0);set(Calendar.MILLISECOND,0)}.timeInMillis;val paidToday=bills.filter{it.status=="PAID"&&it.dataScope=="LIVE"&&it.closedAt!=null&&it.openedAt>=today};val now=System.currentTimeMillis()
+        val dashboardOperation=java.util.UUID.randomUUID().toString()
+        val liveSnapshot=DashboardSalesSnapshot.composeCurrent(tables,sessions,batches,items)
+        stage("DASHBOARD_WRITE",60_000L){writeDashboard(root.collection("dashboard").document("current"),financialDashboard(dao,bills,dao.cloudPaymentsSnapshot(),now)+mapOf("openTables" to open.size,"openTableNames" to tables.filter{openByTable.containsKey(it.id)}.map{it.name},"revenueToday" to paidToday.sumOf{it.total},"paidBillsToday" to paidToday.size,"provisionalOpenTotal" to liveSnapshot.provisionalOpenTotal,"liveTables" to liveSnapshot.liveTables.map{it.toMap()},"lastUpdatedAt" to now),dashboardOperation)}
+        publishDailySnapshots(fs,root,bills,batches,items,now,dashboardOperation)
+        publishMonthlySnapshots(fs,root,bills,now,dashboardOperation)
+        // Cùng nội dung với syncNow (có currentTotal, serviceStatus) để hai đường ghi không đè lẫn nhau.
+        writeMaps(fs,root.collection("tableStatus"),tables.map{t->
+            val session=openByTable[t.id]
+            val activeBatches=if(session==null) emptyList() else batches.filter{it.sessionId==session.id&&it.status!="CANCELLED"}
+            val batchIds=activeBatches.map{it.id}.toSet()
+            val currentTotal=items.filter{it.batchId in batchIds}.sumOf{it.unitPriceSnapshot*it.qty}
+            t.id to mapOf("id" to t.id,"name" to t.name,"areaId" to t.areaId,"active" to t.active,"occupied" to (session!=null),"openedAt" to session?.openedAt,"currentTotal" to currentTotal,"serviceStatus" to activeBatches.map{it.status}.firstOrNull().orEmpty(),"updatedAt" to now)
+        })
         // The browser manager is read-only, but it needs these live records to show
         // the current order and elapsed serving time without waiting for the backup job.
-        writeMaps(fs,root.collection("sessions"),sessions.map{s->s.id to mapOf("id" to s.id,"tableId" to s.tableId,"openedAt" to s.openedAt,"openedBy" to s.openedBy,"status" to s.status,"version" to s.version)})
+        writeMaps(fs,root.collection("sessions"),sessions.map{s->s.id to mapOf("id" to s.id,"tableId" to s.tableId,"openedAt" to s.openedAt,"openedBy" to s.openedBy,"status" to s.status,"version" to s.version,"flow" to s.flow)})
         writeMaps(fs,root.collection("orderBatches"),batches.map{b->b.id to mapOf("id" to b.id,"sessionId" to b.sessionId,"sequence" to b.sequence,"ordererId" to b.ordererId,"createdAt" to b.createdAt,"sentAt" to b.sentAt,"status" to b.status,"serviceNo" to b.serviceNo,"deliveredAt" to b.deliveredAt,"deliveredBy" to b.deliveredBy)})
-        writeMaps(fs,root.collection("orderItems"),items.map{i->i.id to mapOf("id" to i.id,"batchId" to i.batchId,"menuItemId" to i.menuItemId,"itemName" to i.itemNameSnapshot,"unitPrice" to i.unitPriceSnapshot,"qty" to i.qty,"note" to i.note,"adjustmentOfItemId" to i.adjustmentOfItemId)})
-    }}
+        writeMaps(fs,root.collection("orderItems"),items.map{i->i.id to mapOf("id" to i.id,"batchId" to i.batchId,"menuItemId" to i.menuItemId,"itemName" to i.itemNameSnapshot,"unitPrice" to i.unitPriceSnapshot,"qty" to i.qty,"note" to i.note,"adjustmentOfItemId" to i.adjustmentOfItemId,"categoryIdSnapshot" to i.categoryIdSnapshot,"categoryNameSnapshot" to i.categoryNameSnapshot,"comboPartsSnapshot" to i.comboPartsSnapshot,"loyaltyRewardId" to i.loyaltyRewardId,"buyGetPromotionId" to i.buyGetPromotionId)})
+        writeMaps(fs,root.collection("bills"),bills.map{b->b.id to mapOf("id" to b.id,"sessionId" to b.sessionId,"billNo" to b.billNo,"openedAt" to b.openedAt,"closedAt" to b.closedAt,"subtotal" to b.subtotal,"total" to b.total,"status" to b.status)})
+        writeMaps(fs,root.collection("payments"),dao.cloudPaymentMirrorSnapshot().map{p->p.id to mapOf("id" to p.id,"billId" to p.billId,"method" to p.method,"amount" to p.amount,"cashierId" to p.cashierId,"paidAt" to p.paidAt,"reference" to p.reference,"dataScope" to p.dataScope,"cashReceived" to p.cashReceived,"change" to p.change)})
+    }.onFailure{e->if(e is Exception)CloudQuotaGuard.recordFailure(context,e)}
+
+    private suspend fun pushPendingCatalog(root:com.google.firebase.firestore.DocumentReference,dao:PosDao){
+        dao.recoverInflightSync()
+        val pending=dao.pendingSync(System.currentTimeMillis(),500).filter{it.entityType=="MENU_ITEM"||it.entityType=="MENU_CATEGORY"}
+        for(group in pending.chunked(400)){
+            val claimed=group.filter{dao.claimSync(it.id,System.currentTimeMillis())==1}
+            if(claimed.isEmpty())continue
+            try {
+                val writes=mutableListOf<Pair<String,Map<String,Any?>>>()
+                for(q in claimed.distinctBy{it.entityType to it.entityId}) {
+                if(q.entityType=="MENU_ITEM"){
+                    val item=dao.menuItemById(q.entityId)
+                    // Món đã bị xoá hẳn trên máy: ghi dấu xoá để máy khác và web bỏ món này.
+                    if(item==null)writes.add(root.collection("menu").document(q.entityId).path to mapOf("id" to q.entityId,"deleted" to true,"active" to false,"updatedAt" to System.currentTimeMillis()))
+                    if(item!=null)writes.add(root.collection("menu").document(item.id).path to mapOf(
+                        "id" to item.id,"categoryId" to item.categoryId,"name" to item.name,
+                        "price" to item.price,"sortOrder" to item.sortOrder,"active" to item.active,
+                        "productCode" to item.productCode,"description" to item.description,
+                        "updatedAt" to System.currentTimeMillis()))
+                }else{
+                    val cat=dao.allCategoriesSnapshot().firstOrNull{it.id==q.entityId}
+                    if(cat!=null)writes.add(root.collection("menuCategories").document(cat.id).path to mapOf(
+                        "id" to cat.id,"name" to cat.name,"sortOrder" to cat.sortOrder,
+                        "active" to cat.active,"updatedAt" to System.currentTimeMillis()))
+                }
+                }
+                val bumped=System.currentTimeMillis()
+                writes.add(root.collection("config").document("menuVersion").path to mapOf("v" to bumped,"by" to "POS"))
+                stage("PUSH_PENDING_CATALOG count=${claimed.size}",60_000L){FirestoreServerWriter.commit(root.firestore,writes)}
+                // Máy này vừa là nguồn của thay đổi: ghi nhận phiên bản để không tải lại cả menu vô ích.
+                root.firestore.app.applicationContext.getSharedPreferences("pos0210_menu_pull_v1",Context.MODE_PRIVATE).edit().putLong("v",bumped).putLong("at",bumped).apply()
+                claimed.forEach{dao.completeSync(it.id)}
+            }catch(e:CancellationException){ throw e
+            }catch(e:Exception){
+                claimed.forEach{dao.retrySync(it.id,System.currentTimeMillis()+30000L,System.currentTimeMillis(),e.message)}
+                throw e // Fail once, preserve queue; do not accumulate 30 individual timeouts.
+            }
+        }
+    }
+
+    private suspend fun pullCloudMenu(root:com.google.firebase.firestore.DocumentReference,dao:PosDao){
+        // Menu 2 chiều: web sửa menu thì tăng config/menuVersion. Mỗi lần đồng bộ chỉ đọc 1 document này;
+        // chỉ tải lại cả menu khi phiên bản đổi (hoặc đã quá 24 giờ chưa tải). Tiết kiệm lượt đọc gói Spark.
+        val context=root.firestore.app.applicationContext
+        val menuPrefs=context.getSharedPreferences("pos0210_menu_pull_v1",Context.MODE_PRIVATE)
+        val now=System.currentTimeMillis()
+        val version=runCatching{stage("MENU_VERSION"){root.collection("config").document("menuVersion").get(Source.SERVER).await().getLong("v")}}.getOrNull()?:0L
+        if(MenuPullPolicy.skip(version,menuPrefs.getLong("v",-1L),menuPrefs.getLong("at",0L),now))return
+        val categoryDocs=stage("PULL_MENU_CATEGORIES"){root.collection("menuCategories").get(Source.SERVER).await().documents}
+        val itemDocs=stage("PULL_MENU_ITEMS"){root.collection("menu").get(Source.SERVER).await().documents}
+        if(categoryDocs.isEmpty() || itemDocs.isEmpty())return
+        val unsent=dao.unsentCatalogSync()
+        val unsentCategories=unsent.filter{it.entityType=="MENU_CATEGORY"}.map{it.entityId}.toSet()
+        for(doc in categoryDocs){
+            if(doc.id in unsentCategories)continue
+            dao.saveCategory(vn.ecohome.pos0210.data.MenuCategoryEntity(
+                id=doc.getString("id")?:doc.id,
+                name=doc.getString("name")?:continue,
+                sortOrder=doc.getLong("sortOrder")?.toInt()?:0,
+                active=doc.getBoolean("active")?:true))
+        }
+        val local=dao.allMenuSnapshot().associateBy{it.id}
+        // Mã món là duy nhất trên máy: lưu món có mã trùng món KHÁC sẽ làm máy xoá đè món kia. Gặp trùng thì giữ mã cũ / bỏ qua món mới.
+        val idByCode=local.values.filter{it.productCode.isNotBlank()}.associate{it.productCode to it.id}.toMutableMap()
+        val imageUpdates=mutableListOf<Pair<String,String>>()
+        // Cloud must not overwrite unsent local catalog edits after a timeout.
+        val unsentItems=unsent.filter{it.entityType=="MENU_ITEM"}.map{it.entityId}.toSet()
+        for(doc in itemDocs){
+            val id=doc.getString("id")?:doc.id
+            if(id in unsentItems)continue
+            if(doc.getBoolean("deleted")==true){ if(local[id]!=null)dao.deleteUnusedMenuItem(id); continue }
+            val name=doc.getString("name")?:continue
+            val categoryId=doc.getString("categoryId")?:continue
+            val old=local[id]
+            val wanted=doc.getString("productCode")?:old?.productCode.orEmpty()
+            val code=MenuPullPolicy.safeCode(wanted,idByCode[wanted],id,old?.productCode)
+            if(code==null||(code.isBlank()&&local.values.any{it.productCode.isBlank()&&it.id!=id})){CloudExecution.trace("MENU_PULL_SKIP_CODE_CLASH id=$id code=$wanted");continue}
+            old?.productCode?.takeIf{it.isNotBlank()&&it!=code}?.let{idByCode.remove(it)}
+            if(code.isNotBlank())idByCode[code]=id
+            dao.saveMenuItem(vn.ecohome.pos0210.data.MenuItemEntity(
+                id=id,categoryId=categoryId,name=name,
+                price=doc.getLong("price")?:0L,
+                imageUri=old?.imageUri,
+                sortOrder=doc.getLong("sortOrder")?.toInt()?:0,
+                active=doc.getBoolean("active")?:true,
+                productCode=code,
+                description=doc.getString("description")?:""))
+            doc.getString("imageSha")?.takeIf{it.isNotBlank()&&menuPrefs.getString("img_$id",null)!=it}?.let{imageUpdates+=id to it}
+        }
+        // Ảnh web vừa đổi: tải riêng từng món có imageSha mới. Lỗi ảnh không làm hỏng lượt đồng bộ.
+        val uid=root.parent.parent?.id
+        val editor=menuPrefs.edit()
+        if(uid!=null)for((id,sha) in imageUpdates){
+            runCatching{CloudMediaSync.restoreOneFromCloud(context,root.firestore,uid,"menu",id,sha)}
+                .onSuccess{ok->if(ok)editor.putString("img_$id",sha)}
+                .onFailure{if(it is CancellationException)throw it;CloudExecution.trace("MENU_IMAGE_PULL_FAIL id=$id ${it.message}")}
+        }
+        editor.putLong("v",version).putLong("at",now).apply()
+    }
+
+    /** Pulls only browser-entered expense receipts. It never touches sales collections. */
+    private suspend fun pushPendingExpenseReceipts(root:com.google.firebase.firestore.DocumentReference,dao:PosDao){
+        dao.recoverInflightSync()
+        val pending=dao.pendingSync(System.currentTimeMillis(),500).filter{it.entityType=="EXPENSE_RECEIPT"}
+        pending.forEach { queued ->
+            if(dao.claimSync(queued.id,System.currentTimeMillis())!=1)return@forEach
+            try {
+                // Phiếu "web:..." là bản sao nhập từ Web: không bao giờ đẩy ngược lên cloud (tránh vòng lặp/trùng).
+                if(queued.entityId.startsWith("web:")){dao.completeSync(queued.id);return@forEach}
+                val purchase=dao.purchaseById(queued.entityId)?:run{dao.completeSync(queued.id);return@forEach}
+                val lines=dao.purchaseItemsSnapshot(purchase.id)
+                val now=System.currentTimeMillis()
+                val payload=AndroidReceiptPayload.toMap(purchase,lines,now)
+                stage("PUSH_EXPENSE_RECEIPT"){root.collection("expenseReceipts").document(purchase.id).set(payload).await()}
+                dao.completeSync(queued.id)
+            } catch(e:CancellationException){throw e
+            } catch(e:Exception){dao.retrySync(queued.id,System.currentTimeMillis()+30_000L,System.currentTimeMillis(),e.message)}
+        }
+    }
+
+    private suspend fun pullWebExpenseReceipts(root:com.google.firebase.firestore.DocumentReference,db:PosDatabase,dao:PosDao){
+        var cursor=expenseCursor(dao)
+        val repository=PosRepository(db)
+        while(true){
+            val page=stage("PULL_WEB_EXPENSE_PAGE"){root.collection("expenseReceipts")
+                .whereGreaterThanOrEqualTo("updatedAt",cursor.updatedAt)
+                .orderBy("updatedAt")
+                .orderBy(FieldPath.documentId())
+                .limit(200)
+                .get(Source.SERVER).await().documents
+            }.filter { doc ->
+                val updatedAt=doc.getLong("updatedAt")?:Long.MIN_VALUE
+                updatedAt>cursor.updatedAt||(updatedAt==cursor.updatedAt&&doc.id>cursor.receiptId)
+            }
+            if(page.isEmpty()) return
+            page.forEach { doc ->
+                val updatedAt=doc.getLong("updatedAt")?:cursor.updatedAt
+                // Phiếu do Android đẩy lên đã đến các máy Android qua kênh mirror purchases/purchaseItems.
+                // Nhập thêm bản "web:" ở đây sẽ làm máy order tính trùng chi phí, nên chỉ nhập phiếu do Web tạo.
+                val fromAndroid = doc.getString("source") == "ANDROID_POS"
+                if (fromAndroid) {
+                    // Web sửa/huỷ phiếu do Android tạo: áp dụng vào bản local nếu máy này có phiếu đó.
+                    if (WebEditOfAndroidReceipt.isWebEdit(doc.data.orEmpty())) {
+                        val receipt=ExpenseReceiptParser.parse(doc.id,doc.data.orEmpty())
+                        val local=dao.purchaseById(doc.id)
+                        if (receipt==null||local==null) {
+                            CloudExecution.trace("EXPENSE_RECEIPT_WEB_EDIT_SKIPPED ${doc.id} ${if(receipt==null)"dữ liệu phiếu không đọc được" else "máy này chưa có phiếu"}")
+                        } else if (!ExpenseReceiptContract.validate(receipt).valid) {
+                            CloudExecution.trace("EXPENSE_RECEIPT_WEB_EDIT_SKIPPED ${doc.id} ${ExpenseReceiptContract.validate(receipt).error.orEmpty()}")
+                        } else {
+                            WebEditOfAndroidReceipt.apply(local,receipt)?.let{ applied ->
+                                repository.applyWebEditToAndroidReceipt(applied.purchase,applied.items)
+                                dao.markCloudDirty()
+                            }
+                        }
+                    }
+                } else {
+                    val receipt=ExpenseReceiptParser.parse(doc.id,doc.data.orEmpty())
+                    if(receipt==null){
+                        CloudExecution.trace("EXPENSE_RECEIPT_SKIPPED ${doc.id} dữ liệu phiếu không đọc được")
+                    } else {
+                        val deleted=ExpenseReceiptTranslator.isDeleted(receipt.status)
+                        val validation=ExpenseReceiptContract.validate(receipt)
+                        when {
+                            // Phiếu đã xoá mà máy này chưa từng có: không tạo thêm dòng rác trong DB local.
+                            deleted&&dao.purchaseById("web:${receipt.id}")==null -> Unit
+                            !deleted&&!validation.valid -> CloudExecution.trace("EXPENSE_RECEIPT_SKIPPED ${doc.id} ${validation.error.orEmpty()}")
+                            else -> {
+                                val translated=ExpenseReceiptTranslator.translate(receipt)
+                                repository.replaceWebExpenseReceipt(translated.purchase,translated.items)
+                            }
+                        }
+                    }
+                }
+                cursor=cursor.advance(doc.id,updatedAt)
+                dao.saveSetting(vn.ecohome.pos0210.data.AppSettingEntity(EXPENSE_CURSOR_SETTING,"${cursor.updatedAt}|${cursor.receiptId}"))
+            }
+            if(page.size<200) return
+        }
+    }
+
+    private suspend fun expenseCursor(dao:PosDao):ExpenseReceiptCursor{
+        val raw=dao.settingValue(EXPENSE_CURSOR_SETTING)?:return ExpenseReceiptCursor()
+        val parts=raw.split("|",limit=2)
+        return ExpenseReceiptCursor(parts.firstOrNull()?.toLongOrNull()?:0L,parts.getOrElse(1){""})
+    }
 
     private suspend fun pullCloudFinance(root:com.google.firebase.firestore.DocumentReference,dao:PosDao){
-        val remotePurchases=root.collection("purchases").get().await().documents
+        val remotePurchases=stage("PULL_FINANCE_PURCHASES"){root.collection("purchases").get(Source.SERVER).await().documents}
         remotePurchases.forEach{doc->
             val id=doc.getString("id")?.ifBlank{doc.id}?:doc.id
             val purchasedAt=doc.getLong("purchasedAt")?:return@forEach
@@ -141,13 +484,13 @@ object FirebaseCloudSync {
                 )
             )
         }
-        val remoteSuppliers=root.collection("suppliers").get().await().documents
+        val remoteSuppliers=stage("PULL_FINANCE_SUPPLIERS"){root.collection("suppliers").get(Source.SERVER).await().documents}
         remoteSuppliers.forEach{doc->
             val id=doc.getString("id")?.ifBlank{doc.id}?:doc.id
             val name=doc.getString("name")?:return@forEach
             if(name.isNotBlank()) dao.saveSupplier(vn.ecohome.pos0210.data.SupplierEntity(id,name,doc.getString("phone").orEmpty(),doc.getString("note").orEmpty(),doc.getBoolean("active")?:true))
         }
-        val remotePurchaseItems=root.collection("purchaseItems").get().await().documents.mapNotNull{doc->
+        val remotePurchaseItems=stage("PULL_FINANCE_ITEMS"){root.collection("purchaseItems").get(Source.SERVER).await().documents}.mapNotNull{doc->
             val purchaseId=doc.getString("purchaseId")?:return@mapNotNull null
             val name=doc.getString("name")?:return@mapNotNull null
             val qty=doc.getDouble("qty")?:doc.getLong("qty")?.toDouble()?:return@mapNotNull null
@@ -165,7 +508,7 @@ object FirebaseCloudSync {
             )
         }
         if(remotePurchaseItems.isNotEmpty()) dao.insertCloudPurchaseItems(remotePurchaseItems)
-        val remoteAssets=root.collection("assets").get().await().documents
+        val remoteAssets=stage("PULL_FINANCE_ASSETS"){root.collection("assets").get(Source.SERVER).await().documents}
         remoteAssets.forEach{doc->
             val id=doc.getString("id")?.ifBlank{doc.id}?:doc.id
             val name=doc.getString("name")?:return@forEach
@@ -185,7 +528,7 @@ object FirebaseCloudSync {
                 investmentClass=doc.getString("investmentClass").orEmpty().ifBlank{"INITIAL"}
             ))
         }
-        val remoteMovements=root.collection("financialMovements").get().await().documents
+        val remoteMovements=stage("PULL_FINANCE_MOVEMENTS"){root.collection("financialMovements").get(Source.SERVER).await().documents}
         remoteMovements.forEach{doc->
             val id=doc.getString("id")?.ifBlank{doc.id}?:doc.id
             val type=doc.getString("type")?:return@forEach
@@ -221,13 +564,109 @@ object FirebaseCloudSync {
         writeMaps(fs,root.collection("financialMovements"),dao.cloudMovementsSnapshot().map{m->m.id to mapOf("id" to m.id,"type" to m.type,"amount" to m.amount,"occurredAt" to m.occurredAt,"partnerId" to m.partnerId,"method" to m.method,"note" to m.note,"counterpartyName" to m.counterpartyName)})
     }
 
+    /**
+     * Snapshot doanh thu 7 ngày gần nhất vào dashboardDaily/{YYYY-MM-DD}. Chỉ đọc dữ liệu Local đã nạp sẵn.
+     * Chỉ ghi ngày có dữ liệu đổi (dấu vân tay bỏ updatedAt); ngày hôm nay tối đa 10 phút/lần,
+     * ngày đã chốt ghi ngay một lần khi khác. Lỗi ở đây không làm hỏng phần còn lại của lượt sync.
+     */
+    @Volatile private var dailyAckVerified=false
+    @Volatile private var monthlyAckVerified=false
+
+    private suspend fun publishDailySnapshots(fs:FirebaseFirestore,root:com.google.firebase.firestore.DocumentReference,bills:List<vn.ecohome.pos0210.data.BillEntity>,batches:List<vn.ecohome.pos0210.data.OrderBatchEntity>,items:List<vn.ecohome.pos0210.data.OrderItemEntity>,now:Long,operation:String){
+        try{
+            val prefs=fs.app.applicationContext.getSharedPreferences("pos0210_cloud_ack_v1",Context.MODE_PRIVATE)
+            val project=fs.app.options.projectId.orEmpty()
+            val zone=java.time.ZoneId.systemDefault()
+            val todayKey=DashboardSalesSnapshot.dateKey(now,zone)
+            val gateKey="$project/${root.path}/dashboardDaily/lastWriteAt"
+            // Lần đầu sau khi tiến trình khởi động: không tin dấu vân tay đã lưu, ghi lại cả 7 ngày từ DB Local.
+            // Nếu máy khác từng ghi đè document trên cloud thì lần này tự sửa lại, vì dấu vân tay cục bộ không thấy được việc đó.
+            val trustAck=dailyAckVerified
+            val gateOpen=!trustAck||now-prefs.getLong(gateKey,0L)>=DASHBOARD_DAILY_MIN_INTERVAL_MS
+            val changed=DashboardSalesSnapshot.lastDateKeys(todayKey).mapNotNull{key->
+                val snapshot=DashboardSalesSnapshot.composeDaily(key,todayKey,bills,batches,items,zone)
+                val fingerprint=DashboardSalesSnapshot.fingerprint(snapshot)
+                if(trustAck&&prefs.getString("$project/${root.path}/dashboardDaily/$key",null)==fingerprint)null else Triple(key,snapshot,fingerprint)
+            }
+            val due=changed.filter{it.second.finalized||gateOpen}
+            if(due.isEmpty())return
+            stage("DASHBOARD_DAILY",60_000L){
+                FirestoreServerWriter.commit(fs,due.map{(key,snapshot,_)->root.collection("dashboardDaily").document(DashboardSalesSnapshot.dailyDocumentId(key)).path to snapshot.toMap(now)},operation)
+            }
+            val editor=prefs.edit()
+            due.forEach{(key,_,fingerprint)->editor.putString("$project/${root.path}/dashboardDaily/$key",fingerprint)}
+            editor.putLong(gateKey,now).commit()
+            dailyAckVerified=true
+            CloudExecution.trace("DASHBOARD_DAILY written=${due.size}")
+        }catch(e:CancellationException){throw e
+        }catch(e:CloudQuotaDeferred){CloudExecution.trace("DASHBOARD_DAILY DEFERRED ${e.message}")
+        }catch(e:Exception){CloudExecution.trace("DASHBOARD_DAILY FAILED ${e.message}")}
+    }
+
+    /** Doanh thu theo tháng (13 tháng) cho so sánh nhập hàng/doanh thu trên web. Chỉ ghi khi nội dung đổi; tháng hiện tại giới hạn 10 phút một lần. */
+    private suspend fun publishMonthlySnapshots(fs:FirebaseFirestore,root:com.google.firebase.firestore.DocumentReference,bills:List<vn.ecohome.pos0210.data.BillEntity>,now:Long,operation:String){
+        try{
+            val prefs=fs.app.applicationContext.getSharedPreferences("pos0210_cloud_ack_v1",Context.MODE_PRIVATE)
+            val project=fs.app.options.projectId.orEmpty()
+            val zone=java.time.ZoneId.systemDefault()
+            val currentKey=DashboardSalesSnapshot.monthKey(now,zone)
+            val gateKey="$project/${root.path}/dashboardMonthly/lastWriteAt"
+            val trustAck=monthlyAckVerified
+            val gateOpen=!trustAck||now-prefs.getLong(gateKey,0L)>=DASHBOARD_DAILY_MIN_INTERVAL_MS
+            val changed=DashboardSalesSnapshot.lastMonthKeys(currentKey).mapNotNull{key->
+                val snapshot=DashboardSalesSnapshot.composeMonthly(key,currentKey,bills,zone)
+                val fingerprint=DashboardSalesSnapshot.fingerprint(snapshot)
+                if(trustAck&&prefs.getString("$project/${root.path}/dashboardMonthly/$key",null)==fingerprint)null else Triple(key,snapshot,fingerprint)
+            }
+            val due=changed.filter{it.second.finalized||gateOpen}
+            if(due.isEmpty())return
+            stage("DASHBOARD_MONTHLY",60_000L){
+                FirestoreServerWriter.commit(fs,due.map{(key,snapshot,_)->root.collection("dashboardMonthly").document(DashboardSalesSnapshot.monthlyDocumentId(key)).path to snapshot.toMap(now)},operation)
+            }
+            val editor=prefs.edit()
+            due.forEach{(key,_,fingerprint)->editor.putString("$project/${root.path}/dashboardMonthly/$key",fingerprint)}
+            editor.putLong(gateKey,now).commit()
+            monthlyAckVerified=true
+            CloudExecution.trace("DASHBOARD_MONTHLY written=${due.size}")
+        }catch(e:CancellationException){throw e
+        }catch(e:CloudQuotaDeferred){CloudExecution.trace("DASHBOARD_MONTHLY DEFERRED ${e.message}")
+        }catch(e:Exception){CloudExecution.trace("DASHBOARD_MONTHLY FAILED ${e.message}")}
+    }
+
+    private suspend fun writeDashboard(doc:com.google.firebase.firestore.DocumentReference,data:Map<String,Any?>,operation:String=java.util.UUID.randomUUID().toString()){
+        try {FirestoreServerWriter.set(doc,data,operation)}
+        catch(e:CloudQuotaDeferred){
+            CloudExecution.trace("DASHBOARD DEFERRED ${e.message}")
+            val context=doc.firestore.app.applicationContext
+            val delay=(e.until-System.currentTimeMillis()).coerceAtLeast(1000L)
+            val request=OneTimeWorkRequestBuilder<FirebaseRealtimeWorker>().setInitialDelay(delay,TimeUnit.MILLISECONDS).setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build()
+            WorkManager.getInstance(context).enqueueUniqueWork("pos0210-dashboard-deferred-${e.until}",ExistingWorkPolicy.KEEP,request)
+        }
+    }
+
     private suspend fun writeMaps(fs:FirebaseFirestore,collection:com.google.firebase.firestore.CollectionReference,rows:List<Pair<String,Map<String,Any?>>>){
-        rows.chunked(400).forEach{chunk->val batch=fs.batch();chunk.forEach{(id,data)->batch.set(collection.document(id),data)};batch.commit().await()}
+        val ack=fs.app.applicationContext.getSharedPreferences("pos0210_cloud_ack_v1",Context.MODE_PRIVATE)
+        // Persist only hashes of server-acknowledged payloads. UID is part of the path.
+        // Ignore heartbeat timestamps, not business fields, to avoid rewriting historical rows.
+        fun fingerprint(data:Map<String,Any?>):String {
+            val stable=if(collection.id=="tableStatus")data-"updatedAt" else data
+            return java.security.MessageDigest.getInstance("SHA-256").digest(stable.toSortedMap().toString().toByteArray(Charsets.UTF_8)).joinToString(""){"%02x".format(it)}
+        }
+        val changed=rows.filter{(id,data)->ack.getString(fs.app.options.projectId+"/"+collection.path+"/"+id,null)!=fingerprint(data)}
+        CloudExecution.trace("WRITE_${collection.id} changed=${changed.size} total=${rows.size}")
+        changed.chunked(399).forEachIndexed{index,chunk->
+            stage("WRITE_${collection.id}_BATCH_${index+1}",60_000L){
+                FirestoreServerWriter.commit(fs,chunk.map{(id,data)->collection.document(id).path to data})
+            }
+            val editor=ack.edit()
+            chunk.forEach{(id,data)->editor.putString(fs.app.options.projectId+"/"+collection.path+"/"+id,fingerprint(data))}
+            editor.commit()
+        }
     }
     private suspend fun financialDashboard(dao:PosDao,bills:List<vn.ecohome.pos0210.data.BillEntity>,payments:List<vn.ecohome.pos0210.data.PaymentEntity>,now:Long):Map<String,Any?>{
         val month=Calendar.getInstance().apply{timeInMillis=now;set(Calendar.DAY_OF_MONTH,1);set(Calendar.HOUR_OF_DAY,0);set(Calendar.MINUTE,0);set(Calendar.SECOND,0);set(Calendar.MILLISECOND,0)}
         val from=month.timeInMillis;val to=Calendar.getInstance().apply{timeInMillis=from;add(Calendar.MONTH,1)}.timeInMillis;val monthKey="%04d-%02d".format(month.get(Calendar.YEAR),month.get(Calendar.MONTH)+1)
-        val monthBills=bills.filter{it.status=="PAID"&&(it.closedAt?:Long.MIN_VALUE) in from until to};val billIds=monthBills.map{it.id}.toSet();val monthRevenue=monthBills.sumOf{it.total};val received=payments.filter{it.billId in billIds}.sumOf{it.amount}
+        val monthBills=bills.filter{it.status=="PAID"&&it.dataScope=="LIVE"&&it.closedAt!=null&&it.openedAt in from until to};val billIds=monthBills.map{it.id}.toSet();val monthRevenue=monthBills.sumOf{it.total};val received=payments.filter{it.billId in billIds}.sumOf{it.amount}
         val purchases=dao.cloudPurchasesSnapshot();val monthPurchases=purchases.filter{it.status=="ACTIVE"&&it.purchasedAt in from until to};fun sum(category:String)=monthPurchases.filter{it.expenseCategory==category}.sumOf{it.total}
         val fixed=sum(ExpenseCategories.FIXED_EXPENSE);val variableExpense=sum(ExpenseCategories.VARIABLE_EXPENSE);val other=sum(ExpenseCategories.OTHER_EXPENSE);val inventory=sum(ExpenseCategories.INVENTORY_PURCHASE);val capital=sum(ExpenseCategories.CAPITAL_ASSET);val setup=sum(ExpenseCategories.SETUP_COST)+sum(ExpenseCategories.INITIAL_INVESTMENT_SUNK);val unclassified=sum(ExpenseCategories.UNCLASSIFIED)
         val movements=dao.cloudMovementsSnapshot();val monthMovements=movements.filter{it.occurredAt in from until to};val contribution=sum(ExpenseCategories.OWNER_CONTRIBUTION)+monthMovements.filter{it.type=="CAPITAL_CONTRIBUTION"}.sumOf{it.amount};val workingCapital=monthMovements.filter{it.type=="WORKING_CAPITAL"}.sumOf{it.amount};val otherCashIn=monthMovements.filter{it.type in setOf("OTHER_CASH_IN","OTHER_CASH_ADJUSTMENT","ASSET_DISPOSAL_IN")}.sumOf{it.amount};val withdrawal=sum(ExpenseCategories.OWNER_WITHDRAWAL)+monthMovements.filter{it.type=="OWNER_WITHDRAWAL"}.sumOf{it.amount};val profitWithdrawal=sum(ExpenseCategories.PROFIT_WITHDRAWAL)+monthMovements.filter{it.type=="PROFIT_WITHDRAWAL"}.sumOf{it.amount}
@@ -246,7 +685,7 @@ object FirebaseCloudSync {
     }
     fun schedule(context:Context){
         val network=Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
-        val syncRequest=PeriodicWorkRequestBuilder<FirebaseSyncWorker>(24,TimeUnit.HOURS)
+        val syncRequest=PeriodicWorkRequestBuilder<FirebaseSyncWorker>(15,TimeUnit.MINUTES).setInputData(androidx.work.workDataOf(FirebaseSyncWorker.PERIODIC to true))
             .setConstraints(network).build()
         val backupRequest=PeriodicWorkRequestBuilder<FirebaseBackupWorker>(1,TimeUnit.HOURS)
             .setConstraints(network).build()
@@ -259,31 +698,55 @@ object FirebaseCloudSync {
     }
     fun enqueueImmediate(context:Context){
         val request=OneTimeWorkRequestBuilder<FirebaseRealtimeWorker>().setInitialDelay(3,TimeUnit.SECONDS).setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build()
-        WorkManager.getInstance(context).enqueueUniqueWork("pos0210-firebase-immediate",ExistingWorkPolicy.REPLACE,request)
+        WorkManager.getInstance(context).enqueueUniqueWork("pos0210-firebase-immediate",ExistingWorkPolicy.KEEP,request)
+    }
+    /** Web đã sửa menu mà máy này chưa kéo về: KHÔNG được đẩy cả menu máy lên (sẽ đè mất bản sửa trên web). */
+    suspend fun cloudMenuNewer(context:Context,fs:FirebaseFirestore,uid:String):Boolean {
+        val v=fs.collection("users").document(uid).collection("stores").document("0210").collection("config").document("menuVersion").get(Source.SERVER).await().getLong("v")?:0L
+        val pulled=context.getSharedPreferences("pos0210_menu_pull_v1",Context.MODE_PRIVATE).getLong("v",-1L)
+        return v>0L&&v!=pulled
+    }
+    fun enqueueCatalog(context:Context){
+        val request=OneTimeWorkRequestBuilder<FirebaseCatalogWorker>().setInitialDelay(30,TimeUnit.SECONDS).setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build()
+        WorkManager.getInstance(context).enqueueUniqueWork("pos0210-catalog",ExistingWorkPolicy.KEEP,request)
+    }
+    fun enqueueFinance(context:Context){
+        val request=OneTimeWorkRequestBuilder<FirebaseSyncWorker>().setInitialDelay(60,TimeUnit.SECONDS).setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build()
+        WorkManager.getInstance(context).enqueueUniqueWork("pos0210-finance",ExistingWorkPolicy.KEEP,request)
     }
     fun enqueueBackup(context:Context){
         val request=OneTimeWorkRequestBuilder<FirebaseBackupWorker>()
-            .setInitialDelay(5,TimeUnit.MINUTES)
+            .setInitialDelay(1,TimeUnit.HOURS)
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
-            "pos0210-firebase-backup",ExistingWorkPolicy.REPLACE,request
+            "pos0210-firebase-backup",ExistingWorkPolicy.KEEP,request
         )
     }
 }
 
 class FirebaseSyncWorker(context:Context,params:WorkerParameters):CoroutineWorker(context,params){
+    companion object {
+        const val PERIODIC="periodic"
+        const val IDLE_INTERVAL_MS=60*60_000L
+        fun skipIdle(periodic:Boolean,dirty:Boolean,lastSuccessAt:Long?,now:Long)=periodic&&!dirty&&lastSuccessAt!=null&&now-lastSuccessAt in 0 until IDLE_INTERVAL_MS
+    }
     override suspend fun doWork():Result{
         val state=PosDatabase.get(applicationContext).dao().cloudSyncStateSnapshot()
         if(state?.enabled!=true)return Result.success()
-        return if(FirebaseCloudSync.syncNow(applicationContext).isSuccess)Result.success() else Result.retry()
+        // Chu kỳ dự phòng 15 phút: không có thay đổi trên máy thì chỉ kiểm tra lại mỗi 60 phút (vẫn kéo menu sửa từ web).
+        // Thay đổi dữ liệu đã tự đẩy ngay (InvalidationTracker); lệnh từ web không bị bỏ qua.
+        if(FirebaseSyncWorker.skipIdle(inputData.getBoolean(PERIODIC,false),state.dirty,state.lastSuccessAt,System.currentTimeMillis()))return Result.success()
+        val result=FirebaseCloudSync.syncNow(applicationContext)
+        return if(result.isSuccess||!CloudQuotaGuard.retry(result.exceptionOrNull()))Result.success() else Result.retry()
     }
 }
 class FirebaseRealtimeWorker(context:Context,params:WorkerParameters):CoroutineWorker(context,params){
     override suspend fun doWork():Result{
         val state=PosDatabase.get(applicationContext).dao().cloudSyncStateSnapshot()
         if(state?.enabled!=true)return Result.success()
-        return if(FirebaseCloudSync.syncDashboardNow(applicationContext).isSuccess)Result.success() else Result.retry()
+        val result=FirebaseCloudSync.syncDashboardNow(applicationContext)
+        return if(result.isSuccess||!CloudQuotaGuard.retry(result.exceptionOrNull()))Result.success() else Result.retry()
     }
 }
 
@@ -291,6 +754,15 @@ class FirebaseBackupWorker(context:Context,params:WorkerParameters):CoroutineWor
     override suspend fun doWork():Result{
         val state=PosDatabase.get(applicationContext).dao().cloudSyncStateSnapshot()
         if(state?.enabled!=true)return Result.success()
-        return if(FirebaseCloudSync.backupNow(applicationContext).isSuccess)Result.success() else Result.retry()
+        val result=FirebaseCloudSync.backupNow(applicationContext)
+        return if(result.isSuccess||!CloudQuotaGuard.retry(result.exceptionOrNull()))Result.success() else Result.retry()
+    }
+}
+
+class FirebaseCatalogWorker(context:Context,params:WorkerParameters):CoroutineWorker(context,params){
+    override suspend fun doWork():Result{
+        if(PosDatabase.get(applicationContext).dao().cloudSyncStateSnapshot()?.enabled!=true)return Result.success()
+        val result=FirebaseCloudSync.publishMenu(applicationContext)
+        return if(result.isSuccess||!CloudQuotaGuard.retry(result.exceptionOrNull()))Result.success() else Result.retry()
     }
 }

@@ -9,14 +9,15 @@ import androidx.room.PrimaryKey
 @Entity data class ComboEntity(@PrimaryKey val id:String,val name:String,val price:Long,val imageUri:String?=null,val sortOrder:Int=0,val active:Boolean=true,val description:String="")
 @Entity(indices=[Index("comboId"),Index("menuItemId")]) data class ComboItemEntity(@PrimaryKey val id:String,val comboId:String,val menuItemId:String,val qty:Int=1)
 @Entity(indices=[Index("categoryId"),Index(value=["productCode"],unique=true)]) data class MenuItemEntity(@PrimaryKey val id:String,val categoryId:String,val name:String,val price:Long,val imageUri:String?=null,val sortOrder:Int=0,val active:Boolean=true,val productCode:String="",val description:String="")
-@Entity(indices=[Index(value=["tableId","status"])]) data class TableSessionEntity(@PrimaryKey val id:String,val tableId:String,val openedAt:Long,val openedBy:String,val status:String="OPEN",val version:Long=1)
+@Entity(indices=[Index(value=["tableId","status"])]) data class TableSessionEntity(@PrimaryKey val id:String,val tableId:String,val openedAt:Long,val openedBy:String,val status:String="OPEN",val version:Long=1,val dataScope:String="LIVE",val shiftId:String?=null,val flow:String="postpaid")
 @Entity(indices=[Index("sessionId"),Index("serviceNo"),Index("status")]) data class OrderBatchEntity(@PrimaryKey val id:String,val sessionId:String,val sequence:Int,val ordererId:String,val createdAt:Long,val sentAt:Long?=null,val status:String="DRAFT",val serviceNo:Int=0,val deliveredAt:Long?=null,val deliveredBy:String?=null)
-@Entity(indices=[Index("batchId")]) data class OrderItemEntity(@PrimaryKey val id:String,val batchId:String,val menuItemId:String?,val itemNameSnapshot:String,val unitPriceSnapshot:Long,val qty:Int,val note:String="",val adjustmentOfItemId:String?=null)
-@Entity(indices=[Index("sessionId"),Index("customerId")]) data class BillEntity(@PrimaryKey val id:String,val sessionId:String,val billNo:String,val openedAt:Long,val closedAt:Long?,val subtotal:Long,val total:Long,val status:String,val customerId:String?=null)
-@Entity(indices=[Index(value=["billId"],unique=true)]) data class PaymentEntity(@PrimaryKey val id:String,val billId:String,val method:String,val amount:Long,val cashierId:String,val paidAt:Long,val reference:String?=null)
+@Entity(indices=[Index("batchId"),Index("buyGetPromotionId")]) data class OrderItemEntity(@PrimaryKey val id:String,val batchId:String,val menuItemId:String?,val itemNameSnapshot:String,val unitPriceSnapshot:Long,val qty:Int,val note:String="",val adjustmentOfItemId:String?=null,val loyaltyRewardId:String?=null,val loyaltyLabel:String?=null,val buyGetPromotionId:String?=null,val buyGetLabel:String?=null,val categoryIdSnapshot:String?=null,val categoryNameSnapshot:String?=null,val comboPartsSnapshot:String?=null,val deliveredQty:Int=0)
+@Entity(indices=[Index("sessionId"),Index("customerId")]) data class BillEntity(@PrimaryKey val id:String,val sessionId:String,val billNo:String,val openedAt:Long,val closedAt:Long?,val subtotal:Long,val total:Long,val status:String,val customerId:String?=null,val dataScope:String="LIVE")
+@Entity(indices=[Index(value=["billId"],unique=true)]) data class PaymentEntity(@PrimaryKey val id:String,val billId:String,val method:String,val amount:Long,val cashierId:String,val paidAt:Long,val reference:String?=null,val dataScope:String="LIVE",val cashReceived:Long?=null,val change:Long?=null)
 @Entity(indices=[Index(value=["phone"],unique=true),Index("tier")]) data class CustomerEntity(@PrimaryKey val id:String,val phone:String,val name:String="",val tier:String="MEMBER",val points:Int=0,val totalSpend:Long=0,val visitCount:Int=0,val lastVisitAt:Long?=null,val active:Boolean=true,val tierManual:Boolean=false,val address:String="")
 @Entity(indices=[Index("customerId"),Index("billId")]) data class CustomerPointTransactionEntity(@PrimaryKey val id:String,val customerId:String,val billId:String?,val delta:Int,val reason:String,val createdAt:Long,val actorId:String?)
 @Entity(indices=[Index("code"),Index("active")]) data class PricingRuleEntity(@PrimaryKey val id:String,val name:String,val code:String="",val kind:String="DISCOUNT",val percent:Int=0,val startAt:Long?=null,val endAt:Long?=null,val startMinute:Int?=null,val endMinute:Int?=null,val autoApply:Boolean=false,val active:Boolean=true)
+@Entity(indices=[Index("active"),Index("buyMenuItemId"),Index("giftMenuItemId")]) data class BuyGetPromotionEntity(@PrimaryKey val id:String,val name:String,val buyMenuItemId:String,val buyQuantity:Int,val giftMenuItemId:String,val giftQuantity:Int,val repeat:Boolean=true,val active:Boolean=true,val startAt:Long?=null,val endAt:Long?=null,val createdAt:Long=System.currentTimeMillis(),val updatedAt:Long=System.currentTimeMillis())
 @Entity(indices=[Index("billId"),Index("ruleId")]) data class BillAdjustmentEntity(@PrimaryKey val id:String,val billId:String,val ruleId:String?,val name:String,val kind:String,val percent:Int,val amount:Long,val code:String="",val appliedAt:Long,val actorId:String?)
 @Entity data class SupplierEntity(@PrimaryKey val id:String,val name:String,val phone:String="",val note:String="",val active:Boolean=true)
 @Entity(indices=[Index(value=["code"],unique=true),Index("parentExpenseCategory"),Index("active")]) data class CostCodeEntity(@PrimaryKey val id:String,val code:String,val name:String,val parentExpenseCategory:String,val defaultUnit:String="lần",val defaultSupplier:String="",val referenceUnitPrice:Long?=null,val sortOrder:Int=0,val active:Boolean=true)
@@ -33,18 +34,58 @@ import androidx.room.PrimaryKey
 @Entity(indices=[Index("batchId"),Index(value=["batchId","type"],unique=true)]) data class PrintJobEntity(@PrimaryKey val id:String,val batchId:String?,val billId:String?,val type:String,val status:String="PENDING",val claimedByDeviceId:String?=null,val attempts:Int=0,val createdAt:Long,val printedAt:Long?=null,val error:String?=null)
 @Entity(indices=[Index("entityId")]) data class AuditEventEntity(@PrimaryKey val id:String,val entityType:String,val entityId:String,val action:String,val actorId:String?,val deviceId:String?,val occurredAt:Long,val payload:String="")
 @Entity data class AppSettingEntity(@PrimaryKey val key:String,val value:String)
-@Entity data class CloudSyncStateEntity(@PrimaryKey val id:String="firebase",val enabled:Boolean=false,val dirty:Boolean=true,val lastAttemptAt:Long?=null,val lastSuccessAt:Long?=null,val lastError:String?=null,val syncedUid:String?=null)
+@Entity data class CloudSyncStateEntity(@PrimaryKey val id:String="firebase",val enabled:Boolean=false,val dirty:Boolean=true,val lastAttemptAt:Long?=null,val lastSuccessAt:Long?=null,val lastError:String?=null,val syncedUid:String?=null,val bootstrapState:String="NEEDS_PULL",val bootstrapCompletedAt:Long?=null,val lastPullAt:Long?=null)
+@Entity(indices=[Index("employeeId"),Index("checkInAt"),Index("status"),Index("dataScope")])
+data class AttendanceSessionEntity(
+ @PrimaryKey val id:String,
+ val employeeId:String,
+ val checkInAt:Long,
+ val checkOutAt:Long?=null,
+ val status:String="OPEN",
+ val hourlyRate:Long=0,
+ val multiplierBasisPoints:Int=10000,
+ val note:String="",
+ val createdAt:Long=System.currentTimeMillis(),
+ val updatedAt:Long=System.currentTimeMillis(),
+ val dataScope:String="LIVE"
+)
+
+@Entity(indices=[Index("active"),Index("triggerType")])
+data class LoyaltyCampaignEntity(@PrimaryKey val id:String,val name:String,val triggerType:String,val threshold:Long,val rewardType:String,val rewardValue:Long=0,val rewardMenuItemId:String?=null,val rewardCategoryId:String?=null,val cycleMode:String="REPEAT",val expiresDays:Int?=null,val active:Boolean=true,val createdAt:Long,val updatedAt:Long)
+
+@Entity(indices=[Index("customerId"),Index("campaignId"),Index("status"),Index("earnedAt")])
+data class CustomerRewardEntity(@PrimaryKey val id:String,val customerId:String,val campaignId:String,val sourceBillId:String?,val status:String="AVAILABLE",val earnedAt:Long,val expiresAt:Long?=null,val redeemedAt:Long?=null,val redeemedBillId:String?=null,val rewardSnapshot:String="")
+
+@Entity(indices=[Index("status"),Index("nextAttemptAt"),Index(value=["entityType","entityId"],unique=true)])
+data class SyncQueueEntity(@PrimaryKey val id:String,val entityType:String,val entityId:String,val operation:String="UPSERT",val payload:String="",val createdAt:Long,val updatedAt:Long,val attempts:Int=0,val nextAttemptAt:Long=0,val status:String="PENDING",val lastError:String?=null)
 @Entity(indices=[Index("tableSessionId"),Index(value=["paymentCode"],unique=true),Index("status"),Index("expiresAt")])
 data class PaymentSessionEntity(@PrimaryKey val id:String,val tableSessionId:String,val billId:String?=null,val tableId:String,val expectedAmount:Long,val paymentCode:String,val openedAt:Long,val expiresAt:Long,val status:String="WAITING",val detectedFingerprint:String?=null,val detectedBank:String?=null,val detectedAmount:Long?=null,val detectedAt:Long?=null,val confidence:String?=null)
 @Entity(indices=[Index("receivedAt"),Index("matchStatus"),Index("paymentSessionId")])
 data class BankNotificationEventEntity(@PrimaryKey val fingerprint:String,val packageName:String,val bank:String?=null,val title:String,val body:String,val receivedAt:Long,val parserResult:String,val amount:Long?=null,val account:String?=null,val transactionTime:Long?=null,val content:String?=null,val reference:String?=null,val direction:String?=null,val matchStatus:String="UNMATCHED",val paymentSessionId:String?=null)
 
-data class ItemSaleRow(val name:String,val qty:Int,val sessionId:String)
+data class ItemSaleRow(val name:String,val qty:Int,val sessionId:String,
+ val lineId:String="",val menuItemId:String?=null,val unitPrice:Long=0,
+ val categoryId:String?=null,val categoryName:String?=null,val comboPartsJson:String?=null,
+ val loyaltyRewardId:String?=null,val buyGetPromotionId:String?=null,val adjustmentOfItemId:String?=null,
+ val discounted:Boolean=false)
+
+data class SalesReportData(val bills:List<BillEntity> = emptyList(),val items:List<ItemSaleRow> = emptyList(),
+ val payments:List<PaymentEntity> = emptyList(),val adjustments:List<BillAdjustmentEntity> = emptyList(),
+ val sessions:List<TableSessionEntity> = emptyList(),val orphanLines:Int=0)
 
 data class PurchaseCostRow(val purchaseId:String,val categoryId:String,val amount:Long,val purchasedAt:Long)
 
-data class PricingPreview(val subtotal:Long,val surcharge:Long,val discount:Long,val total:Long,val surchargeRules:List<PricingRuleEntity>,val discountRule:PricingRuleEntity?,val message:String="")
+data class PricingPreview(val subtotal:Long,val surcharge:Long,val discount:Long,val total:Long,val surchargeRules:List<PricingRuleEntity>,val discountRule:PricingRuleEntity?,val message:String="",val buyGetDiscount:Long=0L,val buyGetLabel:String?=null)
 
 data class CustomerItemStatRow(val customerId:String,val name:String,val qty:Int)
 
 data class PaymentCommitResult(val bill:BillEntity,val customer:CustomerEntity?,val pointsBefore:Int,val pointsEarned:Int,val pointsAfter:Int,val tier:String?)
+
+@Entity(indices=[Index("status"),Index("date"),Index("staffId")]) data class ShiftEntity(@PrimaryKey val id:String,val date:String,val staffId:String,val staffName:String,val role:String,val checkInClient:Long,val checkOutClient:Long?=null,val checkOutSource:String?=null,val lastActivityAt:Long,val cashExpected:Long?=null,val cashCounted:Long?=null,val diff:Long?=null,val diffNote:String="",val transferTotal:Long=0,val orderCount:Int=0,val status:String="open",val receivedBy:String?=null,val receivedAt:Long?=null,val attendanceId:String?=null,val dataScope:String="LIVE",val updatedAt:Long,val editLog:String="")
+@Entity(indices=[Index("billId"),Index("shiftId"),Index("createdAt")]) data class RefundEntity(@PrimaryKey val id:String,val billId:String,val sessionId:String,val batchId:String?,val amount:Long,val method:String,val reason:String,val actorId:String,val shiftId:String?,val createdAt:Long,val dataScope:String="LIVE",val status:String="DONE",val approvedBy:String?=null,val settledAt:Long?=null,val settleNote:String="")
+/** Một dòng trong danh sách đơn trả trước (kết quả join, không phải bảng). */
+data class PrepaidOrderRow(val sessionId:String,val batchId:String,val serviceNo:Int,val batchStatus:String,val billId:String?,val total:Long?,val method:String?,val cashReceived:Long?,val change:Long?,val paidAt:Long?,val billStatus:String?,val openedAt:Long,val tableName:String="",val itemsText:String?=null,val flow:String="prepaid")
+data class WaitingOrderRow(val batchId:String,val sessionId:String,val serviceNo:Int,val sequence:Int,val createdAt:Long,val sentAt:Long?,val tableId:String,val tableName:String,val flow:String,val itemsText:String?)
+
+/** Số lần mỗi combo đã được gọi (kết quả truy vấn, không phải bảng). */
+data class ComboOrderCount(val id:String,val n:Int)

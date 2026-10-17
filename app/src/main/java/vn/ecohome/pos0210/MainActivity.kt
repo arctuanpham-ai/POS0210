@@ -1,4 +1,6 @@
 package vn.ecohome.pos0210
+import vn.ecohome.pos0210.report.SalesReport
+import vn.ecohome.pos0210.report.SalesItemsReport
 
 import android.net.Uri
 import android.Manifest
@@ -13,6 +15,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
@@ -27,11 +30,14 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -46,9 +52,12 @@ import vn.ecohome.pos0210.data.*
 import vn.ecohome.pos0210.printing.PrinterText
 import vn.ecohome.pos0210.printing.BluetoothPrinter
 import vn.ecohome.pos0210.payment.VietQrOffline
+import vn.ecohome.pos0210.payment.PaymentQrMode
 import vn.ecohome.pos0210.banknotification.NotificationAccess
 import vn.ecohome.pos0210.banknotification.BankPaymentAnnouncer
 import java.text.SimpleDateFormat
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.*
 
 private val Cream = Color(0xFFF6F0E6)
@@ -80,6 +89,27 @@ private fun OfflineVietQrImage(
     )
 }
 
+@Composable
+private fun PaymentQrImage(
+    mode: String,
+    bank: String,
+    account: String,
+    holder: String,
+    amount: Long,
+    info: String,
+    modifier: Modifier
+) {
+    if (PaymentQrMode.usesStaticSoundboxQr(mode)) {
+        Image(
+            painter = painterResource(R.drawable.soundbox_qr_clean),
+            contentDescription = "Mã QR tĩnh Techcombank Soundbox",
+            modifier = modifier
+        )
+    } else {
+        OfflineVietQrImage(bank, account, holder, amount, info, modifier)
+    }
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
@@ -97,24 +127,68 @@ fun App(vm: PosViewModel = viewModel()) {
     val sc by vm.screen.collectAsState()
     val t by vm.currentTable.collectAsState()
     val s by vm.currentSession.collectAsState()
+    val locked by vm.locked.collectAsState()
+    LaunchedEffect(Unit) {
+        var tick = 0
+        vm.autoCloseIfStale()
+        while (true) {
+            vm.lockIfIdle()
+            vm.checkReminder()
+            vm.checkDayClose()
+            tick++
+            if (tick % 30 == 0) vm.autoCloseIfStale()
+            if (tick % 15 == 0) vm.checkDeliveryReminders()
+            kotlinx.coroutines.delay(1000)
+        }
+    }
+    Box(Modifier.fillMaxSize().pointerInput(Unit) {
+        awaitPointerEventScope {
+            while (true) {
+                awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                vm.touch()
+            }
+        }
+    }) {
     when (sc) {
         "LOGIN" -> Login(vm)
+        "SHIFT_START" -> StartShift(vm)
+        "SHIFT_END" -> ShiftEnd(vm)
+        "HR" -> HrHub(vm)
+        "SHIFT_SETTINGS" -> ShiftSettings(vm)
+        "CLOSE_DAY" -> CloseDay(vm)
+        "SHIFTS" -> ShiftList(vm)
+        "ATT_EDIT" -> AttendanceEdit(vm)
         "TABLES" -> Tables(vm)
         "ORDER" -> t?.let { Order(vm, it) }
         "SENT" -> if (t != null && s != null) Sent(vm, t!!, s!!)
-        "PAY" -> if (t != null && s != null) Pay(vm, t!!, s!!)
+        "PAY" -> if (t != null && s != null) {
+            val payShift by vm.activeShift.collectAsState()
+            val payUser by vm.currentEmployee.collectAsState()
+            if (s!!.dataScope == "LIVE" && !ShiftRules.canPay(payShift?.staffId, payUser?.id ?: "")) {
+                LaunchedEffect(Unit) { vm.screen.value = "SENT" }
+            } else Pay(vm, t!!, s!!)
+        }
         "REPORT" -> Report(vm)
         "MANAGE" -> Manage(vm)
         "MENU" -> MenuManager(vm)
         "COMBO" -> ComboManager(vm)
         "PRICING" -> PricingManager(vm)
+        "BUY_GET" -> BuyGetManager(vm)
         "DELIVERY" -> DeliveryQueue(vm)
+        "PREPAID_ORDERS" -> PrepaidOrders(vm)
+        "FROZEN_REFUNDS" -> FrozenRefundsScreen(vm)
+        "UNPAID_PREPAID" -> UnpaidPrepaidScreen(vm)
+        "REVIEW" -> t?.let { PrepaidReview(vm, it) }
+        "PAYMENT_FLOW" -> PaymentFlowSettings(vm)
         "CUSTOMERS" -> Customers(vm)
         "LOYALTY_CONFIG" -> LoyaltyConfig(vm)
+        "LOYALTY_CAMPAIGNS" -> LoyaltyCampaignManager(vm)
         "FINANCE_PEOPLE" -> FinancePeopleManager(vm)
         "EMP" -> Employees(vm)
+        "PAYROLL" -> PayrollManager(vm)
         "PURCHASE" -> Purchases(vm)
         "VIETQR" -> VietQr(vm)
+        "DELIVERY_REMIND" -> DeliveryRemindSettings(vm)
         "PRINTER" -> Printer(vm)
         "TABLE_ADMIN" -> TableManager(vm)
         "BACKUP" -> BackupCenter(vm)
@@ -123,6 +197,18 @@ fun App(vm: PosViewModel = viewModel()) {
         "BANK_PAYMENT_SETTINGS" -> BankPaymentSettings(vm)
         "BANK_NOTIFICATION_TEST" -> BankNotificationTest(vm)
         "CLOUD" -> CloudSyncSettings(vm)
+        "RESET_PREOPENING_SALES" -> ResetPreOpeningSales(vm)
+        "TEST_MODE" -> TestModeManager(vm)
+    }
+    val reminder by vm.reminderDue.collectAsState()
+    if (reminder && !locked) ShiftReminderDialog(vm)
+    val dayDue by vm.dayCloseDate.collectAsState()
+    if (dayDue != null && !reminder && !locked && sc != "CLOSE_DAY") DayCloseReminderDialog(vm, dayDue!!)
+    if (locked) LockScreen(vm)
+    val kitchenUi by vm.kitchenPrint.collectAsState()
+    kitchenUi?.let { KitchenPrintOverlay(vm, it) }
+    if (!locked && sc != "LOGIN") BankReceivedBanner(vm)
+        val kitchenPrev by vm.kitchenPreview.collectAsState(); kitchenPrev?.let { KitchenPreviewScreen(vm, it.first, it.second) }
     }
 }
 
@@ -171,7 +257,15 @@ fun Login(vm: PosViewModel) {
 @Composable
 fun Operator(vm: PosViewModel) {
     val e by vm.currentEmployee.collectAsState()
-    AssistChip(onClick = { vm.logout() }, label = { Text("🔒 ${e?.name} · Đổi người") })
+    val shift by vm.activeShift.collectAsState()
+    Row(Modifier.fillMaxWidth().padding(horizontal=12.dp),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically){
+        AssistChip(onClick = { vm.logout() }, label = { Text("🔒 ${e?.name} · Đổi người") })
+        if(shift==null){
+            AssistChip(onClick={vm.screen.value="SHIFT_START"},label={Text("CHƯA VÀO CA · BẮT ĐẦU")})
+        }else{
+            AssistChip(onClick={vm.screen.value="SHIFT_END"},label={Text("CA ${shift?.staffName} · RA CA")})
+        }
+    }
 }
 
 @Composable
@@ -190,25 +284,101 @@ fun Tables(vm: PosViewModel) {
         }
     }
     val current by vm.currentEmployee.collectAsState()
+    val testMode by vm.businessTestMode.collectAsState()
     var assignmentTarget by remember { mutableStateOf("KITCHEN") }
     val canReport = current?.role == "ADMIN" || current?.canViewReport == true
+    val flowSettings by vm.settings.collectAsState()
+    val prepaidMode = PaymentFlowRules.normalize(flowSettings.firstOrNull { it.key == PaymentFlowRules.SETTING_KEY }?.value) == PaymentFlowRules.PREPAID
     val waitingOrdered = waiting.sortedWith(compareBy<OrderBatchEntity> { it.serviceNo }.thenBy { it.createdAt })
     val waitingRankById = waitingOrdered.mapIndexed { index, batch -> batch.id to index }.toMap()
 
     Column {
         Header()
         Operator(vm)
+        run { val fr by vm.refunds.collectAsState(); FrozenRefundBanner(fr.filter { it.status == "FROZEN" }) { vm.screen.value = "FROZEN_REFUNDS" } }
+        val unpaidAll by vm.unpaidPrepaid.collectAsState()
+        val curSession by vm.currentSession.collectAsState()
+        val unpaidList = unpaidAll.filter { it.id != curSession?.id }
+        if (unpaidList.isNotEmpty()) Surface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).clickable { vm.screen.value = "UNPAID_PREPAID" }, color = Color(0xFFB3261E), shape = RoundedCornerShape(8.dp)) {
+            Column(Modifier.padding(10.dp)) {
+                Text("⚠ ${unpaidList.size} ĐƠN CHƯA XÁC NHẬN THU TIỀN", color = Color.White, fontWeight = FontWeight.Black, fontSize = 14.sp)
+                Text("Bấm để thu tiền hoặc huỷ có lý do. Không ra ca được khi còn đơn này.", color = Color.White, fontSize = 12.sp)
+            }
+        }
+        KitchenWarningBanner(vm)
+        run {
+            // Cảnh báo phục vụ: món chờ lâu, bàn mở mà chưa gửi món, giỏ món chưa gửi. Chỉ đọc dữ liệu trên máy.
+            val drafts by vm.cartDrafts.collectAsState()
+            val draftBs by vm.draftBatches.collectAsState()
+            val unprinted = remember(draftBs, ss) {
+                val tableOf = ss.associate { it.id to it.tableId }
+                draftBs.mapNotNull { b -> tableOf[b.sessionId] }.groupingBy { it }.eachCount()
+            }
+            val alerts = remember(ts, ss, waiting, serviceTimings, drafts, unprinted, timerNow) {
+                ServiceAlerts.compute(
+                    ts.map { ServiceAlerts.Table(it.id, it.name) },
+                    ss.map { o -> ServiceAlerts.OpenSession(o.id, o.tableId, o.openedAt, serviceTimings.firstOrNull { it.sessionId == o.id }?.sentBatchCount ?: 0) },
+                    waiting.map { ServiceAlerts.WaitingBatch(it.sessionId, it.sentAt ?: it.createdAt) },
+                    drafts, timerNow, unprinted = unprinted,
+                )
+            }
+            if (alerts.isNotEmpty()) Surface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), color = Color(0xFFFFF1D6), shape = RoundedCornerShape(8.dp)) {
+                Column(Modifier.padding(10.dp)) {
+                    alerts.take(4).forEach { a ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(when (a.kind) {
+                            ServiceAlert.Kind.SLOW_DISH -> "⏰ ${a.tableName}: ${a.count} lần gọi món chờ ${a.minutes} phút chưa lên"
+                            ServiceAlert.Kind.NOTHING_SENT -> "⚠ ${a.tableName}: mở bàn ${a.minutes} phút chưa gửi món nào"
+                            ServiceAlert.Kind.UNPRINTED_BATCH -> "🖨 ${a.tableName}: ${a.count} đơn CHƯA IN PHIẾU BẾP · bếp chưa nhận được món"
+                            ServiceAlert.Kind.UNSENT_DRAFT -> "✎ ${a.tableName}: còn ${a.count} món chọn rồi CHƯA GỬI bếp"
+                        }, color = Color(0xFF7A4B00), fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        if (a.kind == ServiceAlert.Kind.UNSENT_DRAFT) TextButton(onClick = { vm.clearDraft(a.tableId) }) { Text("BỎ NHÁP", fontSize = 12.sp, fontWeight = FontWeight.Black) }
+                        }
+                    }
+                    if (alerts.size > 4) Text("… và ${alerts.size - 4} cảnh báo khác", fontSize = 12.sp, color = Color(0xFF7A4B00))
+                }
+            }
+            val lastPaid by vm.lastPaid.collectAsState()
+            val me by vm.currentEmployee.collectAsState()
+            var payFixMsg by remember { mutableStateOf("") }
+            lastPaid?.let { lp ->
+                if (me != null && PaymentFixPolicy.canFix(me!!.role, me!!.id, lp.cashierId, lp.paidAt, timerNow)) {
+                    val methodVi = if (lp.method == "CASH") "TIỀN MẶT" else "CHUYỂN KHOẢN"
+                    val other = if (lp.method == "CASH") "CHUYỂN KHOẢN" else "TIỀN MẶT"
+                    Surface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), color = Color(0xFFE8F0E4), shape = RoundedCornerShape(8.dp)) {
+                        Column(Modifier.padding(10.dp)) {
+                            Text("Vừa thu ${lp.tableName} · ${money(lp.total)} · $methodVi", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF2F4F2A))
+                            Text("Khách đổi ý hoặc bấm nhầm hình thức? Sửa ngay, có ghi nhật ký.", fontSize = 11.sp)
+                            Row {
+                                OutlinedButton(onClick = { vm.quickChangeLastPaid { err -> payFixMsg = err ?: "Đã đổi sang $other" } }) { Text("ĐỔI SANG $other", fontSize = 12.sp) }
+                                TextButton(onClick = { vm.lastPaid.value = null }) { Text("ẨN", fontSize = 12.sp) }
+                            }
+                            if (payFixMsg.isNotBlank()) Text(payFixMsg, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+            if (canReport) {
+                val forecast by vm.revenueForecast.collectAsState()
+                LaunchedEffect(timerNow / 300_000L) { vm.refreshForecast() }
+                forecast?.let { f -> Text("📈 Dự báo cuối ngày ~${money(f.total)} · đã bán ${money(f.soFar)} · thêm ~${money(f.expectedRest)} (theo ${f.basis})", Modifier.padding(horizontal = 16.dp, vertical = 2.dp), fontSize = 12.sp, color = Color(0xFF41633A), fontWeight = FontWeight.Bold) }
+            }
+        }
+        if(testMode) Surface(Modifier.fillMaxWidth(),color=Color(0xFFFFD8D8)){Text("TEST MODE · KHÔNG TÍNH DOANH THU",Modifier.fillMaxWidth().padding(8.dp),textAlign=TextAlign.Center,fontWeight=FontWeight.Black,color=Color.Red)}
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            FilterChip(true, {}, { Text("BÁN HÀNG") })
+            FilterChip(true, {}, { Text("BÁN HÀNG", maxLines = 1, softWrap = false) })
+            if (prepaidMode)
+                FilterChip(false, { vm.screen.value = "PREPAID_ORDERS" }, { Text("ĐƠN HÔM NAY", maxLines = 1, softWrap = false) })
             if (canReport) {
-                FilterChip(false, { vm.screen.value = "REPORT" }, { Text("LỊCH SỬ") })
-                FilterChip(false, { vm.screen.value = "REPORT" }, { Text("BÁO CÁO") })
+                FilterChip(false, { vm.screen.value = "REPORT" }, { Text("LỊCH SỬ", maxLines = 1, softWrap = false) })
+                FilterChip(false, { vm.screen.value = "REPORT" }, { Text("BÁO CÁO", maxLines = 1, softWrap = false) })
             }
         }
 
+        val draftCounts by vm.cartDrafts.collectAsState()
         val tableCards = ts.map { tb ->
                     val open = ss.firstOrNull { it.tableId == tb.id }
                     val areaName = areas.firstOrNull { it.id == tb.areaId }?.name ?: tb.areaId
@@ -220,9 +390,28 @@ fun Tables(vm: PosViewModel) {
                             serviceTimerPresentation(timing.firstOrderAt, timing.lastOrderSentAt, timing.sentBatchCount, timing.waitingBatchCount, timerNow)
                         }
                     }
-                    TableCardUi(tb.id,tb.name,areaName,open!=null,nextService?.serviceNo,priorityRank,serviceTimer)
+                    TableCardUi(tb.id,tb.name,areaName,open!=null,nextService?.serviceNo,priorityRank,serviceTimer,draftCounts[tb.id]?.let{"✎ $it món chưa gửi"})
         }
-        ResponsiveTableGrid(tableCards,Modifier.weight(1f).fillMaxWidth().padding(horizontal=12.dp,vertical=8.dp)){id->ts.firstOrNull{it.id==id}?.let(vm::selectTable)}
+        val waitingOrders by vm.waitingOrders.collectAsState()
+        var postpaidException by remember { mutableStateOf(false) }
+        val shownCards = if (!prepaidMode) tableCards else ts.mapIndexed { index, tb ->
+            val openPostpaid = ss.firstOrNull { it.tableId == tb.id && it.flow != PaymentFlowRules.PREPAID }
+            if (openPostpaid != null) return@mapIndexed tableCards[index].copy(busyLabel = "● TRẢ SAU · ĐANG DÙNG")
+            if (unpaidList.any { it.tableId == tb.id }) return@mapIndexed TableCardUi(tb.id, tb.name, areas.firstOrNull { it.id == tb.areaId }?.name ?: tb.areaId, true, null, null, null, "● CHƯA THU TIỀN")
+            val mine = waitingOrders.filter { it.tableId == tb.id }.minByOrNull { it.serviceNo }
+            val rank = mine?.let { m -> waitingOrders.sortedBy { it.serviceNo }.indexOfFirst { it.batchId == m.batchId } }
+            TableCardUi(tb.id, tb.name, areas.firstOrNull { it.id == tb.areaId }?.name ?: tb.areaId, mine != null, mine?.serviceNo, rank, null, "● ĐANG CHỜ MÓN")
+        }
+        if (prepaidMode) {
+            Row(Modifier.padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (postpaidException) "TRẢ SAU · Chọn bàn của khách (gọi món, vào bếp, trả tiền sau)" else "TRẢ TRƯỚC · Chọn số thẻ bàn của khách",
+                    Modifier.weight(1f), fontWeight = FontWeight.Black, color = Coffee
+                )
+                FilterChip(postpaidException, { postpaidException = !postpaidException }, { Text("TRẢ SAU", maxLines = 1, softWrap = false) })
+            }
+        }
+        ResponsiveTableGrid(shownCards,Modifier.weight(1f).fillMaxWidth().padding(horizontal=12.dp,vertical=8.dp)){id->ts.firstOrNull{it.id==id}?.let{vm.selectTable(it,postpaidException)};postpaidException=false}
 
         if (waiting.isNotEmpty()) {
             Button(
@@ -241,13 +430,26 @@ fun Tables(vm: PosViewModel) {
 
 @Composable
 fun Order(vm: PosViewModel, t: DiningTableEntity) {
+    val orderShift by vm.activeShift.collectAsState()
+    val orderUser by vm.currentEmployee.collectAsState()
+    val orderTest by vm.businessTestMode.collectAsState()
+    val orderSession by vm.currentSession.collectAsState()
+    val orderFlowSettings by vm.settings.collectAsState()
+    val orderFlowOverride by vm.orderFlowOverride.collectAsState()
+    val orderIsPrepaid = orderSession?.flow == PaymentFlowRules.PREPAID || (orderSession == null && PaymentFlowRules.normalize(orderFlowOverride ?: orderFlowSettings.firstOrNull { it.key == PaymentFlowRules.SETTING_KEY }?.value) == PaymentFlowRules.PREPAID)
+    val orderBlocked = (orderSession?.dataScope ?: if (orderTest) "TEST" else "LIVE") == "LIVE" && !ShiftRules.canPay(orderShift?.staffId, orderUser?.id ?: "")
     val ms by vm.menu.collectAsState()
     val combos by vm.combos.collectAsState()
     val cats by vm.categories.collectAsState()
     val cart by vm.cart.collectAsState()
     val cartNotes by vm.cartNotes.collectAsState()
+    val sendingNow by vm.sendingBatch.collectAsState()
+    val selectedVoucher by vm.selectedVoucher.collectAsState()
+    val voucherMessage by vm.voucherMessage.collectAsState()
+    var voucherDialog by remember { mutableStateOf(false) }
     var showCart by remember { mutableStateOf(false) }
     var noteTarget by remember { mutableStateOf<Pair<String,String>?>(null) }
+    val orderMessage by vm.orderMessage.collectAsState()
     var selectedCat by remember(cats) { mutableStateOf(cats.firstOrNull()?.id ?: "") }
     val visible = ms.filter { it.active && (selectedCat.isBlank() || it.categoryId == selectedCat) }
     val activeCombos = combos.filter { it.active }
@@ -262,7 +464,12 @@ fun Order(vm: PosViewModel, t: DiningTableEntity) {
     }
 
     Column {
-        Header(t.name) { vm.screen.value = "TABLES" }
+        androidx.activity.compose.BackHandler { vm.leaveOrder() }
+        Header(t.name) { vm.leaveOrder() }
+        if(orderMessage.isNotBlank()) {
+            Text(orderMessage,Modifier.padding(horizontal=14.dp,vertical=4.dp),fontWeight=FontWeight.Bold)
+            TextButton(onClick={vm.cart.value=emptyMap();vm.cartNotes.value=emptyMap();vm.orderMessage.value=""}){Text("XÓA GIỎ ĐỂ CHỌN LẠI")}
+        }
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp).horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -349,17 +556,61 @@ fun Order(vm: PosViewModel, t: DiningTableEntity) {
                 }
             }
         }
+        val comboParts by vm.comboPartsAll.collectAsState()
+        val comboCounts by vm.comboOrderCounts.collectAsState()
+        val comboDefs = remember(activeCombos, comboParts) {
+            activeCombos.map { c -> ComboDef(c.id, c.name, c.price, comboParts.filter { it.comboId == c.id }.associate { it.menuItemId to it.qty }) }
+        }
+        val comboSuggestions = remember(cart, comboDefs, ms, comboCounts) {
+            ComboSuggestions.suggest(cart, comboDefs, ms.associate { it.id to it.price }, comboCounts.associate { it.id to it.n })
+        }
+        comboSuggestions.forEach { sug ->
+            val def = comboDefs.first { it.id == sug.comboId }
+            val missingText = sug.missing.entries.joinToString(" + ") { (id, q) -> "${q}×${ms.firstOrNull { it.id == id }?.name ?: "?"}" }
+            Surface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp), color = Tint, shape = RoundedCornerShape(10.dp)) {
+                Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            if (sug.kind == ComboSuggestion.Kind.FULL) "GỢI Ý COMBO · ${sug.comboName}${if (sug.times > 1) " ×${sug.times}" else ""}" else "THÊM $missingText → COMBO ${sug.comboName}",
+                            fontWeight = FontWeight.Black, fontSize = 13.sp
+                        )
+                        Text("Rẻ hơn gọi lẻ ${money(sug.saving)}", fontSize = 12.sp)
+                    }
+                    Button(onClick = { vm.applyComboSuggestion(sug, def) }) { Text(if (sug.kind == ComboSuggestion.Kind.FULL) "ĐỔI" else "THÊM", fontWeight = FontWeight.Bold) }
+                }
+            }
+        }
         Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("$itemCount món", fontWeight = FontWeight.Bold)
             Spacer(Modifier.weight(1f))
             Text(money(total), fontWeight = FontWeight.Black)
         }
+        if (orderBlocked) ShiftPayBlockBanner(orderShift?.staffName ?: "", "order") { vm.screen.value = "SHIFT_END" }
         Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { showCart = true }, modifier = Modifier.weight(1f)) { Text("XEM GIỎ HÀNG") }
-            Button(onClick = { vm.sendBatch() }, modifier = Modifier.weight(1f), enabled = cart.isNotEmpty()) { Text("GỬI LÀM HÀNG") }
+            OutlinedButton(onClick = { }, modifier = Modifier.weight(1f), enabled=false) { Text("VOUCHER TẠM KHÓA") }
+            OutlinedButton(onClick = { showCart = true }, modifier = Modifier.weight(1f)) { Text("GIỎ HÀNG") }
+            Button(onClick = { if (orderIsPrepaid) vm.reviewPrepaid() else vm.sendBatch() }, modifier = Modifier.weight(1f), enabled = (cart.isNotEmpty()||selectedVoucher!=null) && !orderBlocked && !sendingNow) { Text(if (orderBlocked) "ĐÃ KHOÁ" else if (orderIsPrepaid) "THANH TOÁN" else "GỬI BẾP") }
         }
     }
     if (showCart) OrderCartNotesDialog(vm) { showCart = false }
+    if(voucherDialog){
+        val verifiedVoucher by vm.verifiedVoucher.collectAsState()
+        val verifiedCap = verifiedVoucher?.let { VoucherPolicy.cap(it.rewardSnapshot) }
+        var voucherCode by remember { mutableStateOf("") }
+        AlertDialog(onDismissRequest={voucherDialog=false},title={Text("Đổi voucher 0210")},text={Column(Modifier.verticalScroll(rememberScrollState())){
+            Text("Voucher được phát hành sau khi thanh toán bill LIVE đủ điều kiện tích lũy và có số điện thoại khách. Mã nằm trên phiếu in từ máy in bill.",fontSize=12.sp)
+            Text("Bước 1 · Nhập mã và kiểm tra hạn mức. Bước 2 · Chọn 01 món không vượt hạn mức.",fontSize=12.sp)
+            OutlinedTextField(voucherCode,{voucherCode=it.uppercase().take(20);vm.resetVoucherLookup()},Modifier.fillMaxWidth(),label={Text("Mã trên phiếu · 0210-A1B2C3")},singleLine=true)
+            TextButton(onClick={vm.lookupVoucher(voucherCode)},enabled=voucherCode.trim().length>=6){Text("KIỂM TRA MÃ VOUCHER")}
+            if(voucherMessage.isNotBlank())Text(voucherMessage,fontSize=12.sp,color=Coffee)
+            if(verifiedCap!=null){
+                Text("CHỌN MÓN ĐỔI QUÀ · TỐI ĐA "+money(verifiedCap),fontWeight=FontWeight.Bold,fontSize=12.sp)
+                ms.filter{it.active && it.price in 1..verifiedCap}.forEach{item->TextButton({vm.selectVoucher(voucherCode,item.id);voucherDialog=false},Modifier.fillMaxWidth()){Text(item.name+" · "+money(item.price),Modifier.fillMaxWidth())}}
+                if(ms.none{it.active && it.price in 1..verifiedCap})Text("Không có món phù hợp hạn mức",fontSize=12.sp)
+            }
+        }},confirmButton={TextButton({voucherDialog=false}){Text("ĐÓNG")}})
+    }
+    if(voucherMessage.isNotBlank())Text(voucherMessage,Modifier.padding(horizontal=14.dp,vertical=2.dp),fontSize=11.sp,fontWeight=FontWeight.Bold,color=Coffee)
     noteTarget?.let { (key,name) ->
         var noteText by remember(key) { mutableStateOf(cartNotes[key].orEmpty()) }
         AlertDialog(
@@ -400,30 +651,98 @@ fun Sent(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
     val current by vm.currentEmployee.collectAsState()
     val printerMessage by vm.printerMessage.collectAsState()
     val printerMode = vm.setting("printer_mode").ifBlank { "TEST" }
+    val runningShift by vm.activeShift.collectAsState()
+    val payBlocked = s.dataScope == "LIVE" && !ShiftRules.canPay(runningShift?.staffId, current?.id ?: "")
     var pv by remember { mutableStateOf<OrderBatchEntity?>(null) }
+    var deleteDraftTarget by remember { mutableStateOf<OrderBatchEntity?>(null) }
     var cancelTarget by remember { mutableStateOf<OrderBatchEntity?>(null) }
     var cancelReason by remember { mutableStateOf("") }
+    var adjustmentTarget by remember { mutableStateOf<Pair<OrderBatchEntity,OrderItemEntity>?>(null) }
+    var adjustmentQty by remember { mutableStateOf("1") }
+    var adjustmentReason by remember { mutableStateOf("") }
 
+    val unsent = bs.filter { it.status == "DRAFT" }
+    val failedKitchen by vm.kitchenPrintFailed.collectAsState()
+    var leaveWarn by remember { mutableStateOf(false) }
+    val tryLeave = { if (unsent.isNotEmpty()) leaveWarn = true else vm.screen.value = "TABLES" }
+    androidx.activity.compose.BackHandler { tryLeave() }
+    if (leaveWarn) AlertDialog(
+        onDismissRequest = { leaveWarn = false },
+        title = { Text("Còn ${unsent.size} đơn CHƯA in phiếu bếp") },
+        text = { Text("Bếp chưa nhận được món nên sẽ không làm. In phiếu bếp ngay (bắt buộc). Nếu máy in lỗi thì chọn bỏ qua, app ghi lại và báo bếp trực tiếp.", fontSize = 14.sp) },
+        confirmButton = { Button(onClick = { leaveWarn = false; unsent.forEach { vm.markBatchSent(it) } }) { Text("IN PHIẾU BẾP NGAY") } },
+        dismissButton = { TextButton(onClick = { leaveWarn = false; vm.screen.value = "TABLES" }) { Text("ĐỂ SAU · vẫn nhắc") } }
+    )
     Column {
-        Header(t.name) { vm.screen.value = "TABLES" }
+        Header(t.name) { tryLeave() }
         LazyColumn(Modifier.weight(1f)) {
             items(bs) { b ->
+                val its by vm.items(b.id).collectAsState(initial = emptyList())
+                val canTick = b.status == "WAITING" || b.status == "DELIVERED"
+                val real = its.filter { it.adjustmentOfItemId == null && it.qty > 0 }
+                val doneQty = real.sumOf { it.deliveredQty.coerceAtMost(it.qty) }
+                val allQty = real.sumOf { it.qty }
                 Card(
-                    Modifier.fillMaxWidth().padding(8.dp).clickable { pv = b },
+                    Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 5.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (b.status == "CANCELLED") Color(0xFFF1DDDA) else Tint
-                    )
+                        containerColor = when (b.status) { "CANCELLED" -> Color(0xFFF1DDDA); "DRAFT" -> Color(0xFFFFE9C2); else -> Tint }
+                    ),
+                    border = if (b.status == "DRAFT") BorderStroke(2.dp, Color(0xFFC77700)) else null
                 ) {
-                    Column(Modifier.padding(14.dp)) {
-                        Text("Đơn #${b.sequence}", fontWeight = FontWeight.Bold)
-                        Text(
-                            when (b.status) {
-                                "CANCELLED" -> "ĐÃ HỦY"
-                                "WAITING" -> "CHỜ GIAO · #${b.serviceNo.toString().padStart(3,'0')}"
-                                "DELIVERED" -> "ĐÃ GIAO ĐỦ · #${b.serviceNo.toString().padStart(3,'0')}"
-                                else -> b.status
+                    Column(Modifier.padding(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Đơn #${b.sequence} · STT #${b.serviceNo.toString().padStart(3,'0')}", fontWeight = FontWeight.Bold)
+                                Text(
+                                    when (b.status) {
+                                        "CANCELLED" -> "ĐÃ HỦY"
+                                        "DRAFT" -> "CHƯA IN PHIẾU BẾP · bếp chưa nhận món"
+                                        "WAITING" -> "CHỜ GIAO · đã giao $doneQty/$allQty phần"
+                                        "DELIVERED" -> "ĐÃ GIAO ĐỦ"
+                                        else -> b.status
+                                    },
+                                    fontWeight = FontWeight.Black,
+                                    color = when (b.status) { "DRAFT" -> Color(0xFF9A5B00); "WAITING" -> Color(0xFF7A4B00); "DELIVERED" -> Color(0xFF2F6B2A); else -> Color(0xFF9A2B1F) }
+                                )
                             }
-                        )
+                            if (b.status == "WAITING") TextButton(onClick = { vm.speakBatchAgain(b, t.name) }) { Text("🔊 ĐỌC LẠI") }
+                            TextButton(onClick = { pv = b }) { Text("CHI TIẾT") }
+                        }
+                        its.filter { it.adjustmentOfItemId == null && it.qty > 0 }.forEach { item ->
+                            val d = item.deliveredQty.coerceAtMost(item.qty)
+                            Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("${item.qty} × ${item.itemNameSnapshot}", fontSize = 15.sp, fontWeight = if (d >= item.qty) FontWeight.Normal else FontWeight.Bold,
+                                        color = if (b.status == "CANCELLED") Color(0xFF8A7A77) else Color.Unspecified)
+                                    if (item.note.isNotBlank()) Text("↳ ${item.note}", fontSize = 12.sp)
+                                }
+                                if (canTick) {
+                                    if (item.qty == 1) {
+                                        Checkbox(checked = d >= 1, onCheckedChange = { vm.setItemDelivered(b, item, if (it) 1 else 0) })
+                                    } else {
+                                        TextButton(onClick = { vm.setItemDelivered(b, item, d - 1) }, enabled = d > 0, contentPadding = PaddingValues(4.dp)) { Text("−", fontSize = 18.sp) }
+                                        Text("$d/${item.qty}", fontWeight = FontWeight.Black)
+                                        TextButton(onClick = { vm.setItemDelivered(b, item, d + 1) }, enabled = d < item.qty, contentPadding = PaddingValues(4.dp)) { Text("＋", fontSize = 18.sp) }
+                                    }
+                                }
+                            }
+                        }
+                        if (b.status == "DRAFT") {
+                            Text("Phiếu bếp là BẮT BUỘC: in rồi bếp mới làm. Máy in lỗi vẫn được bỏ qua, app ghi lại lần in lỗi.", fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                            Button(onClick = { vm.markBatchSent(b) }, Modifier.fillMaxWidth().padding(top = 6.dp)) {
+                                Text(if (printerMode == "BLUETOOTH") "IN PHIẾU BẾP & GỬI BẾP" else "XÁC NHẬN GỬI BẾP (TEST)")
+                            }
+                            if (b.id in failedKitchen || printerMode != "BLUETOOTH") {
+                                OutlinedButton(onClick = { vm.skipKitchenPrintForBatch(b) }, Modifier.fillMaxWidth()) { Text("MÁY IN LỖI · BỎ QUA, BÁO BẾP TRỰC TIẾP") }
+                            }
+                        }
+                        if (b.status == "DELIVERED") {
+                            OutlinedButton(onClick = { vm.reopenDelivered(b) }, Modifier.fillMaxWidth().padding(top = 6.dp)) { Text("↩ BẤM NHẦM · CHƯA GIAO ĐỦ") }
+                        }
+                        if (b.status == "WAITING") {
+                            Text("Tích từng món khi đã mang ra. Đủ món thì đơn tự chuyển ĐÃ GIAO ĐỦ.", fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+                            OutlinedButton(onClick = { vm.markDelivered(b) }, Modifier.fillMaxWidth()) { Text("✓ ĐÃ GIAO ĐỦ CẢ ĐƠN") }
+                        }
                     }
                 }
             }
@@ -441,12 +760,13 @@ fun Sent(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                 modifier = Modifier.fillMaxWidth().padding(16.dp)
             ) { Text("TRẢ BÀN") }
         } else {
+            if (payBlocked) ShiftPayBlockBanner(runningShift?.staffName ?: "", "thanh toán") { vm.screen.value = "SHIFT_END" }
             Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedButton(onClick = { vm.addMore() }, modifier = Modifier.weight(1f)) {
+                OutlinedButton(onClick = { vm.addMore() }, modifier = Modifier.weight(1f), enabled = !payBlocked) {
                     Text("＋ GỌI THÊM")
                 }
-                Button(onClick = { vm.screen.value = "PAY" }, modifier = Modifier.weight(1f), enabled = total > 0) {
-                    Text("THANH TOÁN")
+                Button(onClick = { vm.screen.value = "PAY" }, modifier = Modifier.weight(1f), enabled = total > 0 && !payBlocked) {
+                    Text(if (payBlocked) "ĐÃ KHOÁ" else if (unsent.isNotEmpty()) "THANH TOÁN (còn đơn chưa in bếp)" else "THANH TOÁN")
                 }
             }
         }
@@ -474,6 +794,14 @@ fun Sent(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                     its.forEach { item ->
                         Text("${item.qty} × ${item.itemNameSnapshot}")
                         if(item.note.isNotBlank()) Text("↳ ${item.note}", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        if(b.status=="DELIVERED"&&item.qty>0&&item.adjustmentOfItemId==null&&(current?.role=="ADMIN"||current?.role=="MANAGER"||current?.role=="STAFF")){
+                            val correctedQty by vm.correctedQty(item.id).collectAsState(initial=0)
+                            val remaining=item.qty+correctedQty
+                            if(remaining>0) OutlinedButton(
+                                onClick={ adjustmentTarget=b to item;adjustmentQty="1";adjustmentReason="" },
+                                modifier=Modifier.fillMaxWidth().padding(top=6.dp)
+                            ){Text("GIẢM / HỦY MÓN CÒN $remaining")}
+                        }
                     }
                     if (b.status == "WAITING") {
                         Button(
@@ -481,15 +809,34 @@ fun Sent(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                             modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
                         ) { Text("✓ ĐÃ GIAO ĐỦ") }
                     }
-                    if (b.status != "CANCELLED" && b.status != "DELIVERED" && (current?.role == "ADMIN" || current?.role == "MANAGER")) {
+                    if (b.status == "DRAFT" && vm.canDeleteDraft(b)) {
+                        Spacer(Modifier.height(14.dp))
+                        OutlinedButton(
+                            onClick = { deleteDraftTarget = b; pv = null },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("XÓA ĐƠN NHÁP") }
+                    }
+                    if ((b.status == "WAITING" || b.status == "DELIVERED") && (current?.role == "ADMIN" || current?.role == "MANAGER" || current?.role == "STAFF")) {
                         Spacer(Modifier.height(14.dp))
                         OutlinedButton(
                             onClick = { cancelTarget = b; cancelReason = ""; pv = null },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("HỦY ĐƠN · MANAGER") }
+                        ) { Text("HỦY ĐƠN · TRƯỚC THANH TOÁN") }
                     }
                 }
             }
+        )
+    }
+
+    deleteDraftTarget?.let { b ->
+        AlertDialog(
+            onDismissRequest = { deleteDraftTarget = null },
+            title = { Text("Xóa Đơn Nháp #${b.sequence}") },
+            text = { Text("Đơn này chưa gửi bếp. Xóa sẽ không in phiếu và vẫn lưu lịch sử thao tác.") },
+            confirmButton = {
+                Button(onClick = { vm.deleteDraft(b); deleteDraftTarget = null }) { Text("XÓA ĐƠN NHÁP") }
+            },
+            dismissButton = { TextButton(onClick = { deleteDraftTarget = null }) { Text("GIỮ LẠI") } }
         )
     }
 
@@ -499,7 +846,7 @@ fun Sent(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
             title = { Text("Hủy Đơn #${b.sequence}") },
             text = {
                 Column {
-                    Text("Chỉ hủy khi bếp chưa làm. Đơn vẫn được lưu trong lịch sử.")
+                    Text("Chỉ hủy khi bàn chưa thanh toán. Toàn bộ đơn sẽ bị hủy; lịch sử và lý do được lưu lại. Muốn đổi một món, hãy kiểm tra kỹ trước khi xác nhận.")
                     OutlinedTextField(
                         cancelReason,
                         { cancelReason = it },
@@ -519,6 +866,24 @@ fun Sent(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                 ) { Text("XÁC NHẬN HỦY") }
             },
             dismissButton = { TextButton(onClick = { cancelTarget = null }) { Text("KHÔNG HỦY") } }
+        )
+    }
+
+    adjustmentTarget?.let { (batch,item) ->
+        val correctedQty by vm.correctedQty(item.id).collectAsState(initial=0)
+        val remaining=item.qty+correctedQty
+        val quantity=adjustmentQty.toIntOrNull()?:0
+        AlertDialog(
+            onDismissRequest={adjustmentTarget=null},
+            title={Text("Giảm / hủy ${item.itemNameSnapshot}")},
+            text={Column{
+                Text("Đã gọi: ${item.qty} · còn có thể giảm/hủy: $remaining")
+                Text("Hệ thống tạo một dòng điều chỉnh riêng; món gốc và lịch sử giao không bị sửa.",fontSize=12.sp,modifier=Modifier.padding(top=6.dp))
+                OutlinedTextField(adjustmentQty,{adjustmentQty=it.filter(Char::isDigit).take(2)},modifier=Modifier.fillMaxWidth().padding(top=10.dp),label={Text("Số lượng giảm/hủy")})
+                OutlinedTextField(adjustmentReason,{adjustmentReason=it.take(120)},modifier=Modifier.fillMaxWidth().padding(top=8.dp),label={Text("Lý do bắt buộc")},minLines=2)
+            }},
+            confirmButton={Button(onClick={vm.correctDeliveredItem(batch,item,quantity,adjustmentReason);adjustmentTarget=null},enabled=quantity in 1..remaining&&adjustmentReason.isNotBlank()){Text("XÁC NHẬN ĐIỀU CHỈNH")}},
+            dismissButton={TextButton(onClick={adjustmentTarget=null}){Text("KHÔNG ĐỔI")}}
         )
     }
 }
@@ -574,7 +939,7 @@ private fun tierDiscountRule(tier: String?, settings: List<AppSettingEntity>): P
     )
 }
 
-private fun calculatePricing(subtotal: Long, rules: List<PricingRuleEntity>, enteredCode: String, now: Long = System.currentTimeMillis()): PricingPreview {
+private fun calculatePricing(subtotal: Long, rules: List<PricingRuleEntity>, enteredCode: String, now: Long = System.currentTimeMillis(), buyGetDiscount: Long = 0L, buyGetLabel: String? = null): PricingPreview {
     val code = enteredCode.trim().uppercase()
     val eligible = rules.filter { pricingRuleInTime(it, now) }
     val codeMatches = if (code.isBlank()) emptyList() else eligible.filter { it.code.isNotBlank() && it.code.equals(code, true) }
@@ -583,25 +948,36 @@ private fun calculatePricing(subtotal: Long, rules: List<PricingRuleEntity>, ent
     val afterSurcharge = subtotal + surcharge
     val discountCandidates = eligible.filter { it.kind == "DISCOUNT" && (it.autoApply || it in codeMatches) }
     val bestDiscount = discountCandidates.maxByOrNull { afterSurcharge * it.percent / 100L }
-    val discount = bestDiscount?.let { afterSurcharge * it.percent / 100L } ?: 0L
+    val ruleDiscount = bestDiscount?.let { afterSurcharge * it.percent / 100L } ?: 0L
+    val safeBuyGetDiscount = buyGetDiscount.coerceIn(0L, afterSurcharge)
+    // Compare competing discounts; never silently replace a better percentage offer.
+    // Voucher selection is explicit and is handled separately by its caller.
+    val useBuyGet = safeBuyGetDiscount > 0L && safeBuyGetDiscount >= ruleDiscount
+    val discount = if (useBuyGet) safeBuyGetDiscount else ruleDiscount
+    val appliedRule = if (useBuyGet) null else bestDiscount
     val total = (afterSurcharge - discount).coerceAtLeast(0L)
     val message = when {
+        useBuyGet -> "Đã áp dụng ưu đãi ${buyGetLabel ?: "Mua X tặng Y"}."
         code.isNotBlank() && codeMatches.isEmpty() -> "Mã không hợp lệ hoặc đã hết thời gian áp dụng."
-        code.isNotBlank() && bestDiscount != null && bestDiscount !in codeMatches -> "Mã hợp lệ nhưng hệ thống đang áp dụng ưu đãi lớn hơn: ${bestDiscount.name}."
-        code.isNotBlank() && bestDiscount != null -> "Đã áp dụng ưu đãi tốt nhất: ${bestDiscount.name}."
+        code.isNotBlank() && appliedRule != null && appliedRule !in codeMatches -> "Mã hợp lệ nhưng hệ thống đang áp dụng ưu đãi lớn hơn: ${appliedRule.name}."
+        code.isNotBlank() && appliedRule != null -> "Đã áp dụng ưu đãi tốt nhất: ${appliedRule.name}."
         else -> ""
     }
-    return PricingPreview(subtotal, surcharge, discount, total, surchargeRules, bestDiscount, message)
+    return PricingPreview(subtotal, surcharge, discount, total, surchargeRules, appliedRule, message, if (useBuyGet) safeBuyGetDiscount else 0L, if (useBuyGet) buyGetLabel else null)
 }
 
 @Composable
 fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
     val subtotal by vm.total(s.id).collectAsState(initial = 0)
+    val buyGetDiscount by vm.buyGetDiscount(s.id).collectAsState(initial = 0L)
+    val voucherDiscount by vm.voucherDiscount(s.id).collectAsState(initial = 0L)
     val rules by vm.pricingRules.collectAsState()
     val e by vm.currentEmployee.collectAsState()
     val settings by vm.settings.collectAsState()
     val sessionBatches by vm.batches(s.id).collectAsState(initial = emptyList())
-    val pendingDelivery = sessionBatches.filter { it.status == "DRAFT" || it.status == "WAITING" }.sortedBy { it.serviceNo }
+    val isPrepaid = s.flow == PaymentFlowRules.PREPAID
+    val pendingDelivery = if (isPrepaid) emptyList() else sessionBatches.filter { it.status == "DRAFT" || it.status == "WAITING" }.sortedBy { it.serviceNo }
+    var cashGiven by remember { mutableStateOf("") }
     fun setting(key: String) = settings.firstOrNull { it.key == key }?.value ?: ""
     var codeText by remember { mutableStateOf("") }
     var appliedCode by remember { mutableStateOf("") }
@@ -616,9 +992,30 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
         newMember = matchedCustomer == null && normalizedPhone.length >= 9
     )
     val loyaltyRule = tierDiscountRule(effectiveTier, settings)
-    val preview = calculatePricing(subtotal, rules + listOfNotNull(loyaltyRule), appliedCode)
+    val rewardFlow = remember(matchedCustomer?.id) { matchedCustomer?.id?.let { vm.customerRewards(it) } }
+    val availableRewards by (rewardFlow ?: kotlinx.coroutines.flow.flowOf(emptyList<CustomerRewardEntity>())).collectAsState(initial=emptyList())
+    val billReward = availableRewards.firstOrNull {
+        it.rewardSnapshot.split("|").getOrNull(1) in listOf("BILL_DISCOUNT","BILL_DISCOUNT_PERCENT") &&
+        (it.expiresAt==null || it.expiresAt>System.currentTimeMillis())
+    }
+    var applyBillReward by remember(s.id,matchedCustomer?.id) { mutableStateOf(false) }
+    val manualVoucher=if(voucherDiscount>0L) voucherDiscount else buyGetDiscount
+    val manualLabel=if(voucherDiscount>0L) "Voucher 0210" else "Mua X tặng Y"
+    // Both voucher and buy-get gift lines have already been persisted in the order.
+    // Never replace their 100% gift discount with a percentage rule at checkout:
+    // that would charge for a promised gift and leave the redeemed reward locked.
+    val eligibleRules = if (manualVoucher > 0L) rules.filter { it.kind == "SURCHARGE" } else rules + listOfNotNull(loyaltyRule)
+    val applyReward = applyBillReward && billReward!=null && manualVoucher==0L && s.dataScope=="LIVE"
+    val rewardFields=billReward?.rewardSnapshot?.split("|").orEmpty()
+    val rewardValue=rewardFields.getOrNull(2)?.toLongOrNull()?:0L
+    val rewardDiscount=if(applyReward) minOf(if(rewardFields.getOrNull(1)=="BILL_DISCOUNT_PERCENT")subtotal*rewardValue/100L else rewardValue,subtotal) else 0L
+    val preview = calculatePricing(subtotal,if(applyReward)emptyList() else eligibleRules,appliedCode,
+        buyGetDiscount=if(applyReward)rewardDiscount else manualVoucher,
+        buyGetLabel=if(applyReward)"Ưu đãi tích điểm" else manualLabel)
     val paymentSession by vm.paymentSession(s.id).collectAsState(initial = null)
     val printedCheckoutKey by vm.printedCheckoutKey.collectAsState()
+    val printAttemptedKey by vm.checkoutPrintAttemptedKey.collectAsState()
+    val checkoutPrinting by vm.checkoutPrinting.collectAsState()
     val bankEvents by vm.recentBankNotifications.collectAsState()
     LaunchedEffect(preview.total, s.id) { vm.openPaymentSession(s,t,preview.total) }
     val validPaymentSession=paymentSession?.takeIf{it.expectedAmount==preview.total}
@@ -626,13 +1023,138 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
     val qrInfo = "${setting("qr_prefix").ifBlank { "0210" }} $shortTable ${validPaymentSession?.paymentCode.orEmpty()}".trim()
     val checkoutKey="${s.id}:${preview.total}:$qrInfo"
     val billPrinted=printedCheckoutKey==checkoutKey
+    val printPressed=printAttemptedKey==checkoutKey
+    val canConfirmNow=vn.ecohome.pos0210.payment.CheckoutPrintPolicy.canConfirm(checkoutKey,printedCheckoutKey,printAttemptedKey)
     val checkoutTestEnabled by vm.checkoutPrintTestMode.collectAsState()
     val checkoutPrintTestMode = checkoutTestEnabled && e?.role=="ADMIN"
-    val qrConfigured = setting("bank_name").isNotBlank() && setting("bank_account").isNotBlank()
+    val qrMode = setting("payment_qr_mode")
+    val soundboxStatic = PaymentQrMode.usesStaticSoundboxQr(qrMode)
+    val qrConfigured = soundboxStatic || (setting("bank_name").isNotBlank() && setting("bank_account").isNotBlank())
     val ambiguousEvent=bankEvents.firstOrNull{it.matchStatus=="AMBIGUOUS"&&it.amount==preview.total&&it.receivedAt>=s.openedAt}
+    val billImage by vm.checkoutBillImage.collectAsState()
+    val shownBill = billImage?.takeIf { it.first == vn.ecohome.pos0210.payment.CheckoutPrintPolicy.key(s.id, preview.total, qrInfo) }?.second
 
+    val cashValue = cashGiven.filter(Char::isDigit).toLongOrNull()
+    val cashOk = PaymentFlowRules.canConfirmCash(s.flow, preview.total, cashValue)
+    // Phần điều khiển thanh toán: Trả sau nằm ở thanh dưới cố định; Trả trước nằm trong vùng cuộn ngay dưới bill để QR không bị che.
+    val payControls: @Composable () -> Unit = {
+            if(checkoutPrinting) Text("ĐANG IN BILL… · Không cần chờ máy in: vẫn bấm xác nhận thu tiền được, kết quả in được lưu ngầm", fontWeight=FontWeight.Bold)
+            if(!billPrinted){
+                Button(
+                    onClick={
+                        if(checkoutPrintTestMode) vm.confirmCheckoutBillTest(preview,qrInfo)
+                        else vm.printCheckoutBill(preview,qrInfo,matchedCustomer?.name?:customerName)
+                    },
+                    modifier=Modifier.fillMaxWidth(),
+                    enabled=!checkoutPrinting&&preview.total>0&&pendingDelivery.isEmpty()&&validPaymentSession!=null
+                ){
+                    Text(if(pendingDelivery.isNotEmpty()) "CHƯA GIAO ĐỦ · CHƯA THỂ IN BILL" else if(printPressed) "IN LẠI BILL" else "IN BILL")
+                }
+                if(!isPrepaid) Surface(Modifier.fillMaxWidth().padding(top=6.dp),color=Color(0xFFFFF1D6),shape=RoundedCornerShape(8.dp)){
+                    Text(
+                        if(printPressed) "✓ Đã bấm IN BILL. Máy in lỗi hoặc đang in cũng không phải chờ: bấm XÁC NHẬN hình thức khách trả bên dưới. App tự lưu kết quả in."
+                        else "BẮT BUỘC bấm IN BILL trước, rồi mới bấm XÁC NHẬN nhận tiền (tiền mặt hoặc chuyển khoản). Máy in không in được vẫn bấm tiếp, app tự lưu lại lịch sử in.",
+                        Modifier.padding(8.dp),fontSize=12.sp,fontWeight=FontWeight.Bold,color=Color(0xFF7A4B00)
+                    )
+                } else Text("Bill trên màn hình và mã QR luôn khả dụng. Nếu máy in lỗi, vẫn có thể xác nhận sau khi nhận đủ tiền.", Modifier.padding(top=6.dp),fontSize=11.sp)
+            }
+            run {
+                if (isPrepaid) OutlinedTextField(
+                    value = cashGiven,
+                    onValueChange = { cashGiven = it.filter(Char::isDigit).take(9) },
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                    label = { Text("Tiền khách đưa (chỉ cho tiền mặt)") },
+                    singleLine = true
+                )
+                // Gợi ý mệnh giá theo đúng số tiền bill (vừa đủ, tròn 10k/50k/100k, tờ 200k/500k): bấm là ra tiền thối, đỡ tính nhầm.
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    CashSuggest.amounts(preview.total).forEach { v ->
+                        FilterChip(selected = cashValue == v, onClick = { cashGiven = if (cashValue == v) "" else v.toString() }, label = { Text(if (v == preview.total) "Vừa đủ" else money(v)) })
+                    }
+                }
+                val ch = cashValue?.let { PaymentFlowRules.change(preview.total, it) }
+                if (isPrepaid || cashValue != null) Text(
+                    if (cashValue == null) "Nhập tiền khách đưa để xác nhận tiền mặt" else if (ch == null) "Khách đưa chưa đủ · thiếu ${money(preview.total - cashValue)}" else "TIỀN THỐI: ${money(ch)}",
+                    fontWeight = FontWeight.Black, fontSize = 18.sp,
+                    color = if (ch == null) Color(0xFF9A2B1F) else Color(0xFF41633A),
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
+            }
+    }
     Column {
-        Header("Thanh toán") { vm.screen.value = "SENT" }
+        var confirmEdit by remember { mutableStateOf(false) }
+        var confirmLeave by remember { mutableStateOf(false) }
+        var convertPostpaid by remember { mutableStateOf(false) }
+        Header(if (isPrepaid) "Thanh toán trước" else "Thanh toán") {
+            if (isPrepaid) confirmLeave = true else vm.screen.value = "SENT"
+        }
+        if (confirmLeave) AlertDialog(
+            onDismissRequest = { confirmLeave = false },
+            title = { Text("Khách đã trả tiền chưa?") },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Nếu khách ĐÃ trả (tiền mặt hoặc CK), hãy ở lại và bấm XÁC NHẬN. Rời màn hình mà không xác nhận thì đơn nằm trong danh sách CHƯA THU TIỀN, không bị mất.", fontSize = 13.sp)
+                Button(onClick = { confirmLeave = false }, Modifier.fillMaxWidth()) { Text("Ở LẠI · XÁC NHẬN THU TIỀN") }
+                OutlinedButton(onClick = { confirmLeave = false; if (billPrinted) confirmEdit = true else vm.editPrepaidOrder() }, Modifier.fillMaxWidth()) { Text("CHƯA TRẢ · SỬA ĐƠN") }
+                OutlinedButton(onClick = { confirmLeave = false; vm.parkPrepaid() }, Modifier.fillMaxWidth()) { Text("ĐỂ ĐÓ · XỬ LÝ SAU") }
+                OutlinedButton(onClick = { confirmLeave = false; convertPostpaid = true }, Modifier.fillMaxWidth()) { Text("KHÁCH TRẢ SAU · CHỌN BÀN & IN BẾP") }
+            } },
+            confirmButton = {},
+            dismissButton = {}
+        )
+        if (convertPostpaid) ConvertToPostpaidDialog(vm, s) { convertPostpaid = false }
+        if (confirmEdit) AlertDialog(
+            onDismissRequest = { confirmEdit = false },
+            title = { Text("Sửa đơn sau khi đã in bill?") },
+            text = { Text("Bill đã in sẽ KHÔNG còn giá trị, phải in lại bill mới. Thao tác này được ghi vào nhật ký. Giỏ hàng được giữ nguyên để sửa.") },
+            confirmButton = { TextButton(onClick = { confirmEdit = false; vm.editPrepaidOrder() }) { Text("SỬA ĐƠN") } },
+            dismissButton = { TextButton(onClick = { confirmEdit = false }) { Text("Ở LẠI") } }
+        )
+        var showBigQr by remember { mutableStateOf(false) }
+        if (isPrepaid) {
+            val detected = validPaymentSession?.takeIf { it.status == "PAYMENT_DETECTED" }
+            if (detected != null) {
+                Surface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), color = Color(0xFF2E7D32), shape = RoundedCornerShape(10.dp)) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text("✓ ĐÃ NHẬN ${money(detected.detectedAmount ?: preview.total)} · ${detected.detectedBank.orEmpty()}", color = Color.White, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                        Text("Kiểm tra rồi bấm XÁC NHẬN CK bên dưới (app không tự xác nhận).", color = Color.White, fontSize = 12.sp)
+                    }
+                }
+            } else if (ambiguousEvent != null) {
+                Text("Có giao dịch cùng số tiền nhưng chưa chắc của bill này · kiểm tra app ngân hàng", Modifier.padding(horizontal = 16.dp, vertical = 4.dp), color = Color(0xFF9A5B28), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            } else if (!soundboxStatic) {
+                Text("Đang chờ tiền về…", Modifier.padding(horizontal = 16.dp, vertical = 2.dp), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+            if (!soundboxStatic) {
+                val last = bankEvents.firstOrNull()
+                val hhmm = remember(last?.receivedAt) { last?.let { java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(it.receivedAt)) } }
+                Text(
+                    if (last == null) "Chưa nhận thông báo ngân hàng nào · kiểm tra quyền đọc thông báo (Quản lý → Thanh toán chuyển khoản)"
+                    else "TB ngân hàng gần nhất $hhmm" + (last.amount?.let { " · ${if (last.direction == "DEBIT") "-" else "+"}${money(it)}" } ?: "") +
+                        " · " + (if (last.parserResult == "PARSE_FAILED") "KHÔNG ĐỌC ĐƯỢC · nội dung: " + last.body.replace(Regex("\\s+"), " ").take(110) else if (last.matchStatus.startsWith("MATCHED")) "KHỚP BILL" else "CHƯA KHỚP BILL"),
+                    Modifier.padding(horizontal = 16.dp, vertical = 2.dp), fontSize = 11.sp,
+                    color = if (last?.parserResult == "PARSE_FAILED") Color(0xFF9A2B1F) else Color(0xFF655C55)
+                )
+            }
+        }
+        if (showBigQr) androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showBigQr = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false)
+        ) {
+            Surface(Modifier.fillMaxSize(), color = Color.White) {
+                Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("${t.name.uppercase()}${sessionBatches.firstOrNull { it.status != "CANCELLED" }?.serviceNo?.let { " · ĐƠN " + PaymentFlowRules.orderNoLabel(it) } ?: ""}", fontSize = 22.sp, fontWeight = FontWeight.Black, color = Coffee)
+                    Text(money(preview.total), fontSize = 44.sp, fontWeight = FontWeight.Black)
+                    if (soundboxStatic) Text("Khách nhập đúng số tiền trên · chờ loa báo", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    else Text("Quét mã bằng app ngân hàng · số tiền đã nhúng sẵn", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    PaymentQrImage(qrMode, setting("bank_name"), setting("bank_account"), setting("bank_holder"), preview.total, qrInfo, Modifier.fillMaxWidth().aspectRatio(1f).padding(vertical = 12.dp))
+                    if (!soundboxStatic) Text("${setting("bank_holder")} · ${setting("bank_name")} · ${setting("bank_account")}", fontSize = 13.sp)
+                    val det = validPaymentSession?.takeIf { it.status == "PAYMENT_DETECTED" }
+                    if (det != null) Text("✓ ĐÃ NHẬN ${money(det.detectedAmount ?: preview.total)}", fontSize = 28.sp, fontWeight = FontWeight.Black, color = Color(0xFF2E7D32), modifier = Modifier.padding(top = 8.dp))
+                    else if (!soundboxStatic) Text("Đang chờ tiền về…", fontSize = 16.sp, modifier = Modifier.padding(top = 8.dp))
+                    Button(onClick = { showBigQr = false }, modifier = Modifier.fillMaxWidth().padding(top = 16.dp).height(54.dp)) { Text("ĐÓNG", fontWeight = FontWeight.Black) }
+                }
+            }
+        }
         Column(Modifier.weight(1f).padding(18.dp).verticalScroll(rememberScrollState())) {
             if (pendingDelivery.isNotEmpty()) {
                 Card(
@@ -667,12 +1189,58 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                     }
                 }
             }
+            if (shownBill != null && !isPrepaid) {
+                Text("BILL · Khách quét QR trên màn hình hoặc trên bill", fontWeight = FontWeight.Black, color = Coffee, modifier = Modifier.padding(bottom = 6.dp))
+                Card(
+                    Modifier.fillMaxWidth(0.92f).align(Alignment.CenterHorizontally).padding(bottom = 12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    border = BorderStroke(1.dp, Color(0xFFE4DBD0))
+                ) {
+                    androidx.compose.foundation.Image(
+                        bitmap = remember(shownBill) { shownBill.asImageBitmap() },
+                        contentDescription = "Bill",
+                        modifier = Modifier.fillMaxWidth().padding(8.dp),
+                        contentScale = androidx.compose.ui.layout.ContentScale.FillWidth,
+                        filterQuality = androidx.compose.ui.graphics.FilterQuality.None
+                    )
+                }
+            }
+            if (isPrepaid) {
+                // Bill đầy đủ hiện ngay khi vào thanh toán: số tiền, QR to, danh sách món. Khách chọn tiền mặt hay chuyển khoản.
+                val payItems by vm.sessionItems(s.id).collectAsState(initial = emptyList())
+                val orderNo = sessionBatches.firstOrNull { it.status != "CANCELLED" }?.serviceNo
+                Card(
+                    Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    border = BorderStroke(1.dp, Color(0xFFE4DBD0)),
+                    shape = RoundedCornerShape(18.dp)
+                ) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("${t.name.uppercase()}${orderNo?.let { " · ĐƠN " + PaymentFlowRules.orderNoLabel(it) } ?: ""}", fontSize = 24.sp, fontWeight = FontWeight.Black, color = Coffee)
+                        Text(money(preview.total), fontSize = 42.sp, fontWeight = FontWeight.Black)
+                        if (qrConfigured) {
+                            PaymentQrImage(qrMode, setting("bank_name"), setting("bank_account"), setting("bank_holder"), preview.total, qrInfo, Modifier.fillMaxWidth(0.85f).aspectRatio(1f).padding(vertical = 6.dp))
+                            Text(
+                                if (soundboxStatic) "Quét QR Techcombank · nhập đúng số tiền trên" else "Quét mã bằng app ngân hàng · số tiền đã nhúng sẵn",
+                                fontSize = 13.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center
+                            )
+                            if (!soundboxStatic) Text("${setting("bank_holder")} · ${setting("bank_name")}", fontSize = 12.sp, color = Color(0xFF655C55))
+                        } else Text("Chưa cấu hình QR · khách thanh toán tiền mặt", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        HorizontalDivider(Modifier.padding(vertical = 10.dp))
+                        Column(Modifier.fillMaxWidth()) {
+                            payItems.forEach { Text("${it.qty} × ${it.itemNameSnapshot}" + if (it.note.isNotBlank()) "  [${it.note}]" else "", fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 1.dp)) }
+                        }
+                        Text("Khách giữ bill · báo số thẻ ${t.name} khi nhận món", fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                    }
+                }
+            }
             Text("TẠM TÍNH")
             Text(money(preview.subtotal), fontSize = 24.sp, fontWeight = FontWeight.Bold)
             if (preview.surcharge > 0) Text("Phụ thu: +${money(preview.surcharge)}", fontWeight = FontWeight.Bold)
             preview.surchargeRules.forEach { Text("• ${it.name} +${it.percent}%", fontSize = 12.sp) }
             if (preview.discount > 0) {
                 Text("Ưu đãi: -${money(preview.discount)}", fontWeight = FontWeight.Bold)
+                preview.buyGetLabel?.let { Text("• $it · quà tặng giảm 100%", fontSize = 12.sp) }
                 preview.discountRule?.let { Text("• ${it.name} -${it.percent}%", fontSize = 12.sp) }
             }
             HorizontalDivider(Modifier.padding(vertical = 10.dp))
@@ -719,22 +1287,45 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                 )
                 Text("Khách mới · sau thanh toán sẽ tạo Member", fontSize = 11.sp)
             }
-            Text("Tích điểm: 10.000đ thực trả = 1 điểm", fontSize = 11.sp)
+            if(billReward!=null && manualVoucher==0L && s.dataScope=="LIVE"){
+                Row(verticalAlignment=Alignment.CenterVertically){
+                    Checkbox(checked=applyBillReward,onCheckedChange={applyBillReward=it})
+                    Text("Dùng quyền lợi tích điểm: giảm "+(if(rewardFields.getOrNull(1)=="BILL_DISCOUNT_PERCENT")"$rewardValue%" else money(rewardValue))+" một lần",fontWeight=FontWeight.Bold,fontSize=12.sp)
+                }
+            }
+            Text("Tích điểm: "+money(setting("loyalty_vnd_per_point").toLongOrNull()?:10000L)+" thực trả = 1 điểm", fontSize = 11.sp)
 
             Text("🔒 Thu tiền: ${e?.name}", Modifier.padding(vertical = 14.dp))
-            if (billPrinted) {
+            if (billPrinted && shownBill != null) Text("✓ BILL ĐÃ IN · Chờ khách thanh toán", fontWeight = FontWeight.Black, color = Color(0xFF41633A))
+            if (billPrinted && shownBill == null) {
                 Text("✓ BILL ĐÃ IN · Chờ khách kiểm tra và thanh toán",fontWeight=FontWeight.Black,color=Color(0xFF41633A))
-                Card {
-                    Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("VIETQR", fontWeight = FontWeight.Bold)
-                        if (!qrConfigured) Text("Chưa cấu hình tài khoản VietQR") else if(validPaymentSession==null) Text("Đang tạo mã thanh toán riêng cho bill…") else {
-                            OfflineVietQrImage(setting("bank_name"), setting("bank_account"), setting("bank_holder"), preview.total, qrInfo, Modifier.size(280.dp))
-                            Text("${setting("bank_name")} · ${setting("bank_account")}")
-                            Text("${money(preview.total)} · $qrInfo")
+                Card(
+                    modifier=Modifier.fillMaxWidth().padding(top=8.dp),
+                    shape=RoundedCornerShape(22.dp),
+                    colors=CardDefaults.cardColors(containerColor=Color.White),
+                    border=BorderStroke(1.dp,Color(0xFFE4DBD0))
+                ) {
+                    Column(Modifier.fillMaxWidth().padding(horizontal=18.dp,vertical=16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(if(soundboxStatic) "CHUYỂN KHOẢN TECHCOMBANK" else "THANH TOÁN VIETQR", fontWeight = FontWeight.Black, color=Coffee, fontSize=15.sp)
+                        if (!qrConfigured) Text("Chưa cấu hình tài khoản thanh toán") else if(!soundboxStatic && validPaymentSession==null) Text("Đang tạo mã thanh toán riêng cho bill…") else {
+                            Text(money(preview.total),fontWeight=FontWeight.Black,fontSize=30.sp,modifier=Modifier.padding(top=3.dp))
+                            Text(if(soundboxStatic) "Khách tự nhập đúng số tiền trên ứng dụng ngân hàng" else "Quét mã để thanh toán",fontSize=11.sp,textAlign=TextAlign.Center,color=Color(0xFF655C55))
+                            Surface(
+                                modifier=Modifier.padding(vertical=12.dp),
+                                shape=RoundedCornerShape(14.dp),
+                                border=BorderStroke(1.dp,Color(0xFFE6DDD2)),
+                                color=Color.White
+                            ) { PaymentQrImage(qrMode, setting("bank_name"), setting("bank_account"), setting("bank_holder"), preview.total, qrInfo, Modifier.size(250.dp).padding(7.dp)) }
+                            if(soundboxStatic){
+                                Text("Quét QR Techcombank · nghe Soundbox báo tiền vào",fontSize=12.sp,fontWeight=FontWeight.Bold,textAlign=TextAlign.Center)
+                                Text("Nội dung chuyển khoản: $qrInfo",fontSize=11.sp,textAlign=TextAlign.Center,color=Color(0xFF655C55),modifier=Modifier.padding(top=3.dp))
+                            }else Text("${setting("bank_name")} · ${setting("bank_account")}",fontSize=12.sp)
                         }
                     }
                 }
-                if(validPaymentSession?.status=="PAYMENT_DETECTED"){
+                if(soundboxStatic){
+                    Text("Nghe thông báo từ Soundbox và đối chiếu số tiền trước khi xác nhận thanh toán.",Modifier.padding(top=8.dp),fontSize=11.sp)
+                }else if(validPaymentSession?.status=="PAYMENT_DETECTED"){
                     Card(Modifier.fillMaxWidth().padding(top=10.dp),colors=CardDefaults.cardColors(containerColor=Color(0xFFDCE8D8))){
                         Column(Modifier.padding(14.dp)){
                             Text("✓ ĐÃ PHÁT HIỆN THANH TOÁN",fontWeight=FontWeight.Black)
@@ -747,86 +1338,41 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                     Text("Đã phát hiện giao dịch cùng số tiền nhưng chưa xác định được bill.",Modifier.padding(top=8.dp),color=Color(0xFF9A5B28),fontSize=12.sp,fontWeight=FontWeight.Bold)
                 }else Text("Đang chờ thông báo ngân hàng · vẫn có thể xác nhận thủ công",Modifier.padding(top=8.dp),fontSize=11.sp)
             }
-        }
-        Column(Modifier.fillMaxWidth().padding(18.dp)) {
-            if(!billPrinted){
-                Button(
-                    onClick={
-                        if(checkoutPrintTestMode) vm.confirmCheckoutBillTest(preview,qrInfo)
-                        else vm.printCheckoutBill(preview,qrInfo,matchedCustomer?.name?:customerName)
-                    },
-                    modifier=Modifier.fillMaxWidth(),
-                    enabled=preview.total>0&&pendingDelivery.isEmpty()&&validPaymentSession!=null
-                ){
-                    Text(
-                        if(pendingDelivery.isNotEmpty())"CHƯA GIAO ĐỦ · CHƯA THỂ IN BILL"
-                        else if(checkoutPrintTestMode)"QA · XÁC NHẬN BILL TEST (KHÔNG IN)"
-                        else "IN BILL TRƯỚC"
-                    )
-                }
-                Text(
-                    if(checkoutPrintTestMode)"Chế độ QA: chỉ giả lập bước đã in bill để kiểm thử thanh toán; không gửi lệnh tới máy in."
-                    else "Phải in bill để khách kiểm tra trước khi xác nhận thanh toán.",
-                    Modifier.padding(top=6.dp),fontSize=11.sp,
-                    color=if(checkoutPrintTestMode)Color(0xFF9A4B3D) else Color.Unspecified,
-                    fontWeight=if(checkoutPrintTestMode)FontWeight.Bold else FontWeight.Normal
-                )
-            }else{
-                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)){
-                    OutlinedButton(onClick={vm.close("CASH",preview,customerPhone,customerName)},modifier=Modifier.weight(1f)){Text("XÁC NHẬN\nTIỀN MẶT",textAlign=TextAlign.Center)}
-                    Button(onClick={vm.close("TRANSFER",preview,customerPhone,customerName)},modifier=Modifier.weight(1f)){Text("XÁC NHẬN\nCHUYỂN KHOẢN",textAlign=TextAlign.Center)}
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun DeliveryQueue(vm: PosViewModel) {
-    val waiting by vm.waitingBatches.collectAsState()
-    val sessions by vm.sessions.collectAsState()
-    val tables by vm.tables.collectAsState()
-    Column {
-        Header("Đơn chờ giao") { vm.screen.value = "TABLES" }
-        if (waiting.isEmpty()) {
-            Text("Không còn đơn chờ giao.", Modifier.padding(20.dp))
-        } else {
-            val ordered = waiting.sortedWith(compareBy<OrderBatchEntity> { it.serviceNo }.thenBy { it.createdAt })
-            LazyColumn(Modifier.fillMaxSize().padding(12.dp)) {
-                itemsIndexed(ordered, key = { _, b -> b.id }) { index, b ->
-                    val session = sessions.firstOrNull { it.id == b.sessionId }
-                    val table = session?.let { s -> tables.firstOrNull { it.id == s.tableId } }
-                    Card(
-                        Modifier.fillMaxWidth().padding(vertical = 5.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = when (index) {
-                                0 -> WaitingPriority1
-                                1 -> WaitingPriority2
-                                else -> WaitingDelivery
-                            }
-                        )
-                    ) {
-                        Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    "#${b.serviceNo.toString().padStart(3,'0')} · ${table?.name ?: "Bàn"}",
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Black
-                                )
-                                Text(
-                                    when (index) {
-                                        0 -> "ƯU TIÊN GIAO TRƯỚC"
-                                        1 -> "ƯU TIÊN KẾ TIẾP"
-                                        else -> "ĐANG CHỜ GIAO"
-                                    },
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text("Đơn #${b.sequence} · ${SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(b.createdAt))}")
-                            }
-                            Button(onClick = { vm.markDelivered(b) }) { Text("ĐÃ GIAO ĐỦ") }
+            if (isPrepaid) {
+                val resumed by vm.resumedPrepaid.collectAsState()
+                val skipK by vm.skipKitchenPrint.collectAsState()
+                if (resumed) Surface(Modifier.fillMaxWidth().padding(bottom = 6.dp), color = Color(0xFFFFF1D6), shape = RoundedCornerShape(8.dp)) {
+                    Column(Modifier.padding(10.dp)) {
+                        Text("ĐƠN MỞ LẠI · chưa xác nhận thu tiền trước đó", fontWeight = FontWeight.Black)
+                        val splitNote by vm.prepaidSplitNote.collectAsState()
+                        splitNote?.let { Text(it, fontSize = 12.sp, color = Color(0xFF7A4B00)) }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(skipK, { vm.skipKitchenPrint.value = it })
+                            Text("Bếp đã làm cả món gọi thêm: KHÔNG in phiếu bếp nào, đánh dấu đã giao hết", fontSize = 13.sp)
                         }
                     }
                 }
+            }
+            if (isPrepaid) payControls()
+        }
+        // Bill và QR hiện NGAY khi vào màn thanh toán (cả trả trước lẫn trả sau), chưa cần bấm in.
+        LaunchedEffect(checkoutKey, preview.total, validPaymentSession != null) {
+            if (shownBill == null && !billPrinted && preview.total > 0 && validPaymentSession != null) vm.printCheckoutBill(preview, qrInfo, matchedCustomer?.name ?: customerName, print = false)
+        }
+        Column(Modifier.fillMaxWidth().padding(18.dp)) {
+            if (!isPrepaid) payControls()
+            if(!canConfirmNow&&pendingDelivery.isEmpty()) Text("Bấm IN BILL ở trên để mở nút xác nhận thu tiền.",Modifier.padding(bottom=4.dp),fontSize=12.sp,fontWeight=FontWeight.Bold,color=Color(0xFF9A5B00))
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)){
+                OutlinedButton(
+                    onClick={vm.close("CASH",preview,qrInfo,customerPhone,customerName,if(applyReward)billReward?.id else null,cashValue)},
+                    modifier=Modifier.weight(1f),
+                    enabled=canConfirmNow&&preview.total>0&&pendingDelivery.isEmpty()&&validPaymentSession!=null&&cashOk
+                ){Text((if(isPrepaid)"XÁC NHẬN TIỀN MẶT\\n& IN PHIẾU BẾP" else "XÁC NHẬN\\nTIỀN MẶT").replace("\\n","\n"),textAlign=TextAlign.Center)}
+                Button(
+                    onClick={vm.close("TRANSFER",preview,qrInfo,customerPhone,customerName,if(applyReward)billReward?.id else null)},
+                    modifier=Modifier.weight(1f),
+                    enabled=canConfirmNow&&preview.total>0&&pendingDelivery.isEmpty()&&validPaymentSession!=null
+                ){Text((if(isPrepaid)"XÁC NHẬN CK\\n& IN PHIẾU BẾP" else "XÁC NHẬN\\nCHUYỂN KHOẢN").replace("\\n","\n"),textAlign=TextAlign.Center)}
             }
         }
     }
@@ -968,6 +1514,20 @@ fun Customers(vm: PosViewModel) {
                             onClick = { editTarget = c },
                             modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
                         ) { Text("CHỈNH SỬA THÔNG TIN") }
+                        if (current?.role == "ADMIN") {
+                            var confirmHide by remember(c.id) { mutableStateOf(false) }
+                            if (!confirmHide) {
+                                OutlinedButton(onClick = { confirmHide = true }, modifier = Modifier.fillMaxWidth()) {
+                                    Text("ẨN KHÁCH HÀNG")
+                                }
+                            } else {
+                                Text("Ẩn khách khỏi danh sách? Bill và lịch sử giao dịch vẫn được giữ.", fontSize = 12.sp)
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    TextButton(onClick = { confirmHide = false }) { Text("HỦY") }
+                                    Button(onClick = { vm.softDeleteCustomer(c); selected = null }) { Text("XÁC NHẬN ẨN") }
+                                }
+                            }
+                        }
                         Text("Tổng chi tiêu: ${money(c.totalSpend)}")
                         Text("Điểm: ${c.points}")
                         Text("Lượt ghé: ${c.visitCount}")
@@ -1051,6 +1611,57 @@ fun CustomerEditDialog(vm: PosViewModel, customer: CustomerEntity, onDismiss: ()
 }
 
 @Composable
+fun LoyaltyCampaignManager(vm: PosViewModel) {
+    val employee by vm.currentEmployee.collectAsState()
+    val campaigns by vm.loyaltyCampaigns.collectAsState()
+    val menu by vm.menu.collectAsState()
+    val message by vm.printerMessage.collectAsState()
+    var editing by remember { mutableStateOf<LoyaltyCampaignEntity?>(null) }
+    var name by remember { mutableStateOf("") }
+    var trigger by remember { mutableStateOf("BILL_COUNT") }
+    var threshold by remember { mutableStateOf("") }
+    var discountKind by remember { mutableStateOf("BILL_DISCOUNT") }
+    var discountValue by remember { mutableStateOf("30000") }
+    var cycle by remember { mutableStateOf("ONCE") }
+    var expires by remember { mutableStateOf("") }
+    fun edit(c: LoyaltyCampaignEntity?) {
+        editing=c;name=c?.name.orEmpty();trigger="POINTS";threshold=c?.threshold?.toString()?:"100";discountKind=c?.rewardType?.takeIf{it=="BILL_DISCOUNT"||it=="BILL_DISCOUNT_PERCENT"}?:"BILL_DISCOUNT";discountValue=c?.rewardValue?.toString()?:"30000";cycle="ONCE";expires=""
+    }
+    if(employee?.role!="ADMIN"){Column{Header("Tích lũy & quà"){vm.screen.value="MANAGE"};Text("Chỉ Admin được cấu hình chương trình.",Modifier.padding(20.dp))};return}
+    Column {
+        Header("Tích lũy & quà") { vm.screen.value="MANAGE" }
+        LazyColumn(Modifier.fillMaxSize().padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
+            item {
+                Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                    Text(if(editing==null)"TẠO CHƯƠNG TRÌNH" else "SỬA CHƯƠNG TRÌNH",fontWeight=FontWeight.Black)
+                    OutlinedTextField(name,{name=it.take(60)},Modifier.fillMaxWidth(),label={Text("Tên chương trình")},singleLine=true)
+                    OutlinedTextField(threshold,{threshold=it.filter(Char::isDigit)},Modifier.fillMaxWidth(),label={Text("Số điểm đạt mốc")})
+                    Row{FilterChip(discountKind=="BILL_DISCOUNT",{discountKind="BILL_DISCOUNT"},{Text("Giảm tiền")});FilterChip(discountKind=="BILL_DISCOUNT_PERCENT",{discountKind="BILL_DISCOUNT_PERCENT"},{Text("Giảm %")})}
+                    OutlinedTextField(discountValue,{discountValue=it.filter(Char::isDigit)},Modifier.fillMaxWidth(),label={Text(if(discountKind=="BILL_DISCOUNT")"Số tiền giảm (đ)" else "Phần trăm giảm (%)")})
+                    Text("Chỉ áp dụng một lần cho mỗi khách. Không phát hành hoặc đổi voucher.",fontSize=12.sp)
+                    Button(onClick={
+                        val now=System.currentTimeMillis()
+                        vm.saveLoyaltyCampaign(LoyaltyCampaignEntity(editing?.id?:UUID.randomUUID().toString(),name.trim(),"POINTS",threshold.toLongOrNull()?:0L,discountKind,rewardValue=discountValue.toLongOrNull()?:0L,cycleMode="ONCE",active=editing?.active?:true,createdAt=editing?.createdAt?:now,updatedAt=now))
+                    },modifier=Modifier.fillMaxWidth(),enabled=name.isNotBlank()){Text(if(editing==null)"LƯU CHƯƠNG TRÌNH" else "CẬP NHẬT CHƯƠNG TRÌNH")}
+                    if(editing!=null)TextButton({edit(null)}){Text("TẠO CHƯƠNG TRÌNH MỚI")}
+                    if(message.contains("CHƯƠNG TRÌNH")||message.contains("MÓN QUÀ")||message.contains("ĐIỀU KIỆN"))Text(message,fontSize=11.sp,fontWeight=FontWeight.Bold)
+                }}
+            }
+            items(campaigns){campaign->
+                val reward=menu.firstOrNull{it.id==campaign.rewardMenuItemId}
+                val rewardText=when(campaign.rewardType){"BILL_DISCOUNT"->"Giảm "+money(campaign.rewardValue)+" trên bill";"BILL_DISCOUNT_PERCENT"->"Giảm "+campaign.rewardValue+"% trên bill";else->"ĐÃ TẠM KHÓA · chương trình cũ"}
+                Card(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(4.dp)){
+                    Text(campaign.name,fontWeight=FontWeight.Black)
+                    Text("${when(campaign.triggerType){"BILL_COUNT"->"${campaign.threshold} lượt mua";"SPEND"->"${money(campaign.threshold)} tổng chi";else->"${campaign.threshold} điểm"}} → $rewardText · ${if(campaign.cycleMode=="REPEAT")"Lặp lại" else "Một lần"}",fontSize=12.sp)
+                    Text(if(campaign.expiresDays==null)"Không hạn quà" else "Hạn ${campaign.expiresDays} ngày",fontSize=11.sp)
+                    if(campaign.rewardType in listOf("BILL_DISCOUNT","BILL_DISCOUNT_PERCENT")) Row{TextButton({edit(campaign)}){Text("SỬA")};TextButton({vm.toggleLoyaltyCampaign(campaign)}){Text(if(campaign.active)"TẠM NGƯNG" else "BẬT LẠI")}}
+                }}
+            }
+        }
+    }
+}
+
+@Composable
 fun LoyaltyConfig(vm: PosViewModel) {
     val settings by vm.settings.collectAsState()
     fun current(key: String, fallback: String) = settingValue(settings,key,fallback)
@@ -1061,6 +1672,7 @@ fun LoyaltyConfig(vm: PosViewModel) {
     var vvipPoints by remember(settings) { mutableStateOf(current("vvip_min_points","500")) }
     var vvipDiscount by remember(settings) { mutableStateOf(current("vvip_discount_percent","10")) }
     var saved by remember { mutableStateOf(false) }
+    var vndPerPoint by remember(settings) { mutableStateOf(current("loyalty_vnd_per_point","10000")) }
 
     Column {
         Header("Cấu hình hạng thành viên") { vm.screen.value = "MANAGE" }
@@ -1076,6 +1688,8 @@ fun LoyaltyConfig(vm: PosViewModel) {
                 }
             }
             Spacer(Modifier.height(10.dp))
+            OutlinedTextField(vndPerPoint,{vndPerPoint=it.filter(Char::isDigit)},Modifier.fillMaxWidth(),label={Text("Số tiền thanh toán = 1 điểm (VNĐ)")})
+            Button(onClick={vm.savePointEarningRate(vndPerPoint)}){Text("LƯU QUY TẮC TÍCH ĐIỂM")}
             TierConfigCard("MEMBER", "0", memberDiscount, { memberDiscount = it }, null, null)
             Spacer(Modifier.height(8.dp))
             TierConfigCard("VIP", vipPoints, vipDiscount, { vipDiscount = it }, vipPoints) { vipPoints = it }
@@ -1158,27 +1772,35 @@ fun Manage(vm: PosViewModel) {
             }
             Rowx("Khách hàng", "Tra cứu · cập nhật tên/SĐT/địa chỉ · Member/VIP/VVIP") { vm.screen.value = "CUSTOMERS" }
             if (employee?.role == "ADMIN") {
+                Rowx("Quy trình thanh toán", "Trả sau (theo bàn) · Trả trước (thu tiền rồi pha chế) · lịch sử đổi") { vm.screen.value = "PAYMENT_FLOW" }
                 Rowx("Cấu hình hạng thành viên", "Ngưỡng điểm · tự nâng hạng · % ưu đãi Member/VIP/VVIP") { vm.screen.value = "LOYALTY_CONFIG" }
-                Rowx("Nhân viên", "Thêm · khóa · phân quyền") { vm.screen.value = "EMP" }
+                Rowx("Chương trình tích điểm giảm bill", "Tùy chỉnh điểm → giảm tiền hoặc % một lần") { vm.screen.value = "LOYALTY_CAMPAIGNS" }
+                Rowx("Nhân sự & Lương", "Nhân viên · ca làm · chấm công · sửa công · bảng lương") { vm.screen.value = "HR" }
+            }
+            if (employee?.role != null && employee?.role != "ADMIN") {
+                Rowx("Bảng công & lương của tôi", "Xem giờ làm và tiền lương cá nhân · chỉ đọc") { vm.screen.value = "PAYROLL" }
             }
             if (employee?.role == "ADMIN" || employee?.canManageSystem == true) {
                 Rowx("Bàn & khu vực", "Thêm · sửa · Trong nhà / Ngoài trời") { vm.screen.value = "TABLE_ADMIN" }
             }
             if (employee?.role == "ADMIN" || employee?.canPurchase == true) {
-                Rowx("Nhập đầu vào", "Lương · vật tư cố định · vật tư sản xuất") { vm.screen.value = "PURCHASE" }
+                // Chi phí: nhập, duyệt, hoàn ứng, xem đều trên web (màn PURCHASE vẫn còn trong code, chỉ ẩn khỏi menu).
             }
             if (employee?.role == "ADMIN" || employee?.role == "MANAGER") {
-                Rowx("VietQR", "Lưu tài khoản · tạo QR") { vm.screen.value = "VIETQR" }
-                Rowx("Thanh toán chuyển khoản", "Đọc thông báo VCB/VietinBank · rung · đọc số tiền") { vm.screen.value = "BANK_PAYMENT_SETTINGS" }
+                Rowx("VietQR", "Chọn QR động theo bill hoặc QR tĩnh · lưu tài khoản") { vm.screen.value = "VIETQR" }
+                Rowx("Thanh toán chuyển khoản", "Quyền đọc thông báo app ngân hàng · đối soát tiền về") { vm.screen.value = "BANK_PAYMENT_SETTINGS" }
             }
+            if (employee?.role == "ADMIN" || employee?.role == "MANAGER") Rowx("Nhắc giao đồ", "Âm thanh · rung · giọng nói khi khách chờ lâu") { vm.screen.value = "DELIVERY_REMIND" }
             Rowx("Máy in", "58/80mm · Bluetooth · ESC/POS") { vm.screen.value = "PRINTER" }
             if (employee?.role == "ADMIN" || employee?.canManageSystem == true) {
                 Rowx("Dữ liệu & Backup", "MASTER · Autobackup · Backup/Restore") { vm.screen.value = "BACKUP" }
             }
             if (employee?.role == "ADMIN") {
                 Rowx("Kiểm tra dữ liệu", "Đối soát Payment · Bill · Customer · điểm · trạng thái bàn") { vm.screen.value = "HEALTH" }
+                Rowx("TEST MODE", "Test order · bếp · thanh toán · in bill nhưng KHÔNG tính doanh thu") { vm.screen.value = "TEST_MODE" }
+                // Đã khai trương: ẩn "Dọn dữ liệu trước khai trương" để không bấm nhầm (màn vẫn còn trong code).
                 Rowx("Cloud & Manager realtime", "Firebase backup · trạng thái bàn · doanh thu trực tiếp") { vm.screen.value = "CLOUD" }
-                Rowx("Nhật ký hệ thống", "Audit thao tác · người thực hiện · thời điểm · dữ liệu thay đổi") { vm.screen.value = "SETTINGS" }
+                Rowx("Nhật ký & thao tác nhạy cảm", "Ai huỷ món, hoàn tiền, đổi phương thức, sửa đơn, in lại bill, chỉnh tiền ca…") { vm.screen.value = "SETTINGS" }
             }
             HorizontalDivider(Modifier.padding(vertical = 12.dp))
             Text("POS0210 v${packageInfo.versionName} · versionCode ${packageInfo.longVersionCode}", fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -1190,10 +1812,211 @@ fun Manage(vm: PosViewModel) {
 }
 
 @Composable
+fun PayrollManager(vm:PosViewModel){
+    val employee by vm.currentEmployee.collectAsState()
+    val employees by vm.employees.collectAsState()
+    val settings by vm.settings.collectAsState()
+    val days by vm.payrollDays.collectAsState()
+    val label by vm.payrollPeriodLabel.collectAsState()
+    val attendanceQaMode by vm.attendanceQaMode.collectAsState()
+    val message by vm.printerMessage.collectAsState()
+    val cal=remember{Calendar.getInstance()}
+    var year by remember{mutableIntStateOf(cal.get(Calendar.YEAR))}
+    var month by remember{mutableIntStateOf(cal.get(Calendar.MONTH)+1)}
+    LaunchedEffect(year,month){vm.loadPayrollMonth(year,month)}
+    if(employee==null){Column{Header("Bảng lương"){vm.screen.value="MANAGE"};Text("Vui lòng đăng nhập để xem bảng công.",Modifier.padding(20.dp))};return}
+    val isManager=employee?.role=="ADMIN"||employee?.role=="MANAGER"
+    fun setting(key:String)=settings.firstOrNull{it.key==key}?.value.orEmpty()
+    fun kText(basisPoints:String):String{
+        val value=basisPoints.toIntOrNull()?.div(10_000.0)?:1.0
+        return "%.4f".format(Locale.US,value).trimEnd('0').trimEnd('.')
+    }
+    val holidayKByDate=remember(settings){
+        settings.mapNotNull{item->
+            item.key.removePrefix("attendance_date_multiplier_").takeIf{item.key.startsWith("attendance_date_multiplier_")&&item.value.isNotBlank()}?.let{it to kText(item.value)}
+        }.toMap()
+    }
+    var defaultRate by remember(settings){mutableStateOf(setting("hourly_rate_default").ifBlank{"35000"})}
+    var employeeRates by remember(settings,employees){mutableStateOf(employees.associate{it.id to setting("hourly_rate_"+it.id)})}
+    var calendarYear by remember{mutableIntStateOf(cal.get(Calendar.YEAR))}
+    var calendarMonth by remember{mutableIntStateOf(cal.get(Calendar.MONTH)+1)}
+    var selectedHolidayDates by remember{mutableStateOf<Set<String>>(emptySet())}
+    var holidayK by remember{mutableStateOf("2")}
+    val calendarCells=remember(calendarYear,calendarMonth){
+        val first=Calendar.getInstance().apply{set(calendarYear,calendarMonth-1,1,0,0,0);set(Calendar.MILLISECOND,0)}
+        val padding=first.get(Calendar.DAY_OF_WEEK)-1
+        val count=first.getActualMaximum(Calendar.DAY_OF_MONTH)
+        List(padding+count){index->
+            if(index<padding)null else "%04d-%02d-%02d".format(Locale.US,calendarYear,calendarMonth,index-padding+1)
+        }
+    }
+    val visibleDays=if(isManager)days else days.filter{it.employeeId==employee?.id}
+    val visibleEmployees=if(isManager)employees else employees.filter{it.id==employee?.id}
+    val grouped=visibleDays.groupBy{it.employeeId}
+    Column{
+        Header(if(attendanceQaMode)"CHẤM CÔNG QA · BẢNG LƯƠNG" else "Chấm công & Bảng lương"){vm.screen.value=if(isManager)"HR" else "MANAGE"}
+        Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween){
+            OutlinedButton({if(month==1){month=12;year--}else month--}){Text("‹")}
+            Text("THÁNG $label",fontWeight=FontWeight.Black,fontSize=18.sp)
+            OutlinedButton({if(month==12){month=1;year++}else month++}){Text("›")}
+        }
+        LazyColumn(Modifier.fillMaxSize().padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
+            if(isManager) item{
+                Card(Modifier.fillMaxWidth()){
+                    Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
+                        Text("CÀI ĐẶT CÔNG & LƯƠNG",fontWeight=FontWeight.Black,fontSize=17.sp)
+                        Text("Đơn giá và hệ số được chốt vào ca lúc CHECK-IN. Sửa sau đó chỉ áp dụng ca mới, không làm sai lịch sử.",fontSize=11.sp)
+                        OutlinedTextField(defaultRate,{defaultRate=it.filter(Char::isDigit).take(7)},Modifier.fillMaxWidth(),label={Text("Đơn giá mặc định (đ/giờ)")},singleLine=true)
+                        Text("Thiết lập riêng từng nhân viên: để trống sẽ dùng mức mặc định.",fontSize=11.sp,fontWeight=FontWeight.Bold)
+                        employees.forEach{emp->
+                            Card(Modifier.fillMaxWidth()){
+                                Column(Modifier.padding(10.dp),verticalArrangement=Arrangement.spacedBy(6.dp)){
+                                    Text(emp.name+(if(!emp.active)" · ĐÃ KHÓA" else ""),fontWeight=FontWeight.Bold)
+                                    OutlinedTextField(employeeRates[emp.id].orEmpty(),{value->employeeRates=employeeRates.toMutableMap().apply{put(emp.id,value.filter(Char::isDigit).take(7))}},Modifier.fillMaxWidth(),label={Text("Đơn giá riêng (đ/giờ)")},singleLine=true)
+                                }
+                            }
+                        }
+                        Button(onClick={vm.savePayrollConfig(defaultRate,employeeRates)},modifier=Modifier.fillMaxWidth()){Text("LƯU ĐƠN GIÁ CÔNG / GIỜ")}
+                        HorizontalDivider()
+                        Text("HỆ SỐ NGÀY LỄ",fontWeight=FontWeight.Black,fontSize=16.sp)
+                        Text("Chạm để chọn nhiều ngày. Một lần lưu sẽ áp cùng K cho tất cả ngày đang chọn.",fontSize=11.sp)
+                        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween){
+                            OutlinedButton({if(calendarMonth==1){calendarMonth=12;calendarYear--}else calendarMonth--}){Text("‹")}
+                            Text("THÁNG %02d/%04d".format(Locale.US,calendarMonth,calendarYear),fontWeight=FontWeight.Bold)
+                            OutlinedButton({if(calendarMonth==12){calendarMonth=1;calendarYear++}else calendarMonth++}){Text("›")}
+                        }
+                        Row(Modifier.fillMaxWidth()){
+                            listOf("CN","T2","T3","T4","T5","T6","T7").forEach{day->Text(day,Modifier.weight(1f),textAlign=TextAlign.Center,fontSize=10.sp,fontWeight=FontWeight.Bold)}
+                        }
+                        calendarCells.chunked(7).forEach{week->
+                            Row(Modifier.fillMaxWidth()){
+                                week.forEach{date->
+                                    if(date==null) Spacer(Modifier.weight(1f).aspectRatio(1f).padding(1.dp))
+                                    else {
+                                        val selected=date in selectedHolidayDates
+                                        val saved=date in holidayKByDate
+                                        Button(
+                                            onClick={selectedHolidayDates=HolidayCalendarSelection.toggle(selectedHolidayDates,date)},
+                                            modifier=Modifier.weight(1f).aspectRatio(1f).padding(1.dp),
+                                            contentPadding=PaddingValues(0.dp),
+                                            colors=ButtonDefaults.buttonColors(containerColor=when{selected->Coffee;saved->Occupied;else->Tint},contentColor=if(selected)Color.White else Color.Black)
+                                        ){Text(date.takeLast(2),fontSize=11.sp)}
+                                    }
+                                }
+                            }
+                        }
+                        Text(if(selectedHolidayDates.isEmpty())"Chưa chọn ngày." else "Đã chọn ${selectedHolidayDates.size} ngày: ${selectedHolidayDates.sorted().joinToString(", ")}",fontSize=11.sp)
+                        Row(horizontalArrangement=Arrangement.spacedBy(8.dp),modifier=Modifier.fillMaxWidth()){
+                            OutlinedButton({holidayK="1.5"},Modifier.weight(1f)){Text("K = 1.5")}
+                            OutlinedButton({holidayK="2"},Modifier.weight(1f)){Text("K = 2")}
+                        }
+                        OutlinedTextField(holidayK,{holidayK=it.filter{c->c.isDigit()||c=='.'||c==','}.take(6)},Modifier.fillMaxWidth(),label={Text("K tùy chỉnh · từ 0.5 đến 3.0")},singleLine=true)
+                        Button(
+                            onClick={
+                                vm.saveHolidayMultipliers(selectedHolidayDates,holidayK)
+                                selectedHolidayDates=emptySet()
+                            },
+                            modifier=Modifier.fillMaxWidth(),
+                            enabled=selectedHolidayDates.isNotEmpty()
+                        ){Text("LƯU K CHO ${selectedHolidayDates.size} NGÀY")}
+                        if(holidayKByDate.isNotEmpty()){
+                            Text("NGÀY ĐÃ CÀI HỆ SỐ",fontSize=12.sp,fontWeight=FontWeight.Bold)
+                            holidayKByDate.toSortedMap().forEach{(date,k)->
+                                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+                                    Text("$date · K = $k",Modifier.weight(1f),fontSize=12.sp)
+                                    TextButton({vm.clearHolidayMultiplier(date)}){Text("XÓA")}
+                                }
+                            }
+                        }
+                        if(message.contains("CÔNG")||message.contains("LƯƠNG")||message.contains("HỆ SỐ")||message.contains("K NGÀY")||message.contains("K ="))Text("XÁC NHẬN · $message",fontSize=11.sp,fontWeight=FontWeight.Bold)
+                    }
+                }
+            }
+            items(visibleEmployees.filter{grouped[it.id]?.isNotEmpty()==true}){emp->
+                val rows=grouped[emp.id].orEmpty();val mins=rows.sumOf{it.minutes};val total=rows.sumOf{it.amount}
+                Card(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(4.dp)){
+                    Text(emp.name,fontWeight=FontWeight.Black,fontSize=17.sp)
+                    Text("Tổng: ${mins/60}h ${mins%60}p · ${money(total)}",fontWeight=FontWeight.Bold)
+                    rows.sortedByDescending{it.date}.forEach{d->
+                        Text("${d.date.substring(8,10)}/${d.date.substring(5,7)} · ${d.minutes/60}h ${d.minutes%60}p · ${money(d.hourlyRate)}/h × ${"%.2f".format(d.multiplierBasisPoints/10000.0)} · ${money(d.amount)}",fontSize=11.sp)
+                    }
+                }}
+            }
+            if(visibleDays.isEmpty())item{Text("Chưa có dữ liệu chấm công trong tháng này.",Modifier.padding(12.dp))}
+        }
+    }
+}
+
+@Composable
+fun TestModeManager(vm:PosViewModel){
+    val employee by vm.currentEmployee.collectAsState()
+    val enabled by vm.businessTestMode.collectAsState()
+    val testBills by vm.testBills.collectAsState()
+    var confirm by remember{mutableStateOf("")}
+    Column{
+        Header("TEST MODE"){vm.screen.value="MANAGE"}
+        Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)){
+            Text("CHẾ ĐỘ TEST BÁN HÀNG",fontSize=18.sp,fontWeight=FontWeight.Black)
+            Text("Order → gửi bếp → thanh toán → in/reprint vẫn hoạt động. Bill TEST không tính vào doanh thu LIVE, không cộng điểm khách.")
+            Row(verticalAlignment=Alignment.CenterVertically){
+                Text(if(enabled) "TEST MODE ĐANG BẬT" else "ĐANG Ở CHẾ ĐỘ LIVE",Modifier.weight(1f),fontWeight=FontWeight.Bold,color=if(enabled) Color.Red else Color.Unspecified)
+                Switch(enabled,{vm.setBusinessTestMode(it)})
+            }
+            Text("Bill TEST đã thanh toán: ${testBills.size}")
+            if(employee?.role=="ADMIN"){
+                HorizontalDivider()
+                Text("QA CHẤM CÔNG",fontWeight=FontWeight.Black)
+                Text("Tạo ca mẫu có ngày thường, K=1.5, K=2 và ca qua ngày. Dữ liệu này không tính vào bảng lương thật.",fontSize=11.sp)
+                Button({vm.seedAttendanceQa();vm.screen.value="PAYROLL"},Modifier.fillMaxWidth()){Text("TẠO CA CÔNG QA & XEM BẢNG LƯƠNG")}
+                OutlinedButton({vm.clearAttendanceQa()},Modifier.fillMaxWidth()){Text("XÓA TOÀN BỘ CA CÔNG QA")}
+            }
+            HorizontalDivider()
+            Text("XÓA DỮ LIỆU TEST",fontWeight=FontWeight.Black)
+            Text("Chỉ xóa Session/Order/Bill/Payment thuộc TEST. Không đụng dữ liệu LIVE, nhập hàng, chi phí hay tài sản.",fontSize=12.sp)
+            OutlinedTextField(confirm,{confirm=it.uppercase().take(8)},Modifier.fillMaxWidth(),label={Text("Nhập XOA TEST")},singleLine=true)
+            Button({vm.clearBusinessTestData();confirm=""},Modifier.fillMaxWidth(),enabled=employee?.role=="ADMIN"&&confirm=="XOA TEST"){Text("XÁC NHẬN XÓA DỮ LIỆU TEST")}
+        }
+    }
+}
+
+@Composable
+fun ResetPreOpeningSales(vm:PosViewModel){
+    val employee by vm.currentEmployee.collectAsState()
+    val bills by vm.bills.collectAsState()
+    val openAttendances by vm.openAttendances.collectAsState()
+    var confirmText by remember { mutableStateOf("") }
+    if(employee?.role!="ADMIN"){
+        Column{ Header("Dọn dữ liệu trước khai trương"){vm.screen.value="MANAGE"}; Text("Chỉ ADMIN được thực hiện.",Modifier.padding(20.dp),fontWeight=FontWeight.Bold) }
+        return
+    }
+    Column{
+        Header("Dọn dữ liệu trước khai trương"){vm.screen.value="MANAGE"}
+        Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)){
+            Text("DỌN DỮ LIỆU TRƯỚC KHAI TRƯƠNG",fontWeight=FontWeight.Black,fontSize=18.sp)
+            Text("Sẽ dọn ${bills.size} bill đã thanh toán và toàn bộ ca chấm công${if(openAttendances.isNotEmpty()) " · đang có ${openAttendances.size} ca mở" else ""}.",fontWeight=FontWeight.Bold)
+            Text("Bill/Payment bán thử sẽ bị loại khỏi dữ liệu vận hành và doanh thu, nhưng vẫn lưu audit để truy vết. Điểm, lượt ghé và voucher phát sinh từ bill sẽ được hoàn lại/hủy.")
+            Text("GIỮ NGUYÊN: nhập hàng, chi phí đầu tư, nhà cung cấp, tài sản, menu, giá, bàn, nhân viên, cấu hình Cloud và media.")
+            Text("Ứng dụng tự lưu backup trước và sau thao tác, rồi yêu cầu đồng bộ Cloud.",fontSize=12.sp)
+            OutlinedTextField(confirmText,{confirmText=it.uppercase().take(24)},Modifier.fillMaxWidth(),label={Text("Nhập RESET KHAI TRUONG 0210 để xác nhận")},singleLine=true)
+            Button(
+                onClick={vm.resetPreOpeningData();confirmText=""},
+                modifier=Modifier.fillMaxWidth(),
+                enabled=PreOpeningResetPolicy.canExecute(employee?.role,confirmText)
+            ){Text("XÁC NHẬN DỌN DỮ LIỆU TRƯỚC KHAI TRƯƠNG")}
+            Text("Không thao tác vào Purchase/Expense/Asset/Menu/Tài khoản.",fontSize=11.sp,fontWeight=FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
 fun CloudSyncSettings(vm:PosViewModel){
-    val settings by vm.settings.collectAsState();val state by vm.cloudSyncState.collectAsState();val message by vm.cloudMessage.collectAsState();val dashboard by vm.cloudDashboard.collectAsState()
+    val cloudTrace by vn.ecohome.pos0210.cloud.CloudExecution.history.collectAsState()
+    val quotaStatus by vn.ecohome.pos0210.cloud.CloudQuotaGuard.status.collectAsState()
+    val cloudActive by vn.ecohome.pos0210.cloud.CloudExecution.active.collectAsState()
+    val realtimeBusy=cloudActive.keys.any{it in setOf("REALTIME","DASHBOARD","PUBLISH_MENU","BACKUP_SNAPSHOT","RESTORE_DB")}
+    val settings by vm.settings.collectAsState();val state by vm.cloudSyncState.collectAsState();val message by vm.cloudMessage.collectAsState();val dashboard by vm.cloudDashboard.collectAsState();val sessionMissing by vm.firebaseSessionMissing.collectAsState()
     fun current(key:String)=settings.firstOrNull{it.key==key}?.value.orEmpty()
-    var projectId by remember(settings){mutableStateOf(current("firebase_project_id"))};var applicationId by remember(settings){mutableStateOf(current("firebase_application_id"))};var apiKey by remember(settings){mutableStateOf(current("firebase_api_key"))}
+    val firebaseDefaults=vn.ecohome.pos0210.cloud.FirebaseCloudSync.defaultConfig();var projectId by remember(settings){mutableStateOf(current("firebase_project_id").ifBlank{firebaseDefaults.projectId})};var applicationId by remember(settings){mutableStateOf(current("firebase_application_id").ifBlank{firebaseDefaults.applicationId})};var apiKey by remember(settings){mutableStateOf(current("firebase_api_key").ifBlank{firebaseDefaults.apiKey})}
     var email by remember(settings){mutableStateOf(current("firebase_email"))};var password by remember{mutableStateOf("")};var confirmRestore by remember{mutableStateOf(false)}
     LaunchedEffect(Unit){vm.reconcileFirebaseSession()}
     LaunchedEffect(state?.syncedUid){if(state?.syncedUid!=null)vm.observeCloudDashboard()}
@@ -1210,17 +2033,28 @@ fun CloudSyncSettings(vm:PosViewModel){
             Text("TÀI KHOẢN CHỦ QUÁN",fontWeight=FontWeight.Black)
             OutlinedTextField(email,{email=it.trim()},Modifier.fillMaxWidth(),label={Text("Email Firebase")},singleLine=true)
             OutlinedTextField(password,{password=it},Modifier.fillMaxWidth(),label={Text("Mật khẩu")},visualTransformation=PasswordVisualTransformation(),singleLine=true)
-            if(state?.syncedUid==null)Button({vm.firebaseSignIn(email,password);password=""},Modifier.fillMaxWidth(),enabled=email.isNotBlank()&&password.length>=6){Text("ĐĂNG NHẬP & BẬT ĐỒNG BỘ")}
+            if(state?.syncedUid!=null&&sessionMissing)Text("Phiên đăng nhập Firebase đã hết. Dữ liệu bill/order trên máy vẫn giữ nguyên. Nhập lại mật khẩu của đúng tài khoản cũ để tiếp tục đồng bộ.",fontSize=12.sp,color=Color(0xFF9A4B3D),fontWeight=FontWeight.Bold)
+            if(state?.syncedUid==null||sessionMissing)Button({vm.firebaseSignIn(email,password);password=""},Modifier.fillMaxWidth(),enabled=email.isNotBlank()&&password.length>=6){Text(if(sessionMissing&&state?.syncedUid!=null)"ĐĂNG NHẬP LẠI · GIỮ NGUYÊN UID" else "ĐĂNG NHẬP & BẬT ĐỒNG BỘ")}
             else OutlinedButton({vm.firebaseSignOut()},Modifier.fillMaxWidth()){Text("ĐĂNG XUẤT FIREBASE")}
-            Button({vm.syncFirebase()},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null){Text("ĐỒNG BỘ REALTIME NGAY")}
+            Button({vm.syncFirebase()},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null&&!sessionMissing&&!realtimeBusy){Text(if(realtimeBusy)"TÁC VỤ CLOUD ĐANG CHẠY…" else "ĐỒNG BỘ REALTIME NGAY")}
+            Button({vm.syncFullMenuToWeb()},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null){Text("ĐỒNG BỘ TOÀN BỘ MENU + ẢNH LÊN WEB")}
+            Text("Làm một lần trên máy gốc: đẩy lại mọi nhóm món, món, ảnh và ảnh nhỏ cho web. Không sửa menu trên máy.",fontSize=11.sp)
+            Button({vm.transferCloudMedia(true)},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null){Text("ĐẨY TOÀN BỘ ẢNH LÊN CLOUD (MÁY GỐC)")}
+            OutlinedButton({vm.transferCloudMedia(false)},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null){Text("TẢI ẢNH TỪ CLOUD (MÁY ORDER)")}
+            Text("Chỉ bấm ĐẨY trên máy còn ảnh gốc. Màn hình sẽ báo số file và lỗi đầu tiên nếu Storage/URI không đọc được.",fontSize=11.sp)
             OutlinedButton({vm.createFirebaseBackup()},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null){Text("TẠO CLOUD BACKUP NGAY")}
             OutlinedButton({confirmRestore=true},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null){Text("KHÔI PHỤC CLOUD BACKUP")}
-            Text("Tự động backup mỗi 1 giờ khi có mạng · giữ 2 bản A/B luân phiên. Restore ưu tiên bản mới nhất hợp lệ và tự fallback sang bản còn lại nếu checksum lỗi.",fontSize=11.sp)
+            Text("Backup khi dữ liệu thay đổi, tối thiểu 1 giờ/lần có mạng · giữ 2 bản A/B luân phiên. Restore ưu tiên bản mới nhất hợp lệ và tự fallback sang bản còn lại nếu checksum lỗi.",fontSize=11.sp)
             if(message.isNotBlank())Text(message,fontWeight=FontWeight.Bold)
             val backupOnlyError=state?.lastError?.takeIf{it.startsWith("PRIVATE_BACKUP_ONLY:")}
-            Text("Realtime sync: "+when{state?.syncedUid==null->"Chưa đăng nhập";state?.lastSuccessAt!=null->"Thành công";else->"Chưa có lần thành công"},fontWeight=FontWeight.Bold)
+            Text("Realtime sync: "+when{state?.syncedUid==null->"Chưa đăng nhập";sessionMissing->"Mất phiên đăng nhập · cần đăng nhập lại";realtimeBusy->"Đang chạy";state?.lastError!=null&&backupOnlyError==null->"Lần gần nhất chưa hoàn tất";state?.lastSuccessAt!=null->"Đã có lần thành công (xem thời gian bên dưới)";else->"Chưa có lần thành công"},fontWeight=FontWeight.Bold)
             state?.lastSuccessAt?.let{Text("Lần realtime thành công: ${time(it)}",fontSize=12.sp)}
-            Text("Cloud backup: "+if(backupOnlyError==null)"Sẵn sàng" else "Có lỗi",fontWeight=FontWeight.Bold)
+            val backupConfirmed=current("cloud_backup_confirmed_at").toLongOrNull()
+            Text("Cloud backup: "+if(backupOnlyError!=null)"Có lỗi" else if(backupConfirmed!=null)"Đã được server xác nhận" else "Chưa có xác nhận trên máy này",fontWeight=FontWeight.Bold)
+            backupConfirmed?.let{Text("Backup server xác nhận: "+java.text.SimpleDateFormat("dd/MM/yyyy HH:mm:ss",java.util.Locale.getDefault()).format(java.util.Date(it)),fontSize=12.sp)}
+            Text(quotaStatus,fontSize=12.sp,fontWeight=FontWeight.Bold)
+            Text("Dashboard tối đa 1 phút/lần; gần trần 5 phút. Backup khi dữ liệu thay đổi: 1 giờ/lần; gần trần 3 giờ. Cloud bị chặn vẫn giữ dữ liệu local.",fontSize=11.sp)
+            cloudTrace.takeLast(6).forEach{entry->val parts=entry.split(" ",limit=2);val stamp=parts.firstOrNull()?.toLongOrNull();Text(if(stamp!=null)java.text.SimpleDateFormat("HH:mm:ss",java.util.Locale.getDefault()).format(java.util.Date(stamp))+" "+parts.getOrElse(1){""} else entry,fontSize=11.sp)}
             backupOnlyError?.let{Text(it.removePrefix("PRIVATE_BACKUP_ONLY:").trim(),color=Color(0xFF9A4B3D),fontSize=12.sp)}
             HorizontalDivider()
             Text("MANAGER REALTIME",fontWeight=FontWeight.Black,fontSize=18.sp)
@@ -1230,12 +2064,12 @@ fun CloudSyncSettings(vm:PosViewModel){
             MetricCard("Doanh thu tháng",money(dashboard.monthRevenue));MetricCard("Lợi nhuận vận hành",dashboard.operatingProfit?.let(::money)?:"Chưa có giá vốn");MetricCard("Tiền cuối kỳ tạm tính",money(dashboard.closingCash));MetricCard("Tổng vốn đầu tư",money(dashboard.initialInvestment));MetricCard("Đã xác định thu hồi",money(dashboard.recoveredCapital));MetricCard("Tiến độ hoàn vốn","${dashboard.paybackBasisPoints/100.0}%")
             Text("Dashboard chỉ đọc số liệu Firestore; không có quyền sửa order, đóng bill hoặc xác nhận thanh toán.",fontSize=11.sp,fontWeight=FontWeight.Bold)
             if(dashboard.online)Text("● Đang nhận dữ liệu Firestore realtime",color=Color(0xFF41633A),fontWeight=FontWeight.Bold) else Text(dashboard.error?:"Chưa kết nối realtime",color=Color(0xFF9A4B3D))
-            Text("Backup riêng tư lưu dữ liệu kinh doanh, cấu hình và nhân viên/PIN để khôi phục máy mới. Không lưu ảnh món/ảnh hóa đơn, URI thiết bị/lưu trữ, log ngân hàng hay lịch sử in.",fontSize=11.sp)
+            Text("Backup DB riêng tư lưu dữ liệu kinh doanh, cấu hình và nhân viên/PIN. Ảnh món/combo được đồng bộ và khôi phục riêng qua Cloud Storage. URI thiết bị/máy in, log ngân hàng và lịch sử in không được sao chép sang máy mới.",fontSize=11.sp)
         }
         if(confirmRestore)AlertDialog(
             onDismissRequest={confirmRestore=false},
             title={Text("Khôi phục cloud backup?")},
-            text={Text("Dữ liệu POS hiện tại sẽ được lưu một bản an toàn trên máy rồi thay bằng bản cloud mới nhất. Ảnh/media không được khôi phục. Ứng dụng sẽ mở lại sau khi hoàn tất.")},
+            text={Text("Dữ liệu POS hiện tại sẽ được lưu một bản an toàn trên máy rồi thay bằng bản cloud mới nhất. Sau khi DB phục hồi, ảnh món/combo sẽ được khôi phục riêng từ Cloud Storage nếu có. Cấu hình máy in/thiết bị vẫn giữ riêng theo từng máy.")},
             confirmButton={Button({confirmRestore=false;vm.restoreFirebaseBackup()}){Text("KHÔI PHỤC")}},
             dismissButton={OutlinedButton({confirmRestore=false}){Text("HỦY")}}
         )
@@ -1479,6 +2313,11 @@ fun BackupCenter(vm: PosViewModel) {
                     }
 
                     OutlinedButton(
+                        onClick = { message = "Đang lấy lại ảnh món…"; vm.recoverMediaManually { message = it } },
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                    ) { Text("CHỈ KHÔI PHỤC ẢNH MÓN (KHÔNG ĐỤNG DỮ LIỆU)") }
+
+                    OutlinedButton(
                         onClick = { restoreBackup.launch(arrayOf("application/octet-stream", "*/*")) },
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                     ) { Text("RESTORE DATA TỪ FILE KHÁC") }
@@ -1682,11 +2521,12 @@ fun Rowx(t: String, s: String, go: () -> Unit) {
 @Composable
 fun Employees(vm: PosViewModel) {
     val es by vm.employees.collectAsState()
+    val settingsNow by vm.settings.collectAsState()
     val current by vm.currentEmployee.collectAsState()
     var editing by remember { mutableStateOf<EmployeeEntity?>(null) }
     var adding by remember { mutableStateOf(false) }
     Column {
-        Header("Nhân viên") { vm.screen.value = "MANAGE" }
+        Header("Nhân viên") { vm.screen.value = "HR" }
         if (current?.role == "ADMIN") {
             Button(
                 onClick = { adding = true },
@@ -1700,6 +2540,13 @@ fun Employees(vm: PosViewModel) {
                         Text("${e.name} · ${e.role}", fontWeight = FontWeight.Bold)
                         Text("Order ${e.canOrder} · Bếp ${e.canSendKitchen} · Thu ${e.canCheckout} · Nhập ${e.canPurchase}")
                         Text("Chạm để sửa quyền", fontSize = 12.sp)
+                        if (current?.role == "ADMIN") {
+                            val required = ShiftRules.attendanceRequired(settingsNow.firstOrNull { it.key == ShiftRules.attendanceSettingKey(e.id) }?.value ?: "", e.role)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Switch(checked = required, onCheckedChange = { vm.saveSetting(ShiftRules.attendanceSettingKey(e.id), if (it) "1" else "0") })
+                                Text(if (required) " Phải chấm công" else " Không chấm công")
+                            }
+                        }
                     }
                 }
             }
@@ -1944,10 +2791,15 @@ fun ComboEditDialog(
 fun PricingManager(vm: PosViewModel) {
     val rules by vm.pricingRules.collectAsState()
     var showAdd by remember { mutableStateOf(false) }
+    var deleteTarget by remember { mutableStateOf<PricingRuleEntity?>(null) }
+    var editTarget by remember { mutableStateOf<PricingRuleEntity?>(null) }
     Column {
         Header("Ưu đãi & điều chỉnh giá") { vm.screen.value = "MANAGE" }
         Button(onClick = { showAdd = true }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
             Text("＋ TẠO CHƯƠNG TRÌNH")
+        }
+        OutlinedButton(onClick = { vm.screen.value = "BUY_GET" }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp)) {
+            Text("MUA X TẶNG Y")
         }
         Text("Giảm giá không cộng dồn: hệ thống chỉ áp dụng 1 mức giảm có giá trị lớn nhất.", Modifier.padding(horizontal = 16.dp), fontSize = 12.sp)
         LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
@@ -1960,12 +2812,26 @@ fun PricingManager(vm: PosViewModel) {
                             val mode = if (rule.autoApply) "Tự động" else "Theo mã"
                             Text(mode, fontSize = 11.sp)
                         }
-                        Switch(checked = rule.active, onCheckedChange = { vm.togglePricingRule(rule) })
+                        Column(horizontalAlignment = Alignment.End) {
+                            Switch(checked = rule.active, onCheckedChange = { vm.togglePricingRule(rule) })
+                            TextButton(onClick = { editTarget = rule }) { Text("SỬA") }
+                            TextButton(onClick = { deleteTarget = rule }) { Text("XÓA") }
+                        }
                     }
                 }
             }
         }
     }
+    deleteTarget?.let { rule ->
+        AlertDialog(
+            onDismissRequest = { deleteTarget = null },
+            title = { Text("Xóa chương trình giá?") },
+            text = { Text("Chương trình sẽ ngừng áp dụng cho bill mới. Bill lịch sử đã dùng chương trình này vẫn được giữ nguyên.") },
+            confirmButton = { Button(onClick = { vm.deletePricingRule(rule); deleteTarget = null }) { Text("XÓA") } },
+            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("HỦY") } }
+        )
+    }
+    editTarget?.let { rule -> PricingRuleDialog(initial=rule,onDismiss={editTarget=null}) { name,code,kind,percent,startAt,endAt,startMin,endMin,autoApply -> vm.updatePricingRule(rule,name,code,kind,percent,startAt,endAt,startMin,endMin,autoApply);editTarget=null } }
     if (showAdd) {
         PricingRuleDialog(onDismiss = { showAdd = false }) { name, code, kind, percent, startAt, endAt, startMin, endMin, autoApply ->
             vm.savePricingRule(name, code, kind, percent, startAt, endAt, startMin, endMin, autoApply)
@@ -1976,20 +2842,21 @@ fun PricingManager(vm: PosViewModel) {
 
 @Composable
 fun PricingRuleDialog(
+    initial: PricingRuleEntity? = null,
     onDismiss: () -> Unit,
     onSave: (String, String, String, Int, Long?, Long?, Int?, Int?, Boolean) -> Unit
 ) {
-    var name by remember { mutableStateOf("") }
-    var code by remember { mutableStateOf("") }
-    var kind by remember { mutableStateOf("DISCOUNT") }
-    var percentText by remember { mutableStateOf("") }
-    var startText by remember { mutableStateOf("") }
-    var endText by remember { mutableStateOf("") }
-    var startHour by remember { mutableStateOf("") }
-    var endHour by remember { mutableStateOf("") }
-    var autoApply by remember { mutableStateOf(true) }
+    var name by remember { mutableStateOf(initial?.name.orEmpty()) }
+    var code by remember { mutableStateOf(initial?.code.orEmpty()) }
+    var kind by remember { mutableStateOf(initial?.kind ?: "DISCOUNT") }
+    var percentText by remember { mutableStateOf(initial?.percent?.toString().orEmpty()) }
+    var startText by remember { mutableStateOf(initial?.startAt?.let { SimpleDateFormat("dd/MM/yyyy HH:mm",Locale.getDefault()).format(java.util.Date(it)) }.orEmpty()) }
+    var endText by remember { mutableStateOf(initial?.endAt?.let { SimpleDateFormat("dd/MM/yyyy HH:mm",Locale.getDefault()).format(java.util.Date(it)) }.orEmpty()) }
+    var startHour by remember { mutableStateOf(initial?.startMinute?.let { "%02d:%02d".format(it/60,it%60) }.orEmpty()) }
+    var endHour by remember { mutableStateOf(initial?.endMinute?.let { "%02d:%02d".format(it/60,it%60) }.orEmpty()) }
+    var autoApply by remember { mutableStateOf(initial?.autoApply ?: true) }
     fun parseDate(text: String): Long? = if (text.isBlank()) null else runCatching {
-        SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).apply { isLenient = false }.parse(text)?.time
+        SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).apply { isLenient = false }.also { require(it.parse(text)?.let { d -> it.format(d) == text.trim() } == true) }.parse(text)?.time
     }.getOrNull()
     fun parseMinute(text: String): Int? {
         if (text.isBlank()) return null
@@ -2006,7 +2873,7 @@ fun PricingRuleDialog(
         confirmButton = {
             Button(
                 onClick = { onSave(name, code, kind, percentText.toIntOrNull() ?: 0, parseDate(startText), parseDate(endText), parseMinute(startHour), parseMinute(endHour), autoApply) },
-                enabled = name.isNotBlank() && (percentText.toIntOrNull() ?: 0) in 1..100 && (autoApply || code.isNotBlank())
+                enabled = name.isNotBlank() && (percentText.toIntOrNull() ?: 0) in 1..100 && (autoApply || code.isNotBlank()) && (startText.isBlank() || parseDate(startText)!=null) && (endText.isBlank() || parseDate(endText)!=null) && (startHour.isBlank() || parseMinute(startHour)!=null) && (endHour.isBlank() || parseMinute(endHour)!=null) && (startText.isBlank() || endText.isBlank() || parseDate(endText)!! >= parseDate(startText)!!) && (startHour.isBlank() == endHour.isBlank())
             ) { Text("LƯU") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("HỦY") } },
@@ -2052,6 +2919,11 @@ fun MenuManager(vm: PosViewModel) {
     var editTarget by remember { mutableStateOf<MenuItemEntity?>(null) }
     var deleteTarget by remember { mutableStateOf<MenuItemEntity?>(null) }
     var imageTarget by remember { mutableStateOf<MenuItemEntity?>(null) }
+    var codeTarget by remember { mutableStateOf<MenuItemEntity?>(null) }
+    var codeText by remember { mutableStateOf("") }
+    var purgeTarget by remember { mutableStateOf<MenuItemEntity?>(null) }
+    var menuMsg by remember { mutableStateOf("") }
+    val menuUser by vm.currentEmployee.collectAsState()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             runCatching {
@@ -2073,10 +2945,12 @@ fun MenuManager(vm: PosViewModel) {
             Button(onClick = { showAdd = true }, modifier = Modifier.weight(1f)) { Text("＋ THÊM MÓN") }
             OutlinedButton(onClick = { showCategoryManager = true }, modifier = Modifier.weight(1f)) { Text("NHÓM MÓN") }
         }
+        if (menuMsg.isNotBlank()) Text(menuMsg, Modifier.padding(horizontal = 16.dp), fontWeight = FontWeight.Bold, color = Color(0xFF9A3412))
         LazyColumn {
             items(menu) { m ->
                 Card(Modifier.fillMaxWidth().padding(6.dp)) {
-                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.padding(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                         if (!m.imageUri.isNullOrBlank()) {
                             AsyncImage(
                                 model = m.imageUri,
@@ -2101,12 +2975,17 @@ fun MenuManager(vm: PosViewModel) {
                             if (m.description.isNotBlank()) Text(m.description, fontSize = 12.sp, maxLines = 2)
                             if (!m.active) Text("TẠM NGƯNG BÁN", color = Color(0xFF9A3412), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         TextButton(onClick = { editTarget = m }) { Text("SỬA") }
+                        TextButton(onClick = { codeTarget = m; codeText = m.productCode; menuMsg = "" }) { Text("MÃ") }
+                        if (!m.active && menuUser?.role == "ADMIN") TextButton(onClick = { purgeTarget = m; menuMsg = "" }) { Text("XOÁ HẲN", color = Color(0xFFB3261E)) }
                         TextButton(onClick = {
                             imageTarget = m
                             picker.launch(arrayOf("image/*"))
                         }) { Text(if (m.imageUri.isNullOrBlank()) "＋ ẢNH" else "ĐỔI ẢNH") }
                         TextButton(onClick = { if (m.active) deleteTarget = m else vm.toggleMenu(m) }) { Text(if(m.active) "TẠM NGƯNG" else "BẬT BÁN") }
+                        }
                     }
                 }
             }
@@ -2123,6 +3002,28 @@ fun MenuManager(vm: PosViewModel) {
             vm.updateMenu(original, name, price, cat, description, imageUri, active)
             editTarget = null
         }
+    }
+    codeTarget?.let { m ->
+        AlertDialog(
+            onDismissRequest = { codeTarget = null },
+            title = { Text("Sửa mã · ${m.name}") },
+            text = { Column {
+                Text("Mã hiện tại: ${m.productCode}. Lịch sử bill cũ không đổi.", fontSize = 12.sp)
+                OutlinedTextField(codeText, { codeText = it.uppercase().take(20) }, label = { Text("Mã mới (VD: AS-016)") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                if (menuMsg.isNotBlank()) Text(menuMsg, color = Color(0xFFB3261E), fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+            } },
+            confirmButton = { Button(onClick = { vm.updateMenuCode(m, codeText) { err -> if (err == null) { codeTarget = null; menuMsg = "Đã đổi mã ${m.name}" } else menuMsg = err } }) { Text("LƯU MÃ") } },
+            dismissButton = { TextButton(onClick = { codeTarget = null }) { Text("ĐÓNG") } }
+        )
+    }
+    purgeTarget?.let { m ->
+        AlertDialog(
+            onDismissRequest = { purgeTarget = null },
+            title = { Text("Xoá hẳn ${m.name}?") },
+            text = { Text("Chỉ xoá được món CHƯA TỪNG BÁN. Món sẽ biến mất khỏi menu trên mọi máy và web. Không hoàn tác được.") },
+            confirmButton = { Button(onClick = { vm.deleteMenuPermanently(m) { err -> purgeTarget = null; menuMsg = err ?: "Đã xoá hẳn ${m.name}" } }) { Text("XOÁ HẲN") } },
+            dismissButton = { TextButton(onClick = { purgeTarget = null }) { Text("GIỮ LẠI") } }
+        )
     }
     if (showCategoryManager) {
         CategoryManagerDialog(
@@ -2286,6 +3187,12 @@ fun Purchases(vm: PosViewModel) {
         }
         return
     }
+    // Chi phí nhập 100% trên web. Trên máy chỉ xem; ADMIN mở được form cũ khi khẩn cấp (mất mạng, web lỗi).
+    var deviceEntry by remember { mutableStateOf(false) }
+    if (!deviceEntry) {
+        WebOnlyExpenses(vm, canUnlock = currentGuard?.role == "ADMIN") { deviceEntry = true }
+        return
+    }
     val purchases by vm.purchases.collectAsState()
     val purchaseCategories by vm.purchaseCategories.collectAsState()
     val costCodes by vm.costCodes.collectAsState()
@@ -2293,6 +3200,7 @@ fun Purchases(vm: PosViewModel) {
     val profitPartners by vm.profitPartners.collectAsState()
     val context = LocalContext.current
     var itemName by remember { mutableStateOf("") }
+    var materialCode by remember { mutableStateOf("") }
     var qtyText by remember { mutableStateOf("") }
     var unit by remember { mutableStateOf("lần") }
     var unitPriceText by remember { mutableStateOf("") }
@@ -2310,6 +3218,9 @@ fun Purchases(vm: PosViewModel) {
     var movementMethod by remember{mutableStateOf("CASH")};var movementPartnerId by remember{mutableStateOf<String?>(null)}
     var selectedCategoryId by remember { mutableStateOf("") }
     var showCategoryManager by remember { mutableStateOf(false) }
+    val allPurchaseItems by vm.allPurchaseItems.collectAsState()
+    val knownMaterials = remember(allPurchaseItems) { MaterialCatalog.knownFrom(allPurchaseItems.map { Triple(it.name, it.categoryId, it.unit) }) }
+    val draftLines = remember { mutableStateListOf(DraftReceiptLine(UUID.randomUUID().toString())) }
     var dateText by remember {
         mutableStateOf(SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date()))
     }
@@ -2331,6 +3242,7 @@ fun Purchases(vm: PosViewModel) {
     val qty = qtyText.replace(',', '.').toDoubleOrNull()
     val unitPrice = unitPriceText.toLongOrNull()
     val total = if (qty != null && unitPrice != null) (qty * unitPrice).toLong() else 0L
+    val receiptTotal = draftLines.sumOf { it.amount }
 
     Column {
         Header("Nhập đầu vào") { vm.screen.value = "MANAGE" }
@@ -2339,7 +3251,7 @@ fun Purchases(vm: PosViewModel) {
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text("Giao dịch tài chính", Modifier.weight(1f), fontWeight = FontWeight.Black, fontSize = 18.sp)
+            Text(if (transactionType == FinancialTransactionTypes.OPERATING_EXPENSE) "Chi phí mua hàng" else "Giao dịch tài chính", Modifier.weight(1f), fontWeight = FontWeight.Black, fontSize = 18.sp)
             Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)){OutlinedButton(onClick = { showCategoryManager = true }) { Text("DANH MỤC") };OutlinedButton(onClick={showCostCodeManager=true}){Text("MÃ CHI PHÍ")}}
         }
 
@@ -2350,6 +3262,7 @@ fun Purchases(vm: PosViewModel) {
                     FinancialTransactionTypes.all.forEach{value->FilterChip(transactionType==value,{transactionType=value;expenseCategory=FinancialTransactionTypes.legacyExpenseCode(value,ExpenseCategories.OTHER_EXPENSE)},{Text(FinancialTransactionTypes.label(value))})}
                 }
                 if(transactionType==FinancialTransactionTypes.OPERATING_EXPENSE){
+                    Text("CHI PHÍ MUA HÀNG · Phiếu nhiều vật tư",Modifier.padding(top=8.dp),fontWeight=FontWeight.Black)
                     Text("Nhóm chi phí",Modifier.padding(top=8.dp),fontWeight=FontWeight.Bold)
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)){
                         listOf(ExpenseCategories.INVENTORY_PURCHASE,ExpenseCategories.PAYROLL,ExpenseCategories.ELECTRICITY,ExpenseCategories.WATER,ExpenseCategories.RENT,ExpenseCategories.MARKETING,ExpenseCategories.CONSUMABLES,ExpenseCategories.MAINTENANCE,ExpenseCategories.SERVICES,ExpenseCategories.BANK_FEES,ExpenseCategories.OTHER_EXPENSE).forEach{value->FilterChip(expenseCategory==value,{expenseCategory=value},{Text(ExpenseCategories.label(value))})}
@@ -2424,12 +3337,15 @@ fun Purchases(vm: PosViewModel) {
                         supportingText = { Text("Người thực tế bỏ tiền. Có thể cấu hình tên chuẩn và tỷ lệ chia trong Báo cáo tháng.") }
                     )
                 }
+                if (transactionType != FinancialTransactionTypes.OPERATING_EXPENSE) Card(Modifier.fillMaxWidth().padding(top = 8.dp)) { Column(Modifier.padding(12.dp)) {
+                Text("Nội dung giao dịch", fontWeight = FontWeight.Bold)
                 OutlinedTextField(
                     itemName,
                     { itemName = it },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text(if(FinancialTransactionTypes.usesPurchaseDocument(transactionType)) if (isPayrollExpense(expenseCategory)) "Người nhận lương / nhân sự" else "Mặt hàng / nội dung chi" else "Nội dung giao dịch") }
+                    label = { Text(if (transactionType == FinancialTransactionTypes.OPERATING_EXPENSE) "Tên vật tư" else if(FinancialTransactionTypes.usesPurchaseDocument(transactionType)) if (isPayrollExpense(expenseCategory)) "Người nhận lương / nhân sự" else "Mặt hàng / nội dung chi" else "Nội dung giao dịch") }
                 )
+                if (transactionType == FinancialTransactionTypes.OPERATING_EXPENSE) OutlinedTextField(materialCode, { materialCode = it.take(40) }, Modifier.fillMaxWidth(), label = { Text("Mã vật tư") })
                 if(FinancialTransactionTypes.usesPurchaseDocument(transactionType)) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         qtyText,
@@ -2450,6 +3366,8 @@ fun Purchases(vm: PosViewModel) {
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text(if(FinancialTransactionTypes.usesPurchaseDocument(transactionType)) if (isPayrollExpense(expenseCategory)) "Đơn giá / ngày công" else "Đơn giá" else "Số tiền") }
                 )
+                } }
+                if (transactionType == FinancialTransactionTypes.OPERATING_EXPENSE) ReceiptLinesEditor(draftLines, knownMaterials, receiptTotal)
                 if(!FinancialTransactionTypes.usesPurchaseDocument(transactionType)){
                     Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){FilterChip(movementMethod=="CASH",{movementMethod="CASH"},{Text("Tiền mặt")});FilterChip(movementMethod=="TRANSFER",{movementMethod="TRANSFER"},{Text("Chuyển khoản")})}
                     if(transactionType in setOf(FinancialTransactionTypes.PROFIT_WITHDRAWAL,FinancialTransactionTypes.OWNER_WITHDRAWAL)){
@@ -2466,7 +3384,7 @@ fun Purchases(vm: PosViewModel) {
                 if(FinancialTransactionTypes.usesPurchaseDocument(transactionType)) Card(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                     Column(Modifier.padding(16.dp)) {
                         Text(selectedCategory?.name ?: ExpenseCategories.label(expenseCategory), fontWeight = FontWeight.Bold)
-                        Text("Thành tiền: ${money(total)}", fontWeight = FontWeight.Black, fontSize = 18.sp)
+                        Text("Thành tiền: ${money(if (transactionType == FinancialTransactionTypes.OPERATING_EXPENSE) receiptTotal else total)}", fontWeight = FontWeight.Black, fontSize = 18.sp)
                     }
                 }
                 if(FinancialTransactionTypes.usesPurchaseDocument(transactionType)) OutlinedButton(
@@ -2481,7 +3399,10 @@ fun Purchases(vm: PosViewModel) {
                         val parsedAt = runCatching { parser.parse(dateText)?.time }.getOrNull()
                             ?: System.currentTimeMillis()
                         val asset=if(transactionType in setOf(FinancialTransactionTypes.ASSET_PURCHASE,FinancialTransactionTypes.ADDITIONAL_INVESTMENT))selectedAssetCategory?.let{c->AssetEntity(UUID.randomUUID().toString(),itemName.trim(),c.id,parsedAt,unitPrice?:0,qty?.toInt()?.coerceAtLeast(1)?:1,total,supplier=supplier.trim(),usefulLifeMonths=usefulLifeText.toIntOrNull()?:c.defaultUsefulLifeMonths,residualValue=(residualText.toLongOrNull()?:0).coerceAtMost(total),estimatedLiquidationValue=liquidationText.toLongOrNull()?:0,note=note,investmentClass=if(transactionType==FinancialTransactionTypes.ADDITIONAL_INVESTMENT)"ADDITIONAL" else "INITIAL")} else null
-                        if(FinancialTransactionTypes.usesPurchaseDocument(transactionType)) vm.addPurchaseDetailed(
+                        if (transactionType == FinancialTransactionTypes.OPERATING_EXPENSE) {
+                            val receipt = draftLines.map { line -> PurchaseReceiptLine(name = line.name.trim(), categoryId = line.code.ifBlank { MaterialCatalog.newMaterialCode(line.groupCode) }, qty = line.qty ?: 0.0, unit = line.unit.trim(), unitPrice = line.unitPrice ?: 0L) }
+                            vm.addPurchaseReceipt(lines = receipt, note = note, at = parsedAt, supplierName = supplier, expenseCategory = FinancialTransactionTypes.legacyExpenseCode(transactionType,expenseCategory), paidByName = paidByName, costCodeId = selectedCostCodeId)
+                        } else if(FinancialTransactionTypes.usesPurchaseDocument(transactionType)) vm.addPurchaseDetailed(
                             name = itemName,
                             qty = qty ?: 0.0,
                             unit = unit.ifBlank { selectedCategory?.defaultUnit ?: "lần" },
@@ -2497,18 +3418,20 @@ fun Purchases(vm: PosViewModel) {
                             costCodeId = selectedCostCodeId
                         )
                         FinancialTransactionTypes.movementCode(transactionType)?.let{vm.addFinancialMovement(it,unitPrice?:0,movementPartnerId,movementMethod,listOf(itemName.trim(),note.trim()).filter(String::isNotBlank).joinToString(" · "),parsedAt)}
-                        message = "Đã ghi giao dịch · ${FinancialTransactionTypes.label(transactionType)} · ${money(if(FinancialTransactionTypes.usesPurchaseDocument(transactionType))total else unitPrice?:0)}"
+                        message = "Đã ghi giao dịch · ${FinancialTransactionTypes.label(transactionType)} · ${money(if (transactionType == FinancialTransactionTypes.OPERATING_EXPENSE) receiptTotal else if(FinancialTransactionTypes.usesPurchaseDocument(transactionType))total else unitPrice?:0)}"
                         itemName = ""
+                        materialCode = ""
                         qtyText = ""
                         unitPriceText = ""
                         note = ""
                         paidByName = ""
                         selectedCostCodeId = null
+                        draftLines.clear(); draftLines.add(DraftReceiptLine(UUID.randomUUID().toString()))
                         invoiceImage = null
                     },
                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                    enabled = itemName.isNotBlank() && (unitPrice ?: 0L) > 0 &&
-                        (!FinancialTransactionTypes.usesPurchaseDocument(transactionType)||(qty?:0.0)>0) &&
+                    enabled = (if (transactionType == FinancialTransactionTypes.OPERATING_EXPENSE) draftLines.isNotEmpty() && draftLines.all { it.isValid } else itemName.isNotBlank() && (unitPrice ?: 0L) > 0) &&
+                        (transactionType == FinancialTransactionTypes.OPERATING_EXPENSE||!FinancialTransactionTypes.usesPurchaseDocument(transactionType)||(qty?:0.0)>0) &&
                         (transactionType!=FinancialTransactionTypes.OPERATING_EXPENSE||expenseCategory!=ExpenseCategories.UNCLASSIFIED) &&
                         (transactionType !in setOf(FinancialTransactionTypes.ASSET_PURCHASE,FinancialTransactionTypes.ADDITIONAL_INVESTMENT)||(selectedAssetCategory!=null&&(usefulLifeText.toIntOrNull()?:0)>0&&(residualText.toLongOrNull()?:0)<=total)) &&
                         (transactionType !in setOf(FinancialTransactionTypes.PROFIT_WITHDRAWAL,FinancialTransactionTypes.OWNER_WITHDRAWAL)||movementPartnerId!=null)
@@ -2641,24 +3564,55 @@ fun VietQr(vm: PosViewModel) {
     var bank by remember(sets) { mutableStateOf(valueFor("bank_name")) }
     var acc by remember(sets) { mutableStateOf(valueFor("bank_account")) }
     var holder by remember(sets) { mutableStateOf(valueFor("bank_holder")) }
+    var dynamic by remember(sets) { mutableStateOf(!PaymentQrMode.usesStaticSoundboxQr(valueFor("payment_qr_mode"))) }
     var saved by remember { mutableStateOf(false) }
+    val bin = remember(bank) { vn.ecohome.pos0210.payment.VietQrPayload.resolveBin(bank) }
+    val canSave = !dynamic || (bin != null && acc.isNotBlank() && holder.isNotBlank())
     Column {
         Header("VietQR") { vm.screen.value = "MANAGE" }
-        Column(Modifier.padding(16.dp)) {
-            OutlinedTextField(bank, { bank = it }, label = { Text("Ngân hàng / BANK_ID") })
-            OutlinedTextField(acc, { acc = it.filter(Char::isDigit) }, label = { Text("Số tài khoản") })
-            OutlinedTextField(holder, { holder = it }, label = { Text("Chủ tài khoản") })
-            Button(onClick = {
-                vm.saveSetting("bank_name", bank)
+        Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
+            Text("KIỂU QR THANH TOÁN", fontWeight = FontWeight.Black)
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { dynamic = true; saved = false }) {
+                RadioButton(selected = dynamic, onClick = { dynamic = true; saved = false })
+                Column {
+                    Text("VietQR ĐỘNG theo bill", fontWeight = FontWeight.Bold)
+                    Text("QR nhúng đúng số tiền và nội dung của từng bill. Nhân viên theo dõi tiền về ngay trên app ngân hàng của máy order, không cần loa.", fontSize = 12.sp)
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { dynamic = false; saved = false }) {
+                RadioButton(selected = !dynamic, onClick = { dynamic = false; saved = false })
+                Column {
+                    Text("QR tĩnh Techcombank Soundbox", fontWeight = FontWeight.Bold)
+                    Text("QR merchant cố định, khách tự nhập số tiền; cần loa Soundbox báo tiền.", fontSize = 12.sp)
+                }
+            }
+            OutlinedTextField(bank, { bank = it; saved = false }, label = { Text("Ngân hàng / BANK_ID (VD: TCB, VCB, MB hoặc BIN 6 số)") }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+            if (dynamic) Text(
+                if (bin != null) "✓ Nhận diện ngân hàng · BIN $bin" else "Chưa nhận diện được ngân hàng. Nhập tên viết tắt (TCB, VCB, MB, BIDV, ACB…) hoặc BIN 6 số bắt đầu bằng 970.",
+                fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (bin != null) Color(0xFF41633A) else Color(0xFF9A2B1F)
+            )
+            OutlinedTextField(acc, { acc = it.filter(Char::isLetterOrDigit).uppercase().take(19); saved = false }, label = { Text("Số tài khoản hoặc mã VietQR (VD: MS00P00000001284119)") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(holder, { holder = it; saved = false }, label = { Text("Chủ tài khoản") }, modifier = Modifier.fillMaxWidth())
+            Button(enabled = canSave, onClick = {
+                vm.saveSetting("bank_name", bank.trim())
                 vm.saveSetting("bank_account", acc)
-                vm.saveSetting("bank_holder", holder)
+                vm.saveSetting("bank_holder", holder.trim())
                 vm.saveSetting("qr_prefix", "0210")
+                vm.saveSetting("payment_qr_mode", if (dynamic) PaymentQrMode.VIETQR_ACCOUNT_DYNAMIC else PaymentQrMode.TECHCOMBANK_SOUNDBOX_STATIC)
+                vm.saveSetting("bank_notification_enabled", dynamic.toString())
                 saved = true
-            }) { Text("LƯU") }
-            if (saved) Text("Đã lưu cấu hình VietQR", Modifier.padding(top = 8.dp))
-            if (bank.isNotBlank() && acc.isNotBlank()) {
-                Text("QR mẫu 1.000đ", Modifier.padding(top = 14.dp))
-                OfflineVietQrImage(bank, acc, holder, 1000, "0210 TEST", Modifier.size(240.dp))
+            }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("LƯU") }
+            if (saved) Text(
+                if (dynamic) "Đã lưu: QR ĐỘNG theo số tiền bill. Đã bật theo dõi thông báo ngân hàng; nếu chưa cấp quyền đọc thông báo, vào Quản lý → Thanh toán chuyển khoản để cấp." else "Đã lưu cấu hình QR tĩnh Soundbox",
+                Modifier.padding(top = 8.dp), fontWeight = FontWeight.Bold
+            )
+            if (dynamic) {
+                Text("QR MẪU · 10.000đ · nội dung 0210 TEST", Modifier.padding(top = 14.dp), fontWeight = FontWeight.Black)
+                Text("Quét thử bằng app ngân hàng: phải ra đúng tên chủ tài khoản, số tiền 10.000đ. Không cần chuyển.", fontSize = 12.sp)
+                if (bin != null && acc.isNotBlank()) PaymentQrImage(PaymentQrMode.VIETQR_ACCOUNT_DYNAMIC, bank, acc, holder, 10_000L, "0210 TEST", Modifier.size(240.dp).padding(top = 8.dp))
+            } else {
+                Text("TECHCOMBANK SOUNDBOX · QR TĨNH", Modifier.padding(top = 14.dp), fontWeight = FontWeight.Black)
+                PaymentQrImage(PaymentQrMode.TECHCOMBANK_SOUNDBOX_STATIC, bank, acc, holder, 0, "", Modifier.size(240.dp).padding(top = 8.dp))
             }
         }
     }
@@ -2827,15 +3781,18 @@ fun Printer(vm: PosViewModel) {
                         colors = CardDefaults.cardColors(containerColor = Color.White)
                     ) {
                         when (preview) {
-                            "BILL" -> BillPrintPreview(vm)
-                            "KITCHEN" -> SimplePrintPreview(
-                                title = "PHIẾU LÀM HÀNG",
-                                body = PrinterText.kitchenSample()
-                            )
-                            "CANCEL" -> SimplePrintPreview(
-                                title = "PHIẾU HỦY",
-                                body = PrinterText.cancelSample()
-                            )
+                            else -> {
+                                val previewBmp = remember(preview, settings) { vm.previewBitmap(preview) }
+                                previewBmp?.let {
+                                    androidx.compose.foundation.Image(
+                                        bitmap = it.asImageBitmap(),
+                                        contentDescription = null,
+                                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                        contentScale = androidx.compose.ui.layout.ContentScale.FillWidth,
+                                        filterQuality = androidx.compose.ui.graphics.FilterQuality.None
+                                    )
+                                }
+                            }
                         }
                     }
                 } else {
@@ -2871,7 +3828,8 @@ fun BillPrintPreview(vm: PosViewModel) {
     val subtotal = 135000L
     val discount = 13500L
     val amount = subtotal - discount
-    val qrConfigured = setting("bank_name").isNotBlank() && setting("bank_account").isNotBlank()
+    val qrMode = setting("payment_qr_mode")
+    val qrConfigured = PaymentQrMode.usesStaticSoundboxQr(qrMode) || (setting("bank_name").isNotBlank() && setting("bank_account").isNotBlank())
 
     Column(
         Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 16.dp),
@@ -2902,7 +3860,7 @@ fun BillPrintPreview(vm: PosViewModel) {
         HorizontalDivider(Modifier.padding(vertical = 9.dp))
         Text("QUÉT MÃ THANH TOÁN", fontSize = 20.sp, fontWeight = FontWeight.Black)
         if (qrConfigured) {
-            OfflineVietQrImage(setting("bank_name"), setting("bank_account"), setting("bank_holder"), amount, "0210 BAN 02", Modifier.fillMaxWidth(0.78f).aspectRatio(1f).padding(top = 4.dp))
+            PaymentQrImage(qrMode, setting("bank_name"), setting("bank_account"), setting("bank_holder"), amount, "0210 BAN 02", Modifier.fillMaxWidth(0.78f).aspectRatio(1f).padding(top = 4.dp))
             Text("SỐ TIỀN: ${money(amount)}", fontSize = 17.sp, fontWeight = FontWeight.Black)
             Text("${setting("bank_name")} · ${setting("bank_account")}", fontSize = 15.sp, fontWeight = FontWeight.Bold)
             Text("Nội dung: 0210 BAN 02", fontSize = 14.sp)
@@ -2946,16 +3904,18 @@ fun Report(vm: PosViewModel) {
         }
         return
     }
-    val bills by vm.bills.collectAsState()
-    val payments by vm.payments.collectAsState()
+    val reportData by vm.salesReport.collectAsState()
+    val bills = reportData.bills
+    val payments = reportData.payments.filter { it.dataScope == "LIVE" }
     val purchases by vm.purchases.collectAsState()
     val purchaseCosts by vm.purchaseCosts.collectAsState()
     val purchaseCategories by vm.purchaseCategories.collectAsState()
     val profitPartners by vm.profitPartners.collectAsState()
-    val itemSales by vm.itemSales.collectAsState()
+    val itemSales = reportData.items
     val current by vm.currentEmployee.collectAsState()
     var section by remember { mutableStateOf("OVERVIEW") }
     var periodDays by remember { mutableStateOf(1) }
+    var singleDayOffset by remember { mutableStateOf<Int?>(0) }
     var selectedBill by remember { mutableStateOf<BillEntity?>(null) }
     var selectedPurchase by remember { mutableStateOf<PurchaseEntity?>(null) }
     var paymentFilter by remember { mutableStateOf("ALL") }
@@ -2965,6 +3925,81 @@ fun Report(vm: PosViewModel) {
     var selectedBillIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var showBulkDelete by remember { mutableStateOf(false) }
     var bulkDeleteReason by remember { mutableStateOf("") }
+    val reportContext = LocalContext.current
+    var excelFrom by remember { mutableStateOf("") }
+    var excelTo by remember { mutableStateOf("") }
+    var excelPayer by remember { mutableStateOf("ALL") }
+    var excelCashier by remember { mutableStateOf("ALL") }
+    var excelFilterError by remember { mutableStateOf("") }
+    var excelSaveSource by remember { mutableStateOf<android.net.Uri?>(null) }
+    val excelSaveLauncher=androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ){result->
+        val destination=result.data?.data
+        val source=excelSaveSource
+        if(result.resultCode==android.app.Activity.RESULT_OK&&destination!=null&&source!=null){
+            runCatching{
+                reportContext.contentResolver.openInputStream(source)?.use{input->
+                    reportContext.contentResolver.openOutputStream(destination)?.use{output->input.copyTo(output)}
+                        ?:error("Không mở được file đích")
+                }?:error("Không mở được file nguồn")
+            }.onSuccess{excelFilterError="ĐÃ LƯU FILE EXCEL"}
+             .onFailure{excelFilterError="LỖI LƯU EXCEL: "+it.message}
+        }
+        excelSaveSource=null
+    }
+    fun shareExcel(download:Boolean){
+        fun parseDate(s:String):Long? {
+            if(s.isBlank())return null
+            val fmt=java.text.SimpleDateFormat("dd/MM/yyyy",java.util.Locale("vi","VN")).apply{isLenient=false}
+            return fmt.parse(s)?.time
+        }
+        val start=runCatching{parseDate(excelFrom)}.getOrNull()
+        val end=runCatching{parseDate(excelTo)}.getOrNull()
+        if((excelFrom.isNotBlank()&&start==null)||(excelTo.isNotBlank()&&end==null)||(start!=null&&end!=null&&start>end)){
+            excelFilterError="Ngày không hợp lệ. Nhập dd/MM/yyyy, từ ngày không sau đến ngày.";return
+        }
+        excelFilterError="Đang tạo file Excel..."
+        val endExclusive=end?.let{java.util.Calendar.getInstance().apply{timeInMillis=it;add(java.util.Calendar.DAY_OF_MONTH,1)}.timeInMillis}
+        vm.exportTransactionExcel(start,endExclusive,excelPayer.takeUnless{it=="ALL"},excelCashier.takeUnless{it=="ALL"},onReady={uri,name->
+            excelFilterError="Đã tạo file Excel · đang mở ứng dụng..."
+            if(download){
+                val intent=Intent(Intent.ACTION_CREATE_DOCUMENT).apply{
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    putExtra(Intent.EXTRA_TITLE,name)
+                }
+                excelSaveSource=uri
+                excelSaveLauncher.launch(intent)
+            }else{
+                val intent=Intent(Intent.ACTION_SEND).apply{
+                    type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    putExtra(Intent.EXTRA_STREAM,uri)
+                    putExtra(Intent.EXTRA_SUBJECT,"POS0210 · Báo cáo Excel")
+                    clipData=android.content.ClipData.newUri(reportContext.contentResolver,name,uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                val zaloIntent=Intent(intent).apply{setPackage("com.zing.zalo")}
+                if(zaloIntent.resolveActivity(reportContext.packageManager)!=null){
+                    reportContext.startActivity(zaloIntent)
+                }else{
+                    reportContext.startActivity(Intent.createChooser(intent,"Chia sẻ Excel qua Zalo / ứng dụng khác"))
+                }
+            }
+        },onError={error->excelFilterError=error})
+    }
+    fun shareAiExport(){
+        vm.exportAiBusinessData { uri, name ->
+            val intent=Intent(Intent.ACTION_SEND).apply{
+                type="application/json"
+                putExtra(Intent.EXTRA_STREAM,uri)
+                putExtra(Intent.EXTRA_SUBJECT,"POS0210 · Dữ liệu kinh doanh cho AI")
+                putExtra(Intent.EXTRA_TEXT,"Phân tích file dữ liệu POS0210 đính kèm: doanh thu, bill trung bình, món/giá/số lượng, xu hướng theo thời gian, nhập hàng, chi phí, tài sản/khấu hao, dòng tiền và đề xuất chiến lược kinh doanh.")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            reportContext.startActivity(Intent.createChooser(intent,"Gửi $name để AI phân tích"))
+        }
+    }
 
     fun periodStart(days: Int): Long {
         return Calendar.getInstance().apply {
@@ -2977,8 +4012,12 @@ fun Report(vm: PosViewModel) {
         }.timeInMillis
     }
 
-    val from = if (periodDays == 0) null else periodStart(periodDays)
-    val filteredBills = if (from == null) bills else bills.filter { (it.closedAt ?: 0L) >= from }
+    val reportZone=ZoneId.of("Asia/Ho_Chi_Minh")
+    val dayRange=singleDayOffset?.let{SalesReport.relativeDayRange(LocalDate.now(reportZone),it,reportZone)}
+    val from=dayRange?.first ?: if(periodDays==0)null else periodStart(periodDays)
+    val until=dayRange?.second
+    val filteredBills=SalesReport.period(bills,from,until)
+    val reportPeriodLabel=when(singleDayOffset){0->"Hôm nay";1->"Hôm qua";2->"Hôm kia";else->when(periodDays){7->"7 ngày";30->"30 ngày";0->"Tất cả";else->"$periodDays ngày"}}
     val purchaseFrom = when(purchasePeriod){
         "TODAY" -> periodStart(1)
         "WEEK" -> periodStart(7)
@@ -3033,18 +4072,14 @@ fun Report(vm: PosViewModel) {
     val salesInPeriod = itemSales.filter { it.sessionId in sessionIds }
     val totalItemQty = salesInPeriod.sumOf { it.qty }
     val favoriteRows = salesInPeriod
-        .groupBy { it.name }
-        .map { (name, rows) -> name to rows.sumOf { it.qty } }
+        .groupBy { it.menuItemId ?: "legacy:${it.name}" }
+        .map { (_, rows) -> rows.first().name to rows.sumOf { it.qty } }
         .sortedByDescending { it.second }
         .take(8)
 
-    val hourlyBillCounts = (5..23).associateWith { hour ->
-        filteredBills.count { bill ->
-            Calendar.getInstance().apply { timeInMillis = bill.openedAt }
-                .get(Calendar.HOUR_OF_DAY) == hour
-        }
-    }
-    val peakHour = hourlyBillCounts.maxByOrNull { it.value }?.takeIf { it.value > 0 }
+    val salesActivity=SalesReport.activity(filteredBills,reportZone)
+    val hourlyBillCounts=salesActivity.hourlyBills
+    val peakHour=salesActivity.peakHour?.let{it to hourlyBillCounts.getValue(it)}
 
     val exactDayRange = runCatching {
         if (historyDateText.isBlank()) null else {
@@ -3054,7 +4089,7 @@ fun Report(vm: PosViewModel) {
         }
     }.getOrNull()
     val historyTimeBills = if (exactDayRange != null) {
-        bills.filter { (it.closedAt ?: 0L) in exactDayRange }
+        bills.filter { it.openedAt in exactDayRange }
     } else filteredBills
     val historyBills = historyTimeBills.filter { bill ->
         val method = payments.firstOrNull { it.billId == bill.id }?.method
@@ -3074,11 +4109,11 @@ fun Report(vm: PosViewModel) {
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             FilterChip(section == "OVERVIEW", { section = "OVERVIEW" }, { Text("TỔNG QUAN") })
+            FilterChip(section == "ITEMS", { section = "ITEMS" }, { Text("THỐNG KÊ MÓN") })
             FilterChip(section == "BILLS", { section = "BILLS" }, { Text("LỊCH SỬ BILL") })
-            FilterChip(section == "PURCHASES", { section = "PURCHASES" }, { Text("CHI / NGƯỜI CHI") })
-            FilterChip(section == "MONTHLY", { section = "MONTHLY" }, { Text("BÁO CÁO THÁNG") })
+            // Chi phí và báo cáo tháng / chốt chia cổ đông chuyển hẳn sang web (Tài chính → Đối soát quỹ & chia cổ đông).
+            FilterChip(section == "EXPORT", { section = "EXPORT" }, { Text("XUẤT DỮ LIỆU") })
         }
-
         if(section == "PURCHASES") {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp).horizontalScroll(rememberScrollState()),
@@ -3099,19 +4134,72 @@ fun Report(vm: PosViewModel) {
             }
         }
         when (section) {
+            "ITEMS" -> { val reportMenu by vm.menu.collectAsState(); val reportCategories by vm.categories.collectAsState(); SalesItemsReport(reportData, reportMenu, reportCategories) { selectedBill = it } }
+            "EXPORT" -> {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal=12.dp,vertical=10.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
+                    Text("XUẤT BÁO CÁO",fontWeight=FontWeight.Bold)
+                    Text("Tải Excel hoặc gửi qua Zalo theo khoảng thời gian và người thực hiện.")
+                    OutlinedTextField(excelFrom,{excelFrom=it},Modifier.fillMaxWidth(),label={Text("Từ ngày · dd/MM/yyyy")},singleLine=true)
+                    OutlinedTextField(excelTo,{excelTo=it},Modifier.fillMaxWidth(),label={Text("Đến ngày · dd/MM/yyyy")},singleLine=true)
+                    Text("NGƯỜI CHI",fontWeight=FontWeight.Bold)
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                        FilterChip(excelPayer=="ALL",{excelPayer="ALL"},{Text("Tất cả")})
+                        purchases.map{it.paidByName}.filter{it.isNotBlank()}.distinct().sorted().forEach{name->FilterChip(excelPayer==name,{excelPayer=name},{Text(name)})}
+                    }
+                    Text("THU NGÂN",fontWeight=FontWeight.Bold)
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                        FilterChip(excelCashier=="ALL",{excelCashier="ALL"},{Text("Tất cả")})
+                        payments.map{it.cashierId}.distinct().forEach{id->FilterChip(excelCashier==id,{excelCashier=id},{Text(id.take(8))})}
+                    }
+                    if(excelFilterError.isNotBlank())Text(excelFilterError,color=if(excelFilterError.startsWith("LỖI")||excelFilterError.contains("lỗi",true))Color.Red else Color.DarkGray)
+                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                        Button(onClick={shareExcel(true)},modifier=Modifier.weight(1f)){Text("TẢI EXCEL")}
+                        Button(onClick={shareExcel(false)},modifier=Modifier.weight(1f)){Text("SHARE ZALO")}
+                    }
+                    Text("DỮ LIỆU PHÂN TÍCH AI",fontWeight=FontWeight.Bold)
+                    OutlinedButton(onClick={shareAiExport()},modifier=Modifier.fillMaxWidth()){Text("XUẤT DỮ LIỆU JSON CHO AI")}
+                }
+            }
             "MONTHLY" -> MonthlyProfitReport(vm)
             "OVERVIEW" -> {
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    FilterChip(periodDays == 1, { periodDays = 1 }, { Text("Hôm nay") })
-                    FilterChip(periodDays == 7, { periodDays = 7 }, { Text("7 ngày") })
-                    FilterChip(periodDays == 30, { periodDays = 30 }, { Text("30 ngày") })
-                    FilterChip(periodDays == 0, { periodDays = 0 }, { Text("Tất cả") })
+                    FilterChip(singleDayOffset==0, { periodDays=1;singleDayOffset=0 }, { Text("Hôm nay") })
+                    FilterChip(singleDayOffset==1, { periodDays=1;singleDayOffset=1 }, { Text("Hôm qua") })
+                    FilterChip(singleDayOffset==2, { periodDays=1;singleDayOffset=2 }, { Text("Hôm kia") })
+                    FilterChip(singleDayOffset==null&&periodDays==7, { periodDays=7;singleDayOffset=null }, { Text("7 ngày") })
+                    FilterChip(singleDayOffset==null&&periodDays==30, { periodDays=30;singleDayOffset=null }, { Text("30 ngày") })
+                    FilterChip(singleDayOffset==null&&periodDays==0, { periodDays=0;singleDayOffset=null }, { Text("Tất cả") })
                 }
                 LazyColumn(Modifier.fillMaxSize().padding(12.dp)) {
+                    item {
+                        val ids = filteredBills.map { it.id }.toSet()
+                        val alerts = SalesReport.reconcile(reportData.bills,reportData.items,reportData.adjustments,reportData.payments,reportData.sessions).count { it.bill.id in ids && it.issues.isNotEmpty() }
+                        if(alerts > 0 || reportData.orphanLines > 0) {
+                            OutlinedButton(onClick={section="ITEMS"},modifier=Modifier.fillMaxWidth()) { Text("ĐỐI SOÁT: $alerts bill cần kiểm tra · ${reportData.orphanLines} dòng mất liên kết") }
+                        }
+                    }
                     item { MetricCard("Doanh thu", money(revenue)) }
+                    item {
+                        val allRefunds by vm.refunds.collectAsState()
+                        val periodRefunds = allRefunds.filter { it.dataScope == "LIVE" && it.createdAt >= (from ?: 0L) && (until == null || it.createdAt < until) }
+                        val cashBack = periodRefunds.filter { it.method == "CASH" }.sumOf { it.amount }
+                        val frozenAll = allRefunds.filter { it.dataScope == "LIVE" && it.status == "FROZEN" }.sumOf { it.amount }
+                        val ckSettled = periodRefunds.filter { it.method != "CASH" && it.status == "DONE" }.sumOf { it.amount }
+                        if (periodRefunds.isNotEmpty() || frozenAll > 0L) {
+                            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEDEA))) {
+                                Column(Modifier.padding(12.dp)) {
+                                    Text("HOÀN TIỀN (đã loại khỏi doanh thu)", fontWeight = FontWeight.Black)
+                                    Text("Hoàn tiền mặt trong kỳ: ${money(cashBack)}")
+                                    Text("CK đã hoàn xong trong kỳ: ${money(ckSettled)}")
+                                    Text("CK ĐÓNG BĂNG chờ hoàn (tính đến nay): ${money(frozenAll)}", fontWeight = FontWeight.Black, color = Color(0xFF9A2B1F))
+                                    Text("Tiền CK đóng băng nằm trong tài khoản nhưng thuộc về khách, trừ ra khi đối chiếu sao kê.", fontSize = 11.sp)
+                                }
+                            }
+                        }
+                    }
                     item { MetricCard("Số bill", filteredBills.size.toString()) }
                     item { MetricCard("Bill trung bình", money(avgBill)) }
                     item { MetricCard("Tiền mặt", money(cash)) }
@@ -3119,10 +4207,13 @@ fun Report(vm: PosViewModel) {
                     item { MetricCard("Tổng tiền chi trong kỳ", money(purchaseTotal)) }
                     item { MetricCard("Chênh lệch thu - tổng tiền chi", money(revenue - purchaseTotal)) }
                     item {
+                        SalesDayChart(salesActivity.dailyRevenue,salesActivity.peakDay,reportPeriodLabel)
+                    }
+                    item {
                         PeakHoursChart(
                             hourlyCounts = hourlyBillCounts,
                             peakHour = peakHour,
-                            periodDays = periodDays
+                            periodLabel = reportPeriodLabel
                         )
                     }
                     item {
@@ -3172,6 +4263,7 @@ fun Report(vm: PosViewModel) {
                     if (favoriteRows.isEmpty()) {
                         item { Text("Chưa đủ dữ liệu món trong kỳ.", Modifier.padding(8.dp)) }
                     } else {
+                        item { ItemQuantityChart(favoriteRows) }
                         items(favoriteRows) { row ->
                             val pct = if (totalItemQty == 0) 0 else ((row.second * 100.0 / totalItemQty) + 0.5).toInt()
                             Card(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
@@ -3187,13 +4279,15 @@ fun Report(vm: PosViewModel) {
             "BILLS" -> {
                 Column(Modifier.fillMaxSize()) {
                     Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp),
+                        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp).horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-                        FilterChip(periodDays == 1 && historyDateText.isBlank(), { periodDays = 1; historyDateText = ""; selectedBillIds = emptySet() }, { Text("Hôm nay") })
-                        FilterChip(periodDays == 7 && historyDateText.isBlank(), { periodDays = 7; historyDateText = ""; selectedBillIds = emptySet() }, { Text("7 ngày") })
-                        FilterChip(periodDays == 30 && historyDateText.isBlank(), { periodDays = 30; historyDateText = ""; selectedBillIds = emptySet() }, { Text("30 ngày") })
-                        FilterChip(periodDays == 0 && historyDateText.isBlank(), { periodDays = 0; historyDateText = ""; selectedBillIds = emptySet() }, { Text("Tất cả") })
+                        FilterChip(singleDayOffset==0&&historyDateText.isBlank(), { periodDays=1;singleDayOffset=0;historyDateText="";selectedBillIds=emptySet() }, { Text("Hôm nay") })
+                        FilterChip(singleDayOffset==1&&historyDateText.isBlank(), { periodDays=1;singleDayOffset=1;historyDateText="";selectedBillIds=emptySet() }, { Text("Hôm qua") })
+                        FilterChip(singleDayOffset==2&&historyDateText.isBlank(), { periodDays=1;singleDayOffset=2;historyDateText="";selectedBillIds=emptySet() }, { Text("Hôm kia") })
+                        FilterChip(singleDayOffset==null&&periodDays==7&&historyDateText.isBlank(), { periodDays=7;singleDayOffset=null;historyDateText="";selectedBillIds=emptySet() }, { Text("7 ngày") })
+                        FilterChip(singleDayOffset==null&&periodDays==30&&historyDateText.isBlank(), { periodDays=30;singleDayOffset=null;historyDateText="";selectedBillIds=emptySet() }, { Text("30 ngày") })
+                        FilterChip(singleDayOffset==null&&periodDays==0&&historyDateText.isBlank(), { periodDays=0;singleDayOffset=null;historyDateText="";selectedBillIds=emptySet() }, { Text("Tất cả") })
                     }
                     OutlinedTextField(
                         value = historyDateText,
@@ -3258,6 +4352,9 @@ fun Report(vm: PosViewModel) {
                                             Text(bill.billNo, fontWeight = FontWeight.Bold)
                                             Text("${bill.closedAt?.let { time(it) } ?: "--"} · ${money(bill.total)}")
                                             Text(if (p?.method == "TRANSFER") "Chuyển khoản" else "Tiền mặt", fontSize = 12.sp)
+                                        }
+                                        if (current?.canCheckout == true || current?.role == "ADMIN") {
+                                            OutlinedButton(onClick = { vm.reprintPaidBill(bill.id) }) { Text("IN LẠI") }
                                         }
                                     }
                                 }
@@ -3439,11 +4536,12 @@ fun MonthlyProfitReport(vm:PosViewModel){
     var monthOffset by remember{mutableIntStateOf(0)};var reimbursementPayer by remember{mutableStateOf<String?>(null)}
     val month=remember(monthOffset){Calendar.getInstance().apply{set(Calendar.DAY_OF_MONTH,1);set(Calendar.HOUR_OF_DAY,0);set(Calendar.MINUTE,0);set(Calendar.SECOND,0);set(Calendar.MILLISECOND,0);add(Calendar.MONTH,monthOffset)}}
     val from=month.timeInMillis;val to=Calendar.getInstance().apply{timeInMillis=from;add(Calendar.MONTH,1)}.timeInMillis
-    val monthBills=bills.filter{(it.closedAt?:Long.MIN_VALUE) in from until to};val billIds=monthBills.map{it.id}.toSet();val revenue=payments.filter{it.billId in billIds}.sumOf{it.amount}
+    val monthBills=bills.filter{it.closedAt!=null&&it.openedAt in from until to};val billIds=monthBills.map{it.id}.toSet();val revenue=payments.filter{it.billId in billIds}.sumOf{it.amount}
     val monthPurchases=purchases.filter{it.purchasedAt in from until to}
     val initialCodes=setOf(ExpenseCategories.SETUP_COST,ExpenseCategories.INITIAL_INVESTMENT_SUNK,ExpenseCategories.CAPITAL_ASSET)
     val additional=monthPurchases.filter{it.expenseCategory==ExpenseCategories.ADDITIONAL_INVESTMENT}.sumOf{it.total}
-    val operating=monthPurchases.filter{it.expenseCategory !in initialCodes&&it.expenseCategory!=ExpenseCategories.ADDITIONAL_INVESTMENT}.sumOf{it.total}
+    val byCategory=ShareholderMonth.operatingByCategory(monthPurchases,from,to)
+    val operating=byCategory.sumOf{it.second}
     val activeAssets=linkedAssetsForPurchases(assets,purchases,allItems).filter{it.status=="ACTIVE"||it.status=="DAMAGED"||it.status=="TRANSFERRED"}
     fun assetValue(a:AssetEntity):AssetValue{val p=Calendar.getInstance().apply{timeInMillis=a.purchaseDate};val used=((month.get(Calendar.YEAR)-p.get(Calendar.YEAR))*12+month.get(Calendar.MONTH)-p.get(Calendar.MONTH)+1).coerceAtLeast(0);return calculateAssetValue(a.totalCost,a.residualValue,a.usefulLifeMonths,used)}
     val depreciation=activeAssets.filter{it.purchaseDate<to}.sumOf{assetValue(it).monthlyDepreciation}
@@ -3452,15 +4550,40 @@ fun MonthlyProfitReport(vm:PosViewModel){
     val reimbursements=movements.filter{it.type=="PAYER_REIMBURSEMENT"&&it.counterpartyName.isNotBlank()}.map{PayerReimbursement(it.counterpartyName,it.amount)}
     val payerLedger=calculatePayerLedger(purchases.filter{it.paidByName.isNotBlank()}.map{PayerAdvance(it.paidByName,it.total)},reimbursements)
     val initialInvestment=initialInvestmentFromPurchases(purchases)
-    val allBillIds=bills.map{it.id}.toSet();val allRevenue=payments.filter{it.billId in allBillIds}.sumOf{it.amount};val allOperating=purchases.filter{it.expenseCategory !in initialCodes}.sumOf{it.total};val cumulativeNet=allRevenue-allOperating;val payback=calculateCashPayback(initialInvestment,cumulativeNet)
-    fun periodResult(start:Long,end:Long):FinancialPeriodResult{val ids=bills.filter{(it.closedAt?:Long.MIN_VALUE) in start until end}.map{it.id}.toSet();val rev=payments.filter{it.billId in ids}.sumOf{it.amount};val ps=purchases.filter{it.purchasedAt in start until end};val add=ps.filter{it.expenseCategory==ExpenseCategories.ADDITIONAL_INVESTMENT}.sumOf{it.total};val op=ps.filter{it.expenseCategory !in initialCodes&&it.expenseCategory!=ExpenseCategories.ADDITIONAL_INVESTMENT}.sumOf{it.total};return calculateFinancialPeriod(FinancialPeriodInput(rev,op,add,0))}
+    val allBillIds=bills.map{it.id}.toSet();val allRevenue=payments.filter{it.billId in allBillIds}.sumOf{it.amount};val allOperating=purchases.filter{it.expenseCategory !in initialCodes&&it.expenseCategory !in ShareholderMonth.NON_EXPENSE}.sumOf{it.total};val cumulativeNet=allRevenue-allOperating;val payback=calculateCashPayback(initialInvestment,cumulativeNet)
+    fun periodResult(start:Long,end:Long):FinancialPeriodResult{val ids=bills.filter{it.closedAt!=null&&it.openedAt in start until end}.map{it.id}.toSet();val rev=payments.filter{it.billId in ids}.sumOf{it.amount};val ps=purchases.filter{it.purchasedAt in start until end};val add=ps.filter{it.expenseCategory==ExpenseCategories.ADDITIONAL_INVESTMENT}.sumOf{it.total};val op=ps.filter{ShareholderMonth.isOperating(it.expenseCategory)}.sumOf{it.total};return calculateFinancialPeriod(FinancialPeriodInput(rev,op,add,0))}
     val quarterStart=Calendar.getInstance().apply{timeInMillis=from;set(Calendar.MONTH,(get(Calendar.MONTH)/3)*3);set(Calendar.DAY_OF_MONTH,1)}.timeInMillis;val yearStart=Calendar.getInstance().apply{timeInMillis=from;set(Calendar.MONTH,0);set(Calendar.DAY_OF_MONTH,1)}.timeInMillis
     val quarter=periodResult(quarterStart,to);val year=periodResult(yearStart,to)
+    val openSessions by vm.sessions.collectAsState();val cloud by vm.cloudSyncState.collectAsState();val reportUser by vm.currentEmployee.collectAsState();val appSettings by vm.settings.collectAsState()
+    val reportContext=LocalContext.current
+    val monthKey=SimpleDateFormat("yyyy-MM",Locale.US).format(Date(from));val monthLabel=SimpleDateFormat("MM/yyyy",Locale.getDefault()).format(Date(from))
+    val now=System.currentTimeMillis()
+    val unclassified=byCategory.filter{it.first==ExpenseCategories.UNCLASSIFIED}.sumOf{it.second}
+    val unreviewed by vm.unreviewedPurchases.collectAsState()
+    val unreviewedInMonth=unreviewed.filter{it.purchasedAt in from until to}
+    val pendingReview=unreviewedInMonth.filter{it.status=="PENDING_REVIEW"}.let{l->l.size to l.sumOf{it.total}}
+    val rejectedReview=unreviewedInMonth.filter{it.status=="REJECTED_REVIEW"}.let{l->l.size to l.sumOf{it.total}}
+    val warnings=ShareholderMonth.warnings(openSessions.count{it.dataScope=="LIVE"&&it.openedAt in from until to},cloud?.lastPullAt?:cloud?.lastSuccessAt,now,to,unclassified,pendingReview,rejectedReview)
+    val closed=ShareholderMonth.decode(appSettings.firstOrNull{it.key==ShareholderMonth.settingKey(monthKey)}?.value)
+    val withdrawnThisMonth=movements.filter{it.type=="PROFIT_WITHDRAWAL"&&it.occurredAt in from until to}.sumOf{it.amount}
+    var confirmClose by remember(monthKey){mutableStateOf(false)}
     LazyColumn(Modifier.fillMaxSize().padding(12.dp)){
+      if(warnings.isNotEmpty())item{Card(Modifier.fillMaxWidth().padding(top=8.dp),colors=CardDefaults.cardColors(containerColor=Color(0xFFFFF1D6))){Column(Modifier.padding(12.dp)){Text("CHƯA NÊN CHỐT CHIA TIỀN",fontWeight=FontWeight.Black,color=Color(0xFF7A4B00));warnings.forEach{Text("• $it",fontSize=13.sp)}}}}
+      if(closed!=null)item{val diff=result.netCashResult-closed.net;Card(Modifier.fillMaxWidth().padding(top=8.dp),colors=CardDefaults.cardColors(containerColor=if(diff==0L)Color(0xFFE3F1DF) else Color(0xFFFFE0DC))){Column(Modifier.padding(12.dp)){Text("ĐÃ CHỐT SỐ: ${money(closed.net)}",fontWeight=FontWeight.Black);Text("Lúc ${SimpleDateFormat("HH:mm dd/MM/yyyy",Locale.getDefault()).format(Date(closed.closedAt))} · ${closed.closedBy}",fontSize=12.sp);if(diff!=0L)Text("Số hiện tại khác bản chốt ${money(diff)}: có phiếu chi hoặc bill được sửa sau khi chốt.",fontWeight=FontWeight.Bold,color=Color(0xFF9A2B1F),fontSize=13.sp)}}}
       item{Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){OutlinedButton({monthOffset--}){Text("‹")};Text(SimpleDateFormat("MM / yyyy",Locale.getDefault()).format(Date(from)),Modifier.weight(1f),textAlign=TextAlign.Center,fontWeight=FontWeight.Black,fontSize=20.sp);OutlinedButton({monthOffset++}){Text("›")}}}
       item{Text("KẾT QUẢ TIỀN THÁNG",Modifier.padding(top=12.dp,bottom=4.dp),fontWeight=FontWeight.Black,fontSize=18.sp);AccountingCard(listOf("Tiền thu bán hàng" to revenue,"Chi vận hành" to -operating,"DƯ TRƯỚC ĐẦU TƯ BỔ SUNG" to result.operatingResultBeforeAdditionalInvestment,"Đầu tư bổ sung" to -additional,"DÒNG TIỀN RÒNG THÁNG" to result.netCashResult,"Khấu hao tham khảo" to -depreciation));Text("Khấu hao chỉ để theo dõi tài sản, không trừ lần hai khỏi tiền chia.",Modifier.padding(8.dp),fontSize=12.sp,fontWeight=FontWeight.Bold)}
+      item{Text("CHI VẬN HÀNH THEO NHÓM",Modifier.padding(top=10.dp,bottom=4.dp),fontWeight=FontWeight.Black,fontSize=16.sp);if(byCategory.isEmpty())Text("Chưa có chi phí trong tháng.",Modifier.padding(8.dp)) else AccountingCard(byCategory.map{ExpenseCategories.label(it.first) to -it.second})}
+      if(withdrawnThisMonth>0)item{MetricCard("Đã ghi nhận rút lợi nhuận trong tháng",money(withdrawnThisMonth))}
       item{Text("CHIA TIỀN",Modifier.padding(top=10.dp),fontWeight=FontWeight.Black,fontSize=18.sp);OutlinedButton({vm.screen.value="FINANCE_PEOPLE"},Modifier.fillMaxWidth().padding(vertical=6.dp)){Text("CẤU HÌNH NGƯỜI & TỶ LỆ CHIA")};if(result.netCashResult<=0)Text("Tháng này không có số dư dương để chia.",Modifier.padding(8.dp),fontWeight=FontWeight.Bold) else if(shares.isEmpty())Text("Cần cấu hình tỷ lệ người chia đủ 100%.",Modifier.padding(8.dp),color=Color(0xFF9A4B3D),fontWeight=FontWeight.Bold)}
       items(shares){p->MetricCard("${p.name} · ${p.shareBasisPoints/100.0}%",money(p.amount))}
+      item{Row(Modifier.fillMaxWidth().padding(vertical=6.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+        OutlinedButton(onClick={
+          val text=ShareholderMonth.summaryText(monthLabel,revenue,byCategory,additional,result.netCashResult,shares.map{it.name to it.amount},warnings,closed)
+          val intent=Intent(Intent.ACTION_SEND).apply{type="text/plain";putExtra(Intent.EXTRA_TEXT,text);putExtra(Intent.EXTRA_SUBJECT,"Báo cáo tháng $monthLabel · 0210")}
+          reportContext.startActivity(Intent.createChooser(intent,"Gửi báo cáo tháng cho cổ đông"))
+        },Modifier.weight(1f)){Text("GỬI CỔ ĐÔNG")}
+        if(reportUser?.role=="ADMIN")Button(onClick={confirmClose=true},Modifier.weight(1f)){Text(if(closed==null)"CHỐT SỐ THÁNG" else "CHỐT LẠI")}
+      }}
       item{Text("CÔNG NỢ NGƯỜI ỨNG",Modifier.padding(top=12.dp,bottom=4.dp),fontWeight=FontWeight.Black,fontSize=18.sp)}
       if(payerLedger.isEmpty())item{Text("Chưa có khoản người cá nhân ứng tiền.",Modifier.padding(8.dp))} else items(payerLedger){row->Card(Modifier.fillMaxWidth().padding(vertical=3.dp)){Column(Modifier.padding(12.dp)){Text(row.payer,fontWeight=FontWeight.Black);Text("Đã ứng ${money(row.advanced)} · Đã hoàn ${money(row.reimbursed)}");Text("Quán còn nợ ${money(row.outstanding)}",fontWeight=FontWeight.Bold);if(row.outstanding>0)OutlinedButton({reimbursementPayer=row.payer},Modifier.fillMaxWidth().padding(top=5.dp)){Text("GHI HOÀN ỨNG")}}}}
       item{Text("ĐẦU TƯ & HOÀN VỐN",Modifier.padding(top=12.dp,bottom=4.dp),fontWeight=FontWeight.Black,fontSize=18.sp);AccountingCard(listOf("Đầu tư ban đầu" to initialInvestment,"Dòng tiền kinh doanh tích lũy" to cumulativeNet,"Còn để hoàn vốn" to payback.remaining));Text("Tiến độ hoàn vốn: ${payback.paybackBasisPoints/100.0}%",Modifier.padding(8.dp),fontWeight=FontWeight.Bold)}
@@ -3468,23 +4591,58 @@ fun MonthlyProfitReport(vm:PosViewModel){
       item{Text("BIẾN ĐỘNG MÃ CHI PHÍ",Modifier.padding(top=12.dp,bottom=4.dp),fontWeight=FontWeight.Black,fontSize=18.sp)}
       items(costCodes){cc->val rows=purchases.filter{it.costCodeId==cc.id}.sortedBy{it.purchasedAt};val latest=rows.lastOrNull();val prev=if(rows.size>1)rows[rows.lastIndex-1] else null;val latestItem=latest?.let{p->allItems.firstOrNull{it.purchaseId==p.id}};val prevItem=prev?.let{p->allItems.firstOrNull{it.purchaseId==p.id}};val monthSpend=monthPurchases.filter{it.costCodeId==cc.id}.sumOf{it.total};Card(Modifier.fillMaxWidth().padding(vertical=3.dp)){Column(Modifier.padding(12.dp)){Text("${cc.code} · ${cc.name}",fontWeight=FontWeight.Black);Text("Chi tháng: ${money(monthSpend)}");if(latestItem!=null)Text("Lần gần nhất: ${latestItem.qty} ${latestItem.unit} × ${money(latestItem.unitPrice)}",fontSize=12.sp);if(latestItem!=null&&prevItem!=null){val v=calculateCostVariance(CostObservation(prevItem.qty,prevItem.unitPrice),CostObservation(latestItem.qty,latestItem.unitPrice));Text("Đơn giá ${"%+.1f".format(v.unitPriceChangePct)}% · Sử dụng ${"%+.1f".format(v.quantityChangePct)}%",fontSize=12.sp,fontWeight=FontWeight.Bold)}}}}
     }
+    if(confirmClose)AlertDialog(onDismissRequest={confirmClose=false},title={Text("Chốt số tháng $monthLabel?")},
+      text={Column{Text("Lưu lại dòng tiền ròng ${money(result.netCashResult)} và số chia cho từng người để đối chiếu về sau. Không sửa hay xoá dữ liệu nào.");if(warnings.isNotEmpty())Text("Còn ${warnings.size} cảnh báo ở trên.",Modifier.padding(top=8.dp),fontWeight=FontWeight.Bold,color=Color(0xFF9A2B1F))}},
+      confirmButton={Button(onClick={vm.closeShareholderMonth(ShareholderMonth.Close(monthKey,revenue,operating,additional,result.netCashResult,System.currentTimeMillis(),reportUser?.name.orEmpty(),shares.map{it.name to it.amount}));confirmClose=false}){Text("CHỐT")}},
+      dismissButton={TextButton(onClick={confirmClose=false}){Text("HUỶ")}})
     reimbursementPayer?.let{payer->PayerReimbursementDialog(payer,{reimbursementPayer=null}){amount,method,note->vm.reimbursePayer(payer,amount,method,note);reimbursementPayer=null}}
 }
+/** Chi phí đã nhập (từ web và máy), chỉ xem. Form nhập trên máy chỉ mở khi ADMIN chọn nhập khẩn cấp. */
+@Composable
+fun WebOnlyExpenses(vm: PosViewModel, canUnlock: Boolean, onUnlock: () -> Unit) {
+    val purchases by vm.purchases.collectAsState()
+    val fmt = remember { SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()) }
+    var confirm by remember { mutableStateOf(false) }
+    Column {
+        Header("Chi phí") { vm.screen.value = "MANAGE" }
+        Card(Modifier.fillMaxWidth().padding(12.dp), colors = CardDefaults.cardColors(containerColor = Tint)) {
+            Column(Modifier.padding(12.dp)) {
+                Text("CHI PHÍ NHẬP TRÊN WEB", fontWeight = FontWeight.Black)
+                Text("Phiếu mua hàng: web → Tài chính → + CHI PHÍ MUA HÀNG. Lương, điện, nước, mặt bằng: web → Giao dịch khác. Máy tự kéo về khi đồng bộ.", fontSize = 13.sp)
+            }
+        }
+        Text("Gần đây · ${purchases.size} phiếu", Modifier.padding(horizontal = 14.dp), fontWeight = FontWeight.Bold)
+        LazyColumn(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+            items(purchases.take(60), key = { it.id }) { p ->
+                Card(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(ExpenseCategories.label(p.expenseCategory), fontWeight = FontWeight.Bold)
+                            Text(listOf(fmt.format(Date(p.purchasedAt)), p.paidByName, p.note).filter { it.isNotBlank() }.joinToString(" · "), fontSize = 12.sp, maxLines = 2)
+                        }
+                        Text(money(p.total), fontWeight = FontWeight.Black)
+                    }
+                }
+            }
+        }
+        if (canUnlock) TextButton(onClick = { confirm = true }, modifier = Modifier.fillMaxWidth().padding(8.dp)) { Text("NHẬP KHẨN CẤP TRÊN MÁY (khi không dùng được web)") }
+    }
+    if (confirm) AlertDialog(
+        onDismissRequest = { confirm = false },
+        title = { Text("Nhập chi phí trên máy?") },
+        text = { Text("Chỉ dùng khi không vào được web. Phiếu nhập trên máy vẫn được đẩy lên web, nhưng không có danh mục vật tư chuẩn nên giá vốn món sẽ kém chính xác hơn.") },
+        confirmButton = { Button(onClick = { confirm = false; onUnlock() }) { Text("MỞ FORM") } },
+        dismissButton = { TextButton(onClick = { confirm = false }) { Text("THÔI") } }
+    )
+}
+
 @Composable
 fun PeakHoursChart(
     hourlyCounts: Map<Int, Int>,
-    peakHour: Map.Entry<Int, Int>?,
-    periodDays: Int
+    peakHour: Pair<Int, Int>?,
+    periodLabel: String
 ) {
     val maxCount = (hourlyCounts.values.maxOrNull() ?: 0).coerceAtLeast(1)
-    val periodLabel = when (periodDays) {
-        1 -> "Hôm nay"
-        7 -> "7 ngày"
-        30 -> "30 ngày"
-        0 -> "Tất cả"
-        else -> "$periodDays ngày"
-    }
-
     Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
         Column(Modifier.padding(16.dp)) {
             Text("GIỜ CAO ĐIỂM", fontWeight = FontWeight.Black, fontSize = 18.sp)
@@ -3493,15 +4651,15 @@ fun PeakHoursChart(
             } else {
                 Text(
                     "Cao điểm: %02d:00–%02d:00 · %d bill".format(
-                        peakHour.key,
-                        (peakHour.key + 1) % 24,
-                        peakHour.value
+                        peakHour.first,
+                        (peakHour.first + 1) % 24,
+                        peakHour.second
                     ),
                     Modifier.padding(top = 4.dp),
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    "Biểu đồ theo giờ mở bàn · $periodLabel",
+                    "Biểu đồ theo giờ thanh toán · $periodLabel",
                     fontSize = 11.sp
                 )
             }
@@ -3544,6 +4702,47 @@ fun PeakHoursChart(
 }
 
 @Composable
+fun SalesDayChart(dailyRevenue:Map<LocalDate,Long>,peakDay:LocalDate?,periodLabel:String) {
+    val rows=dailyRevenue.entries.sortedBy{it.key}
+    val max=(rows.maxOfOrNull{it.value} ?: 0L).coerceAtLeast(1L)
+    Card(Modifier.fillMaxWidth().padding(vertical=6.dp)) {
+        Column(Modifier.padding(16.dp)) {
+            Text("DOANH THU THEO NGÀY",fontWeight=FontWeight.Black,fontSize=18.sp)
+            if(peakDay==null) Text("Chưa có bill PAID trong kỳ $periodLabel.",Modifier.padding(top=6.dp))
+            else Text("Ngày cao điểm: ${"%02d/%02d".format(peakDay.dayOfMonth,peakDay.monthValue)} · ${money(dailyRevenue.getValue(peakDay))}",Modifier.padding(top=4.dp),fontWeight=FontWeight.Bold)
+            if(rows.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top=12.dp),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.Bottom) {
+                rows.forEach{(day,total)->
+                    Column(Modifier.width(52.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Bottom) {
+                        Text(money(total),fontSize=9.sp,maxLines=1)
+                        Surface(Modifier.width(30.dp).height(if(total==0L)2.dp else (18f+92f*total.toFloat()/max).dp),color=if(day==peakDay) Coffee else Tint,shape=RoundedCornerShape(topStart=6.dp,topEnd=6.dp)){}
+                        Text("%02d/%02d".format(day.dayOfMonth,day.monthValue),fontSize=10.sp)
+                    }
+                }
+            }
+            Text("Trục ngang: ngày thanh toán · Trục đứng: doanh thu PAID",Modifier.padding(top=8.dp),fontSize=10.sp)
+        }
+    }
+}
+
+@Composable
+fun ItemQuantityChart(rows:List<Pair<String,Int>>) {
+    val max=(rows.maxOfOrNull{it.second} ?: 0).coerceAtLeast(1)
+    Card(Modifier.fillMaxWidth().padding(vertical=6.dp)) {
+        Column(Modifier.padding(16.dp)) {
+            Text("MÓN BÁN NHIỀU",fontWeight=FontWeight.Black,fontSize=18.sp)
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top=10.dp),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.Bottom) {
+                rows.forEach{(name,qty)->Column(Modifier.width(64.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Bottom){
+                    Text("$qty",fontSize=10.sp,fontWeight=FontWeight.Bold)
+                    Surface(Modifier.width(30.dp).height(if(qty==0)2.dp else (18f+92f*qty.toFloat()/max).dp),color=if(qty==max) Coffee else Tint,shape=RoundedCornerShape(topStart=6.dp,topEnd=6.dp)){}
+                    Text(name.take(10),fontSize=10.sp,maxLines=2,textAlign=TextAlign.Center)
+                }}
+            }
+            Text("Trục ngang: món · Trục đứng: số phần",Modifier.padding(top=8.dp),fontSize=10.sp)
+        }
+    }
+}
+
+@Composable
 fun MetricCard(label: String, value: String) {
     Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -3563,6 +4762,9 @@ fun BillDetailDialog(vm: PosViewModel, bill: BillEntity, onDismiss: () -> Unit) 
     val current by vm.currentEmployee.collectAsState()
     var showDelete by remember { mutableStateOf(false) }
     var deleteReason by remember { mutableStateOf("") }
+    var showMethod by remember { mutableStateOf(false) }
+    var methodReason by remember { mutableStateOf("") }
+    var methodMsg by remember { mutableStateOf("") }
 
     val payment = payments.firstOrNull { it.billId == bill.id }
     val tableName = tables.firstOrNull { it.id == session?.tableId }?.name ?: session?.tableId ?: "?"
@@ -3584,6 +4786,11 @@ fun BillDetailDialog(vm: PosViewModel, bill: BillEntity, onDismiss: () -> Unit) 
                     Text("Mở: ${time(bill.openedAt)}")
                     Text("Đóng: ${bill.closedAt?.let { time(it) } ?: "--"}")
                     Text("Thanh toán: $methodText")
+                    if (payment != null && bill.status == "PAID" && current?.let { PaymentFixPolicy.canFix(it.role, it.id, payment.cashierId, payment.paidAt, System.currentTimeMillis()) } == true) {
+                        TextButton(onClick = { methodReason = ""; methodMsg = ""; showMethod = true }) {
+                            Text(if (payment.method == "TRANSFER") "ĐỔI SANG TIỀN MẶT (ghi nhầm)" else "ĐỔI SANG CHUYỂN KHOẢN (ghi nhầm)")
+                        }
+                    }
                     Text("Thu tiền: $cashier")
                     Text("Tổng bill: ${money(bill.total)}", fontWeight = FontWeight.Black)
                     Spacer(Modifier.height(8.dp))
@@ -3594,6 +4801,28 @@ fun BillDetailDialog(vm: PosViewModel, bill: BillEntity, onDismiss: () -> Unit) 
             }
         }
     )
+
+    if (showMethod && payment != null) {
+        val target = if (payment.method == "TRANSFER") "CASH" else "TRANSFER"
+        val targetText = if (target == "CASH") "Tiền mặt" else "Chuyển khoản"
+        AlertDialog(
+            onDismissRequest = { showMethod = false },
+            title = { Text("Đổi ${bill.billNo} sang $targetText?") },
+            text = {
+                Column {
+                    Text("Chỉ sửa hình thức thanh toán. Bill, món và tổng ${money(bill.total)} giữ nguyên, vẫn tính doanh thu. Báo cáo tiền mặt / chuyển khoản và đối soát ca sẽ tính lại theo hình thức mới.", fontSize = 13.sp)
+                    OutlinedTextField(methodReason, { methodReason = it.take(120) }, modifier = Modifier.fillMaxWidth().padding(top = 10.dp), label = { Text("Lý do bắt buộc (VD: khách trả tiền mặt, bấm nhầm CK)") })
+                    if (methodMsg.isNotBlank()) Text(methodMsg, color = Color(0xFFB3261E), fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
+                }
+            },
+            confirmButton = {
+                Button(enabled = methodReason.isNotBlank(), onClick = {
+                    vm.changePaymentMethod(bill, target, methodReason) { err -> if (err == null) showMethod = false else methodMsg = err }
+                }) { Text("XÁC NHẬN ĐỔI") }
+            },
+            dismissButton = { TextButton(onClick = { showMethod = false }) { Text("KHÔNG ĐỔI") } }
+        )
+    }
 
     if (showDelete) {
         AlertDialog(
@@ -3640,6 +4869,12 @@ fun BillBatchDetail(vm: PosViewModel, batch: OrderBatchEntity, employees: List<E
             lines.forEach { line ->
                 Text("${line.qty} × ${line.itemNameSnapshot} · ${money(line.unitPriceSnapshot * line.qty)}")
                 if (line.note.isNotBlank()) Text("  Ghi chú: ${line.note}", fontSize = 12.sp)
+            }
+            if (batch.status != "DRAFT" && batch.status != "CANCELLED") {
+                OutlinedButton(
+                    onClick = { vm.reprintKitchenBatch(batch) },
+                    modifier = Modifier.padding(top = 8.dp)
+                ) { Text("IN LẠI PHIẾU BẾP") }
             }
         }
     }
@@ -3714,15 +4949,24 @@ fun Settings(vm: PosViewModel) {
         }
         return
     }
+    var sensitiveOnly by remember { mutableStateOf(true) }
+    val shown = remember(a, sensitiveOnly) { if (sensitiveOnly) a.filter { SensitiveAudit.isSensitive(it.entityType, it.action, it.payload) } else a }
+    val weekAgo = System.currentTimeMillis() - 7L * 86_400_000L
+    val byPerson = remember(a) { a.filter { it.occurredAt >= weekAgo && SensitiveAudit.isSensitive(it.entityType, it.action, it.payload) }.groupBy { it.actorId }.mapValues { it.value.size }.toList().sortedByDescending { it.second } }
     Column {
-        Header("Nhật ký hệ thống") { vm.screen.value = "MANAGE" }
-        Text("Các thao tác gần nhất · không sửa/xóa từ giao diện", Modifier.padding(horizontal = 16.dp), fontSize = 11.sp)
+        Header("Nhật ký & thao tác nhạy cảm") { vm.screen.value = "MANAGE" }
+        Text("Chỉ ghi thêm, không sửa / xoá được · không ảnh hưởng dữ liệu bán hàng", Modifier.padding(horizontal = 16.dp), fontSize = 11.sp)
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FilterChip(sensitiveOnly, { sensitiveOnly = true }, { Text("NHẠY CẢM") })
+            FilterChip(!sensitiveOnly, { sensitiveOnly = false }, { Text("TẤT CẢ") })
+        }
+        if (byPerson.isNotEmpty()) Text("7 ngày qua: " + byPerson.joinToString(" · ") { (id, n) -> "${employees.firstOrNull { it.id == id }?.name ?: id ?: "Hệ thống"} $n" }, Modifier.padding(horizontal = 16.dp), fontSize = 12.sp, fontWeight = FontWeight.Bold)
         LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
-            items(a) { event ->
+            items(shown) { event ->
                 val actor = employees.firstOrNull { it.id == event.actorId }?.name ?: event.actorId ?: "SYSTEM"
                 Card(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
                     Column(Modifier.padding(12.dp)) {
-                        Text("${time(event.occurredAt)} · ${event.action}", fontWeight = FontWeight.Black)
+                        Text("${time(event.occurredAt)} · ${SensitiveAudit.label(event.entityType, event.action)}", fontWeight = FontWeight.Black)
                         Text("Người thực hiện: $actor", fontSize = 12.sp)
                         Text("${event.entityType} · ${event.entityId}", fontSize = 11.sp)
                         if (event.payload.isNotBlank()) {
@@ -3758,14 +5002,14 @@ fun BankPaymentSettings(vm:PosViewModel){
                     Button(onClick={context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))},modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text(if(permissionGranted)"MỞ CÀI ĐẶT QUYỀN" else "CẤP QUYỀN ĐỌC THÔNG BÁO")}
                 }
             }
-            Text("Ngân hàng hỗ trợ: Vietcombank · VietinBank",fontSize=12.sp)
+            Text("Ngân hàng hỗ trợ: Techcombank · Vietcombank · VietinBank",fontSize=12.sp)
             Text("Chỉ đọc notification từ package ngân hàng trong whitelist; không đọc SMS, Zalo hoặc ứng dụng khác.",fontSize=11.sp)
             SettingSwitch("Rung khi nhận tiền",enabled("bank_notification_vibrate",true)){vm.saveSetting("bank_notification_vibrate",it.toString())}
             SettingSwitch("Đọc số tiền bằng loa",enabled("bank_notification_tts",true)){vm.saveSetting("bank_notification_tts",it.toString())}
             HorizontalDivider(Modifier.padding(vertical=12.dp))
             Text("Chế độ xác nhận",fontWeight=FontWeight.Bold)
             Text("Phát hiện + nhân viên xác nhận (mặc định)\nKhông tự động đóng bill.",fontSize=12.sp)
-            OutlinedButton(onClick={vm.screen.value="BANK_NOTIFICATION_TEST"},modifier=Modifier.fillMaxWidth().padding(top=14.dp)){Text("TEST THÔNG BÁO NGÂN HÀNG")}
+            // Màn thử thông báo ngân hàng là màn kỹ thuật: ẩn khỏi giao diện bán hàng.
         }
     }
 }
@@ -3779,6 +5023,8 @@ fun BankNotificationTest(vm:PosViewModel){
     val context=LocalContext.current
     val events by vm.recentBankNotifications.collectAsState()
     val event=events.firstOrNull()
+    var demoAmount by remember { mutableStateOf("127000") }
+    var demoStatus by remember { mutableStateOf("") }
     Column{
         Header("Test thông báo ngân hàng"){vm.screen.value="BANK_PAYMENT_SETTINGS"}
         Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())){
@@ -3794,9 +5040,181 @@ fun BankNotificationTest(vm:PosViewModel){
                     Text("Content: ${event.content?:"—"}",fontSize=11.sp)
                 }
             }
-            Button(onClick={BankPaymentAnnouncer.announce(context,127000,"Bàn 05",false,true)},modifier=Modifier.fillMaxWidth().padding(top=12.dp)){Text("TEST TTS")}
+            Text("DEMO RUNG VÀ ĐỌC TIỀN · KHÔNG GHI DOANH THU",fontWeight=FontWeight.Black)
+            OutlinedTextField(value=demoAmount,onValueChange={demoAmount=it.filter(Char::isDigit)},label={Text("Số tiền mô phỏng (VNĐ)")},modifier=Modifier.fillMaxWidth())
+            Button(onClick={
+                BankPaymentAnnouncer.announce(context,demoAmount.toLongOrNull()?:127000L,"Bàn 05",true,true)
+                demoStatus="Đã gửi lệnh rung và đọc loa. Nếu không nghe, kiểm tra âm lượng media và giọng đọc tiếng Việt."
+            },modifier=Modifier.fillMaxWidth().padding(top=12.dp)){Text("DEMO NHẬN TIỀN · RUNG + ĐỌC LOA")}
+            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                OutlinedButton(onClick={BankPaymentAnnouncer.announce(context,0L,null,true,false);demoStatus="Đã gửi lệnh rung"},modifier=Modifier.weight(1f)){Text("TEST RUNG")}
+                OutlinedButton(onClick={BankPaymentAnnouncer.announce(context,demoAmount.toLongOrNull()?:127000L,null,false,true);demoStatus="Đã gửi lệnh đọc loa"},modifier=Modifier.weight(1f)){Text("TEST LOA")}
+            }
+            if(demoStatus.isNotBlank())Text(demoStatus,fontSize=12.sp)
             OutlinedButton(onClick={vm.clearBankNotificationLog()},modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text("XÓA LOG TEST")}
             Text("Log chỉ lưu cục bộ tối đa 20 notification ngân hàng gần nhất và có thể xóa tại đây.",Modifier.padding(top=10.dp),fontSize=11.sp)
+        }
+    }
+}
+
+
+@Composable
+fun BuyGetManager(vm: PosViewModel) {
+    val rules by vm.buyGetPromotions.collectAsState()
+    val menu by vm.menu.collectAsState()
+    var adding by remember { mutableStateOf(false) }
+    Column {
+        Header("Mua X tặng Y") { vm.screen.value = "PRICING" }
+        Text("Mỗi order chỉ lấy ưu đãi có lợi nhất; quà hiển thị riêng cho bếp và hóa đơn.", Modifier.padding(horizontal = 16.dp, vertical = 6.dp), fontSize = 12.sp)
+        Button(onClick = { adding = true }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) { Text("＋ TẠO MUA–TẶNG") }
+        LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
+            items(rules) { rule ->
+                val buy = menu.firstOrNull { it.id == rule.buyMenuItemId }?.name ?: "Món đã xoá"
+                val gift = menu.firstOrNull { it.id == rule.giftMenuItemId }?.name ?: "Món đã xoá"
+                Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(rule.name, fontWeight = FontWeight.Bold)
+                            Text("Mua ${rule.buyQuantity} $buy · tặng ${rule.giftQuantity} $gift")
+                            Text(if (rule.repeat) "Lặp lại khi đủ điều kiện" else "Chỉ áp dụng một lần", fontSize = 11.sp)
+                        }
+                        Switch(checked = rule.active, onCheckedChange = { vm.toggleBuyGetPromotion(rule) })
+                    }
+                }
+            }
+        }
+    }
+    if (adding) BuyGetRuleDialog(menu = menu.filter { it.active }, onDismiss = { adding = false }) { name,buy,buyQty,gift,giftQty,repeat ->
+        vm.saveBuyGetPromotion(name,buy,buyQty,gift,giftQty,repeat,null,null)
+        adding = false
+    }
+}
+
+@Composable
+private fun BuyGetRuleDialog(
+    menu: List<MenuItemEntity>,
+    onDismiss: () -> Unit,
+    onSave: (String,String,Int,String,Int,Boolean) -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    var buyId by remember { mutableStateOf(menu.firstOrNull()?.id.orEmpty()) }
+    var giftId by remember { mutableStateOf(menu.firstOrNull()?.id.orEmpty()) }
+    var buyQty by remember { mutableStateOf("1") }
+    var giftQty by remember { mutableStateOf("1") }
+    var repeat by remember { mutableStateOf(true) }
+    var selectingBuy by remember { mutableStateOf(true) }
+    val buyName = menu.firstOrNull { it.id == buyId }?.name ?: "Chọn món cần mua"
+    val giftName = menu.firstOrNull { it.id == giftId }?.name ?: "Chọn món tặng"
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Tạo chương trình mua–tặng") },
+        confirmButton = {
+            Button(
+                onClick = { onSave(name,buyId,buyQty.toIntOrNull() ?: 0,giftId,giftQty.toIntOrNull() ?: 0,repeat) },
+                enabled = name.isNotBlank() && buyId.isNotBlank() && giftId.isNotBlank() && (buyQty.toIntOrNull() ?: 0) > 0 && (giftQty.toIntOrNull() ?: 0) > 0
+            ) { Text("LƯU") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("HỦY") } },
+        text = {
+            LazyColumn {
+                item {
+                    OutlinedTextField(name,{name=it},Modifier.fillMaxWidth(),label={Text("Tên chương trình")})
+                    Text("Món cần mua", Modifier.padding(top=8.dp), fontWeight=FontWeight.Bold)
+                    OutlinedButton(onClick={selectingBuy=true},Modifier.fillMaxWidth()){Text(buyName)}
+                    OutlinedTextField(buyQty,{buyQty=it.filter(Char::isDigit).take(4)},Modifier.fillMaxWidth(),label={Text("Số lượng X")})
+                    Text("Món tặng", Modifier.padding(top=8.dp), fontWeight=FontWeight.Bold)
+                    OutlinedButton(onClick={selectingBuy=false},Modifier.fillMaxWidth()){Text(giftName)}
+                    OutlinedTextField(giftQty,{giftQty=it.filter(Char::isDigit).take(4)},Modifier.fillMaxWidth(),label={Text("Số lượng Y")})
+                    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){Text("Lặp lại khi đủ điều kiện",Modifier.weight(1f));Switch(repeat,{repeat=it})}
+                    Text(if (buyId==giftId) "Cùng món: hệ thống thêm đủ món nhận được và giảm 100% phần quà." else "Khác món: món quà được tự thêm vào order.",fontSize=11.sp)
+                    Text("Chọn ${if(selectingBuy) "món cần mua" else "món tặng"}",Modifier.padding(top=8.dp),fontWeight=FontWeight.Bold)
+                }
+                items(menu){ item ->
+                    TextButton(onClick={if(selectingBuy)buyId=item.id else giftId=item.id},modifier=Modifier.fillMaxWidth()){Text("${item.name} · ${money(item.price)}",Modifier.fillMaxWidth())}
+                }
+            }
+        }
+    )
+}
+
+/** Phiếu nhiều vật tư giống Web: mỗi vật tư một thẻ sửa trực tiếp, mã tự sinh theo nhóm, gợi ý tên từ lần nhập trước. */
+@Composable
+fun ReceiptLinesEditor(lines: SnapshotStateList<DraftReceiptLine>, known: List<KnownMaterial>, total: Long) {
+    Text("CHI PHÍ MUA HÀNG · Phiếu nhiều vật tư", Modifier.padding(top = 8.dp), fontWeight = FontWeight.Black)
+    lines.forEachIndexed { index, line ->
+        key(line.id) {
+            Card(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Vật tư ${index + 1}", fontWeight = FontWeight.Bold)
+                    OutlinedTextField(line.name, { lines[index] = MaterialCatalog.withName(lines[index], it.take(120), known) }, Modifier.fillMaxWidth(), label = { Text("Tên vật tư") }, singleLine = true)
+                    val suggestions = if (line.name.isBlank() || MaterialCatalog.exactMatch(known, line.name) != null) emptyList() else MaterialCatalog.suggest(known, line.name)
+                    if (suggestions.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        suggestions.forEach { m -> FilterChip(false, { lines[index] = MaterialCatalog.withKnown(lines[index], m) }, { Text(m.name) }) }
+                    }
+                    OutlinedTextField(line.code, { }, Modifier.fillMaxWidth(), readOnly = true, label = { Text("Mã vật tư (tự sinh)") }, singleLine = true)
+                    Text("Nhóm vật tư", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        MaterialCatalog.groups.forEach { (code, label) -> FilterChip(line.groupCode == code, { lines[index] = MaterialCatalog.withGroup(lines[index], code) }, { Text(label) }) }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(line.qtyText, { v -> lines[index] = lines[index].copy(qtyText = v.filter { ch -> ch.isDigit() || ch == ',' || ch == '.' }) }, Modifier.weight(1f), label = { Text("Số lượng") }, singleLine = true)
+                        OutlinedTextField(line.unit, { v -> lines[index] = lines[index].copy(unit = v.take(20)) }, Modifier.weight(1f), label = { Text("Đơn vị tính") }, singleLine = true)
+                    }
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        MaterialCatalog.units.forEach { u -> FilterChip(line.unit == u, { lines[index] = lines[index].copy(unit = u) }, { Text(u) }) }
+                    }
+                    OutlinedTextField(line.priceText, { v -> lines[index] = lines[index].copy(priceText = v.filter(Char::isDigit)) }, Modifier.fillMaxWidth(), label = { Text("Đơn giá") }, singleLine = true)
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Thành tiền: ${money(line.amount)}", Modifier.weight(1f), fontWeight = FontWeight.Bold)
+                        TextButton(onClick = { lines.removeAt(index) }, enabled = lines.size > 1) { Text("BỎ DÒNG") }
+                    }
+                }
+            }
+        }
+    }
+    OutlinedButton(onClick = { lines.add(DraftReceiptLine(UUID.randomUUID().toString())) }, Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("＋ THÊM VẬT TƯ") }
+    Text("Tổng phiếu: ${money(total)}", Modifier.padding(vertical = 8.dp), fontWeight = FontWeight.Black, fontSize = 18.sp)
+}
+
+@Composable
+fun DeliveryRemindSettings(vm: PosViewModel) {
+    val sets by vm.settings.collectAsState()
+    fun v(key: String) = sets.firstOrNull { it.key == key }?.value.orEmpty()
+    val on = v("delivery_remind_on") != "false"
+    val voice = v("delivery_remind_voice") != "false"
+    val first = v("delivery_remind_min").toLongOrNull() ?: 8L
+    val repeat = v("delivery_remind_repeat_min").toLongOrNull() ?: 5L
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    Column {
+        Header("Nhắc giao đồ") { vm.screen.value = "MANAGE" }
+        Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Khi đơn đã gửi bếp mà khách chờ quá lâu chưa được giao, máy phát còi, rung và đọc giọng tiếng Việt để nhắc. Nhắc lặp lại cho tới khi giao đủ.", fontSize = 13.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(checked = on, onCheckedChange = { vm.saveSetting("delivery_remind_on", it.toString()) })
+                Text("  Bật nhắc giao đồ", fontWeight = FontWeight.Bold)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(checked = v("order_announce_on") != "false", onCheckedChange = { vm.saveSetting("order_announce_on", it.toString()) })
+                Text("  Đọc loa tên + số lượng món khi chốt đơn / in phiếu bếp", fontWeight = FontWeight.Bold)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(checked = v("order_announce_repeat") == "true", onCheckedChange = { vm.saveSetting("order_announce_repeat", it.toString()) }, enabled = v("order_announce_on") != "false")
+                Text("  Đọc nhắc lại thêm một lần sau vài giây", fontWeight = FontWeight.Bold)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(checked = voice, onCheckedChange = { vm.saveSetting("delivery_remind_voice", it.toString()) }, enabled = on)
+                Text("  Đọc giọng nói tiếng Việt (cần máy có giọng tiếng Việt)", fontWeight = FontWeight.Bold)
+            }
+            Text("Nhắc lần đầu khi khách chờ", fontWeight = FontWeight.Black)
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(5L, 8L, 10L, 12L, 15L, 20L).forEach { m -> FilterChip(first == m, { vm.saveSetting("delivery_remind_min", m.toString()) }, { Text("$m phút") }, enabled = on) }
+            }
+            Text("Nhắc lại sau mỗi", fontWeight = FontWeight.Black)
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(2L, 3L, 5L, 10L).forEach { m -> FilterChip(repeat == m, { vm.saveSetting("delivery_remind_repeat_min", m.toString()) }, { Text("$m phút") }, enabled = on) }
+            }
+            OutlinedButton(onClick = { DeliveryAnnouncer.announce(ctx, "Bàn 3 đã chờ $first phút, còn 2 món chưa giao. Vui lòng giao đồ cho khách.", voice) }, Modifier.fillMaxWidth()) { Text("NGHE THỬ") }
+            Text("Nếu nghe thử chỉ có còi và rung mà không có giọng nói: vào Cài đặt Android → Quản lý chung → Chuyển văn bản thành giọng nói, cài thêm tiếng Việt.", fontSize = 12.sp)
         }
     }
 }

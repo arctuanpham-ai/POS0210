@@ -15,7 +15,7 @@ object CashSuggest {
 
 /** Cảnh báo phục vụ trên màn bàn. Chỉ đọc dữ liệu đang có trên máy, không ghi gì. */
 data class ServiceAlert(val tableId: String, val tableName: String, val kind: Kind, val minutes: Long, val count: Int = 0) {
-    enum class Kind { SLOW_DISH, NOTHING_SENT, UNSENT_DRAFT }
+    enum class Kind { UNPRINTED_BATCH, SLOW_DISH, NOTHING_SENT, UNSENT_DRAFT }
 }
 
 object ServiceAlerts {
@@ -26,6 +26,8 @@ object ServiceAlerts {
     fun compute(
         tables: List<Table>, sessions: List<OpenSession>, waiting: List<WaitingBatch>, drafts: Map<String, Int>,
         now: Long, slowDishMinutes: Long = 12L, nothingSentMinutes: Long = 10L,
+        /** tableId -> số đơn đã chọn xong nhưng CHƯA in phiếu bếp (đơn nháp trong dữ liệu). */
+        unprinted: Map<String, Int> = emptyMap(),
     ): List<ServiceAlert> {
         val name = tables.associate { it.id to it.name }
         val out = mutableListOf<ServiceAlert>()
@@ -41,6 +43,7 @@ object ServiceAlerts {
                 if (m >= nothingSentMinutes) out += ServiceAlert(s.tableId, tableName, ServiceAlert.Kind.NOTHING_SENT, m)
             }
         }
+        for ((tableId, count) in unprinted) if (count > 0) name[tableId]?.let { out += ServiceAlert(tableId, it, ServiceAlert.Kind.UNPRINTED_BATCH, 0L, count) }
         for ((tableId, count) in drafts) if (count > 0) name[tableId]?.let { out += ServiceAlert(tableId, it, ServiceAlert.Kind.UNSENT_DRAFT, 0L, count) }
         return out.sortedWith(compareBy<ServiceAlert> { it.kind.ordinal }.thenByDescending { it.minutes })
     }

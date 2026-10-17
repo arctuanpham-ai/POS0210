@@ -169,6 +169,7 @@ class PosRepository(private val db:PosDatabase){
         db.withTransaction {
             val now=System.currentTimeMillis()
             if(dao.markDelivered(batch.id,now,employeeId)!=1) return@withTransaction false
+            dao.markAllItemsDelivered(batch.id)
             dao.audit(AuditEventEntity(
                 UUID.randomUUID().toString(),"BATCH",batch.id,action,employeeId,null,now,
                 "serviceNo=${batch.serviceNo},by=$employeeName"

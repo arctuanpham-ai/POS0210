@@ -709,7 +709,7 @@ fun saveSetting(key:String,value:String){
  val e=currentEmployee.value?:return
  val allowed=when(key){
   "storage_root_uri","master_config_uri","autoback_tree_uri" -> e.role=="ADMIN"||e.canManageSystem
-  "bank_name","bank_account","bank_holder","qr_prefix","payment_qr_mode","printer_mode","printer_mac","printer_name","kitchen_printer_mac","kitchen_printer_name","receipt_printer_mac","receipt_printer_name","printer_paper_mm","bank_notification_enabled","bank_notification_vibrate","bank_notification_tts" -> e.role=="ADMIN"||e.role=="MANAGER"
+  "bank_name","bank_account","bank_holder","qr_prefix","payment_qr_mode","printer_mode","printer_mac","printer_name","kitchen_printer_mac","kitchen_printer_name","receipt_printer_mac","receipt_printer_name","printer_paper_mm","bank_notification_enabled","bank_notification_vibrate","bank_notification_tts","delivery_remind_on","delivery_remind_min","delivery_remind_repeat_min","delivery_remind_voice" -> e.role=="ADMIN"||e.role=="MANAGER"
   else -> e.role=="ADMIN"
  }
  if(!allowed){viewModelScope.launch{audit("SECURITY",key,"SETTING_DENIED","role=${e.role}")};return}
@@ -1720,20 +1720,35 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
   FrozenRefundInfo(batch?.let{PaymentFlowRules.orderNoLabel(it.serviceNo)}?:"—",table?:"Trả trước",bill?.billNo?:"—",items.ifBlank{"(không đọc được món)"},people[r.actorId]?:r.actorId,r.approvedBy?.let{people[it]?:it},payment?.paidAt,payment?.reference)
  }
  /** Sửa hình thức thanh toán ghi nhầm (tiền mặt ↔ chuyển khoản). Giữ nguyên bill, món, số tiền; ghi audit kèm lý do. */
- fun changePaymentMethod(bill:BillEntity,newMethod:String,reason:String,onDone:(String?)->Unit){
+ data class LastPaid(val billId:String,val billNo:String,val tableName:String,val method:String,val total:Long,val paidAt:Long,val cashierId:String)
+ val lastPaid=MutableStateFlow<LastPaid?>(null)
+ fun changePaymentMethod(bill:BillEntity,newMethod:String,reason:String,onDone:(String?)->Unit)=changeMethodCore(bill.id,bill.billNo,bill.total,newMethod,reason,onDone)
+ /** Nút "ĐỔI HÌNH THỨC" ngay sau khi thu nhầm: người thu tiền sửa trong vài phút đầu, quản lý sửa bất kỳ lúc nào. Luôn ghi nhật ký. */
+ fun quickChangeLastPaid(onDone:(String?)->Unit){
+  val lp=lastPaid.value?:return
+  val target=if(lp.method=="CASH")"TRANSFER" else "CASH"
+  changeMethodCore(lp.billId,lp.billNo,lp.total,target,"Khách đổi ý hình thức thanh toán, sửa ngay sau khi xác nhận",onDone)
+ }
+ private fun changeMethodCore(billId:String,billNo:String,total:Long,newMethod:String,reason:String,onDone:(String?)->Unit){
   val e=currentEmployee.value
   viewModelScope.launch(Dispatchers.IO){
    fun done(m:String?){viewModelScope.launch(Dispatchers.Main){onDone(m)}}
-   if(e==null||(e.role!="ADMIN"&&e.role!="MANAGER")){done("Chỉ quản lý được sửa hình thức thanh toán");return@launch}
+   if(e==null){done("Chưa đăng nhập");return@launch}
    if(newMethod!="CASH"&&newMethod!="TRANSFER"){done("Hình thức không hợp lệ");return@launch}
    if(reason.isBlank()){done("Bắt buộc ghi lý do");return@launch}
-   val old=dao.paymentByBillId(bill.id)?.method
+   val pay=dao.paymentByBillId(billId)
+   if(pay==null){done("Không tìm thấy thanh toán của bill");return@launch}
+   if(!PaymentFixPolicy.canFix(e.role,e.id,pay.cashierId,pay.paidAt,System.currentTimeMillis())){done("Chỉ quản lý được sửa, hoặc người thu tiền trong ${PaymentFixPolicy.WINDOW_MINUTES} phút đầu");return@launch}
+   val old=pay.method
    val n=db.withTransaction{
-    val changed=dao.changePaymentMethod(bill.id,newMethod)
-    if(changed==1)audit("PAYMENT",bill.id,"PAYMENT_METHOD_CHANGED","billNo=${bill.billNo},from=$old,to=$newMethod,amount=${bill.total},reason=${reason.trim()},operator=${e.name}")
+    val changed=dao.changePaymentMethod(billId,newMethod)
+    if(changed==1)audit("PAYMENT",billId,"PAYMENT_METHOD_CHANGED","billNo=$billNo,from=$old,to=$newMethod,amount=$total,reason=${reason.trim()},operator=${e.name}")
     changed
    }
-   if(n==1){dao.markCloudDirty();autoBackup();done(null)} else done("Không sửa được: bill chưa thanh toán, đã hoàn tiền hoặc đã đúng hình thức này")
+   if(n==1){
+    lastPaid.value=lastPaid.value?.takeIf{it.billId==billId}?.copy(method=newMethod)
+    dao.markCloudDirty();autoBackup();done(null)
+   } else done("Không sửa được: bill chưa thanh toán, đã hoàn tiền hoặc đã đúng hình thức này")
   }
  }
  /** Lưu bản chốt số tháng (một dòng cài đặt riêng). Không đụng dữ liệu bán hàng hay chi phí. */
@@ -1907,6 +1922,8 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    val mac=kitchenPrinterMac()
    if(mac.isBlank()){
     repo.failKitchenPrint(job.id,"NO_PRINTER_SELECTED")
+    kitchenPrintFailed.value=kitchenPrintFailed.value+b.id
+    audit("PRINT",b.id,"KITCHEN_PRINT_FAILED","reason=NO_PRINTER_SELECTED,operator=${e.name}")
     printerMessage.value="Chưa chọn máy in Bluetooth"
     return@launch
    }
@@ -1917,6 +1934,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    if(result.isSuccess){
     val now=System.currentTimeMillis()
     if(repo.finalizeKitchenPrint(job.id,b.id,now)){
+     kitchenPrintFailed.value=kitchenPrintFailed.value-b.id
      audit("PRINT",b.id,"KITCHEN_PRINTED","printer=${kitchenPrinterName()},operator=${e.name},job=${job.id}")
      printerMessage.value="ĐÃ IN #${b.serviceNo.toString().padStart(3,'0')} · Đơn #${b.sequence}"
      autoBackup()
@@ -1925,6 +1943,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
     }
    }else{
     repo.failKitchenPrint(job.id,result.exceptionOrNull()?.message ?: "UNKNOWN")
+    kitchenPrintFailed.value=kitchenPrintFailed.value+b.id
     audit("PRINT",b.id,"KITCHEN_PRINT_FAILED","printer=${kitchenPrinterName()},job=${job.id}")
     printerMessage.value="IN THẤT BẠI · Có thể bấm lại để retry"
    }
@@ -1950,6 +1969,62 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    val result=printKitchenTickets(mac,tableName,b,"${e.name} · IN LẠI","IN LẠI",profile)
    if(result.isSuccess){dao.markPrintSuccess(job.id,System.currentTimeMillis());audit("PRINT",b.id,"KITCHEN_REPRINTED","printer=${kitchenPrinterName()},operator=${e.name},job=${job.id}");printerMessage.value="ĐÃ IN LẠI PHIẾU BẾP #${b.serviceNo}"}
    else{dao.markPrintFailed(job.id,result.exceptionOrNull()?.message?:"UNKNOWN");audit("PRINT",b.id,"KITCHEN_REPRINT_FAILED","job=${job.id}");printerMessage.value="IN LẠI PHIẾU BẾP LỖI · ${result.exceptionOrNull()?.message?:"Thử lại"}"}
+  }
+ }
+ val kitchenPrintFailed=MutableStateFlow<Set<String>>(emptySet())
+ val draftBatches=dao.draftBatches().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
+ /** Máy in lỗi: nhân viên được bỏ qua in phiếu bếp (báo bếp miệng). Đơn vẫn sang CHỜ GIAO, lần in lỗi và việc bỏ qua đều được ghi nhật ký. */
+ fun skipKitchenPrintForBatch(b:OrderBatchEntity){
+  val e=currentEmployee.value?:return
+  if(!e.canSendKitchen&&e.role!="ADMIN"&&e.role!="MANAGER")return
+  viewModelScope.launch(Dispatchers.IO){
+   if(dao.transitionBatch(b.id,"DRAFT","WAITING",System.currentTimeMillis())==1){
+    audit("PRINT",b.id,"KITCHEN_PRINT_SKIPPED","serviceNo=${b.serviceNo},operator=${e.name},printerMsg=${printerMessage.value.take(80)}")
+    kitchenPrintFailed.value=kitchenPrintFailed.value-b.id
+    printerMessage.value="ĐÃ BỎ QUA IN PHIẾU BẾP #${b.serviceNo.toString().padStart(3,'0')} · báo bếp trực tiếp, đã ghi nhật ký"
+    autoBackup()
+   }
+  }
+ }
+ /** Đánh dấu giao từng món (cả phần số lượng). Đủ hết món thì đơn tự sang ĐÃ GIAO ĐỦ. */
+ fun setItemDelivered(b:OrderBatchEntity,item:OrderItemEntity,qty:Int){
+  val e=currentEmployee.value?:return
+  viewModelScope.launch(Dispatchers.IO){
+   val q=DeliveryRules.clamp(qty,item.qty)
+   if(dao.setItemDelivered(item.id,q)!=1)return@launch
+   audit("BATCH",b.id,"ITEM_DELIVERY","serviceNo=${b.serviceNo},item=${item.itemNameSnapshot.take(40)},delivered=$q/${item.qty},operator=${e.name}")
+   val lines=dao.batchItemsOnce(b.id).map{DeliveryRules.Line(it.qty,it.deliveredQty,it.adjustmentOfItemId!=null)}
+   if(b.status=="WAITING"&&DeliveryRules.allDelivered(lines)){
+    if(repo.markDeliveredAudited(b,e.id,e.name,"DELIVERED")){printerMessage.value="ĐƠN #${b.serviceNo.toString().padStart(3,'0')} ĐÃ GIAO ĐỦ"}
+   }
+   autoBackup()
+  }
+ }
+ private val lastDeliveryReminder=mutableMapOf<String,Long>()
+ /** Gọi định kỳ: đơn CHỜ GIAO quá thời gian đặt → còi + rung + giọng tiếng Việt. Chỉ đọc dữ liệu trên máy. */
+ fun checkDeliveryReminders(){
+  if(setting("delivery_remind_on")=="false")return
+  val first=setting("delivery_remind_min").toLongOrNull()?.coerceIn(2L,60L)?:8L
+  val repeat=setting("delivery_remind_repeat_min").toLongOrNull()?.coerceIn(1L,60L)?:5L
+  val speak=setting("delivery_remind_voice")!="false"
+  if(currentEmployee.value==null)return
+  viewModelScope.launch(Dispatchers.IO){
+   val waitingNow=dao.waitingBatches().first()
+   if(waitingNow.isEmpty())return@launch
+   val now=System.currentTimeMillis()
+   val sessionsById=repo.openSessions().first().associateBy{it.id}
+   val tablesById=repo.tables().first().associateBy{it.id}
+   val pending=waitingNow.mapNotNull{b->
+    val s=sessionsById[b.sessionId]?:return@mapNotNull null
+    val label=if(s.flow==PaymentFlowRules.PREPAID)"Đơn số ${b.serviceNo}" else (tablesById[s.tableId]?.name?:"Bàn")
+    val remaining=DeliveryRules.remaining(dao.batchItemsOnce(b.id).map{DeliveryRules.Line(it.qty,it.deliveredQty,it.adjustmentOfItemId!=null)})
+    DeliveryReminder.Pending(b.id,label,b.sentAt?:b.createdAt,remaining)
+   }
+   val due=DeliveryReminder.due(pending,now,first,repeat,lastDeliveryReminder)
+   if(due.isEmpty())return@launch
+   due.forEach{lastDeliveryReminder[it.key]=now}
+   lastDeliveryReminder.keys.retainAll(waitingNow.map{it.id}.toSet())
+   withContext(Dispatchers.Main){DeliveryAnnouncer.announce(getApplication(),DeliveryReminder.speech(due),speak)}
   }
  }
  fun markDelivered(b:OrderBatchEntity){
@@ -2226,7 +2301,7 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
   val session=currentSession.value?:return
   val table=currentTable.value?:return
   val printKey=CheckoutPrintPolicy.key(session.id,preview.total,qrInfo)
-  if(print){printedCheckoutKey.value=null;checkoutPrintAttemptedKey.value=printKey;checkoutPrinting.value=true}
+  if(print){printedCheckoutKey.value=null;checkoutPrintAttemptedKey.value=printKey;checkoutPrinting.value=true;viewModelScope.launch(Dispatchers.IO){audit("PRINT",session.id,"CHECKOUT_BILL_PRINT_PRESSED","amount=${preview.total},operator=${currentEmployee.value?.name.orEmpty()}")}}
   viewModelScope.launch(Dispatchers.IO){
    try {
    val batches=dao.batches(session.id).first().filter{it.status!="CANCELLED"}
@@ -2246,8 +2321,8 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
    val orderTag=if(session.flow==PaymentFlowRules.PREPAID)batches.firstOrNull()?.let{"ĐƠN "+PaymentFlowRules.orderNoLabel(it.serviceNo)} else null
    val bitmap=ReceiptRenderer.bill(table.name,period,lines,preview.subtotal,preview.surcharge,preview.discount,preview.total,adjustments,customerName.ifBlank{"KHÁCH LẠ"},null,0,0,0,"CHƯA XÁC NHẬN",qr,profile,orderTag)
    checkoutBillImage.value=printKey to bitmap
-   if(!print){checkoutPrintAttemptedKey.value=printKey;return@launch}
-   if(printerMode()!="BLUETOOTH"||receiptPrinterMac().isBlank()){printerMessage.value="IN BILL LỖI · Chưa cấu hình máy in. Bill vẫn hiện trên màn hình để khách quét QR";return@launch}
+   if(!print){if(session.flow==PaymentFlowRules.PREPAID)checkoutPrintAttemptedKey.value=printKey;return@launch}
+   if(printerMode()!="BLUETOOTH"||receiptPrinterMac().isBlank()){printerMessage.value="IN BILL LỖI · Chưa cấu hình máy in. Bill vẫn hiện trên màn hình để khách quét QR";audit("PRINT",session.id,"CHECKOUT_BILL_PRINT_FAILED","reason=NO_PRINTER,amount=${preview.total},operator=${currentEmployee.value?.name.orEmpty()}");return@launch}
    val job=PrintJobEntity(UUID.randomUUID().toString(),null,null,"BILL_PREPAY",createdAt=now)
    dao.insertPrintJob(job)
    if(repo.claimPrint(job.id,"ANDROID")){
@@ -2256,7 +2331,7 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
      dao.markPrintSuccess(job.id,System.currentTimeMillis());printedCheckoutKey.value=printKey
      audit("PRINT",session.id,"PREPAY_BILL_PRINTED","printer=${receiptPrinterName()},job=${job.id},amount=${preview.total}")
      printerMessage.value="ĐÃ IN BILL · Chờ khách kiểm tra và thanh toán"
-    }else{dao.markPrintFailed(job.id,result.exceptionOrNull()?.message?:"UNKNOWN");printerMessage.value="IN BILL LỖI · ${result.exceptionOrNull()?.message?:"Thử in lại"}"}
+    }else{dao.markPrintFailed(job.id,result.exceptionOrNull()?.message?:"UNKNOWN");audit("PRINT",session.id,"CHECKOUT_BILL_PRINT_FAILED","job=${job.id},reason=${result.exceptionOrNull()?.message.orEmpty().take(80)},amount=${preview.total},operator=${currentEmployee.value?.name.orEmpty()}");printerMessage.value="IN BILL LỖI · ${result.exceptionOrNull()?.message?:"Thử in lại"} · vẫn xác nhận thu tiền được, hệ thống đã ghi lại lần in lỗi"}
    }
    } finally { if(print)checkoutPrinting.value=false }
   }
@@ -2319,7 +2394,6 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
   if(!employee.canCheckout&&employee.role!="ADMIN")return
   val runningShift=activeShift.value
   if(session.dataScope=="LIVE"&&!ShiftRules.canPay(runningShift?.staffId,employee.id)){printerMessage.value="ĐANG TRONG CA CỦA ${runningShift?.staffName} · CHỈ ${runningShift?.staffName} ĐƯỢC THANH TOÁN (hoặc chờ ra ca)";return}
-  if(checkoutPrinting.value){printerMessage.value="ĐANG IN BILL · Vui lòng chờ in hoàn tất";return}
   val prepaidCash=session.flow==PaymentFlowRules.PREPAID&&method=="CASH"
   if(method=="CASH"&&!PaymentFlowRules.canConfirmCash(session.flow,preview.total,cashReceived)){printerMessage.value="KHÁCH ĐƯA CHƯA ĐỦ TIỀN";return}
   val skipKitchen=resumedPrepaid.value&&skipKitchenPrint.value
@@ -2435,6 +2509,7 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
     kotlinx.coroutines.withTimeoutOrNull(5000L){kitchenJob.await()}
     kitchenOverlayOn=false
    }
+   lastPaid.value=LastPaid(bill.id,bill.billNo,table?.name?:"Trả trước",method,preview.total,System.currentTimeMillis(),employee.id)
    withContext(Dispatchers.Main){leavePaidOrder()}
   }
  }

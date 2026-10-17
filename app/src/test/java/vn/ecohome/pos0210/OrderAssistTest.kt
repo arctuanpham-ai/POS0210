@@ -61,4 +61,13 @@ class OrderAssistTest {
         assertFalse(SensitiveAudit.isSensitive("BILL", "DISCOUNT_APPLIED", "discount=5000,auto=true"))
         assertTrue(SensitiveAudit.isSensitive("BILL", "DISCOUNT_APPLIED", "discount=5000,auto=false"))
     }
+
+    @Test fun unprintedBatchesAreFlaggedFirst() {
+        val now = at(2026, 10, 18, 10, 0)
+        val alerts = ServiceAlerts.compute(
+            tables = listOf(ServiceAlerts.Table("t1", "Bàn 1")), sessions = listOf(ServiceAlerts.OpenSession("s1", "t1", now - 60_000L, 0)),
+            waiting = emptyList(), drafts = emptyMap(), now = now, unprinted = mapOf("t1" to 2),
+        )
+        assertEquals(ServiceAlert.Kind.UNPRINTED_BATCH, alerts.first().kind); assertEquals(2, alerts.first().count)
+    }
 }

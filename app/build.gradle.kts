@@ -12,8 +12,8 @@ android {
         applicationId = "vn.ecohome.pos0210"
         minSdk = 26
         targetSdk = 35
-        versionCode = 169
-        versionName = "1.0.0-alpha136-prepaid-to-postpaid"
+        versionCode = 170
+        versionName = "1.0.0-alpha137-draft-discard"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {

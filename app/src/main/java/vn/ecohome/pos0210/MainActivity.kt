@@ -318,11 +318,14 @@ fun Tables(vm: PosViewModel) {
             if (alerts.isNotEmpty()) Surface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), color = Color(0xFFFFF1D6), shape = RoundedCornerShape(8.dp)) {
                 Column(Modifier.padding(10.dp)) {
                     alerts.take(4).forEach { a ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(when (a.kind) {
                             ServiceAlert.Kind.SLOW_DISH -> "⏰ ${a.tableName}: ${a.count} lần gọi món chờ ${a.minutes} phút chưa lên"
                             ServiceAlert.Kind.NOTHING_SENT -> "⚠ ${a.tableName}: mở bàn ${a.minutes} phút chưa gửi món nào"
                             ServiceAlert.Kind.UNSENT_DRAFT -> "✎ ${a.tableName}: còn ${a.count} món chọn rồi CHƯA GỬI bếp"
-                        }, color = Color(0xFF7A4B00), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }, color = Color(0xFF7A4B00), fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        if (a.kind == ServiceAlert.Kind.UNSENT_DRAFT) TextButton(onClick = { vm.clearDraft(a.tableId) }) { Text("BỎ NHÁP", fontSize = 12.sp, fontWeight = FontWeight.Black) }
+                        }
                     }
                     if (alerts.size > 4) Text("… và ${alerts.size - 4} cảnh báo khác", fontSize = 12.sp, color = Color(0xFF7A4B00))
                 }

@@ -72,7 +72,7 @@ class PosViewModel(app:Application):AndroidViewModel(app){
  /** Rời màn order: còn món chưa gửi thì lưu nháp cho bàn, không mất. */
  fun leaveOrder(){
   val t=currentTable.value
-  if(t!=null&&cart.value.isNotEmpty()){saveDraft(t.id);orderMessage.value="Đã lưu nháp ${cart.value.values.sum()} món chưa gửi của ${t.name}"}
+  if(t!=null){saveDraft(t.id);if(cart.value.isNotEmpty())orderMessage.value="Đã lưu nháp ${cart.value.values.sum()} món chưa gửi của ${t.name}"}
   screen.value="TABLES"
  }
  // ---- Chống bấm gửi order 2 lần ----

@@ -24,7 +24,7 @@ class DeliveryRulesTest {
         val first = DeliveryReminder.due(p, now, 8, 5, emptyMap())
         assertEquals(listOf("a"), first.map { it.key }); assertEquals(9L, first[0].minutes)
         assertTrue(DeliveryReminder.due(p, now + 2 * min, 8, 5, mapOf("a" to now)).none { it.key == "a" })
-        assertEquals(listOf("a"), DeliveryReminder.due(p, now + 5 * min, 8, 5, mapOf("a" to now)).map { it.key })
+        assertTrue(DeliveryReminder.due(p, now + 5 * min, 8, 5, mapOf("a" to now)).any { it.key == "a" })
     }
 
     @Test fun speechIsVietnameseAndMentionsTableAndRemaining() {

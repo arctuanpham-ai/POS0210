@@ -709,7 +709,7 @@ fun saveSetting(key:String,value:String){
  val e=currentEmployee.value?:return
  val allowed=when(key){
   "storage_root_uri","master_config_uri","autoback_tree_uri" -> e.role=="ADMIN"||e.canManageSystem
-  "bank_name","bank_account","bank_holder","qr_prefix","payment_qr_mode","printer_mode","printer_mac","printer_name","kitchen_printer_mac","kitchen_printer_name","receipt_printer_mac","receipt_printer_name","printer_paper_mm","bank_notification_enabled","bank_notification_vibrate","bank_notification_tts","order_announce_on","delivery_remind_on","delivery_remind_min","delivery_remind_repeat_min","delivery_remind_voice" -> e.role=="ADMIN"||e.role=="MANAGER"
+  "bank_name","bank_account","bank_holder","qr_prefix","payment_qr_mode","printer_mode","printer_mac","printer_name","kitchen_printer_mac","kitchen_printer_name","receipt_printer_mac","receipt_printer_name","printer_paper_mm","bank_notification_enabled","bank_notification_vibrate","bank_notification_tts","order_announce_on","order_announce_repeat","delivery_remind_on","delivery_remind_min","delivery_remind_repeat_min","delivery_remind_voice" -> e.role=="ADMIN"||e.role=="MANAGER"
   else -> e.role=="ADMIN"
  }
  if(!allowed){viewModelScope.launch{audit("SECURITY",key,"SETTING_DENIED","role=${e.role}")};return}
@@ -2015,6 +2015,19 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    val lines=dao.batchItemsOnce(batchId).filter{it.adjustmentOfItemId==null&&it.qty>0}.map{Triple(it.qty,it.itemNameSnapshot,it.note)}
    val text=DeliveryReminder.newOrderSpeech(label,lines)
    if(text.isNotBlank())withContext(Dispatchers.Main){DeliveryAnnouncer.announce(getApplication(),text,speak,vibrate=false)}
+   // Tuỳ chọn đọc nhắc lại: đọc thêm một lần sau vài giây để bếp đang bận vẫn nghe kịp.
+   if(text.isNotBlank()&&setting("order_announce_repeat")=="true"){
+    kotlinx.coroutines.delay(9000L)
+    withContext(Dispatchers.Main){DeliveryAnnouncer.announce(getApplication(),"Nhắc lại. "+text,speak,vibrate=false)}
+   }
+  }
+ }
+ /** Nút đọc lại thủ công ở màn danh sách đơn của bàn: đọc ngay, không phụ thuộc công tắc tự động. */
+ fun speakBatchAgain(b:OrderBatchEntity,label:String){
+  viewModelScope.launch(Dispatchers.IO){
+   val lines=dao.batchItemsOnce(b.id).filter{it.adjustmentOfItemId==null&&it.qty>0}.map{Triple(it.qty,it.itemNameSnapshot,it.note)}
+   val text=DeliveryReminder.newOrderSpeech(label,lines)
+   if(text.isNotBlank())withContext(Dispatchers.Main){DeliveryAnnouncer.announce(getApplication(),"Nhắc lại. "+text,true,vibrate=false)}
   }
  }
  private val lastDeliveryReminder=mutableMapOf<String,Long>()

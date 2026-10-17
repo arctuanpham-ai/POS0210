@@ -705,6 +705,7 @@ fun Sent(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                                     color = when (b.status) { "DRAFT" -> Color(0xFF9A5B00); "WAITING" -> Color(0xFF7A4B00); "DELIVERED" -> Color(0xFF2F6B2A); else -> Color(0xFF9A2B1F) }
                                 )
                             }
+                            if (b.status == "WAITING") TextButton(onClick = { vm.speakBatchAgain(b, t.name) }) { Text("🔊 ĐỌC LẠI") }
                             TextButton(onClick = { pv = b }) { Text("CHI TIẾT") }
                         }
                         its.filter { it.adjustmentOfItemId == null && it.qty > 0 }.forEach { item ->
@@ -5195,6 +5196,10 @@ fun DeliveryRemindSettings(vm: PosViewModel) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Switch(checked = v("order_announce_on") != "false", onCheckedChange = { vm.saveSetting("order_announce_on", it.toString()) })
                 Text("  Đọc loa tên + số lượng món khi chốt đơn / in phiếu bếp", fontWeight = FontWeight.Bold)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(checked = v("order_announce_repeat") == "true", onCheckedChange = { vm.saveSetting("order_announce_repeat", it.toString()) }, enabled = v("order_announce_on") != "false")
+                Text("  Đọc nhắc lại thêm một lần sau vài giây", fontWeight = FontWeight.Bold)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Switch(checked = voice, onCheckedChange = { vm.saveSetting("delivery_remind_voice", it.toString()) }, enabled = on)

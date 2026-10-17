@@ -76,7 +76,7 @@ object RevenueForecaster {
 object SensitiveAudit {
     private val actions = setOf(
         "CANCELLED", "DRAFT_DELETED", "ITEM_CORRECTION_REQUESTED", "PAYMENT_METHOD_CHANGED", "REFUND", "SETTLE_TRANSFER",
-        "PREPAID_UNPAID_CANCELLED", "PREPAID_ABANDONED", "PREPAID_EDITED", "PREPAID_EDIT_START", "KITCHEN_SKIPPED_VERBAL", "KITCHEN_SKIPPED_SERVED",
+        "PREPAID_UNPAID_CANCELLED", "PREPAID_TO_POSTPAID", "PREPAID_ABANDONED", "PREPAID_EDITED", "PREPAID_EDIT_START", "KITCHEN_SKIPPED_VERBAL", "KITCHEN_SKIPPED_SERVED",
         "BILL_REPRINTED", "EDIT_CHECKOUT", "TAKEOVER", "REVIEWED", "AUTO_CLOSE", "OPENING_CASH_OVERRIDE", "DENIED", "SETTING_DENIED",
         "DISCOUNT_APPLIED", "VOUCHER_REDEEMED", "RESET_PREOPENING_DATA", "CLEAR_TEST_DATA", "DEFER_TO_NEXT_SHIFT",
     )
@@ -86,7 +86,7 @@ object SensitiveAudit {
     private val labels = mapOf(
         "CANCELLED" to "Huỷ lần gọi món", "DRAFT_DELETED" to "Xoá món nháp", "ITEM_CORRECTION_REQUESTED" to "Bớt món đã giao",
         "PAYMENT_METHOD_CHANGED" to "Đổi tiền mặt ↔ chuyển khoản", "REFUND" to "Hoàn tiền bill", "SETTLE_TRANSFER" to "Chốt hoàn tiền CK",
-        "PREPAID_UNPAID_CANCELLED" to "Huỷ đơn trả trước chưa thu", "PREPAID_ABANDONED" to "Bỏ đơn trả trước", "PREPAID_EDITED" to "Sửa đơn trả trước",
+        "PREPAID_UNPAID_CANCELLED" to "Huỷ đơn trả trước chưa thu", "PREPAID_TO_POSTPAID" to "Đổi trả trước → trả sau", "PREPAID_ABANDONED" to "Bỏ đơn trả trước", "PREPAID_EDITED" to "Sửa đơn trả trước",
         "PREPAID_EDIT_START" to "Mở sửa đơn trả trước", "KITCHEN_SKIPPED_VERBAL" to "Không in bếp (báo miệng)", "KITCHEN_SKIPPED_SERVED" to "Không in bếp (đã phục vụ)",
         "BILL_REPRINTED" to "In lại bill", "EDIT_CHECKOUT" to "Sửa giờ ra ca", "TAKEOVER" to "Nhận ca thay", "REVIEWED" to "Duyệt tiền ca", "AUTO_CLOSE" to "Tự đóng ca",
         "OPENING_CASH_OVERRIDE" to "Sửa tiền đầu kỳ", "DENIED" to "Bị chặn quyền", "SETTING_DENIED" to "Bị chặn sửa cài đặt", "VOUCHER_REDEEMED" to "Dùng voucher",

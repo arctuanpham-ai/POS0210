@@ -982,6 +982,7 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
     Column {
         var confirmEdit by remember { mutableStateOf(false) }
         var confirmLeave by remember { mutableStateOf(false) }
+        var convertPostpaid by remember { mutableStateOf(false) }
         Header(if (isPrepaid) "Thanh toán trước" else "Thanh toán") {
             if (isPrepaid) confirmLeave = true else vm.screen.value = "SENT"
         }
@@ -993,10 +994,12 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                 Button(onClick = { confirmLeave = false }, Modifier.fillMaxWidth()) { Text("Ở LẠI · XÁC NHẬN THU TIỀN") }
                 OutlinedButton(onClick = { confirmLeave = false; if (billPrinted) confirmEdit = true else vm.editPrepaidOrder() }, Modifier.fillMaxWidth()) { Text("CHƯA TRẢ · SỬA ĐƠN") }
                 OutlinedButton(onClick = { confirmLeave = false; vm.parkPrepaid() }, Modifier.fillMaxWidth()) { Text("ĐỂ ĐÓ · XỬ LÝ SAU") }
+                OutlinedButton(onClick = { confirmLeave = false; convertPostpaid = true }, Modifier.fillMaxWidth()) { Text("KHÁCH TRẢ SAU · CHỌN BÀN & IN BẾP") }
             } },
             confirmButton = {},
             dismissButton = {}
         )
+        if (convertPostpaid) ConvertToPostpaidDialog(vm, s) { convertPostpaid = false }
         if (confirmEdit) AlertDialog(
             onDismissRequest = { confirmEdit = false },
             title = { Text("Sửa đơn sau khi đã in bill?") },

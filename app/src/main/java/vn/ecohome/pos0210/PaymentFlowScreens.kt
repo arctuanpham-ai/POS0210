@@ -471,6 +471,7 @@ fun UnpaidPrepaidScreen(vm: PosViewModel) {
     val employees by vm.employees.collectAsState()
     val fmt = remember { SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()) }
     var cancelTarget by remember { mutableStateOf<vn.ecohome.pos0210.data.TableSessionEntity?>(null) }
+    var convertTarget by remember { mutableStateOf<vn.ecohome.pos0210.data.TableSessionEntity?>(null) }
     var reason by remember { mutableStateOf("") }
     var msg by remember { mutableStateOf("") }
     Column {
@@ -493,11 +494,13 @@ fun UnpaidPrepaidScreen(vm: PosViewModel) {
                             Button(onClick = { vm.resumePrepaid(s) }, Modifier.weight(1f)) { Text("THU TIỀN", fontWeight = FontWeight.Black) }
                             OutlinedButton(onClick = { reason = ""; msg = ""; cancelTarget = s }, Modifier.weight(1f)) { Text("KHÁCH KHÔNG LẤY · HUỶ") }
                         }
+                        OutlinedButton(onClick = { convertTarget = s }, Modifier.fillMaxWidth().padding(top = 6.dp)) { Text("KHÁCH TRẢ SAU · CHỌN BÀN & IN BẾP") }
                     }
                 }
             }
         }
     }
+    convertTarget?.let { s -> ConvertToPostpaidDialog(vm, s) { convertTarget = null } }
     cancelTarget?.let { s ->
         AlertDialog(
             onDismissRequest = { cancelTarget = null },
@@ -510,4 +513,33 @@ fun UnpaidPrepaidScreen(vm: PosViewModel) {
             dismissButton = { TextButton(onClick = { cancelTarget = null }) { Text("ĐÓNG") } }
         )
     }
+}
+
+
+/** Chọn bàn khách đang ngồi để đổi đơn trả trước (chưa thu tiền) sang trả sau và in phiếu bếp ngay. */
+@Composable
+fun ConvertToPostpaidDialog(vm: PosViewModel, s: vn.ecohome.pos0210.data.TableSessionEntity, onClose: () -> Unit) {
+    val tables by vm.tables.collectAsState()
+    val open by vm.sessions.collectAsState()
+    val busy = open.filter { it.id != s.id }.map { it.tableId }.toSet()
+    val free = tables.filter { it.id != PaymentFlowRules.PREPAID_TABLE_ID && it.id !in busy }
+    var chosen by remember { mutableStateOf(if (s.tableId != PaymentFlowRules.PREPAID_TABLE_ID && s.tableId !in busy) s.tableId else "") }
+    var err by remember { mutableStateOf("") }
+    var working by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = { if (!working) onClose() },
+        title = { Text("Đổi sang TRẢ SAU?") },
+        text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Khách chưa trả tiền, muốn trả sau: chọn bàn khách đang ngồi. Món và giá giữ nguyên, phiếu bếp in ngay; khách trả tiền khi về như bàn trả sau.", fontSize = 13.sp)
+            if (free.isEmpty()) Text("Không còn bàn trống · trả bàn hoặc thêm bàn trước", color = Color(0xFF9A2B1F), fontWeight = FontWeight.Bold)
+            Column(Modifier.heightIn(max = 260.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                free.chunked(3).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { row.forEach { t -> FilterChip(chosen == t.id, { chosen = t.id }, { Text(t.name, maxLines = 1) }) } }
+                }
+            }
+            if (err.isNotBlank()) Text(err, color = Color(0xFF9A2B1F), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+        } },
+        confirmButton = { TextButton(enabled = chosen.isNotBlank() && !working, onClick = { working = true; vm.convertPrepaidToPostpaid(s, chosen) { m -> working = false; if (m == null) onClose() else err = m } }) { Text(if (working) "ĐANG ĐỔI…" else "ĐỔI & IN BẾP") } },
+        dismissButton = { TextButton(enabled = !working, onClick = onClose) { Text("ĐÓNG") } }
+    )
 }

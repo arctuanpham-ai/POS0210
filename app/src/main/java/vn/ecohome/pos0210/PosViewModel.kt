@@ -1605,6 +1605,37 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    screen.value="PAY"
   }
  }
+ /**
+  * Khách trả trước nhưng chưa trả, muốn chuyển sang TRẢ SAU: đổi phiên sang trả sau ở bàn thật (trống) rồi in phiếu bếp ngay.
+  * Không đổi món, giá, số đơn; không tạo bill. Ghi nhật ký nhạy cảm. Đã thu tiền thì không cho đổi.
+  */
+ fun convertPrepaidToPostpaid(s:TableSessionEntity,tableId:String,onDone:(String?)->Unit){
+  val e=currentEmployee.value
+  viewModelScope.launch(Dispatchers.IO){
+   fun done(m:String?){viewModelScope.launch(Dispatchers.Main){onDone(m)}}
+   if(e==null||(!e.canOrder&&e.role!="ADMIN")){done("Không có quyền đổi đơn");return@launch}
+   if(dao.billBySessionId(s.id)!=null){done("Đơn này đã thu tiền: không đổi sang trả sau được");return@launch}
+   val table=dao.allTablesSnapshot().firstOrNull{it.id==tableId&&it.id!=PaymentFlowRules.PREPAID_TABLE_ID}?:run{done("Chọn bàn khách đang ngồi");return@launch}
+   val other=dao.openSessionForTable(tableId)
+   if(other!=null&&other.id!=s.id){done("${table.name} đang có khách khác · chọn bàn trống");return@launch}
+   if(dao.convertPrepaidToPostpaid(s.id,tableId)!=1){done("Đơn vừa thay đổi hoặc đã thu tiền · thử lại");return@launch}
+   dao.cancelPaymentSessions(s.id)
+   audit("SESSION",s.id,"PREPAID_TO_POSTPAID","table=${table.name},by=${e.name}")
+   val updated=dao.sessionSnapshotById(s.id)
+   val drafts=dao.batches(s.id).first().filter{it.status=="DRAFT"}
+   withContext(Dispatchers.Main){
+    resetPrepaidEdit();prepaidCartBackup=null;printedCheckoutKey.value=null;checkoutBillImage.value=null
+    resumedPrepaid.value=false;skipKitchenPrint.value=false
+    cart.value=emptyMap();cartNotes.value=emptyMap()
+    orderFlowOverride.value=PaymentFlowRules.POSTPAID
+    currentTable.value=table;currentSession.value=updated
+    screen.value="SENT"
+   }
+   drafts.forEach{markBatchSent(it)} // in phiếu bếp như đơn trả sau bình thường (không in lặp nếu đã in)
+   autoBackup()
+   done(null)
+  }
+ }
  /** Khách không lấy / không trả: huỷ đơn chưa thu tiền, bắt buộc lý do. */
  fun cancelUnpaidPrepaid(s:TableSessionEntity,reason:String,onDone:(String?)->Unit){
   val e=currentEmployee.value

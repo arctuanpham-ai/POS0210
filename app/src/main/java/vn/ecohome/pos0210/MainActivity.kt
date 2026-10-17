@@ -4782,7 +4782,7 @@ fun BillDetailDialog(vm: PosViewModel, bill: BillEntity, onDismiss: () -> Unit) 
                     Text("Mở: ${time(bill.openedAt)}")
                     Text("Đóng: ${bill.closedAt?.let { time(it) } ?: "--"}")
                     Text("Thanh toán: $methodText")
-                    if (payment != null && bill.status == "PAID" && current != null && PaymentFixPolicy.canFix(current.role, current.id, payment.cashierId, payment.paidAt, System.currentTimeMillis())) {
+                    if (payment != null && bill.status == "PAID" && current?.let { PaymentFixPolicy.canFix(it.role, it.id, payment.cashierId, payment.paidAt, System.currentTimeMillis()) } == true) {
                         TextButton(onClick = { methodReason = ""; methodMsg = ""; showMethod = true }) {
                             Text(if (payment.method == "TRANSFER") "ĐỔI SANG TIỀN MẶT (ghi nhầm)" else "ĐỔI SANG CHUYỂN KHOẢN (ghi nhầm)")
                         }

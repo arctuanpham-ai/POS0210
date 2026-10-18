@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20261018-03" />
+    <link rel="stylesheet" href="styles.css?v=20261018-04" />
     <title>0210 · Manager</title>
   </head>
   <body>
@@ -17,7 +17,7 @@
         <p class="eyebrow">0210 · BREAKFAST · COFFEE · DRINKS</p>
         <h1 id="login-title">Manager realtime</h1>
         <p class="muted">Theo dõi quán và nhập phiếu tài chính từ xa.</p>
-        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.18.03 · Phiếu chi: nháp cũ tự lấy lại ngày giờ hiện tại</p>
+        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.18.04 · Doanh thu: so sánh ngày và cùng thứ tuần trước</p>
         <p class="muted">Đăng nhập tài khoản quán một lần trên mỗi máy, sau đó mỗi người vào bằng PIN riêng.</p>
         <label>Email tài khoản quán<input id="email" type="email" autocomplete="username" inputmode="email" /></label>
         <label>Mật khẩu<input id="password" type="password" autocomplete="current-password" /></label>
@@ -47,7 +47,7 @@
           <div class="heading-actions"><button id="refresh-dashboard" class="btn">Làm mới</button><button id="request-sync" class="btn" title="Yêu cầu máy POS ở quán đồng bộ ngay">Yêu cầu đồng bộ</button><button id="switch-person" class="btn">Đổi người</button><button id="logout-button" class="btn ghost">Đăng xuất</button></div>
         </header>
 
-        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><section id="my-alerts" class="my-alerts" aria-live="polite" hidden></section><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.18.03 · Phiếu chi: nháp cũ tự lấy lại ngày giờ hiện tại</p>
+        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><section id="my-alerts" class="my-alerts" aria-live="polite" hidden></section><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.18.04 · Doanh thu: so sánh ngày và cùng thứ tuần trước</p>
 
         <nav class="tabbar" id="tabbar" aria-label="Các trang">
           <a href="#ban" data-tab="ban">Bàn</a>
@@ -93,6 +93,17 @@
         <p id="sales-notice" class="sales-notice" role="status"></p>
         <section id="sales-summary" class="summary-grid" aria-label="Tổng quan doanh thu theo ngày"></section>
         <section id="sales-chart" class="sales-chart" aria-label="Biểu đồ doanh thu theo ngày"></section>
+
+        <section class="section-heading compact">
+          <div><p class="eyebrow">SO SÁNH</p><h2>Ngày với ngày, thứ với cùng thứ tuần trước</h2></div>
+        </section>
+        <section id="cmp-week" class="cmp-tiles" aria-label="7 ngày gần nhất so với 7 ngày trước đó"></section>
+        <div class="filter-row" id="cmp-modes">
+          <button data-cmp-mode="prev" class="filter active">So với hôm trước</button>
+          <button data-cmp-mode="week" class="filter">So với cùng thứ tuần trước</button>
+        </div>
+        <section id="cmp-table" class="table-wrap" aria-label="So sánh các ngày gần nhau"></section>
+        <p id="cmp-note" class="muted"></p>
 
         <section class="section-heading compact">
           <div><p class="eyebrow">GIỜ CAO ĐIỂM</p><h2>Số bill theo giờ mở bàn</h2></div>
@@ -588,7 +599,7 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261018-03"></script>
+    <script type="module" src="app.js?v=20261018-04"></script>
     <script>
       // Trang không chạy được (thường do trình duyệt còn giữ file cũ): báo rõ thay vì để nút đăng nhập "chết".
       setTimeout(function () {

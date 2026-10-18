@@ -39,3 +39,15 @@ test("combines cached receipt filters", () => {
   ];
   assert.deepEqual(filterReceipts(rows, { staff: "Lan", group: "FOOD", material: "gà" }).map((x) => x.id), ["a"]);
 });
+
+import { freshenDraft } from "../expense-domain.js";
+test("nháp trống lấy lại giờ hiện tại, nháp có nội dung giữ ngày và báo cũ", () => {
+  const now = Date.parse("2026-10-18T13:57:00Z"), old = Date.parse("2026-10-11T16:50:00Z");
+  const empty = { purchaseDate: old, note: "", items: [{ materialName: "", unitPrice: 0 }] };
+  const r = freshenDraft(empty, now);
+  assert.equal(r.draft.purchaseDate, now); assert.equal(r.reset, true); assert.equal(r.stale, false);
+  const filled = { purchaseDate: old, note: "", items: [{ materialName: "Rau thơm", unitPrice: 5000 }] };
+  const f = freshenDraft(filled, now);
+  assert.equal(f.draft.purchaseDate, old); assert.equal(f.stale, true);
+  assert.equal(freshenDraft({ ...filled, purchaseDate: now - 3600_000 }, now).stale, false);
+});

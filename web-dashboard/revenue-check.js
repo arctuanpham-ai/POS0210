@@ -109,5 +109,18 @@ export function reconcileDays({ dailyDocs = {}, bills = [], payments = [], range
     }
     days.push({ dateKey: k, posBills, posRevenue, cloudBills: list.length, cloudRevenue, diffBills: list.length - posBills, diffRevenue: cloudRevenue - posRevenue, snapshotAt: Number(snap.updatedAt || 0), hasHourly: Boolean(hourly), hours });
   }
-  return { days, missingDays, checkedDays: Object.keys(dailyDocs).filter((k) => dailyDocs[k]).length };
+  // Bill trên cloud ở ngày TRƯỚC ngày bán đầu tiên mà POS ghi nhận (POS báo 0 bill) = nghi bill thử còn sót trên cloud sau khi POS reset trước khai trương.
+  const salesDays = Object.keys(dailyDocs).filter((k) => dailyDocs[k] && Number(dailyDocs[k].paidBills || 0) > 0).sort();
+  const firstSalesDay = salesDays[0] || null;
+  const preOpening = [];
+  if (firstSalesDay) {
+    for (const [k, list] of byDay) {
+      if (k >= firstSalesDay) continue;
+      const snap = dailyDocs[k];
+      if (snap && Number(snap.paidBills || 0) > 0) continue;
+      for (const b of list) preOpening.push({ billNo: String(b.billNo ?? b.id), total: Number(b.total || 0), openedAt: Number(b.openedAt), closedAt: Number(b.closedAt), dateKey: k });
+    }
+    preOpening.sort((a, c) => a.openedAt - c.openedAt);
+  }
+  return { days, missingDays, checkedDays: Object.keys(dailyDocs).filter((k) => dailyDocs[k]).length, firstSalesDay, preOpening, preOpeningTotal: preOpening.reduce((t, b) => t + b.total, 0) };
 }

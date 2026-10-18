@@ -69,3 +69,15 @@ test("ngày chưa có snapshot ngày không bị tính là lệch", () => {
   const r = reconcileDays({ dailyDocs: {}, bills: [b], payments: [{ billId: "x", amount: 5, dataScope: "LIVE" }], range: { from: new Date(2026, 9, 1).getTime(), to: new Date(2026, 10, 1).getTime() } });
   assert.deepEqual(r.days, []); assert.deepEqual(r.missingDays, ["2026-10-03"]);
 });
+
+test("bill ở ngày trước ngày bán đầu tiên của POS được nhận diện là bill thử trước khai trương", () => {
+  const at = (day, h) => new Date(2026, 9, day, h).getTime();
+  const mkb = (id, total, day, h) => ({ id, billNo: id, total, openedAt: at(day, h), closedAt: at(day, h + 1), status: "PAID" });
+  const bills = [mkb("t1", 6, 9, 15), mkb("t2", 6, 9, 16), mkb("a", 50, 10, 9)];
+  const payments = bills.map((b) => ({ billId: b.id, amount: b.total, dataScope: "LIVE" }));
+  const dailyDocs = { "2026-10-09": { paidBills: 0, revenue: 0 }, "2026-10-10": { paidBills: 1, revenue: 50 } };
+  const r = reconcileDays({ dailyDocs, bills, payments, range: { from: at(1, 0), to: at(31, 0) } });
+  assert.equal(r.firstSalesDay, "2026-10-10");
+  assert.deepEqual(r.preOpening.map((b) => b.billNo), ["t1", "t2"]);
+  assert.equal(r.preOpeningTotal, 12);
+});

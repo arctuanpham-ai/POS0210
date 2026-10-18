@@ -32,10 +32,10 @@ test("bill hoàn toàn bộ không tính", () => {
 
 test("gợi ý bill nghi vấn: bill đóng sát lúc POS ghi, tổ hợp cộng đúng số tiền lệch", () => {
   const r = reconcileRevenue({
-    snapshot: { revenue: 100, paidBills: 2, updatedAt: 1_000_000 },
-    bills: [bill("a", 50, 500), bill("b", 50, 600), bill("c", 5, 990_000), bill("d", 7, 995_000), bill("e", 9, 996_000)],
+    snapshot: { revenue: 100, paidBills: 2, updatedAt: 5_000_000 },
+    bills: [bill("a", 50, 500), bill("b", 50, 600), bill("c", 5, 4_990_000), bill("d", 7, 4_995_000), bill("e", 9, 4_996_000)],
     payments: ["a", "b", "c", "d", "e"].map((id) => ({ billId: id, amount: { a: 50, b: 50, c: 5, d: 7, e: 9 }[id], dataScope: "LIVE" })),
-    range: { from: 0, to: 2_000_000 },
+    range: { from: 0, to: 9_000_000 },
   });
   assert.equal(r.unexplained, 21); assert.equal(r.unexplainedBills, 3);
   assert.deepEqual(r.leads.combos, [["e", "d", "c"]]);

@@ -2195,6 +2195,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
  fun items(id:String)=dao.batchItems(id)
  fun correctedQty(sourceItemId:String)=dao.sourceCorrectionQtyFlow(sourceItemId)
  fun total(id:String)=dao.sessionTotal(id)
+ fun comboTotal(id:String)=dao.sessionComboTotal(id)
  fun buyGetDiscount(id:String)=dao.sessionBuyGetDiscount(id)
  fun voucherDiscount(id:String)=dao.sessionVoucherDiscount(id)
  fun session(id:String)=dao.sessionById(id)
@@ -2377,7 +2378,9 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
    if(qrConfigured&&qr==null)printerMessage.value="VIETQR LỖI · Bill vẫn được in để thanh toán tiền mặt"
    val now=System.currentTimeMillis()
    val period="${java.text.SimpleDateFormat("HH:mm",java.util.Locale.getDefault()).format(java.util.Date(session.openedAt))}–${java.text.SimpleDateFormat("HH:mm",java.util.Locale.getDefault()).format(java.util.Date(now))}"
+   val comboTotalForBill=dao.sessionComboTotalSnapshot(session.id)
    val adjustments=buildList{
+    if(comboTotalForBill>0L&&(preview.discount>0L||preview.surcharge>0L||preview.discountRule!=null))add("COMBO GIỮ NGUYÊN GIÁ · không áp khuyến mại/phụ thu")
     preview.surchargeRules.forEach{rule->add("PHỤ THU ${rule.name}  +${rule.percent}%")}
     preview.discountRule?.let{rule->add("ƯU ĐÃI ${rule.name}${if(rule.code.isNotBlank()) " · ${rule.code}" else ""}  -${rule.percent}%")}
     preview.buyGetLabel?.let{label->add("ƯU ĐÃI $label  · quà tặng -${java.text.NumberFormat.getNumberInstance(java.util.Locale("vi","VN")).format(preview.buyGetDiscount)+"đ"}")}

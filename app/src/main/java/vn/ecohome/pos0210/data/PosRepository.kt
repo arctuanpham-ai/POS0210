@@ -278,12 +278,14 @@ class PosRepository(private val db:PosDatabase){
                     ?:error("LOYALTY_REWARD_UNAVAILABLE")
                 val fields=reward.rewardSnapshot.split("|")
                 val value=fields.getOrNull(2)?.toLongOrNull() ?: error("LOYALTY_REWARD_INVALID")
+                // Giá combo cố định: quyền lợi chỉ tính trên phần món lẻ (không gồm combo).
+                val nonCombo=(preview.subtotal-dao.sessionComboTotalSnapshot(session.id)).coerceAtLeast(0L)
                 val expected=when(fields.getOrNull(1)){
                     "BILL_DISCOUNT" -> value.takeIf{it in 1L..10000000L}
-                    "BILL_DISCOUNT_PERCENT" -> value.takeIf{it in 1L..100L}?.let{preview.subtotal*it/100L}
+                    "BILL_DISCOUNT_PERCENT" -> value.takeIf{it in 1L..100L}?.let{nonCombo*it/100L}
                     else -> null
                 } ?: error("LOYALTY_REWARD_INVALID")
-                check(preview.discount==minOf(expected,preview.subtotal+preview.surcharge)){"LOYALTY_DISCOUNT_MISMATCH"}
+                check(preview.discount==minOf(expected,nonCombo+preview.surcharge)){"LOYALTY_DISCOUNT_MISMATCH"}
             }
             if(dao.closeSession(session.id,session.version)!=1) error("SESSION_ALREADY_CLOSED_OR_CHANGED")
             dao.insertBill(bill)

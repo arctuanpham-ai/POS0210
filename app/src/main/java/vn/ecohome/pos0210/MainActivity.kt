@@ -897,20 +897,6 @@ fun Sent(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
     }
 }
 
-private fun pricingRuleInTime(rule: PricingRuleEntity, now: Long): Boolean {
-    if (!rule.active) return false
-    if (rule.startAt != null && now < rule.startAt) return false
-    if (rule.endAt != null && now > rule.endAt) return false
-    val cal = Calendar.getInstance().apply { timeInMillis = now }
-    val minute = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
-    val start = rule.startMinute
-    val end = rule.endMinute
-    if (start != null && end != null) {
-        val ok = if (start <= end) minute in start..end else minute >= start || minute <= end
-        if (!ok) return false
-    }
-    return true
-}
 
 private fun settingValue(settings: List<AppSettingEntity>, key: String, fallback: String): String =
     settings.firstOrNull { it.key == key }?.value?.ifBlank { fallback } ?: fallback
@@ -948,37 +934,12 @@ private fun tierDiscountRule(tier: String?, settings: List<AppSettingEntity>): P
     )
 }
 
-private fun calculatePricing(subtotal: Long, rules: List<PricingRuleEntity>, enteredCode: String, now: Long = System.currentTimeMillis(), buyGetDiscount: Long = 0L, buyGetLabel: String? = null): PricingPreview {
-    val code = enteredCode.trim().uppercase()
-    val eligible = rules.filter { pricingRuleInTime(it, now) }
-    val codeMatches = if (code.isBlank()) emptyList() else eligible.filter { it.code.isNotBlank() && it.code.equals(code, true) }
-    val surchargeRules = eligible.filter { it.kind == "SURCHARGE" && (it.autoApply || it in codeMatches) }
-    val surcharge = surchargeRules.sumOf { subtotal * it.percent / 100L }
-    val afterSurcharge = subtotal + surcharge
-    val discountCandidates = eligible.filter { it.kind == "DISCOUNT" && (it.autoApply || it in codeMatches) }
-    val bestDiscount = discountCandidates.maxByOrNull { afterSurcharge * it.percent / 100L }
-    val ruleDiscount = bestDiscount?.let { afterSurcharge * it.percent / 100L } ?: 0L
-    val safeBuyGetDiscount = buyGetDiscount.coerceIn(0L, afterSurcharge)
-    // Compare competing discounts; never silently replace a better percentage offer.
-    // Voucher selection is explicit and is handled separately by its caller.
-    val useBuyGet = safeBuyGetDiscount > 0L && safeBuyGetDiscount >= ruleDiscount
-    val discount = if (useBuyGet) safeBuyGetDiscount else ruleDiscount
-    val appliedRule = if (useBuyGet) null else bestDiscount
-    val total = (afterSurcharge - discount).coerceAtLeast(0L)
-    val message = when {
-        useBuyGet -> "Đã áp dụng ưu đãi ${buyGetLabel ?: "Mua X tặng Y"}."
-        code.isNotBlank() && codeMatches.isEmpty() -> "Mã không hợp lệ hoặc đã hết thời gian áp dụng."
-        code.isNotBlank() && appliedRule != null && appliedRule !in codeMatches -> "Mã hợp lệ nhưng hệ thống đang áp dụng ưu đãi lớn hơn: ${appliedRule.name}."
-        code.isNotBlank() && appliedRule != null -> "Đã áp dụng ưu đãi tốt nhất: ${appliedRule.name}."
-        else -> ""
-    }
-    return PricingPreview(subtotal, surcharge, discount, total, surchargeRules, appliedRule, message, if (useBuyGet) safeBuyGetDiscount else 0L, if (useBuyGet) buyGetLabel else null)
-}
 
 @Composable
 fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
     val subtotal by vm.total(s.id).collectAsState(initial = 0)
     val buyGetDiscount by vm.buyGetDiscount(s.id).collectAsState(initial = 0L)
+    val comboSubtotal by vm.comboTotal(s.id).collectAsState(initial = 0L)
     val voucherDiscount by vm.voucherDiscount(s.id).collectAsState(initial = 0L)
     val rules by vm.pricingRules.collectAsState()
     val e by vm.currentEmployee.collectAsState()
@@ -1017,10 +978,13 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
     val applyReward = applyBillReward && billReward!=null && manualVoucher==0L && s.dataScope=="LIVE"
     val rewardFields=billReward?.rewardSnapshot?.split("|").orEmpty()
     val rewardValue=rewardFields.getOrNull(2)?.toLongOrNull()?:0L
-    val rewardDiscount=if(applyReward) minOf(if(rewardFields.getOrNull(1)=="BILL_DISCOUNT_PERCENT")subtotal*rewardValue/100L else rewardValue,subtotal) else 0L
+    // Giá combo cố định: quyền lợi tích điểm chỉ tính trên phần món lẻ.
+    val nonComboSubtotal=(subtotal-comboSubtotal).coerceAtLeast(0L)
+    val rewardDiscount=if(applyReward) minOf(if(rewardFields.getOrNull(1)=="BILL_DISCOUNT_PERCENT")nonComboSubtotal*rewardValue/100L else rewardValue,nonComboSubtotal) else 0L
     val preview = calculatePricing(subtotal,if(applyReward)emptyList() else eligibleRules,appliedCode,
         buyGetDiscount=if(applyReward)rewardDiscount else manualVoucher,
-        buyGetLabel=if(applyReward)"Ưu đãi tích điểm" else manualLabel)
+        buyGetLabel=if(applyReward)"Ưu đãi tích điểm" else manualLabel,
+        comboSubtotal=comboSubtotal)
     val paymentSession by vm.paymentSession(s.id).collectAsState(initial = null)
     val printedCheckoutKey by vm.printedCheckoutKey.collectAsState()
     val printAttemptedKey by vm.checkoutPrintAttemptedKey.collectAsState()
@@ -1247,6 +1211,7 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
             Text(money(preview.subtotal), fontSize = 24.sp, fontWeight = FontWeight.Bold)
             if (preview.surcharge > 0) Text("Phụ thu: +${money(preview.surcharge)}", fontWeight = FontWeight.Bold)
             preview.surchargeRules.forEach { Text("• ${it.name} +${it.percent}%", fontSize = 12.sp) }
+            if (comboSubtotal > 0) Text("Combo ${money(comboSubtotal)}: GIÁ CỐ ĐỊNH, không áp khuyến mại/phụ thu", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF41633A))
             if (preview.discount > 0) {
                 Text("Ưu đãi: -${money(preview.discount)}", fontWeight = FontWeight.Bold)
                 preview.buyGetLabel?.let { Text("• $it · quà tặng giảm 100%", fontSize = 12.sp) }

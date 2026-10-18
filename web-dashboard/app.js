@@ -19,38 +19,38 @@ import {
   setDoc as rawSetDoc,
   writeBatch as rawWriteBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261018-05";
-import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, freshenDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261018-05";
-import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261018-05";
-import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261018-05";
-import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261018-05";
-import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261018-05";
-import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261018-05";
-import { buildSimulation } from "./sim-data.js?v=20261018-05";
-import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261018-05";
-import { menuCsv } from "./menu-export.js?v=20261018-05";
-import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261018-05";
-import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261018-05";
-import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261018-05";
-import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261018-05";
-import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261018-05";
-import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261018-05";
-import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261018-05";
-import { otherCostRows } from "./other-costs.js?v=20261018-05";
-import { paybackStatus } from "./payback.js?v=20261018-05";
-import { topSellers } from "./top-banner.js?v=20261018-05";
-import { reconcileRevenue } from "./revenue-check.js?v=20261018-05";
-import { prepList, profitRanking, tomorrowSales } from "./plan-profit.js?v=20261018-05";
-import { menuEditProblem, menuGroups, mergePlan, nameIssues, nextProductCode, normName, soldNotInMenu } from "./menu-view.js?v=20261018-05";
-import { POS_CEILING, SPARK, dayUsage, lastPacificDays, nextReset, pacificDay, usageTrend } from "./usage.js?v=20261018-05";
-import { AI_SCOPES, buildAiPack, scopeRange } from "./ai-export.js?v=20261018-05";
-import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261018-05";
-import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261018-05";
-import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261018-05";
-import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261018-05";
-import { compareKeys, compareRows, weekTotals } from "./day-compare.js?v=20261018-05";
-import { comboCount, formatBaseQty, materialConsumption, outputRows } from "./item-output.js?v=20261018-05";
-import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261018-05";
+import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261018-07";
+import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, freshenDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261018-07";
+import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261018-07";
+import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261018-07";
+import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261018-07";
+import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261018-07";
+import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261018-07";
+import { buildSimulation } from "./sim-data.js?v=20261018-07";
+import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261018-07";
+import { menuCsv } from "./menu-export.js?v=20261018-07";
+import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261018-07";
+import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261018-07";
+import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261018-07";
+import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261018-07";
+import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261018-07";
+import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261018-07";
+import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261018-07";
+import { otherCostRows } from "./other-costs.js?v=20261018-07";
+import { paybackStatus } from "./payback.js?v=20261018-07";
+import { topSellers } from "./top-banner.js?v=20261018-07";
+import { reconcileDays, reconcileRevenue } from "./revenue-check.js?v=20261018-07";
+import { prepList, profitRanking, tomorrowSales } from "./plan-profit.js?v=20261018-07";
+import { menuEditProblem, menuGroups, mergePlan, nameIssues, nextProductCode, normName, soldNotInMenu } from "./menu-view.js?v=20261018-07";
+import { POS_CEILING, SPARK, dayUsage, lastPacificDays, nextReset, pacificDay, usageTrend } from "./usage.js?v=20261018-07";
+import { AI_SCOPES, buildAiPack, scopeRange } from "./ai-export.js?v=20261018-07";
+import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261018-07";
+import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261018-07";
+import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261018-07";
+import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261018-07";
+import { compareKeys, compareRows, weekTotals } from "./day-compare.js?v=20261018-07";
+import { comboCount, formatBaseQty, materialConsumption, outputRows } from "./item-output.js?v=20261018-07";
+import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261018-07";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",
@@ -3132,13 +3132,16 @@ function rcMonthKey() { const d = new Date(); const m = rc.month === "last" ? ne
 async function readMonthBills(key) {
   const from = new Date(Number(key.slice(0, 4)), Number(key.slice(5)) - 1, 1).getTime();
   const to = new Date(Number(key.slice(0, 4)), Number(key.slice(5)), 1).getTime();
-  const [bills, snap] = await Promise.all([
+  const fromKey = dateKeyOf(new Date(from)), toKey = dateKeyOf(new Date(to - 1));
+  const [bills, snap, dailyRows] = await Promise.all([
     getDocs(query(collection(db, ...root, "bills"), where("openedAt", ">=", from), where("openedAt", "<", to), limit(6000))).then(rows),
     getDoc(doc(db, ...root, "dashboardMonthly", key)).then((d) => (d.exists() ? d.data() : null)),
+    getDocs(query(collection(db, ...root, "dashboardDaily"), where("dateKey", ">=", fromKey), where("dateKey", "<=", toKey), limit(40))).then(rows).catch(() => []),
   ]);
+  const daily = Object.fromEntries(dailyRows.map((d) => [d.dateKey || d.id, d]));
   const ids = bills.filter((b) => b.status === "PAID" || b.status === "REFUNDED").map((b) => String(b.id));
   const payments = (await Promise.all(chunk(ids, 30).map((part) => getDocs(query(collection(db, ...root, "payments"), where("billId", "in", part))).then(rows)))).flat();
-  return { key, from, to, bills, payments, snapshot: snap, readAt: Date.now() };
+  return { key, from, to, bills, payments, snapshot: snap, daily, readAt: Date.now() };
 }
 async function loadRevenueCheck(force = false) {
   if (!state.user || !state.role || state.demo || state.simulation) { $("#rc-view").innerHTML = '<p class="muted">Tắt demo / mô phỏng để đối chiếu số thật.</p>'; return; }
@@ -3157,6 +3160,10 @@ function renderRevenueCheck(data) {
   $("#rc-badge").textContent = r.snapRevenue === null ? "· chưa có số POS" : ok ? "· ✅ khớp" : onlyLate ? "· ⏳ lệch do bill mới, chờ đồng bộ" : "· ⚠ có lệch cần xem";
   const row = (a, b, cls = "") => `<tr class="${cls}"><td>${a}</td><td>${b}</td></tr>`;
   const signedMoney = (v) => (v > 0 ? `+${money(v)}` : v < 0 ? `−${money(-v)}` : money(0));
+  const dd = reconcileDays({ dailyDocs: data.daily || {}, bills: data.bills, payments: data.payments, range: { from: data.from, to: data.to } });
+  const dayHtml = r.diff === 0 ? "" : !dd.checkedDays ? '<p class="muted">Chưa có snapshot ngày của POS trong tháng này nên chưa đối chiếu được từng ngày.</p>'
+    : dd.days.length === 0 ? `<p class="reimb-sub">Đối chiếu từng ngày</p><p class="muted">${dd.checkedDays} ngày có snapshot ngày của POS, tất cả đều KHỚP số bill và doanh thu với bill trên cloud. Vậy phần lệch không nằm ở ngày nào: số tháng của POS cũ hơn các số ngày (chờ POS đồng bộ lại) hoặc POS tính tháng khác ngày.</p>`
+    : `<p class="reimb-sub">Đối chiếu từng ngày · ${dd.days.length} ngày lệch / ${dd.checkedDays} ngày có snapshot</p><p class="muted">Bill cloud − POS, tính theo ngày mở bill. Giờ lệch kèm các bill mở trong giờ đó: bill thừa nằm trong số này.</p><ul class="rc-list">${dd.days.map((d) => `<li><b>${shortDay(d.dateKey)}</b>: POS ${d.posBills} bill · ${money(d.posRevenue)}, cloud ${d.cloudBills} bill · ${money(d.cloudRevenue)} → <b>${d.diffBills > 0 ? "+" : ""}${d.diffBills} bill · ${d.diffRevenue > 0 ? "+" : ""}${money(d.diffRevenue)}</b>${d.snapshotAt ? ` (POS ghi ${dateTime(d.snapshotAt)})` : ""}${d.hasHourly ? "" : " · POS bản cũ chưa có số theo giờ"}${d.hours.length ? `<ul>${d.hours.map((h) => `<li>${String(h.hour).padStart(2, "0")}:00 — POS ${h.pos}, cloud ${h.cloud}${h.bills.length ? `: ${h.bills.map((b) => `Bill ${escapeHtml(b.billNo)} (${money(b.total)}, mở ${dateTime(b.openedAt).split(" ").pop()}, đóng ${dateTime(b.closedAt).split(" ").pop()})`).join("; ")}` : ""}</li>`).join("")}</ul>` : ""}</li>`).join("")}</ul>`;
   const groups = [["warn", "⚠ Cần kiểm tra"], ["late", "⏳ Bill đóng sau lúc POS ghi số tổng"], ["excluded", "Không tính (không phải bán thật)"], ["info", "Ghi chú"]];
   $("#rc-view").innerHTML = `<table class="fund-table"><tbody>
     ${row(`Số POS cộng (ghi lúc ${data.snapshot?.updatedAt ? dateTime(data.snapshot.updatedAt) : "—"})`, r.snapRevenue === null ? "chưa có" : `${money(r.snapRevenue)} · ${r.snapBills} bill`)}
@@ -3166,6 +3173,8 @@ function renderRevenueCheck(data) {
     ${r.diff ? row("· chưa giải thích được", `${signedMoney(r.unexplained)} · ${r.unexplainedBills} bill`, r.unexplained ? "total" : "sub") : ""}
   </tbody></table>
   ${r.diff === 0 ? '<p class="muted">Số POS và tổng từng bill khớp nhau.</p>' : onlyLate ? '<p class="muted">Toàn bộ chênh lệch là bill mới đóng sau lần POS ghi số tổng. Máy POS đồng bộ lần sau (tối đa ~10 phút khi còn mở app) sẽ tự khớp.</p>' : '<p class="warn-text">Còn phần lệch chưa giải thích: xem từng bill bên dưới, hoặc bấm Đọc lại sau khi máy POS đồng bộ.</p>'}
+  ${dayHtml}
+  ${r.leads ? `<p class="reimb-sub">🔎 Nghi vấn cho phần lệch ${money(r.unexplained)} · ${r.unexplainedBills} bill</p><p class="muted">POS chỉ lưu tổng nên chưa chỉ đích danh được. Thường là bill đóng sát lúc POS ghi số (POS đọc dữ liệu ngay trước khi bill đó xong). ${r.leads.combos.length ? `Có ${r.leads.combos.length} tổ hợp bill cộng đúng ${money(r.unexplained)}, đánh dấu ⭐.` : `Không có tổ hợp ${r.unexplainedBills} bill nào trong ${r.leads.windowMinutes} phút trước đó cộng đúng ${money(r.unexplained)}, nên nguyên nhân có thể không phải do thời điểm ghi.`}</p>${r.leads.bills.length ? `<ul class="rc-list">${r.leads.bills.map((b) => `<li>${b.match ? "⭐ " : ""}<b>Bill ${escapeHtml(b.billNo)}</b> · ${money(b.total)} — đóng lúc ${dateTime(b.closedAt)}</li>`).join("")}</ul>` : `<p class="muted">Không có bill nào đóng trong ${r.leads.windowMinutes} phút trước lúc POS ghi số.</p>`}` : ""}
   ${groups.map(([k, t]) => { const list = r.suspects.filter((s) => s.kind === k); return list.length ? `<p class="reimb-sub">${t} · ${list.length}</p><ul class="rc-list">${list.slice(0, 50).map((s) => `<li><b>Bill ${escapeHtml(s.billNo)}</b> · ${money(s.total)} — ${escapeHtml(s.reason)}</li>`).join("")}</ul>` : ""; }).join("")}`;
 }
 $("#revenue-check").addEventListener("toggle", (e) => { if (e.target.open) loadRevenueCheck(); });

@@ -62,4 +62,20 @@ class DeliveryRulesTest {
         assertEquals("Nhắc bếp: Bàn 3 đã chờ 12 phút, còn thiếu 2 Cà phê sữa, 1 combo Trà Ngon. Bếp làm giúp.", t)
         assertEquals("Bàn 3 đã giao đủ món.", DeliveryReminder.nudgeSpeech("Bàn 3", 5, emptyList()))
     }
+
+    @Test fun reminderRespectsNoRepeatAndMaxCount() {
+        val min = 60_000L; val now = 100 * min
+        val p = listOf(DeliveryReminder.Pending("s1", "Bàn 3", now - 30 * min, 1))
+        assertTrue(DeliveryReminder.due(p, now, 10, 0, mapOf("s1" to now - 20 * min)).isEmpty())
+        assertTrue(DeliveryReminder.due(p, now, 10, 10, mapOf("s1" to now - 20 * min), mapOf("s1" to 3), 3).isEmpty())
+        assertEquals(1, DeliveryReminder.due(p, now, 10, 10, mapOf("s1" to now - 20 * min), mapOf("s1" to 2), 3).size)
+    }
+
+    @Test fun itemTotalsMergeAcrossTablesOldestFirst() {
+        val rows = listOf(ItemTotals.Row("Cà phê sữa", 2, "s1", 10), ItemTotals.Row("Cà phê sữa", 1, "s2", 5), ItemTotals.Row("Trà chanh", 3, "s1", 8), ItemTotals.Row("Bánh", 0, "s1", 1))
+        val t = ItemTotals.build(rows) { if (it == "s1") "Bàn 1" else "Bàn 2" }
+        assertEquals(listOf("Cà phê sữa", "Trà chanh"), t.map { it.name })
+        assertEquals(3, t[0].qty); assertEquals(listOf("Bàn 1" to 2, "Bàn 2" to 1), t[0].tables); assertEquals(5L, t[0].oldestSentAt)
+        assertEquals("Bếp còn phải làm: 3 Cà phê sữa, 3 Trà chanh.", DeliveryReminder.kitchenTotalsSpeech(t.map { it.qty to it.name }))
+    }
 }

@@ -32,14 +32,30 @@ object DeliveryReminder {
     data class Pending(val key: String, val label: String, val sentAt: Long, val remaining: Int, val detail: String = "")
     data class Due(val key: String, val label: String, val minutes: Long, val remaining: Int, val detail: String = "")
 
-    fun due(pending: List<Pending>, now: Long, firstMinutes: Long, repeatMinutes: Long, lastReminded: Map<String, Long>): List<Due> =
+    /**
+     * Đến hạn nhắc: chờ đủ firstMinutes; lặp lại sau repeatMinutes (0 = chỉ nhắc một lần); mỗi bàn tối đa maxCount lần.
+     * key nên là MÃ BÀN/PHIÊN (không phải mã từng đơn) để một bàn chỉ bị nhắc một lần mỗi chu kỳ.
+     */
+    fun due(
+        pending: List<Pending>, now: Long, firstMinutes: Long, repeatMinutes: Long, lastReminded: Map<String, Long>,
+        counts: Map<String, Int> = emptyMap(), maxCount: Int = Int.MAX_VALUE,
+    ): List<Due> =
         pending.mapNotNull { p ->
             val waited = (now - p.sentAt).coerceAtLeast(0L)
             if (waited < firstMinutes * 60_000L) return@mapNotNull null
+            if ((counts[p.key] ?: 0) >= maxCount) return@mapNotNull null
             val last = lastReminded[p.key]
-            if (last != null && now - last < repeatMinutes * 60_000L) return@mapNotNull null
+            if (last != null && (repeatMinutes <= 0L || now - last < repeatMinutes * 60_000L)) return@mapNotNull null
             Due(p.key, p.label, waited / 60_000L, p.remaining, p.detail)
         }.sortedByDescending { it.minutes }
+
+    /** Tổng món bếp còn phải làm: "Bếp còn phải làm: 5 Cà phê sữa, 3 Trà chanh." (tối đa 8 loại). */
+    fun kitchenTotalsSpeech(totals: List<Pair<Int, String>>): String {
+        val real = totals.filter { it.first > 0 }
+        if (real.isEmpty()) return "Không còn món nào đang đợi."
+        val parts = real.take(8).map { "${it.first} ${spokenName(it.second)}" }
+        return "Bếp còn phải làm: " + parts.joinToString(", ") + (if (real.size > 8) " và ${real.size - 8} loại khác" else "") + "."
+    }
 
     /** Tên món đọc gọn: bỏ chữ COMBO và phần liệt kê trong ngoặc. */
     fun spokenName(name: String) = name.substringBefore(" [").replace("COMBO ·", "combo").replace("🎁", "").trim()
@@ -119,4 +135,16 @@ object DeliveryAnnouncer {
             holder[0] = engine
         }
     }
+}
+
+/** Gộp các món đang đợi của mọi bàn thành bảng tổng cho bếp. */
+object ItemTotals {
+    data class Row(val name: String, val remaining: Int, val sessionId: String, val sentAt: Long)
+    data class Total(val name: String, val qty: Int, val tables: List<Pair<String, Int>>, val oldestSentAt: Long)
+
+    fun build(rows: List<Row>, labelOf: (String) -> String): List<Total> =
+        rows.filter { it.remaining > 0 }.groupBy { it.name }.map { (name, list) ->
+            val perTable = list.groupBy { it.sessionId }.map { (sid, l) -> labelOf(sid) to l.sumOf { it.remaining } }
+            Total(name, list.sumOf { it.remaining }, perTable.sortedBy { it.first }, list.minOf { it.sentAt })
+        }.sortedWith(compareBy<Total> { it.oldestSentAt }.thenByDescending { it.qty })
 }

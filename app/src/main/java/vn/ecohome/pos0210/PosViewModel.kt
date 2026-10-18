@@ -1974,6 +1974,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
   }
  }
  val kitchenPrintFailed=MutableStateFlow<Set<String>>(emptySet())
+ val waitingItemRows=dao.waitingItemRows().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
  val draftBatches=dao.draftBatches().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
  /** Máy in lỗi: nhân viên được bỏ qua in phiếu bếp (báo bếp miệng). Đơn vẫn sang CHỜ GIAO, lần in lỗi và việc bỏ qua đều được ghi nhật ký. */
  fun skipKitchenPrintForBatch(b:OrderBatchEntity){
@@ -2031,39 +2032,54 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    val oldest=batches.minOfOrNull{it.sentAt?:it.createdAt}
    val minutes=oldest?.let{(now-it).coerceAtLeast(0L)/60_000L}?:0L
    val text=DeliveryReminder.nudgeSpeech(label,minutes,missing)
+   lastDeliveryReminder[sessionId]=now
    withContext(Dispatchers.Main){DeliveryAnnouncer.announce(getApplication(),text,true,vibrate=false)}
    audit("BATCH",sessionId,"KITCHEN_NUDGE","label=$label,minutes=$minutes,missing=${missing.sumOf{it.first}},operator=${currentEmployee.value?.name.orEmpty()}")
   }
  }
- private val lastDeliveryReminder=mutableMapOf<String,Long>()
- /** Gọi định kỳ: đơn CHỜ GIAO quá thời gian đặt → còi + rung + giọng tiếng Việt. Chỉ đọc dữ liệu trên máy. */
+ private val lastDeliveryReminder=java.util.concurrent.ConcurrentHashMap<String,Long>()
+ private val deliveryReminderCount=java.util.concurrent.ConcurrentHashMap<String,Int>()
+ private var lastAnyDeliveryReminder=0L
+ /**
+  * Gọi định kỳ: bàn có món CHỜ GIAO quá thời gian đặt → còi + rung + giọng tiếng Việt.
+  * Mỗi BÀN chỉ bị nhắc một lần mỗi chu kỳ (gộp mọi đơn của bàn), có giới hạn số lần nhắc, và cách nhau ít nhất 1 phút giữa hai lần phát. Chỉ đọc dữ liệu trên máy.
+  */
  fun checkDeliveryReminders(){
   if(setting("delivery_remind_on")=="false")return
-  val first=setting("delivery_remind_min").toLongOrNull()?.coerceIn(2L,60L)?:8L
-  val repeat=setting("delivery_remind_repeat_min").toLongOrNull()?.coerceIn(1L,60L)?:5L
+  val first=setting("delivery_remind_min").toLongOrNull()?.coerceIn(2L,60L)?:10L
+  val repeat=setting("delivery_remind_repeat_min").toLongOrNull()?.coerceIn(0L,60L)?:10L
+  val maxCount=setting("delivery_remind_max").toIntOrNull()?.coerceIn(1,20)?:3
   val speak=setting("delivery_remind_voice")!="false"
   if(currentEmployee.value==null)return
   viewModelScope.launch(Dispatchers.IO){
    val waitingNow=dao.waitingBatches().first()
-   if(waitingNow.isEmpty())return@launch
+   if(waitingNow.isEmpty()){deliveryReminderCount.clear();lastDeliveryReminder.clear();return@launch}
    val now=System.currentTimeMillis()
+   if(now-lastAnyDeliveryReminder<60_000L)return@launch
    val sessionsById=repo.openSessions().first().associateBy{it.id}
    val tablesById=repo.tables().first().associateBy{it.id}
-   val pending=waitingNow.mapNotNull{b->
-    val s=sessionsById[b.sessionId]?:return@mapNotNull null
-    val label=if(s.flow==PaymentFlowRules.PREPAID)"Đơn số ${b.serviceNo}" else (tablesById[s.tableId]?.name?:"Bàn")
-    val its=dao.batchItemsOnce(b.id)
+   val pending=waitingNow.groupBy{it.sessionId}.mapNotNull{(sid,bs)->
+    val s=sessionsById[sid]?:return@mapNotNull null
+    val label=if(s.flow==PaymentFlowRules.PREPAID)"Đơn số ${bs.minOf{it.serviceNo}}" else (tablesById[s.tableId]?.name?:"Bàn")
+    val its=bs.flatMap{dao.batchItemsOnce(it.id)}
     val remaining=DeliveryRules.remaining(its.map{DeliveryRules.Line(it.qty,it.deliveredQty,it.adjustmentOfItemId!=null)})
-    val missing=its.filter{it.adjustmentOfItemId==null&&it.qty>it.deliveredQty}.map{(it.qty-it.deliveredQty) to it.itemNameSnapshot}
-    DeliveryReminder.Pending(b.id,label,b.sentAt?:b.createdAt,remaining,DeliveryReminder.detail(missing))
+    val missing=its.filter{it.adjustmentOfItemId==null&&it.qty>it.deliveredQty}.groupBy{it.itemNameSnapshot}.map{(n,l)->l.sumOf{it.qty-it.deliveredQty} to n}
+    DeliveryReminder.Pending(sid,label,bs.minOf{it.sentAt?:it.createdAt},remaining,DeliveryReminder.detail(missing))
    }
-   val due=DeliveryReminder.due(pending,now,first,repeat,lastDeliveryReminder)
+   val due=DeliveryReminder.due(pending,now,first,repeat,lastDeliveryReminder,deliveryReminderCount,maxCount)
+   val liveKeys=pending.map{it.key}.toSet()
+   lastDeliveryReminder.keys.retainAll(liveKeys);deliveryReminderCount.keys.retainAll(liveKeys)
    if(due.isEmpty())return@launch
-   due.forEach{lastDeliveryReminder[it.key]=now}
-   lastDeliveryReminder.keys.retainAll(waitingNow.map{it.id}.toSet())
+   due.forEach{lastDeliveryReminder[it.key]=now;deliveryReminderCount[it.key]=(deliveryReminderCount[it.key]?:0)+1}
+   lastAnyDeliveryReminder=now
    withContext(Dispatchers.Main){DeliveryAnnouncer.announce(getApplication(),DeliveryReminder.speech(due),speak)}
   }
  }
+ /** Đọc loa tổng món bếp còn phải làm (nút ở tab THEO MÓN). */
+ fun speakKitchenTotals(totals:List<Pair<Int,String>>){
+  withContext0{DeliveryAnnouncer.announce(getApplication(),DeliveryReminder.kitchenTotalsSpeech(totals),true,vibrate=false)}
+ }
+ private fun withContext0(block:()->Unit){viewModelScope.launch(Dispatchers.Main){block()}}
  /** Bấm nhầm "ĐÃ GIAO ĐỦ": đưa đơn về CHỜ GIAO, mọi món về chưa giao (tích lại từng món). Chỉ khi bàn chưa thanh toán, có ghi nhật ký. */
  fun reopenDelivered(b:OrderBatchEntity){
   val e=currentEmployee.value?:return

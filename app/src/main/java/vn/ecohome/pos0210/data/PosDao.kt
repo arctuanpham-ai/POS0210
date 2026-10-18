@@ -57,6 +57,7 @@ WHERE s.status='OPEN' GROUP BY s.id""") fun tableServiceTimings():Flow<List<Tabl
 @Query("SELECT status FROM OrderBatchEntity WHERE id=:id") suspend fun batchStatus(id:String):String?
 @Query("UPDATE OrderBatchEntity SET status='WAITING',deliveredAt=NULL,deliveredBy=NULL WHERE id=:id AND status='DELIVERED' AND EXISTS(SELECT 1 FROM TableSessionEntity s WHERE s.id=OrderBatchEntity.sessionId AND s.status='OPEN')") suspend fun reopenDelivered(id:String):Int
 @Query("UPDATE OrderItemEntity SET deliveredQty=0 WHERE batchId=:batchId") suspend fun resetItemsDelivered(batchId:String):Int
+@Query("SELECT i.itemNameSnapshot AS name, i.qty-i.deliveredQty AS remaining, b.sessionId AS sessionId, COALESCE(b.sentAt,b.createdAt) AS sentAt FROM OrderItemEntity i JOIN OrderBatchEntity b ON b.id=i.batchId WHERE b.status='WAITING' AND i.adjustmentOfItemId IS NULL AND i.qty>i.deliveredQty") fun waitingItemRows():Flow<List<WaitingItemRow>>
 @Query("SELECT * FROM OrderBatchEntity WHERE status='DRAFT'") fun draftBatches():Flow<List<OrderBatchEntity>>
 @Query("SELECT * FROM OrderItemEntity WHERE batchId=:batchId") fun batchItems(batchId:String):Flow<List<OrderItemEntity>>
 @Query("SELECT COALESCE(SUM(qty*unitPriceSnapshot),0) FROM OrderItemEntity WHERE batchId IN (SELECT id FROM OrderBatchEntity WHERE sessionId=:sessionId AND status!='CANCELLED')") fun sessionTotal(sessionId:String):Flow<Long>

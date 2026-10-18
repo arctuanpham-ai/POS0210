@@ -89,3 +89,6 @@ data class WaitingOrderRow(val batchId:String,val sessionId:String,val serviceNo
 
 /** Số lần mỗi combo đã được gọi (kết quả truy vấn, không phải bảng). */
 data class ComboOrderCount(val id:String,val n:Int)
+
+/** Một dòng món đang đợi giao (chưa giao đủ) của một đơn CHỜ GIAO. Dùng cho bảng tổng món của bếp. */
+data class WaitingItemRow(val name:String,val remaining:Int,val sessionId:String,val sentAt:Long)

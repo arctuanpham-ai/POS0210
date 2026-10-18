@@ -289,6 +289,8 @@ fun Tables(vm: PosViewModel) {
     val canReport = current?.role == "ADMIN" || current?.canViewReport == true
     val flowSettings by vm.settings.collectAsState()
     val prepaidMode = PaymentFlowRules.normalize(flowSettings.firstOrNull { it.key == PaymentFlowRules.SETTING_KEY }?.value) == PaymentFlowRules.PREPAID
+    var byItem by remember { mutableStateOf(false) }
+    val waitingItemRows by vm.waitingItemRows.collectAsState()
     val waitingOrdered = waiting.sortedWith(compareBy<OrderBatchEntity> { it.serviceNo }.thenBy { it.createdAt })
     val waitingRankById = waitingOrdered.mapIndexed { index, batch -> batch.id to index }.toMap()
 
@@ -369,7 +371,9 @@ fun Tables(vm: PosViewModel) {
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            FilterChip(true, {}, { Text("BÁN HÀNG", maxLines = 1, softWrap = false) })
+            FilterChip(!byItem, { byItem = false }, { Text("BÁN HÀNG", maxLines = 1, softWrap = false) })
+            val waitingTotalQty = waitingItemRows.sumOf { it.remaining }
+            FilterChip(byItem, { byItem = true }, { Text("THEO MÓN" + if (waitingTotalQty > 0) " · $waitingTotalQty" else "", maxLines = 1, softWrap = false) })
             if (prepaidMode)
                 FilterChip(false, { vm.screen.value = "PREPAID_ORDERS" }, { Text("ĐƠN HÔM NAY", maxLines = 1, softWrap = false) })
             if (canReport) {
@@ -402,7 +406,11 @@ fun Tables(vm: PosViewModel) {
             val rank = mine?.let { m -> waitingOrders.sortedBy { it.serviceNo }.indexOfFirst { it.batchId == m.batchId } }
             TableCardUi(tb.id, tb.name, areas.firstOrNull { it.id == tb.areaId }?.name ?: tb.areaId, mine != null, mine?.serviceNo, rank, null, "● ĐANG CHỜ MÓN")
         }
-        if (prepaidMode) {
+        if (byItem) {
+            val tableOfSession = ss.associate { it.id to it }
+            ItemTotalsPanel(vm, waitingItemRows, timerNow, { sid -> tableOfSession[sid]?.let { o -> if (o.flow == PaymentFlowRules.PREPAID) "Đơn số " + (waiting.filter { it.sessionId == sid }.minOfOrNull { it.serviceNo } ?: "") else ts.firstOrNull { it.id == o.tableId }?.name } ?: "Bàn" }, Modifier.weight(1f).fillMaxWidth())
+        }
+        if (prepaidMode && !byItem) {
             Row(Modifier.padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     if (postpaidException) "TRẢ SAU · Chọn bàn của khách (gọi món, vào bếp, trả tiền sau)" else "TRẢ TRƯỚC · Chọn số thẻ bàn của khách",
@@ -411,7 +419,7 @@ fun Tables(vm: PosViewModel) {
                 FilterChip(postpaidException, { postpaidException = !postpaidException }, { Text("TRẢ SAU", maxLines = 1, softWrap = false) })
             }
         }
-        ResponsiveTableGrid(shownCards,Modifier.weight(1f).fillMaxWidth().padding(horizontal=12.dp,vertical=8.dp)){id->ts.firstOrNull{it.id==id}?.let{vm.selectTable(it,postpaidException)};postpaidException=false}
+        if (!byItem) ResponsiveTableGrid(shownCards,Modifier.weight(1f).fillMaxWidth().padding(horizontal=12.dp,vertical=8.dp)){id->ts.firstOrNull{it.id==id}?.let{vm.selectTable(it,postpaidException)};postpaidException=false}
 
         if (waiting.isNotEmpty()) {
             Button(
@@ -5183,8 +5191,9 @@ fun DeliveryRemindSettings(vm: PosViewModel) {
     fun v(key: String) = sets.firstOrNull { it.key == key }?.value.orEmpty()
     val on = v("delivery_remind_on") != "false"
     val voice = v("delivery_remind_voice") != "false"
-    val first = v("delivery_remind_min").toLongOrNull() ?: 8L
-    val repeat = v("delivery_remind_repeat_min").toLongOrNull() ?: 5L
+    val first = v("delivery_remind_min").toLongOrNull() ?: 10L
+    val repeat = v("delivery_remind_repeat_min").toLongOrNull() ?: 10L
+    val maxCount = v("delivery_remind_max").toIntOrNull() ?: 3
     val ctx = androidx.compose.ui.platform.LocalContext.current
     Column {
         Header("Nhắc giao đồ") { vm.screen.value = "MANAGE" }
@@ -5210,12 +5219,45 @@ fun DeliveryRemindSettings(vm: PosViewModel) {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf(5L, 8L, 10L, 12L, 15L, 20L).forEach { m -> FilterChip(first == m, { vm.saveSetting("delivery_remind_min", m.toString()) }, { Text("$m phút") }, enabled = on) }
             }
-            Text("Nhắc lại sau mỗi", fontWeight = FontWeight.Black)
+            Text("Nhắc lại sau mỗi (mỗi bàn chỉ nhắc một lần mỗi chu kỳ, gộp mọi đơn của bàn)", fontWeight = FontWeight.Black)
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf(2L, 3L, 5L, 10L).forEach { m -> FilterChip(repeat == m, { vm.saveSetting("delivery_remind_repeat_min", m.toString()) }, { Text("$m phút") }, enabled = on) }
+                FilterChip(repeat == 0L, { vm.saveSetting("delivery_remind_repeat_min", "0") }, { Text("Không lặp") }, enabled = on)
+                listOf(5L, 10L, 15L, 20L).forEach { m -> FilterChip(repeat == m, { vm.saveSetting("delivery_remind_repeat_min", m.toString()) }, { Text("$m phút") }, enabled = on) }
             }
+            Text("Tối đa số lần nhắc tự động cho mỗi bàn", fontWeight = FontWeight.Black)
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(1, 2, 3, 5, 10).forEach { m -> FilterChip(maxCount == m, { vm.saveSetting("delivery_remind_max", m.toString()) }, { Text("$m lần") }, enabled = on) }
+            }
+            Text("Muốn nhắc thêm thì bấm NHẮC BẾP ở màn đơn của bàn.", fontSize = 12.sp)
             OutlinedButton(onClick = { DeliveryAnnouncer.announce(ctx, "Bàn 3 đã chờ $first phút, còn 2 món chưa giao. Vui lòng giao đồ cho khách.", voice) }, Modifier.fillMaxWidth()) { Text("NGHE THỬ") }
             Text("Nếu nghe thử chỉ có còi và rung mà không có giọng nói: vào Cài đặt Android → Quản lý chung → Chuyển văn bản thành giọng nói, cài thêm tiếng Việt.", fontSize = 12.sp)
+        }
+    }
+}
+
+/** Tab THEO MÓN: tổng số món bếp còn phải làm/giao của mọi bàn, món đợi lâu nhất lên đầu. */
+@Composable
+fun ItemTotalsPanel(vm: PosViewModel, rows: List<vn.ecohome.pos0210.data.WaitingItemRow>, now: Long, labelOf: (String) -> String, modifier: Modifier = Modifier) {
+    val totals = remember(rows) { ItemTotals.build(rows.map { ItemTotals.Row(it.name, it.remaining, it.sessionId, it.sentAt) }, labelOf) }
+    Column(modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(if (totals.isEmpty()) "Không có món nào đang đợi" else "ĐANG ĐỢI ${totals.sumOf { it.qty }} PHẦN · ${totals.size} LOẠI MÓN", Modifier.weight(1f), fontWeight = FontWeight.Black, color = Coffee)
+            if (totals.isNotEmpty()) OutlinedButton(onClick = { vm.speakKitchenTotals(totals.map { it.qty to it.name }) }) { Text("🔊 ĐỌC TỔNG MÓN", fontSize = 12.sp) }
+        }
+        LazyColumn(Modifier.weight(1f)) {
+            items(totals) { tt ->
+                val waited = ((now - tt.oldestSentAt).coerceAtLeast(0L) / 60_000L)
+                Card(Modifier.fillMaxWidth().padding(vertical = 4.dp), colors = CardDefaults.cardColors(containerColor = if (waited >= 10) Color(0xFFFFE9C2) else Tint)) {
+                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("${tt.qty}", fontSize = 34.sp, fontWeight = FontWeight.Black, modifier = Modifier.width(64.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(tt.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Text(tt.tables.joinToString(" · ") { (label, q) -> if (q > 1) "$label ×$q" else label }, fontSize = 12.sp)
+                        }
+                        Text("$waited'", fontWeight = FontWeight.Black, color = if (waited >= 10) Color(0xFF9A2B1F) else Color(0xFF655C55))
+                    }
+                }
+            }
         }
     }
 }

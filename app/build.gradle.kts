@@ -12,8 +12,8 @@ android {
         applicationId = "vn.ecohome.pos0210"
         minSdk = 26
         targetSdk = 35
-        versionCode = 176
-        versionName = "1.0.0-alpha143-kitchen-nudge"
+        versionCode = 177
+        versionName = "1.0.0-alpha144-item-totals"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {

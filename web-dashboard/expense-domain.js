@@ -28,6 +28,16 @@ export function createStableDraft(storage, user, createId = () => crypto.randomU
   return draft;
 }
 
+/**
+ * Bản nháp lưu trong trình duyệt nên có thể là của hôm trước. Nháp còn trống (chưa nhập gì) thì lấy lại giờ hiện tại;
+ * nháp đã có nội dung giữ nguyên nhưng báo `stale` nếu ngày mua cách hiện tại quá 12 giờ để người nhập kiểm tra lại.
+ */
+export function freshenDraft(draft, now = Date.now()) {
+  const empty = !String(draft.note || "").trim() && !(draft.items || []).some((i) => String(i.materialName || "").trim() || Number(i.unitPrice) > 0);
+  if (empty) return { draft: { ...draft, purchaseDate: now }, stale: false, reset: true };
+  return { draft, stale: Math.abs(now - Number(draft.purchaseDate || now)) > 12 * 3600_000, reset: false };
+}
+
 const zonedParts = (date) => Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date).filter((x) => x.type !== "literal").map((x) => [x.type, Number(x.value)]));
 const vietnamMidnight = (year, month, day) => Date.UTC(year, month - 1, day) - 7 * 60 * 60 * 1000;
 

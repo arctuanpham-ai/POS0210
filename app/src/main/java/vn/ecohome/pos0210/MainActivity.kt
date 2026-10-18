@@ -705,7 +705,7 @@ fun Sent(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                                     color = when (b.status) { "DRAFT" -> Color(0xFF9A5B00); "WAITING" -> Color(0xFF7A4B00); "DELIVERED" -> Color(0xFF2F6B2A); else -> Color(0xFF9A2B1F) }
                                 )
                             }
-                            if (b.status == "WAITING") TextButton(onClick = { vm.speakBatchAgain(b, t.name) }) { Text("🔊 ĐỌC LẠI") }
+                            if (b.status == "WAITING") TextButton(onClick = { vm.nudgeKitchen(s.id, t.name, b.id) }) { Text("🔊 NHẮC BẾP") }
                             TextButton(onClick = { pv = b }) { Text("CHI TIẾT") }
                         }
                         its.filter { it.adjustmentOfItemId == null && it.qty > 0 }.forEach { item ->
@@ -748,6 +748,7 @@ fun Sent(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
             }
         }
         Text("Tạm tính ${money(total)}", Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+        if (bs.any { it.status == "WAITING" }) OutlinedButton(onClick = { vm.nudgeKitchen(s.id, t.name) }, Modifier.fillMaxWidth().padding(horizontal = 16.dp)) { Text("🔊 NHẮC BẾP · món còn thiếu của cả bàn") }
         if (printerMessage.isNotBlank()) {
             Text(printerMessage, Modifier.padding(horizontal = 16.dp, vertical = 4.dp), fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }

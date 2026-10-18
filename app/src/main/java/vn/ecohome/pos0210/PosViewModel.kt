@@ -2022,12 +2022,17 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    }
   }
  }
- /** Nút đọc lại thủ công ở màn danh sách đơn của bàn: đọc ngay, không phụ thuộc công tắc tự động. */
- fun speakBatchAgain(b:OrderBatchEntity,label:String){
+ /** Nút NHẮC BẾP ở màn danh sách đơn: đọc loa tình hình giao đồ còn lại (tên + số lượng món chưa giao, khách đã chờ bao lâu). Chỉ một đơn nếu truyền batchId, không thì cả bàn. */
+ fun nudgeKitchen(sessionId:String,label:String,batchId:String?=null){
   viewModelScope.launch(Dispatchers.IO){
-   val lines=dao.batchItemsOnce(b.id).filter{it.adjustmentOfItemId==null&&it.qty>0}.map{Triple(it.qty,it.itemNameSnapshot,it.note)}
-   val text=DeliveryReminder.newOrderSpeech(label,lines)
-   if(text.isNotBlank())withContext(Dispatchers.Main){DeliveryAnnouncer.announce(getApplication(),"Nhắc lại. "+text,true,vibrate=false)}
+   val now=System.currentTimeMillis()
+   val batches=dao.batches(sessionId).first().filter{it.status=="WAITING"&&(batchId==null||it.id==batchId)}
+   val missing=batches.flatMap{b->dao.batchItemsOnce(b.id).filter{it.adjustmentOfItemId==null&&it.qty>it.deliveredQty}.map{(it.qty-it.deliveredQty) to it.itemNameSnapshot}}
+   val oldest=batches.minOfOrNull{it.sentAt?:it.createdAt}
+   val minutes=oldest?.let{(now-it).coerceAtLeast(0L)/60_000L}?:0L
+   val text=DeliveryReminder.nudgeSpeech(label,minutes,missing)
+   withContext(Dispatchers.Main){DeliveryAnnouncer.announce(getApplication(),text,true,vibrate=false)}
+   audit("BATCH",sessionId,"KITCHEN_NUDGE","label=$label,minutes=$minutes,missing=${missing.sumOf{it.first}},operator=${currentEmployee.value?.name.orEmpty()}")
   }
  }
  private val lastDeliveryReminder=mutableMapOf<String,Long>()

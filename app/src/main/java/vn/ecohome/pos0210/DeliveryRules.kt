@@ -50,6 +50,13 @@ object DeliveryReminder {
         return if (parts.size <= 4) parts.joinToString(", ") else parts.take(4).joinToString(", ") + " và ${parts.size - 4} món khác"
     }
 
+    /** Nhắc bếp chủ động theo tình hình giao đồ: "Nhắc bếp: Bàn 3 đã chờ 12 phút, còn thiếu 2 Cà phê sữa, 1 Trà chanh. Bếp làm giúp." */
+    fun nudgeSpeech(label: String, minutes: Long, missing: List<Pair<Int, String>>): String {
+        val merged = missing.filter { it.first > 0 }.groupBy { spokenName(it.second) }.map { (n, l) -> l.sumOf { it.first } to n }
+        if (merged.isEmpty()) return "$label đã giao đủ món."
+        return "Nhắc bếp: $label" + (if (minutes > 0) " đã chờ $minutes phút" else "") + ", còn thiếu " + detail(merged) + ". Bếp làm giúp."
+    }
+
     /** Thông báo đơn mới vừa chốt/in phiếu bếp: "Có đơn mới, Bàn 3: 2 Cà phê sữa, ít đường, 1 combo Trà Ngon." Mỗi dòng: (số lượng, tên, ghi chú). */
     fun newOrderSpeech(label: String, lines: List<Triple<Int, String, String>>): String {
         val real = lines.filter { it.first > 0 }

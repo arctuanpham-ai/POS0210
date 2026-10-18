@@ -56,4 +56,10 @@ class DeliveryRulesTest {
         assertEquals("", DeliveryReminder.newOrderSpeech("Bàn 1", emptyList()))
         assertTrue(DeliveryReminder.newOrderSpeech("Bàn 1", List(8) { Triple(1, "Món $it", "") }).contains("và 2 món khác"))
     }
+
+    @Test fun nudgeSpeechSummarisesWhatIsStillMissing() {
+        val t = DeliveryReminder.nudgeSpeech("Bàn 3", 12, listOf(1 to "Cà phê sữa", 1 to "Cà phê sữa", 1 to "COMBO · Trà Ngon [x]", 0 to "Bánh"))
+        assertEquals("Nhắc bếp: Bàn 3 đã chờ 12 phút, còn thiếu 2 Cà phê sữa, 1 combo Trà Ngon. Bếp làm giúp.", t)
+        assertEquals("Bàn 3 đã giao đủ món.", DeliveryReminder.nudgeSpeech("Bàn 3", 5, emptyList()))
+    }
 }

@@ -118,7 +118,7 @@ export function reconcileDays({ dailyDocs = {}, bills = [], payments = [], range
       if (k >= firstSalesDay) continue;
       const snap = dailyDocs[k];
       if (snap && Number(snap.paidBills || 0) > 0) continue;
-      for (const b of list) preOpening.push({ billNo: String(b.billNo ?? b.id), total: Number(b.total || 0), openedAt: Number(b.openedAt), closedAt: Number(b.closedAt), dateKey: k });
+      for (const b of list) preOpening.push({ id: String(b.id), billNo: String(b.billNo ?? b.id), total: Number(b.total || 0), openedAt: Number(b.openedAt), closedAt: Number(b.closedAt), dateKey: k });
     }
     preOpening.sort((a, c) => a.openedAt - c.openedAt);
   }

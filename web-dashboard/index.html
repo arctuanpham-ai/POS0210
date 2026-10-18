@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20261017-09" />
+    <link rel="stylesheet" href="styles.css?v=20261018-01" />
     <title>0210 · Manager</title>
   </head>
   <body>
@@ -17,7 +17,7 @@
         <p class="eyebrow">0210 · BREAKFAST · COFFEE · DRINKS</p>
         <h1 id="login-title">Manager realtime</h1>
         <p class="muted">Theo dõi quán và nhập phiếu tài chính từ xa.</p>
-        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.17.09 · Nguyên liệu ngày mai, xếp hạng lãi gộp</p>
+        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.18.01 · Tab Bàn có tiền mặt, chuyển khoản hôm nay</p>
         <p class="muted">Đăng nhập tài khoản quán một lần trên mỗi máy, sau đó mỗi người vào bằng PIN riêng.</p>
         <label>Email tài khoản quán<input id="email" type="email" autocomplete="username" inputmode="email" /></label>
         <label>Mật khẩu<input id="password" type="password" autocomplete="current-password" /></label>
@@ -47,7 +47,7 @@
           <div class="heading-actions"><button id="refresh-dashboard" class="btn">Làm mới</button><button id="request-sync" class="btn" title="Yêu cầu máy POS ở quán đồng bộ ngay">Yêu cầu đồng bộ</button><button id="switch-person" class="btn">Đổi người</button><button id="logout-button" class="btn ghost">Đăng xuất</button></div>
         </header>
 
-        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><section id="my-alerts" class="my-alerts" aria-live="polite" hidden></section><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.17.09 · Nguyên liệu ngày mai, xếp hạng lãi gộp</p>
+        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><section id="my-alerts" class="my-alerts" aria-live="polite" hidden></section><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.18.01 · Tab Bàn có tiền mặt, chuyển khoản hôm nay</p>
 
         <nav class="tabbar" id="tabbar" aria-label="Các trang">
           <a href="#ban" data-tab="ban">Bàn</a>
@@ -68,7 +68,10 @@
           <article><span>Tổng tạm tính bàn mở (chưa phải doanh thu)</span><strong id="live-open-total">0đ</strong></article>
           <article class="closed"><span>Doanh thu hôm nay đã chốt</span><strong id="live-revenue-today">—</strong></article>
           <article class="closed"><span>Bill hôm nay đã thanh toán</span><strong id="live-paid-bills">—</strong></article>
+          <article class="closed"><span>Tiền mặt hôm nay</span><strong id="live-cash-today">—</strong></article>
+          <article class="closed"><span>Chuyển khoản hôm nay</span><strong id="live-transfer-today">—</strong></article>
         </section>
+        <p id="live-split-note" class="muted"></p>
         <section id="tables" class="table-grid" aria-live="polite"></section>
         </div>
 
@@ -584,7 +587,7 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261017-09"></script>
+    <script type="module" src="app.js?v=20261018-01"></script>
     <script>
       // Trang không chạy được (thường do trình duyệt còn giữ file cũ): báo rõ thay vì để nút đăng nhập "chết".
       setTimeout(function () {

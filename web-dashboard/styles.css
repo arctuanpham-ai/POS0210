@@ -397,3 +397,16 @@ button.paylist-row { width: 100%; font: inherit; color: inherit; cursor: pointer
 .profit-table th, .profit-table td { text-align: left; padding: 5px 4px; border-bottom: 1px solid var(--line, #e5ded5); vertical-align: top; }
 .profit-table tr.low td { background: rgba(224, 161, 0, .10); }
 @media (max-width: 420px) { .prep-list { grid-template-columns: minmax(0, 1fr); } }
+
+/* So sánh ngày / tuần */
+.cmp-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+.cmp-tiles article { background: #fffcf7; border: 1px solid #dfcfb8; border-radius: 14px; padding: 10px 12px; }
+.cmp-tiles span { display: block; font-size: 12px; color: #796758; }
+.cmp-tiles strong { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+.cmp-tiles small { display: block; font-size: 12px; }
+.cmp-table td, .cmp-table th { white-space: nowrap; }
+.cmp-table small { display: block; font-size: 11px; color: #796758; font-variant-numeric: tabular-nums; }
+.cmp-table .up, .cmp-tiles .up { color: #24572a; }
+.cmp-table .down, .cmp-tiles .down { color: #8b1d12; }
+.cmp-table tr.is-today td { background: #fbf3e6; }
+@media (min-width: 720px) { .cmp-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }

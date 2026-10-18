@@ -997,7 +997,7 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
     val checkoutKey="${s.id}:${preview.total}:$qrInfo"
     val billPrinted=printedCheckoutKey==checkoutKey
     val printPressed=printAttemptedKey==checkoutKey
-    val canConfirmNow=vn.ecohome.pos0210.payment.CheckoutPrintPolicy.canConfirm(checkoutKey,printedCheckoutKey,printAttemptedKey)
+    val canConfirmNow=true
     val checkoutTestEnabled by vm.checkoutPrintTestMode.collectAsState()
     val checkoutPrintTestMode = checkoutTestEnabled && e?.role=="ADMIN"
     val qrMode = setting("payment_qr_mode")
@@ -1011,26 +1011,6 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
     val cashOk = PaymentFlowRules.canConfirmCash(s.flow, preview.total, cashValue)
     // Phần điều khiển thanh toán: Trả sau nằm ở thanh dưới cố định; Trả trước nằm trong vùng cuộn ngay dưới bill để QR không bị che.
     val payControls: @Composable () -> Unit = {
-            if(checkoutPrinting) Text("ĐANG IN BILL… · Không cần chờ máy in: vẫn bấm xác nhận thu tiền được, kết quả in được lưu ngầm", fontWeight=FontWeight.Bold)
-            if(!billPrinted){
-                Button(
-                    onClick={
-                        if(checkoutPrintTestMode) vm.confirmCheckoutBillTest(preview,qrInfo)
-                        else vm.printCheckoutBill(preview,qrInfo,matchedCustomer?.name?:customerName)
-                    },
-                    modifier=Modifier.fillMaxWidth(),
-                    enabled=!checkoutPrinting&&preview.total>0&&pendingDelivery.isEmpty()&&validPaymentSession!=null
-                ){
-                    Text(if(pendingDelivery.isNotEmpty()) "CHƯA GIAO ĐỦ · CHƯA THỂ IN BILL" else if(printPressed) "IN LẠI BILL" else "IN BILL")
-                }
-                if(!isPrepaid) Surface(Modifier.fillMaxWidth().padding(top=6.dp),color=Color(0xFFFFF1D6),shape=RoundedCornerShape(8.dp)){
-                    Text(
-                        if(printPressed) "✓ Đã bấm IN BILL. Máy in lỗi hoặc đang in cũng không phải chờ: bấm XÁC NHẬN hình thức khách trả bên dưới. App tự lưu kết quả in."
-                        else "BẮT BUỘC bấm IN BILL trước, rồi mới bấm XÁC NHẬN nhận tiền (tiền mặt hoặc chuyển khoản). Máy in không in được vẫn bấm tiếp, app tự lưu lại lịch sử in.",
-                        Modifier.padding(8.dp),fontSize=12.sp,fontWeight=FontWeight.Bold,color=Color(0xFF7A4B00)
-                    )
-                } else Text("Bill trên màn hình và mã QR luôn khả dụng. Nếu máy in lỗi, vẫn có thể xác nhận sau khi nhận đủ tiền.", Modifier.padding(top=6.dp),fontSize=11.sp)
-            }
             run {
                 if (isPrepaid) OutlinedTextField(
                     value = cashGiven,
@@ -1335,7 +1315,6 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
         }
         Column(Modifier.fillMaxWidth().padding(18.dp)) {
             if (!isPrepaid) payControls()
-            if(!canConfirmNow&&pendingDelivery.isEmpty()) Text("Bấm IN BILL ở trên để mở nút xác nhận thu tiền.",Modifier.padding(bottom=4.dp),fontSize=12.sp,fontWeight=FontWeight.Bold,color=Color(0xFF9A5B00))
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)){
                 OutlinedButton(
                     onClick={vm.close("CASH",preview,qrInfo,customerPhone,customerName,if(applyReward)billReward?.id else null,cashValue)},
@@ -1348,6 +1327,12 @@ fun Pay(vm: PosViewModel, t: DiningTableEntity, s: TableSessionEntity) {
                     enabled=canConfirmNow&&preview.total>0&&pendingDelivery.isEmpty()&&validPaymentSession!=null
                 ){Text((if(isPrepaid)"XÁC NHẬN CK\\n& IN PHIẾU BẾP" else "XÁC NHẬN\\nCHUYỂN KHOẢN").replace("\\n","\n"),textAlign=TextAlign.Center)}
             }
+            // Bill và QR đã hiện sẵn ở trên để khách chọn cách trả. In giấy chỉ khi khách cần (cùng máy in với phiếu bếp).
+            OutlinedButton(
+                onClick={vm.printCheckoutBill(preview,qrInfo,matchedCustomer?.name?:customerName)},
+                modifier=Modifier.fillMaxWidth().padding(top=8.dp),
+                enabled=!checkoutPrinting&&preview.total>0&&validPaymentSession!=null
+            ){Text(if(checkoutPrinting)"ĐANG IN BILL…" else if(printPressed)"IN LẠI BILL GIẤY" else "IN BILL GIẤY (khi khách cần)")}
         }
     }
 }
@@ -3604,8 +3589,8 @@ fun Printer(vm: PosViewModel) {
     val selectedName = settings.firstOrNull { it.key == "printer_name" }?.value ?: ""
     val kitchenMac = settings.firstOrNull { it.key == "kitchen_printer_mac" }?.value?.ifBlank { selectedMac } ?: selectedMac
     val kitchenName = settings.firstOrNull { it.key == "kitchen_printer_name" }?.value?.ifBlank { selectedName } ?: selectedName
-    val receiptMac = settings.firstOrNull { it.key == "receipt_printer_mac" }?.value?.ifBlank { selectedMac } ?: selectedMac
-    val receiptName = settings.firstOrNull { it.key == "receipt_printer_name" }?.value?.ifBlank { selectedName } ?: selectedName
+    val receiptMac = kitchenMac
+    val receiptName = kitchenName
     val paperMm = settings.firstOrNull { it.key == "printer_paper_mm" }?.value ?: "58"
     val checkoutTestMode by vm.checkoutPrintTestMode.collectAsState()
     val current by vm.currentEmployee.collectAsState()
@@ -3663,14 +3648,9 @@ fun Printer(vm: PosViewModel) {
                 if (mode == "BLUETOOTH") {
                     Card(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                         Column(Modifier.padding(14.dp)) {
-                            Text("PHÂN CÔNG MÁY IN", fontWeight = FontWeight.Bold)
-                            Text("Phiếu bếp: ${if(kitchenMac.isBlank()) "CHƯA CHỌN" else "${kitchenName.ifBlank { "Bluetooth printer" }} · $kitchenMac"}",fontSize=12.sp)
-                            Text("Bill thanh toán: ${if(receiptMac.isBlank()) "CHƯA CHỌN" else "${receiptName.ifBlank { "Bluetooth printer" }} · $receiptMac"}",fontSize=12.sp)
+                            Text("MÁY IN (phiếu bếp + bill dùng chung)", fontWeight = FontWeight.Bold)
+                            Text("Máy in: ${if(kitchenMac.isBlank()) "CHƯA CHỌN" else "${kitchenName.ifBlank { "Bluetooth printer" }} · $kitchenMac"}",fontSize=12.sp)
                             Spacer(Modifier.height(8.dp))
-                            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                                FilterChip(selected=assignmentTarget=="KITCHEN",onClick={assignmentTarget="KITCHEN"},label={Text("GÁN PHIẾU BẾP")})
-                                FilterChip(selected=assignmentTarget=="RECEIPT",onClick={assignmentTarget="RECEIPT"},label={Text("GÁN BILL")})
-                            }
                             Spacer(Modifier.height(4.dp))
 
                             if (!hasPermission) {

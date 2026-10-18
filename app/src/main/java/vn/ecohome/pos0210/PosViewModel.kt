@@ -312,7 +312,7 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
  private fun kitchenPrinterMac()=printerRouting().addressFor(vn.ecohome.pos0210.printing.PrintJobType.KITCHEN)
  private fun receiptPrinterMac()=printerRouting().addressFor(vn.ecohome.pos0210.printing.PrintJobType.PAYMENT)
  private fun kitchenPrinterName()=setting("kitchen_printer_name").ifBlank{printerName()}
- private fun receiptPrinterName()=setting("receipt_printer_name").ifBlank{printerName()}
+ private fun receiptPrinterName()=kitchenPrinterName()
  private fun printerProfile()=vn.ecohome.pos0210.printing.PrinterProfile.fromSetting(setting("printer_paper_mm"))
  private fun qrMode()=setting("payment_qr_mode")
  private fun isQrConfigured()=PaymentQrMode.usesStaticSoundboxQr(qrMode())||
@@ -2466,7 +2466,6 @@ fun exportAiBusinessData(onReady:(android.net.Uri,String)->Unit){
   if(method=="CASH"&&!PaymentFlowRules.canConfirmCash(session.flow,preview.total,cashReceived)){printerMessage.value="KHÁCH ĐƯA CHƯA ĐỦ TIỀN";return}
   val skipKitchen=resumedPrepaid.value&&skipKitchenPrint.value
   val checkoutKey=CheckoutPrintPolicy.key(session.id,preview.total,qrInfo)
-  if(!CheckoutPrintPolicy.canConfirm(checkoutKey,printedCheckoutKey.value,checkoutPrintAttemptedKey.value)){printerMessage.value="BILL/QR ĐÃ THAY ĐỔI · VUI LÒNG IN LẠI TRƯỚC KHI XÁC NHẬN";return}
   viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO){
    val pendingPaymentSession=dao.activePaymentSessionSnapshot(session.id)
    val commit=runCatching {

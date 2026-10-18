@@ -1,5 +1,5 @@
 // Banner "món đỉnh nhất": món bán nhiều nhất hôm nay / 7 ngày / tháng này, từ snapshot dashboardDaily. Hàm thuần.
-import { aggregateItems, dateKeyOf } from "./sales-snapshot-view.js?v=20261018-01";
+import { aggregateItems, dateKeyOf } from "./sales-snapshot-view.js?v=20261018-02";
 
 const keysBack = (now, days) => Array.from({ length: days }, (_, i) => dateKeyOf(new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1 - i))));
 const monthKeys = (now) => Array.from({ length: now.getDate() }, (_, i) => dateKeyOf(new Date(now.getFullYear(), now.getMonth(), i + 1)));

@@ -29,3 +29,20 @@ test("bill hoàn toàn bộ không tính", () => {
   const r = reconcileRevenue({ snapshot: { revenue: 0, paidBills: 0, updatedAt: 1 }, bills: [bill("r", 40, 500, { status: "REFUNDED" })], payments: [], range });
   assert.equal(r.cloudRevenue, 0); assert.equal(r.diff, 0);
 });
+
+test("gợi ý bill nghi vấn: bill đóng sát lúc POS ghi, tổ hợp cộng đúng số tiền lệch", () => {
+  const r = reconcileRevenue({
+    snapshot: { revenue: 100, paidBills: 2, updatedAt: 1_000_000 },
+    bills: [bill("a", 50, 500), bill("b", 50, 600), bill("c", 5, 990_000), bill("d", 7, 995_000), bill("e", 9, 996_000)],
+    payments: ["a", "b", "c", "d", "e"].map((id) => ({ billId: id, amount: { a: 50, b: 50, c: 5, d: 7, e: 9 }[id], dataScope: "LIVE" })),
+    range: { from: 0, to: 2_000_000 },
+  });
+  assert.equal(r.unexplained, 21); assert.equal(r.unexplainedBills, 3);
+  assert.deepEqual(r.leads.combos, [["e", "d", "c"]]);
+  assert.deepEqual(r.leads.bills.map((b) => b.billNo), ["e", "d", "c"]);
+  assert.ok(r.leads.bills.every((b) => b.match));
+});
+test("không có phần lệch thì không có gợi ý", () => {
+  const r = reconcileRevenue({ snapshot: { revenue: 50, paidBills: 1, updatedAt: 9000 }, bills: [bill("a", 50, 500)], payments: [{ billId: "a", amount: 50, dataScope: "LIVE" }], range });
+  assert.equal(r.leads, null);
+});

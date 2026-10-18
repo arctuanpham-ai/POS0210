@@ -1,6 +1,6 @@
 // So sánh ngày với ngày và cùng thứ tuần trước: số bill, giá trị bill trung bình, số món làm ra, doanh thu. Hàm thuần.
 // Ngày thiếu snapshot là "không có dữ liệu" (null), tuyệt đối không tính thành 0.
-import { outputRows } from "./item-output.js?v=20261018-04";
+import { outputRows } from "./item-output.js?v=20261018-05";
 
 const pad = (n) => String(n).padStart(2, "0");
 const keyOf = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -44,7 +44,13 @@ export const weekTotals = (docs, todayKey) => {
   const cur = sum(addDays(todayKey, -6));
   const prev = sum(addDays(todayKey, -13));
   const pct = (a, b) => (b > 0 ? (a - b) / b : null);
-  return { cur, prev, pct: { billsPerDay: pct(cur.billsPerDay, prev.billsPerDay), itemsPerDay: pct(cur.itemsPerDay, prev.itemsPerDay), revenuePerDay: pct(cur.revenuePerDay, prev.revenuePerDay), avgBill: pct(cur.avgBill, prev.avgBill) } };
+  // Tổng so với tổng khi hai tuần có cùng số ngày dữ liệu; lệch số ngày thì so theo trung bình mỗi ngày để không bị lệch.
+  const same = cur.days === prev.days;
+  return { cur, prev, same, pct: {
+    bills: same ? pct(cur.bills, prev.bills) : pct(cur.billsPerDay, prev.billsPerDay),
+    items: same ? pct(cur.items, prev.items) : pct(cur.itemsPerDay, prev.itemsPerDay),
+    revenue: same ? pct(cur.revenue, prev.revenue) : pct(cur.revenuePerDay, prev.revenuePerDay),
+    avgBill: pct(cur.avgBill, prev.avgBill) } };
 };
 
 /** Khoảng ngày cần đọc để so sánh: 14 ngày kết thúc hôm nay. */

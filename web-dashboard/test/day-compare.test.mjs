@@ -40,7 +40,8 @@ test("tổng 7 ngày so với 7 ngày trước, trung bình theo ngày có số 
   const w = weekTotals(docs, "2026-10-18");
   assert.equal(w.cur.days, 2); assert.equal(w.cur.bills, 42); assert.equal(w.cur.billsPerDay, 21);
   assert.equal(w.prev.days, 1); assert.equal(w.prev.bills, 20);
-  assert.ok(Math.abs(w.pct.billsPerDay - 0.05) < 1e-9);
+  assert.equal(w.same, false);
+  assert.ok(Math.abs(w.pct.bills - 0.05) < 1e-9); // lệch số ngày: so theo TB mỗi ngày
 });
 
 test("khoảng đọc 14 ngày", () => {

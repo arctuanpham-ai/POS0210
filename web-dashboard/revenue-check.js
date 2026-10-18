@@ -67,3 +67,47 @@ export function findLeads({ counted, snapAt, unexplained, unexplainedBills }) {
     bills: near.map((b) => ({ billNo: String(b.billNo ?? b.id), total: Number(b.total || 0), closedAt: Number(b.closedAt), match: inCombo.has(String(b.billNo ?? b.id)) })),
   };
 }
+
+const pad2 = (n) => String(n).padStart(2, "0");
+const dayKeyOfMs = (ms) => { const d = new Date(Number(ms)); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; };
+
+/**
+ * Đối chiếu TỪNG NGÀY và TỪNG GIỜ: snapshot ngày của POS (paidBills, revenue, hourlyBills theo giờ mở bill)
+ * với bill trên cloud cùng quy tắc. Chỉ trả về ngày có lệch; trong ngày lệch, các giờ lệch kèm danh sách bill mở trong giờ đó,
+ * nên phần cần soát thu từ cả tháng xuống vài bill. Ngày chưa có snapshot ngày không tính là lệch (ghi vào missingDays).
+ */
+export function reconcileDays({ dailyDocs = {}, bills = [], payments = [], range }) {
+  const payByBill = new Map(payments.map((p) => [String(p.billId), p]));
+  const byDay = new Map();
+  for (const b of bills) {
+    const opened = Number(b.openedAt || 0);
+    if (opened < range.from || opened >= range.to) continue;
+    if (b.status !== "PAID" || !Number(b.closedAt || 0)) continue;
+    const scope = payByBill.get(String(b.id))?.dataScope || null;
+    if (scope && scope !== "LIVE") continue;
+    const k = dayKeyOfMs(opened);
+    if (!byDay.has(k)) byDay.set(k, []);
+    byDay.get(k).push(b);
+  }
+  const keys = new Set([...byDay.keys(), ...Object.keys(dailyDocs).filter((k) => dailyDocs[k])]);
+  const days = [];
+  const missingDays = [];
+  for (const k of [...keys].sort()) {
+    const snap = dailyDocs[k];
+    const list = byDay.get(k) || [];
+    const cloudRevenue = list.reduce((t, b) => t + Number(b.total || 0), 0);
+    if (!snap) { if (list.length) missingDays.push(k); continue; }
+    const posBills = Number(snap.paidBills || 0);
+    const posRevenue = Number(snap.revenue || 0);
+    if (posBills === list.length && posRevenue === cloudRevenue) continue;
+    const hours = [];
+    const hourly = Array.isArray(snap.hourlyBills) && snap.hourlyBills.length === 24 ? snap.hourlyBills : null;
+    for (let h = 0; h < 24; h++) {
+      const inHour = list.filter((b) => new Date(Number(b.openedAt)).getHours() === h).sort((a, c) => Number(a.openedAt) - Number(c.openedAt));
+      const pos = hourly ? Number(hourly[h] || 0) : null;
+      if (hourly ? pos !== inHour.length : false) hours.push({ hour: h, pos, cloud: inHour.length, bills: inHour.map((b) => ({ billNo: String(b.billNo ?? b.id), total: Number(b.total || 0), openedAt: Number(b.openedAt), closedAt: Number(b.closedAt) })) });
+    }
+    days.push({ dateKey: k, posBills, posRevenue, cloudBills: list.length, cloudRevenue, diffBills: list.length - posBills, diffRevenue: cloudRevenue - posRevenue, snapshotAt: Number(snap.updatedAt || 0), hasHourly: Boolean(hourly), hours });
+  }
+  return { days, missingDays, checkedDays: Object.keys(dailyDocs).filter((k) => dailyDocs[k]).length };
+}

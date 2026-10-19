@@ -36,13 +36,15 @@
     <!-- ===== Màn hình menu ===== -->
     <div id="screen-menu">
       <header class="hero">
-        <div class="hero-photo" id="hero-photo">
-          <img src="assets/shop.jpg" alt="Ảnh quán" width="640" height="320" decoding="async" onerror="this.parentElement.hidden=true" />
+        <div class="hero-photo" id="hero-photo" aria-label="Ảnh quán">
+          <img src="assets/shop1.jpg" alt="Mặt tiền quán" width="720" height="410" decoding="async" onerror="this.parentElement.hidden=true" />
+          <img src="assets/shop2.jpg" alt="Không gian trong quán" width="720" height="484" loading="lazy" decoding="async" />
+          <img src="assets/shop3.jpg" alt="Quầy cà phê" width="720" height="538" loading="lazy" decoding="async" />
         </div>
         <div class="hero-head">
           <img class="logo wide" src="assets/logo.png" alt="0210 Breakfast Coffee Drinks" width="124" height="52" />
           <div>
-            <h1 id="shop-name">0210</h1>
+            <h1 id="shop-name" class="sr-only">0210</h1>
             <p class="tagline" id="shop-tagline" hidden></p>
           </div>
         </div>
@@ -61,6 +63,7 @@
       </main>
 
       <footer class="foot">
+        <button type="button" class="text-button" id="open-history" hidden>Lịch sử đơn hàng của bạn</button>
         <p>Đơn của bạn được gửi trực tiếp đến quán. Không cần đăng nhập hay cài app.</p>
       </footer>
     </div>
@@ -69,10 +72,20 @@
     <div id="screen-track" hidden>
       <header class="track-head">
         <img class="logo wide small" src="assets/logo.png" alt="" width="70" height="30" />
-        <b id="track-name">0210</b>
+        <b id="track-name" class="sr-only">0210</b>
         <button type="button" class="text-button" id="back-to-menu">← Xem menu</button>
       </header>
       <main id="track-body" aria-live="polite"></main>
+    </div>
+
+    <!-- ===== Lịch sử mua hàng ===== -->
+    <div id="screen-history" hidden>
+      <header class="track-head">
+        <img class="logo wide small" src="assets/logo.png" alt="" width="70" height="30" />
+        <b>Lịch sử đơn hàng</b>
+        <button type="button" class="text-button" id="history-back">← Xem menu</button>
+      </header>
+      <main id="history-body" aria-live="polite"></main>
     </div>
   </div>
 

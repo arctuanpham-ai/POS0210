@@ -19,7 +19,7 @@
     .row { display: flex; gap: 10px; flex-wrap: wrap; }
     button { padding: 12px 16px; border: 0; border-radius: 12px; background: #1e1e1e; color: #fff; font: inherit; font-weight: 800; cursor: pointer; }
     button.alt { background: #fff8ee; color: #6e432d; border: 1px solid #836149; }
-    .poster { padding: 28px 24px; border: 2px solid #1e1e1e; border-radius: 24px; background: #fff; text-align: center; display: grid; gap: 12px; justify-items: center; }
+    .poster { padding: 28px 24px; border-radius: 24px; background: #f6efe2; text-align: center; display: grid; gap: 12px; justify-items: center; }
     .poster img.logo { width: 72px; height: 72px; border-radius: 16px; }
     .poster h1 { margin: 0; font-size: 28px; }
     .poster p { margin: 0; }
@@ -88,24 +88,28 @@
       const W = 1240, H = 1754, pad = 90, font = "Montserrat, Inter, Arial, sans-serif";
       const canvas = document.createElement("canvas"); canvas.width = W; canvas.height = H;
       const ctx = canvas.getContext("2d");
-      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
-      ctx.lineWidth = 8; ctx.strokeStyle = "#1e1e1e"; ctx.beginPath(); ctx.roundRect(36, 36, W - 72, H - 72, 56); ctx.stroke();
+      const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, "#f8f1e4"); bg.addColorStop(1, "#ecdcc5");
+      ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
       ctx.textAlign = "center"; ctx.textBaseline = "top";
       const info = [];
       if (shop.address) info.push(...wrap((ctx.font = `600 40px ${font}`, ctx), `Địa chỉ: ${shop.address}`, W - 2 * pad - 60));
       if (shop.phone) info.push(`Điện thoại: ${shop.phone}`);
       if (shop.hours) info.push(`Giờ mở cửa: ${shop.hours}`);
       const logoW = 560, logoH = Math.round(logo.height * logoW / logo.width), qrS = 680;
-      const total = logoH + 70 + 84 + 50 + qrS + 50 + 52 + 20 + 46 + (info.length ? 60 + info.length * 58 : 0);
+      const total = logoH + 70 + 84 + 50 + qrS + 104 + 52 + 20 + 46 + (info.length ? 60 + info.length * 58 : 0);
       let y = Math.max(100, Math.round((H - total) / 2));
-      ctx.drawImage(logo, (W - logoW) / 2, y, logoW, logoH); y += logoH + 70;
-      ctx.fillStyle = "#1e1e1e"; ctx.font = `800 76px ${font}`; ctx.fillText("Quét mã để đặt món", W / 2, y); y += 84 + 50;
-      ctx.fillStyle = "#fff"; ctx.imageSmoothingEnabled = false; ctx.drawImage(qr, (W - qrS) / 2, y, qrS, qrS); ctx.imageSmoothingEnabled = true; y += qrS + 50;
-      ctx.fillStyle = "#58483a"; ctx.font = `700 46px ${font}`; ctx.fillText(document.getElementById("url-text").textContent, W / 2, y); y += 52 + 20;
+      { const t = document.createElement("canvas"); t.width = logo.width; t.height = logo.height; const tc = t.getContext("2d");
+        tc.drawImage(logo, 0, 0); tc.globalCompositeOperation = "source-in"; tc.fillStyle = "#5b3d2a"; tc.fillRect(0, 0, t.width, t.height);
+        ctx.drawImage(t, (W - logoW) / 2, y, logoW, logoH); } y += logoH + 70;
+      ctx.fillStyle = "#5b3d2a"; ctx.font = `800 76px ${font}`; ctx.fillText("Quét mã để đặt món", W / 2, y); y += 84 + 50;
+      ctx.fillStyle = "#fff"; ctx.shadowColor = "rgba(91,61,42,.18)"; ctx.shadowBlur = 40; ctx.shadowOffsetY = 12;
+      ctx.beginPath(); ctx.roundRect((W - qrS) / 2 - 44, y - 44, qrS + 88, qrS + 88, 44); ctx.fill(); ctx.shadowColor = "transparent";
+      ctx.imageSmoothingEnabled = false; ctx.drawImage(qr, (W - qrS) / 2, y, qrS, qrS); ctx.imageSmoothingEnabled = true; y += qrS + 44 + 60;
+      ctx.fillStyle = "#836149"; ctx.font = `700 46px ${font}`; ctx.fillText(document.getElementById("url-text").textContent, W / 2, y); y += 52 + 20;
       ctx.font = `500 38px ${font}`; ctx.fillText("Không cần đăng nhập · Không cần cài app", W / 2, y); y += 46;
       if (info.length) {
-        y += 30; ctx.strokeStyle = "#dfcfb8"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W - pad, y); ctx.stroke(); y += 30;
-        ctx.fillStyle = "#3d332b"; ctx.font = `600 40px ${font}`;
+        y += 30; ctx.strokeStyle = "#cdb596"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W - pad, y); ctx.stroke(); y += 30;
+        ctx.fillStyle = "#5b3d2a"; ctx.font = `600 40px ${font}`;
         for (const line of info) { ctx.fillText(line, W / 2, y); y += 58; }
       }
       const link = document.createElement("a");

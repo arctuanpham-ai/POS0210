@@ -11,6 +11,7 @@
         { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=(), payment=()" }
       ] },
       { "source": "**/*.@(html|js|css)", "headers": [ { "key": "Cache-Control", "value": "no-cache, max-age=0, must-revalidate" } ] },
+      { "source": "/qr", "headers": [ { "key": "Cache-Control", "value": "no-cache, max-age=0, must-revalidate" } ] },
       { "source": "/", "headers": [ { "key": "Cache-Control", "value": "no-cache, max-age=0, must-revalidate" } ] },
       { "source": "/assets/**", "headers": [ { "key": "Cache-Control", "value": "public, max-age=86400" } ] }
     ]

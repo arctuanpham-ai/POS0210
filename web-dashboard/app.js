@@ -3617,6 +3617,19 @@ function stopOnlineOrders() {
 async function loadOnlineShop() {
   try { const snap = await rawGetDoc(doc(db, ...root, "online_config", "shop")); oo.shop = snap.exists() ? snap.data() : {}; }
   catch { oo.shop = oo.shop || {}; }
+  // Tài khoản nhận tiền lấy từ app POS (config/safe: bank_name, bank_account, bank_holder). POS đổi tài khoản thì trang đặt món tự theo.
+  if (canTreasure(state.role)) {
+    try {
+      const safe = await rawGetDoc(doc(db, ...root, "config", "safe"));
+      const v = safe.exists() ? safe.data() : {};
+      const bank = String(v.bank_name || "").trim(), account = String(v.bank_account || "").trim(), holder = String(v.bank_holder || "").trim();
+      const cur = oo.shop || {};
+      if (bank && account && holder && (cur.bank !== bank || cur.account !== account || cur.holder !== holder)) {
+        await setDoc(doc(db, ...root, "online_config", "shop"), { bank, account, holder, bankFromPos: true, updatedAt: Date.now(), updatedBy: myName() }, { merge: true });
+        oo.shop = { ...cur, bank, account, holder, bankFromPos: true };
+      }
+    } catch { /* không đọc được cấu hình POS: giữ thông tin đang có, vẫn nhập tay được */ }
+  }
   renderOnline();
 }
 

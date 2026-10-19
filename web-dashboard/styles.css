@@ -445,3 +445,7 @@ button.paylist-row { width: 100%; font: inherit; color: inherit; cursor: pointer
 .oo-countdown { color: #a33125; font-weight: 800; font-variant-numeric: tabular-nums; }
 .oo-config { margin: 22px 0; padding: 12px 14px; border: 1px solid #dfcfb8; border-radius: 16px; background: #fffcf7; }
 .oo-config summary { cursor: pointer; font-weight: 800; }
+
+.menu-row .oo-vis { flex: 0 0 auto; margin-left: auto; padding: 4px 8px; font-size: 12px; border: 1px solid var(--line, #eee6dc); border-radius: 999px; background: #eef7ee; color: #2d6a2d; cursor: pointer; }
+.menu-row .oo-vis.is-hidden { background: #fdeaea; color: #a12626; border-color: #e9b8b8; font-weight: 700; }
+.menu-row.online-hidden { box-shadow: inset 3px 0 0 #c0392b; }

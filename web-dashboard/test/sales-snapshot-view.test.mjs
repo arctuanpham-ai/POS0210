@@ -138,3 +138,11 @@ test("thống kê món cộng chung món trùng tên khác mã", () => {
   const byDay = aggregateItems(docs, ["2026-10-13"], "byDay");
   assert.equal(byDay[0].rows.length, 1); assert.equal(byDay[0].rows[0].qty, 5);
 });
+
+test("liveSummary mang theo món của bàn, bỏ dòng số lượng 0", () => {
+  const live = liveSummary({ liveTables: [{ id: "t4", name: "Bàn 04", openedAt: 1, currentTotal: 69000, serviceStatus: "SENT", items: [{ name: "Bạc xỉu", qty: 1, price: 29000, note: "ít đá" }, { name: "x", qty: 0, price: 1 }] }] });
+  assert.equal(live.tables[0].items.length, 1);
+  assert.equal(live.tables[0].items[0].itemName, "Bạc xỉu");
+  assert.equal(live.tables[0].items[0].unitPrice, 29000);
+  assert.deepEqual(liveSummary({ liveTables: [{ id: "a", name: "A" }] }).tables[0].items, []);
+});

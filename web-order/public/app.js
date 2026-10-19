@@ -497,7 +497,7 @@ function renderTrack() {
   const text = STATUS_TEXT[view.status] || STATUS_TEXT.new;
   let extra = "";
   if (view.status === STATUS.AWAITING_PAYMENT) {
-    extra = `<p class="countdown-line">Thời gian còn lại <b id="countdown">${countdownText(view.remainingMs ?? 0)}</b></p>${paymentHtml(order)}<p class="pay-warning">⚠️ Lưu ý: sau khi thanh toán, đơn sẽ <b>không được hoàn tiền hoặc huỷ</b>. Mong bạn thông cảm.</p>`;
+    extra = `<p class="countdown-line">Thời gian còn lại <b id="countdown">${countdownText(view.remainingMs ?? 0)}</b></p>${paymentHtml(order)}<p class="pay-warning">⚠️ Lưu ý: sau khi thanh toán, bạn <b>không thể sửa đơn</b> và <b>không được hoàn tiền nếu huỷ đơn</b>. Mong bạn thông cảm.</p>`;
   }
   if (view.status === STATUS.REJECTED) extra = `<p class="reject-reason"><b>Lý do:</b> ${esc(order.rejectReason || "Quán chưa nhận được đơn lúc này.")}</p>`;
   const spinner = view.status === STATUS.NEW ? '<div class="spinner" aria-hidden="true"></div>' : "";

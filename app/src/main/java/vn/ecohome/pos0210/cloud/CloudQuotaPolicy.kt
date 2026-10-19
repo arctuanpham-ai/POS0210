@@ -20,7 +20,7 @@ internal object CloudQuotaPolicy {
         return when(collection){
             "tableStatus","sessions","orderBatches","orderItems","bills","payments","refunds" -> "sales"
             "dashboard","dashboardDaily" -> "dashboard"
-            "menu","menuCategories","areas","config" -> "catalog"
+            "menu","menuCategories","combos","areas","config" -> "catalog"
             "purchases","purchaseItems","purchaseCategories","suppliers","costCodes","profitPartners","assetCategories","monthlyAccounting","assets","financialMovements" -> "finance"
             "attendance","shifts","days","customers","loyalty" -> "people"
             "privateBackup" -> "backup"

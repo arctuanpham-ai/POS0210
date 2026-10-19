@@ -12,8 +12,8 @@ android {
         applicationId = "vn.ecohome.pos0210"
         minSdk = 26
         targetSdk = 35
-        versionCode = 180
-        versionName = "1.0.0-alpha147-live-items"
+        versionCode = 181
+        versionName = "1.0.0-alpha148-combo-mirror"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {

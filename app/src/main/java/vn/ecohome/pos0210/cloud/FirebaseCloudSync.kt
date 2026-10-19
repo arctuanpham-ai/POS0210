@@ -185,6 +185,12 @@ object FirebaseCloudSync {
             writeMaps(fs,root.collection("menu"),dao.allMenuSnapshot().map{m->m.id to mapOf("id" to m.id,"categoryId" to m.categoryId,"name" to m.name,"price" to m.price,"sortOrder" to m.sortOrder,"active" to m.active,"productCode" to m.productCode,"description" to m.description)})
             writeMaps(fs,root.collection("menuCategories"),dao.allCategoriesSnapshot().map{cat->cat.id to mapOf("id" to cat.id,"name" to cat.name,"sortOrder" to cat.sortOrder,"active" to cat.active)})
         }
+        // Combo quản lý riêng trên POS: chỉ đẩy một chiều (POS -> web) để web hiện danh sách; lỗi rules/quota không được chặn đồng bộ chính.
+        runCatching{
+            val menuNames=dao.allMenuSnapshot().associate{it.id to it.name}
+            val comboParts=dao.allComboItemsSnapshot().groupBy{it.comboId}
+            writeMaps(fs,root.collection("combos"),dao.allCombosSnapshot().map{c->c.id to mapOf("id" to c.id,"name" to c.name,"price" to c.price,"sortOrder" to c.sortOrder,"active" to c.active,"description" to c.description,"items" to comboParts[c.id].orEmpty().map{part->mapOf("menuItemId" to part.menuItemId,"name" to (menuNames[part.menuItemId]?:"Món đã xoá"),"qty" to part.qty)})})
+        }
         writeMaps(fs,root.collection("areas"),dao.allAreasSnapshot().map{a->a.id to mapOf("id" to a.id,"name" to a.name,"sortOrder" to a.sortOrder,"active" to a.active)})
         writeMaps(fs,root.collection("sessions"),sessions.map{s->s.id to mapOf("id" to s.id,"tableId" to s.tableId,"openedAt" to s.openedAt,"openedBy" to s.openedBy,"status" to s.status,"version" to s.version,"flow" to s.flow)})
         writeMaps(fs,root.collection("orderBatches"),dao.cloudOrderBatchesSnapshot().map{b->b.id to mapOf("id" to b.id,"sessionId" to b.sessionId,"sequence" to b.sequence,"ordererId" to b.ordererId,"createdAt" to b.createdAt,"sentAt" to b.sentAt,"status" to b.status,"serviceNo" to b.serviceNo,"deliveredAt" to b.deliveredAt,"deliveredBy" to b.deliveredBy)})

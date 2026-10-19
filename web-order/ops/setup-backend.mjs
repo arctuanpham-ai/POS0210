@@ -11,7 +11,7 @@ const MARK = "ĐẶT MÓN ONLINE (khách ẩn danh)";
 const token = execSync("gcloud auth print-access-token", { encoding: "utf8" }).trim();
 
 async function call(method, url, body) {
-  const res = await fetch(url, { method, headers: { authorization: `Bearer ${token}`, "content-type": "application/json", "x-goog-user-project": PROJECT }, body: body ? JSON.stringify(body) : undefined });
+  const res = await fetch(url, { method, headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
   const text = await res.text();
   let json; try { json = JSON.parse(text); } catch { json = { raw: text }; }
   return { ok: res.ok, status: res.status, json };

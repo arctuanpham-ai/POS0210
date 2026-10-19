@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Đặt món online · 0210</title>
+  <meta name="description" content="Đặt món online tại 0210: chọn món, gửi đơn, thanh toán bằng QR. Không cần đăng nhập, không cần cài app." />
+  <meta name="theme-color" content="#34241b" />
+  <meta name="format-detection" content="telephone=no" />
+
+  <!-- Thẻ xem trước khi gửi link qua Zalo / Messenger / Facebook. Đổi tên miền trong og:url và og:image sau khi gắn tên miền riêng. -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="0210" />
+  <meta property="og:locale" content="vi_VN" />
+  <meta property="og:title" content="Đặt món online · 0210" />
+  <meta property="og:description" content="Chọn món, gửi đơn, thanh toán bằng QR. Không cần đăng nhập, không cần cài app." />
+  <meta property="og:url" content="https://pos0210-order.web.app/" />
+  <meta property="og:image" content="https://pos0210-order.web.app/assets/og.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Đặt món online · 0210" />
+  <meta name="twitter:description" content="Chọn món, gửi đơn, thanh toán bằng QR. Không cần đăng nhập, không cần cài app." />
+  <meta name="twitter:image" content="https://pos0210-order.web.app/assets/og.png" />
+
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="assets/logo.svg" />
+  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin />
+  <link rel="stylesheet" href="order.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- ===== Màn hình menu ===== -->
+    <div id="screen-menu">
+      <header class="hero">
+        <div class="hero-photo" id="hero-photo">
+          <img src="assets/shop.jpg" alt="Ảnh quán" width="640" height="320" decoding="async" onerror="this.parentElement.hidden=true" />
+        </div>
+        <div class="hero-head">
+          <img class="logo" src="assets/logo.svg" alt="Logo quán" width="64" height="64" />
+          <div>
+            <h1 id="shop-name">0210</h1>
+            <p class="tagline" id="shop-tagline" hidden></p>
+          </div>
+        </div>
+        <dl class="shop-info" id="shop-info" hidden></dl>
+        <p class="banner" id="closed-banner" hidden></p>
+      </header>
+
+      <button type="button" class="track-banner" id="track-banner" hidden>Bạn có đơn đang theo dõi. Bấm để xem trạng thái</button>
+
+      <nav class="cat-chips" id="cat-chips" aria-label="Nhóm món"></nav>
+
+      <main>
+        <p class="notice error" id="menu-error" hidden></p>
+        <button type="button" class="secondary" id="menu-retry" hidden>Thử lại</button>
+        <div id="menu" aria-live="polite"><p class="muted center">Đang tải menu…</p></div>
+      </main>
+
+      <footer class="foot">
+        <p>Đơn của bạn được gửi trực tiếp đến quán. Không cần đăng nhập hay cài app.</p>
+      </footer>
+    </div>
+
+    <!-- ===== Màn hình theo dõi đơn ===== -->
+    <div id="screen-track" hidden>
+      <header class="track-head">
+        <img class="logo small" src="assets/logo.svg" alt="" width="40" height="40" />
+        <b id="track-name">0210</b>
+        <button type="button" class="text-button" id="back-to-menu">← Xem menu</button>
+      </header>
+      <main id="track-body" aria-live="polite"></main>
+    </div>
+  </div>
+
+  <!-- ===== Giỏ hàng cố định ở đáy màn hình ===== -->
+  <div class="cartbar" id="cartbar" hidden>
+    <div><span id="cart-count">0 món</span><b id="cart-total">0đ</b></div>
+    <button type="button" class="primary" id="cart-open">Xem giỏ &amp; đặt</button>
+  </div>
+  <p class="toast" id="toast" role="status" hidden></p>
+
+  <!-- ===== Giỏ + form đặt đơn ===== -->
+  <section class="sheet" id="sheet" aria-label="Giỏ hàng và thông tin đặt đơn" hidden>
+    <div class="sheet-inner">
+      <header class="sheet-head"><h2>Đơn của bạn</h2><button type="button" class="text-button" id="sheet-close">Đóng</button></header>
+      <ul class="sheet-lines" id="sheet-lines"></ul>
+      <p class="sheet-total">Tổng cộng <b id="sheet-total">0đ</b></p>
+
+      <form id="order-form" novalidate autocomplete="on">
+        <label>Tên của bạn
+          <input name="name" type="text" maxlength="50" autocomplete="name" placeholder="Ví dụ: Lan" />
+          <small class="field-error" data-error="name"></small>
+        </label>
+        <label>Số điện thoại
+          <input name="phone" type="tel" inputmode="tel" maxlength="16" autocomplete="tel" placeholder="0912345678" />
+          <small class="field-error" data-error="phone"></small>
+        </label>
+
+        <fieldset class="receive">
+          <legend>Nhận món</legend>
+          <label class="radio"><input type="radio" name="receive" value="pickup" checked /> <span>Mang đi / tại quán</span></label>
+          <label class="radio"><input type="radio" name="receive" value="delivery" /> <span>Giao tận nơi</span></label>
+        </fieldset>
+
+        <label id="field-address" hidden>Địa chỉ giao hàng
+          <textarea name="address" rows="2" maxlength="200" autocomplete="street-address" placeholder="Số nhà, đường, phường/xã…"></textarea>
+          <small class="field-error" data-error="address"></small>
+        </label>
+        <label id="field-table">Số bàn (nếu ngồi tại quán)
+          <input name="table" type="text" maxlength="10" placeholder="Bỏ trống nếu mang đi" />
+          <small class="field-error" data-error="table"></small>
+        </label>
+        <label>Ghi chú chung cho quán
+          <textarea name="note" rows="2" maxlength="200" placeholder="Ví dụ: gọi trước khi giao"></textarea>
+        </label>
+
+        <p class="form-message" id="form-message" role="alert"></p>
+        <button type="submit" class="primary big" id="submit"><span>Gửi đơn</span> · <b id="submit-total">0đ</b></button>
+        <p class="muted small center">Quán sẽ xác nhận đơn, sau đó bạn thanh toán bằng mã QR. Đơn chưa thanh toán sau 10 phút sẽ tự hết hạn.</p>
+      </form>
+    </div>
+  </section>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

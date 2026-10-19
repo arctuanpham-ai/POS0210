@@ -418,3 +418,30 @@ button.paylist-row { width: 100%; font: inherit; color: inherit; cursor: pointer
 .recipe-dup p { margin: 0 0 6px; font-weight: 700; }
 .recipe-dup-opt { display: flex; gap: 8px; align-items: flex-start; padding: 4px 0; }
 .recipe-dup .btn { margin-top: 6px; width: 100%; }
+
+/* ---------- Đơn đặt món online ---------- */
+.oo-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 10px 0; }
+.oo-bar .secondary.on { border-color: #2f6b3f; background: #e8f4ea; color: #2f6b3f; }
+.oo-bar .secondary.off { border-color: #a33125; background: #fbe9e6; color: #a33125; }
+.oo-group-title { margin: 22px 0 8px; font-size: 14px; color: #6e5848; letter-spacing: .04em; font-weight: 800; }
+.oo-card { margin-bottom: 12px; padding: 14px; border: 1px solid #dfcfb8; border-radius: 16px; background: #fffcf7; box-shadow: 0 8px 22px #6043210d; }
+.oo-card.s-new { border-color: #c9824f; background: #fff3e3; }
+.oo-card.s-awaiting_payment { border-color: #b3a02a; background: #fffbe6; }
+.oo-card.s-paid, .oo-card.s-delivering { border-color: #9cc2a5; background: #f2faf4; }
+.oo-card.s-rejected, .oo-card.s-expired { opacity: .75; }
+.oo-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+.oo-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 18px; font-weight: 800; letter-spacing: .1em; }
+.oo-status { padding: 2px 10px; border-radius: 999px; background: #ead8c7; color: #58483a; font-size: 12px; font-weight: 800; }
+.oo-time { margin-left: auto; color: #77685b; font-size: 12px; }
+.oo-who, .oo-mode { margin: 6px 0 0; font-size: 14px; }
+.oo-items { list-style: none; margin: 10px 0; padding: 0; display: grid; gap: 4px; font-size: 14px; }
+.oo-items li { display: flex; justify-content: space-between; gap: 10px; }
+.oo-items small { display: block; color: #77685b; }
+.oo-note-line { margin: 0 0 8px; font-size: 13px; color: #58483a; }
+.oo-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.oo-foot strong { font-size: 18px; margin-right: auto; }
+.oo-foot button { padding: 11px 16px; border-radius: 12px; font-weight: 800; border: 1px solid #836149; background: #fff8ee; color: #6e432d; }
+.oo-foot button.main { background: #34241b; border-color: #34241b; color: #fff; }
+.oo-countdown { color: #a33125; font-weight: 800; font-variant-numeric: tabular-nums; }
+.oo-config { margin: 22px 0; padding: 12px 14px; border: 1px solid #dfcfb8; border-radius: 16px; background: #fffcf7; }
+.oo-config summary { cursor: pointer; font-weight: 800; }

@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20261019-04" />
+    <link rel="stylesheet" href="styles.css?v=20261019-06" />
     <title>0210 · Manager</title>
   </head>
   <body>
@@ -17,7 +17,7 @@
         <p class="eyebrow">0210 · BREAKFAST · COFFEE · DRINKS</p>
         <h1 id="login-title">Manager realtime</h1>
         <p class="muted">Theo dõi quán và nhập phiếu tài chính từ xa.</p>
-        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.19.04 · Menu: combo hiện riêng, không báo thiếu</p>
+        <p class="muted" id="login-build-marker">Phiên bản Web: 2026.10.19.06 · Đơn đặt món online</p>
         <p class="muted">Đăng nhập tài khoản quán một lần trên mỗi máy, sau đó mỗi người vào bằng PIN riêng.</p>
         <label>Email tài khoản quán<input id="email" type="email" autocomplete="username" inputmode="email" /></label>
         <label>Mật khẩu<input id="password" type="password" autocomplete="current-password" /></label>
@@ -47,10 +47,11 @@
           <div class="heading-actions"><button id="refresh-dashboard" class="btn">Làm mới</button><button id="request-sync" class="btn" title="Yêu cầu máy POS ở quán đồng bộ ngay">Yêu cầu đồng bộ</button><button id="switch-person" class="btn">Đổi người</button><button id="logout-button" class="btn ghost">Đăng xuất</button></div>
         </header>
 
-        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><section id="my-alerts" class="my-alerts" aria-live="polite" hidden></section><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.19.04 · Menu: combo hiện riêng, không báo thiếu</p>
+        <p id="sync-status" class="sync-status">Bấm Làm mới để đọc snapshot POS.</p><p id="sync-command-status" class="muted" role="status"></p><section id="my-alerts" class="my-alerts" aria-live="polite" hidden></section><p id="web-build-marker" class="muted">Phiên bản Web: 2026.10.19.06 · Đơn đặt món online</p>
 
         <nav class="tabbar" id="tabbar" aria-label="Các trang">
           <a href="#ban" data-tab="ban">Bàn</a>
+          <a href="#donline" data-tab="donline">Đơn online<span id="donline-badge" class="tab-badge" hidden></span></a>
           <a href="#doanhthu" data-tab="doanhthu">Doanh thu</a>
           <a href="#bill" data-tab="bill">Lịch sử bill</a>
           <a href="#taichinh" data-tab="taichinh">Tài chính</a>
@@ -238,6 +239,36 @@
         <section id="reimb-history" class="reimb-list"></section>
         </div>
         <datalist id="payee-names"></datalist><datalist id="bank-choices"></datalist>
+        </div>
+
+        <div class="page" data-page="donline" hidden>
+        <section class="section-heading first-section">
+          <div><p class="eyebrow">ĐẶT MÓN ONLINE</p><h2>Đơn khách đặt qua link</h2></div>
+        </section>
+        <section class="oo-bar" aria-label="Trạng thái nhận đơn online">
+          <button type="button" id="oo-toggle" class="secondary">Đang tải…</button>
+          <span class="muted" id="oo-link-line"></span>
+        </section>
+        <p id="oo-note" class="muted" role="status"></p>
+        <section id="oo-list" aria-live="polite"></section>
+        <details id="oo-config" class="oo-config">
+          <summary>Thông tin quán hiển thị cho khách &amp; tài khoản nhận tiền</summary>
+          <form id="oo-form" novalidate>
+            <p class="muted">Khách nhìn thấy các thông tin này trên trang đặt món (cả tài khoản nhận tiền khi quét QR). Chỉ chủ quán và thủ quỹ sửa được.</p>
+            <label>Tên quán<input name="name" maxlength="60" /></label>
+            <label>Giới thiệu ngắn<input name="tagline" maxlength="80" placeholder="Cà phê · Ăn sáng · Cơm trưa" /></label>
+            <label>Địa chỉ<input name="address" maxlength="200" /></label>
+            <label>Số điện thoại quán<input name="phone" type="tel" maxlength="20" /></label>
+            <label>Giờ mở cửa<input name="hours" maxlength="120" placeholder="6:30 – 22:00 hằng ngày" /></label>
+            <label>Thông báo cho khách (tuỳ chọn)<input name="notice" maxlength="160" placeholder="Ví dụ: Giao hàng bán kính 3km" /></label>
+            <label>Đường dẫn trang đặt món (https://…)<input name="siteUrl" type="url" maxlength="200" placeholder="https://pos0210-order.web.app/" /></label>
+            <label>Ngân hàng nhận tiền<input name="bank" list="bank-choices" maxlength="40" placeholder="Techcombank" /></label>
+            <label>Số tài khoản<input name="account" inputmode="text" maxlength="25" /></label>
+            <label>Tên chủ tài khoản (hiển thị cho khách đối chiếu)<input name="holder" maxlength="60" /></label>
+            <p class="error" id="oo-form-error"></p>
+            <button type="submit" class="primary">Lưu thông tin quán</button>
+          </form>
+        </details>
         </div>
 
         <div class="page" data-page="taikhoan" hidden>
@@ -599,7 +630,7 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261019-04"></script>
+    <script type="module" src="app.js?v=20261019-06"></script>
     <script>
       // Trang không chạy được (thường do trình duyệt còn giữ file cũ): báo rõ thay vì để nút đăng nhập "chết".
       setTimeout(function () {

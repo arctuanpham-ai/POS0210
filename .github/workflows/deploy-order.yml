@@ -1,0 +1,39 @@
+name: Deploy POS0210 Order Site
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "web-order/**"
+      - ".github/workflows/deploy-order.yml"
+permissions:
+  contents: read
+jobs:
+  verify-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Test order site
+        working-directory: web-order
+        run: node --test test/*.test.mjs
+      - name: Auth gcloud
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_POS0210_17CE4 }}' > "$RUNNER_TEMP/sa.json"
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/sa.json"
+      - name: Create hosting site (idempotent)
+        id: site
+        run: node web-order/ops/setup-backend.mjs
+        continue-on-error: true
+      - name: Deploy Firebase Hosting (order site)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_POS0210_17CE4 }}
+          channelId: live
+          projectId: pos0210-17ce4
+          entryPoint: web-order
+      - name: Fail if backend setup failed
+        if: steps.site.outcome == 'failure'
+        run: echo "Backend setup có lỗi, xem log bước trước" && exit 1

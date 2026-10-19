@@ -1,0 +1,7 @@
+{
+  "name": "pos0210-order-rules-test",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "firebase emulators:exec --only firestore --project demo-pos0210 \"node --test rules.emulator.test.mjs\"" },
+  "devDependencies": { "@firebase/rules-unit-testing": "^3.0.4", "firebase": "^10.13.2", "firebase-tools": "^13.0.0" }
+}

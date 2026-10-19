@@ -1,0 +1,172 @@
+// =====================================================================================================
+// ĐẶT MÓN ONLINE (khách ẩn danh) — PHẦN RULES CẦN DÁN THÊM
+//
+// CÁCH DÙNG
+//   Firebase Console > Firestore Database > Rules. Giữ NGUYÊN rules đang có (POS, web dashboard dùng chúng).
+//   Dán toàn bộ nội dung bên dưới (từ dòng "function isShopOwner" đến hết) vào BÊN TRONG khối:
+//
+//       service cloud.firestore {
+//         match /databases/{database}/documents {
+//           ... rules cũ của bạn ...
+//           >>> DÁN Ở ĐÂY <<<
+//         }
+//       }
+//
+//   Rules Firestore cộng dồn kiểu OR: phần dán thêm chỉ MỞ THÊM quyền cho các đường dẫn mới
+//   (online_orders, online_limits, online_config) và quyền ĐỌC công khai cho menu/menuCategories/menuThumbs.
+//   Không đụng tới bills, payments, nhân viên, QR hay bất cứ dữ liệu bán hàng nào.
+//
+// TRƯỚC KHI BẬT ANONYMOUS AUTH (bắt buộc kiểm tra)
+//   Nếu rules cũ có chỗ nào chỉ kiểm "request.auth != null" cho dữ liệu bán hàng, thì khách ẩn danh cũng đọc được
+//   dữ liệu đó. Vào Rules Playground, mô phỏng "Get" đường dẫn
+//   /users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/bills/test với Authenticated = có, Provider = anonymous,
+//   uid = một chuỗi bất kỳ khác chủ quán. Kết quả PHẢI là "Denied".
+//
+// Chủ quán / POS / web dashboard đăng nhập bằng tài khoản dùng chung (uid chủ quán) nên được coi là nhân viên.
+// =====================================================================================================
+
+function isShopOwner() {
+  return request.auth != null && request.auth.uid == 'X9ln8CP7UtbOLOHfipYMCjfbb1p1';
+}
+
+function isGuest() {
+  return request.auth != null && request.auth.token.firebase.sign_in_provider == 'anonymous';
+}
+
+function menuRef(id) {
+  return /databases/$(database)/documents/users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/menu/$(id);
+}
+
+function orderRef(code) {
+  return /databases/$(database)/documents/users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/online_orders/$(code);
+}
+
+function limitRef(key) {
+  return /databases/$(database)/documents/users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/online_limits/$(key);
+}
+
+// ---- Menu: đọc công khai, KHÔNG ghi (việc ghi vẫn do rules cũ cho chủ quán/POS) ----
+match /users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/menu/{itemId} {
+  allow read: if true;
+}
+
+match /users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/menuCategories/{categoryId} {
+  allow read: if true;
+}
+
+match /users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/menuThumbs/{itemId} {
+  allow read: if true;
+}
+
+// ---- Thông tin quán hiển thị cho khách (tên, địa chỉ, SĐT, giờ mở, tài khoản nhận tiền, bật/tắt đặt món) ----
+match /users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/online_config/{docId} {
+  allow read: if true;
+  allow write: if isShopOwner();
+}
+
+// ---- Đơn đặt online ----
+match /users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/online_orders/{code} {
+  // Khách chỉ đọc đơn của chính mình (truy vấn phải có where('uid','==',uid)). Nhân viên đọc tất cả.
+  allow read: if isShopOwner() || (request.auth != null && resource.data.uid == request.auth.uid);
+  // Khách chỉ được TẠO đơn mới, đúng định dạng, đúng giá menu, kèm 2 bộ đếm giới hạn trong cùng một batch.
+  allow create: if isGuest() && validNewOrder(code);
+  // Chỉ nhân viên (POS/web dashboard) được đổi trạng thái hoặc xoá. Khách KHÔNG sửa/xoá được.
+  allow update, delete: if isShopOwner();
+}
+
+// ---- Bộ đếm "tối đa 2 đơn đang chờ" cho mỗi uid (u_<uid>) và mỗi SĐT (p_<sđt>) ----
+match /users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/online_limits/{key} {
+  allow get: if request.auth != null;
+  allow list: if isShopOwner();
+  allow create, update: if isShopOwner() || (isGuest() && validLimitWrite(key));
+  allow delete: if isShopOwner();
+}
+
+function validNewOrder(code) {
+  let d = request.resource.data;
+  return d.keys().hasOnly(['code', 'createdAt', 'uid', 'name', 'phone', 'mode', 'address', 'table', 'note', 'items', 'total', 'status', 'rejectReason', 'transferContent', 'expiresAt'])
+    && d.keys().hasAll(['code', 'createdAt', 'uid', 'name', 'phone', 'mode', 'address', 'table', 'note', 'items', 'total', 'status', 'rejectReason', 'transferContent', 'expiresAt'])
+    && code.matches('^[A-HJ-NP-Z2-9]{6}$')
+    && d.code == code
+    && d.uid == request.auth.uid
+    && d.createdAt == request.time
+    && d.status == 'new'
+    && d.rejectReason == ''
+    && d.transferContent == ''
+    && d.expiresAt == null
+    && d.name is string && d.name.size() >= 1 && d.name.size() <= 50
+    && d.phone is string && d.phone.matches('^0[0-9]{9,10}$')
+    && d.mode in ['delivery', 'pickup', 'dinein']
+    && d.address is string && d.address.size() <= 200
+    && (d.mode != 'delivery' || d.address.size() >= 8)
+    && (d.mode == 'delivery' || d.address == '')
+    && d.table is string && d.table.size() <= 10
+    && (d.mode == 'dinein' ? d.table.size() >= 1 : d.table == '')
+    && d.note is string && d.note.size() <= 200
+    && d.items is list && d.items.size() >= 1 && d.items.size() <= 7
+    && d.total is int && d.total > 0 && d.total <= 5000000
+    && linesValid(d.items)
+    && d.total == linesSum(d.items)
+    && getAfter(limitRef('u_' + request.auth.uid)).data.lastOrder == code
+    && getAfter(limitRef('p_' + d.phone)).data.lastOrder == code;
+}
+
+// Tối đa 7 dòng món/đơn: mỗi dòng cần 1 lần get() menu, giới hạn của Firestore là 10 lần truy cập tài liệu cho mỗi thao tác ghi
+// (7 menu + 2 bộ đếm = 9).
+function linesValid(items) {
+  return (items.size() < 1 || lineValid(items[0]))
+    && (items.size() < 2 || lineValid(items[1]))
+    && (items.size() < 3 || lineValid(items[2]))
+    && (items.size() < 4 || lineValid(items[3]))
+    && (items.size() < 5 || lineValid(items[4]))
+    && (items.size() < 6 || lineValid(items[5]))
+    && (items.size() < 7 || lineValid(items[6]));
+}
+
+function lineValid(l) {
+  return l is map
+    && l.keys().hasOnly(['id', 'name', 'qty', 'note', 'price'])
+    && l.keys().hasAll(['id', 'name', 'qty', 'note', 'price'])
+    && l.id is string && l.id.size() >= 1 && l.id.size() <= 64 && l.id.matches('^[^/]+$')
+    && l.name is string
+    && l.note is string && l.note.size() <= 100
+    && l.qty is int && l.qty >= 1 && l.qty <= 20
+    && l.price is int && l.price > 0
+    && menuMatches(l);
+}
+
+// Đơn giá và tên món phải đúng menu thật; món đã tắt/xoá không đặt được.
+function menuMatches(l) {
+  let m = get(menuRef(l.id)).data;
+  return m.price == l.price
+    && m.name == l.name
+    && m.get('active', true) != false
+    && m.get('deleted', false) != true;
+}
+
+function lineAmount(items, i) {
+  return items.size() > i ? items[i].price * items[i].qty : 0;
+}
+
+function linesSum(items) {
+  return lineAmount(items, 0) + lineAmount(items, 1) + lineAmount(items, 2) + lineAmount(items, 3)
+    + lineAmount(items, 4) + lineAmount(items, 5) + lineAmount(items, 6);
+}
+
+// Khách chỉ được TĂNG bộ đếm đúng 1 đơn vị, và chỉ khi đồng thời tạo một đơn MỚI (chưa tồn tại) của chính mình trong cùng batch.
+// Bộ đếm tự về 0 sau 60 phút kể từ đơn gần nhất (phòng khi nhân viên quên đóng đơn); nhân viên trừ bộ đếm khi đóng đơn.
+function validLimitWrite(key) {
+  let d = request.resource.data;
+  let ord = getAfter(orderRef(d.lastOrder)).data;
+  let base = (resource != null && resource.data.lastAt + duration.value(60, 'm') > request.time) ? resource.data.pending : 0;
+  return d.keys().hasOnly(['pending', 'lastAt', 'lastOrder'])
+    && d.keys().hasAll(['pending', 'lastAt', 'lastOrder'])
+    && d.lastOrder is string && d.lastOrder.matches('^[A-HJ-NP-Z2-9]{6}$')
+    && !exists(orderRef(d.lastOrder))
+    && ord.uid == request.auth.uid
+    && (key == 'u_' + request.auth.uid || key == 'p_' + ord.phone)
+    && d.lastAt == request.time
+    && d.pending is int
+    && d.pending == base + 1
+    && d.pending <= 2;
+}

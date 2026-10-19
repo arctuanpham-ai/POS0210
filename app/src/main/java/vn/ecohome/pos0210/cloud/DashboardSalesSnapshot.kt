@@ -12,8 +12,12 @@ import java.time.YearMonth
 import java.time.ZoneId
 
 /** Bàn đang mở: chỉ là TẠM TÍNH, không phải doanh thu. */
-data class LiveTableSnapshot(val id: String, val name: String, val openedAt: Long?, val currentTotal: Long, val serviceStatus: String) {
-    fun toMap(): Map<String, Any?> = mapOf("id" to id, "name" to name, "openedAt" to openedAt, "currentTotal" to currentTotal, "serviceStatus" to serviceStatus)
+data class LiveItemSnapshot(val name: String, val qty: Int, val unitPrice: Long, val note: String = "") {
+    fun toMap(): Map<String, Any?> = mapOf("name" to name, "qty" to qty, "price" to unitPrice, "note" to note)
+}
+
+data class LiveTableSnapshot(val id: String, val name: String, val openedAt: Long?, val currentTotal: Long, val serviceStatus: String, val items: List<LiveItemSnapshot> = emptyList()) {
+    fun toMap(): Map<String, Any?> = mapOf("id" to id, "name" to name, "openedAt" to openedAt, "currentTotal" to currentTotal, "serviceStatus" to serviceStatus, "items" to items.map { it.toMap() })
 }
 
 /** Phần bổ sung cho dashboard/current. Các trường doanh thu hiện có vẫn do FirebaseCloudSync ghi như cũ. */
@@ -101,7 +105,12 @@ object DashboardSalesSnapshot {
             // Lô đã huỷ không được cộng vào tạm tính.
             val active = batches.filter { it.sessionId == session.id && it.status != "CANCELLED" }
             val total = active.sumOf { batch -> itemsByBatch[batch.id].orEmpty().sumOf { it.unitPriceSnapshot * it.qty } }
-            LiveTableSnapshot(table.id, table.name, session.openedAt, total, active.firstOrNull()?.status.orEmpty())
+            // Món của bàn gửi kèm trong chính tài liệu dashboard/current: không tạo thêm tài liệu, không thêm lượt ghi.
+            val lines = active.flatMap { batch -> itemsByBatch[batch.id].orEmpty() }
+                .filter { it.qty != 0 }
+                .take(60)
+                .map { LiveItemSnapshot(it.itemNameSnapshot, it.qty, it.unitPriceSnapshot, it.note) }
+            LiveTableSnapshot(table.id, table.name, session.openedAt, total, active.firstOrNull()?.status.orEmpty(), lines)
         }.sortedBy { it.openedAt ?: Long.MAX_VALUE }
         return CurrentDashboardSnapshot(live.size, live.sumOf { it.currentTotal }, live)
     }

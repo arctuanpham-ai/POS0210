@@ -53,6 +53,19 @@ class DashboardSalesSnapshotTest {
         assertEquals(30_000L, current.provisionalOpenTotal)
     }
 
+    @Test fun liveTableCarriesItemLinesButNotCancelledBatches() {
+        val sessions = listOf(session("s1"))
+        val batches = listOf(batch("b1", "s1"), batch("b2", "s1", "CANCELLED"))
+        val items = listOf(item("i1", "b1", "m1", "Cà phê", 30_000L, 2), item("i2", "b2", "m2", "Trà", 99_000L, 5))
+
+        val lines = DashboardSalesSnapshot.composeCurrent(listOf(table), sessions, batches, items).liveTables.single().items
+
+        assertEquals(1, lines.size)
+        assertEquals("Cà phê", lines.single().name)
+        assertEquals(2, lines.single().qty)
+        assertEquals(30_000L, lines.single().unitPrice)
+    }
+
     @Test fun closedSessionIsNotALiveTable() {
         val current = DashboardSalesSnapshot.composeCurrent(listOf(table), listOf(session("s1", "CLOSED")), emptyList(), emptyList())
         assertEquals(0, current.openTables)

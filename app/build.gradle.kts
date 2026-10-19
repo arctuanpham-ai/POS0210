@@ -12,8 +12,8 @@ android {
         applicationId = "vn.ecohome.pos0210"
         minSdk = 26
         targetSdk = 35
-        versionCode = 179
-        versionName = "1.0.0-alpha146-pay-auto-qr"
+        versionCode = 180
+        versionName = "1.0.0-alpha147-live-items"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {

@@ -211,3 +211,18 @@ label.radio input { width: 20px; height: 20px; margin: 0; }
   .sheet-lines li { padding: 6px 10px; }
   .status-card h2 { font-size: 18px; }
 }
+
+/* Ảnh bìa (toàn cảnh quán) */
+.cover { margin: 0 -16px; background: #ead8c7; line-height: 0; }
+.cover img { width: 100%; height: auto; display: block; }
+@media (min-width: 700px) { .cover { margin: 16px 0 0; border-radius: 22px; overflow: hidden; } }
+@media (min-width: 768px) {
+  #screen-menu > .cover { grid-column: 1 / -1; grid-row: 1; }
+  #screen-menu > .cover img { max-height: 380px; object-fit: cover; }
+  #screen-menu > .hero { grid-row: 2 / span 6; }
+}
+@media (orientation: landscape) and (max-height: 520px) {
+  #screen-menu > .cover { grid-column: 1 / -1; grid-row: 1; margin: 8px 0 0; border-radius: 14px; }
+  #screen-menu > .cover img { max-height: 110px; object-fit: cover; }
+  #screen-menu > .hero { grid-row: 2 / span 6; }
+}

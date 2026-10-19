@@ -501,9 +501,9 @@ function renderTrack() {
   }
   if (view.status === STATUS.REJECTED) extra = `<p class="reject-reason"><b>Lý do:</b> ${esc(order.rejectReason || "Quán chưa nhận được đơn lúc này.")}</p>`;
   const spinner = view.status === STATUS.NEW ? '<div class="spinner" aria-hidden="true"></div>' : "";
-  const phone = state.shop.phone ? `<p class="muted small">Cần hỗ trợ? Gọi quán <a href="tel:${esc(String(state.shop.phone).replace(/[^\d+]/g, ""))}">${esc(state.shop.phone)}</a></p>` : "";
+  const phone = state.shop.phone && ["new", "rejected", "expired"].includes(view.status) ? `<p class="muted small">Cần hỗ trợ? Gọi quán <a href="tel:${esc(String(state.shop.phone).replace(/[^\d+]/g, ""))}">${esc(state.shop.phone)}</a></p>` : "";
   const canEdit = view.status === STATUS.NEW || view.status === STATUS.AWAITING_PAYMENT;
-  const editRow = canEdit ? `<div class="cancel-row"><button type="button" class="secondary" data-act2="edit">✏️ Sửa đơn</button><button type="button" class="danger-link" data-act2="cancel">Huỷ đơn</button></div><p class="muted small">Bạn chỉ sửa hoặc huỷ đơn được khi chưa thanh toán. Nếu đã chuyển khoản, vui lòng gọi quán để được hỗ trợ.</p>` : "";
+  const editRow = canEdit ? `<div class="cancel-row"><button type="button" class="secondary" data-act2="edit">✏️ Sửa đơn</button><button type="button" class="danger-link" data-act2="cancel">Huỷ đơn</button></div><p class="muted small">Bạn chỉ sửa hoặc huỷ đơn được khi chưa thanh toán.</p>` : "";
   const actions = editRow + (view.status === STATUS.EXPIRED
     ? `<button type="button" class="primary" data-act2="reorder">Đặt lại đơn này</button>`
     : view.isFinal ? `<button type="button" class="primary" data-act2="new">Đặt đơn mới</button>` : "");
@@ -626,8 +626,8 @@ async function cancelCurrentOrder(thenEdit) {
   const order = state.order;
   if (!order || ![STATUS.NEW, STATUS.AWAITING_PAYMENT].includes(order.status) || state.cancelling) return;
   const ask = thenEdit
-    ? "Huỷ đơn này để chọn lại món?\n\nNếu bạn ĐÃ chuyển khoản thì vui lòng KHÔNG huỷ, hãy gọi quán."
-    : "Huỷ đơn này?\n\nNếu bạn ĐÃ chuyển khoản thì vui lòng KHÔNG huỷ, hãy gọi quán.";
+    ? "Huỷ đơn này để chọn lại món?\n\nNếu bạn ĐÃ chuyển khoản thì không được hoàn tiền."
+    : "Huỷ đơn này?\n\nNếu bạn ĐÃ chuyển khoản thì không được hoàn tiền.";
   if (!window.confirm(ask)) return;
   state.cancelling = true;
   try {

@@ -410,3 +410,11 @@ button.paylist-row { width: 100%; font: inherit; color: inherit; cursor: pointer
 .cmp-table .down, .cmp-tiles .down { color: #8b1d12; }
 .cmp-table tr.is-today td { background: #fbf3e6; }
 @media (min-width: 720px) { .cmp-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+/* Cảnh báo vật tư trùng loại trong công thức */
+.recipe-dup { margin: 8px 0 0; padding: 8px 10px; border-radius: 10px; font-size: 13px; }
+.recipe-dup.warn { background: #fff1d6; border: 1px solid #e3bd72; color: #6b4300; }
+.recipe-dup.ok { background: #e6f3e2; color: #24572a; }
+.recipe-dup p { margin: 0 0 6px; font-weight: 700; }
+.recipe-dup-opt { display: flex; gap: 8px; align-items: flex-start; padding: 4px 0; }
+.recipe-dup .btn { margin-top: 6px; width: 100%; }

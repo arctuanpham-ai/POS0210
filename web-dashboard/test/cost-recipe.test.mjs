@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { MATERIALS, costLevel, draftRecipeFor, matchMaterial, materialCosts, recipeCost, sliderSpec, unitFactor, materialById } from "../cost-recipe.js";
+import { MATERIALS, costLevel, draftRecipeFor, matchMaterial, materialCosts, recipeCost, sliderSpec, unitFactor, materialById, buildDynamicMaterials, registerDynamicMaterials, similarMaterials, usageVsPurchase, dynamicIdOf } from "../cost-recipe.js";
 
 const NOW = new Date(2026, 9, 15, 12).getTime();
 const day = 86400000;
@@ -73,4 +73,46 @@ test("ngưỡng màu và thanh kéo", () => {
   assert.deepEqual(sliderSpec("g", 20), { min: 0, max: 100, step: 1 });
   assert.deepEqual(sliderSpec("g", 400), { min: 0, max: 1200, step: 5 });
   assert.deepEqual(sliderSpec("quả", 2), { min: 0, max: 6, step: 0.5 });
+});
+
+
+const RC = [{ id: "r1", code: "PC1910-TRONG-55D", purchaseDate: NOW, items: [
+  { materialName: "Arabica 100%", qty: 0.25, unit: "kg", amount: 200000, expenseGroup: "Cà phê" },
+  { materialName: "Cà phê hạt espresso", qty: 1, unit: "kg", amount: 700000, expenseGroup: "Cà phê" },
+  { materialName: "Sữa đặc Ông Thọ", qty: 2, unit: "hộp", amount: 50000, expenseGroup: "Trứng, sữa, bơ" },
+] }];
+
+test('"Arabica 100%" không ghép vào espresso mà thành vật tư riêng theo đúng tên phiếu chi', () => {
+  assert.equal(matchMaterial({ materialName: "Arabica 100%" }), null);
+  const r = materialCosts(RC, { now: NOW });
+  const id = dynamicIdOf("Arabica 100%");
+  assert.equal(id, "rm:arabica_100");
+  assert.equal(r.costs[id].unitCost, 800);                   // 800.000đ/kg = 800đ/g
+  assert.deepEqual(r.costs[id].sources.map((x) => x.code), ["PC1910-TRONG-55D"]);
+  assert.equal(r.costs.cf_espresso.unitCost, 700);          // espresso chỉ lấy dòng espresso
+});
+
+test("tên khác hãng: vừa tính cho vật tư chuẩn (theo tên gọi khác) vừa là vật tư riêng", () => {
+  const r = materialCosts(RC, { now: NOW });
+  assert.equal(r.costs.sua_dac.unitCost, 50000 / (2 * 380));
+  assert.equal(r.costs["rm:sua_dac_ong_tho"].unitCost, 50000 / (2 * 1));   // đơn vị mua "hộp" lạ: 1 hộp = 1 hộp
+});
+
+test("đăng ký vật tư động rồi công thức, trùng loại và mua so với định mức dùng được ngay", () => {
+  const list = buildDynamicMaterials(RC, [{ materialId: "rm:da_het_phieu", name: "Đá cũ", base: "bao" }]);
+  registerDynamicMaterials(list);
+  try {
+    const ara = materialById.get("rm:arabica_100");
+    assert.equal(ara.name, "Arabica 100%"); assert.equal(ara.base, "g"); assert.equal(ara.dynamic, true); assert.equal(ara.groupLabel, "Cà phê");
+    assert.equal(materialById.get("rm:da_het_phieu").name, "Đá cũ");          // công thức cũ vẫn có tên khi phiếu không còn
+    assert.ok(MATERIALS.includes(ara));
+    const sim = similarMaterials("cf_espresso").map((m) => m.id);
+    assert.ok(sim.includes("rm:arabica_100") && sim.includes("cf_phin") === false);  // chỉ cảnh báo cùng nhóm + cùng đơn vị có liên quan tên phiếu chi
+    assert.ok(similarMaterials("rm:arabica_100").map((m) => m.id).includes("cf_coldbrew"));
+    assert.deepEqual(similarMaterials("cam"), []);                                // không có vật tư động cùng nhóm: không cảnh báo
+    const u = usageVsPurchase({ receipts: RC, usagePerDay: { "rm:arabica_100": 50 }, from: NOW - 5 * day, to: NOW + day });
+    const row = u.find((x) => x.materialId === "rm:arabica_100");
+    assert.equal(row.bought, 250); assert.equal(row.expected, 50 * 6);
+  } finally { registerDynamicMaterials([]); }
+  assert.equal(materialById.has("rm:arabica_100"), false);
 });

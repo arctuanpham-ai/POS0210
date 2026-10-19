@@ -19,38 +19,38 @@ import {
   setDoc as rawSetDoc,
   writeBatch as rawWriteBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261018-09";
-import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, freshenDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261018-09";
-import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261018-09";
-import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261018-09";
-import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261018-09";
-import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261018-09";
-import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261018-09";
-import { buildSimulation } from "./sim-data.js?v=20261018-09";
-import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261018-09";
-import { menuCsv } from "./menu-export.js?v=20261018-09";
-import { KIND_LABELS, MATERIALS, catalogRules, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261018-09";
-import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261018-09";
-import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261018-09";
-import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261018-09";
-import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261018-09";
-import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261018-09";
-import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261018-09";
-import { otherCostRows } from "./other-costs.js?v=20261018-09";
-import { paybackStatus } from "./payback.js?v=20261018-09";
-import { topSellers } from "./top-banner.js?v=20261018-09";
-import { reconcileDays, reconcileRevenue } from "./revenue-check.js?v=20261018-09";
-import { prepList, profitRanking, tomorrowSales } from "./plan-profit.js?v=20261018-09";
-import { menuEditProblem, menuGroups, mergePlan, nameIssues, nextProductCode, normName, soldNotInMenu } from "./menu-view.js?v=20261018-09";
-import { POS_CEILING, SPARK, dayUsage, lastPacificDays, nextReset, pacificDay, usageTrend } from "./usage.js?v=20261018-09";
-import { AI_SCOPES, buildAiPack, scopeRange } from "./ai-export.js?v=20261018-09";
-import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261018-09";
-import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261018-09";
-import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261018-09";
-import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261018-09";
-import { compareKeys, compareRows, weekTotals } from "./day-compare.js?v=20261018-09";
-import { comboCount, formatBaseQty, materialConsumption, outputRows } from "./item-output.js?v=20261018-09";
-import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261018-09";
+import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261019-02";
+import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, freshenDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261019-02";
+import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261019-02";
+import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261019-02";
+import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261019-02";
+import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261019-02";
+import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261019-02";
+import { buildSimulation } from "./sim-data.js?v=20261019-02";
+import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261019-02";
+import { menuCsv } from "./menu-export.js?v=20261019-02";
+import { KIND_LABELS, MATERIALS, buildDynamicMaterials, catalogRules, registerDynamicMaterials, similarMaterials, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261019-02";
+import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261019-02";
+import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261019-02";
+import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261019-02";
+import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261019-02";
+import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261019-02";
+import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261019-02";
+import { otherCostRows } from "./other-costs.js?v=20261019-02";
+import { paybackStatus } from "./payback.js?v=20261019-02";
+import { topSellers } from "./top-banner.js?v=20261019-02";
+import { reconcileDays, reconcileRevenue } from "./revenue-check.js?v=20261019-02";
+import { prepList, profitRanking, tomorrowSales } from "./plan-profit.js?v=20261019-02";
+import { menuEditProblem, menuGroups, mergePlan, nameIssues, nextProductCode, normName, soldNotInMenu } from "./menu-view.js?v=20261019-02";
+import { POS_CEILING, SPARK, dayUsage, lastPacificDays, nextReset, pacificDay, usageTrend } from "./usage.js?v=20261019-02";
+import { AI_SCOPES, buildAiPack, scopeRange } from "./ai-export.js?v=20261019-02";
+import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261019-02";
+import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261019-02";
+import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261019-02";
+import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261019-02";
+import { compareKeys, compareRows, weekTotals } from "./day-compare.js?v=20261019-02";
+import { comboCount, formatBaseQty, materialConsumption, outputRows } from "./item-output.js?v=20261019-02";
+import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261019-02";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",
@@ -980,7 +980,7 @@ const knownMaterial = (name) => {
   const n = normalizeMaterial(name);
   if (!n) return false;
   const std = matchMaterial({ materialName: name });
-  return Boolean((std && normalizeMaterial(std.name) === n) || savedMaterials().some((m) => normalizeMaterial(m.materialName) === n));
+  return Boolean((std && normalizeMaterial(std.name) === n) || savedMaterials().some((m) => normalizeMaterial(m.materialName) === n) || MATERIALS.some((m) => m.dynamic && !m.stub && normalizeMaterial(m.name) === n));
 };
 /** Mỗi dòng một loại chi: dòng không phải vật tư ẩn mã / nhóm vật tư; phiếu nhiều loại sẽ tách khi lưu. */
 function applyKindUi() {
@@ -1157,6 +1157,7 @@ async function cancelReceipt(id) {
 }
 
 function render() {
+  syncMaterialRegistry();
   renderCumulativeSummary();
   renderPeriodSummary();
   renderTables();
@@ -1497,7 +1498,10 @@ $("#expense-lines").addEventListener("change", (event) => {
     if (line.dataset.groupTouched !== "1") line.querySelector("[data-field=expenseGroup]").value = suggestion.group ? groupLabelOf(suggestion.group) : "";
     const known = savedMaterials().find((item) => normalizeMaterial(item.materialName) === normalizeMaterial(input.value));
     const std = matchMaterial({ materialName: input.value });
+    const dyn = MATERIALS.find((m) => m.dynamic && !m.stub && normalizeMaterial(m.name) === normalizeMaterial(input.value));
+    if (dyn?.groupLabel && line.dataset.groupTouched !== "1" && MATERIAL_GROUPS.some(([, name]) => name === dyn.groupLabel)) line.querySelector("[data-field=expenseGroup]").value = dyn.groupLabel;
     if (known?.unit) line.querySelector("[data-field=unit]").value = known.unit;
+    else if (dyn?.lastUnit) line.querySelector("[data-field=unit]").value = dyn.lastUnit;
     else if (std && normalizeMaterial(std.name) === normalizeMaterial(input.value)) line.querySelector("[data-field=unit]").value = std.units[0].unit;
     line.querySelector("[data-field=materialCode]").value = "";
     applyExpenseInputs(); refreshRuleHint(line);
@@ -1924,12 +1928,22 @@ async function loadRecipes() {
   } catch (error) { state.recipeError = error.code === "permission-denied" ? "Không có quyền đọc menu hoặc công thức (cần mở quy tắc Firestore cho recipes)." : (error.message || "lỗi không rõ"); }
   renderRecipes();
 }
-function currentCosts() { return materialCosts(materialReceipts()); }
+// Giá vật tư chỉ lấy từ phiếu ĐÃ DUYỆT: phiếu chờ duyệt / không duyệt có thể sai và sẽ làm lệch giá vốn.
+// Tên vật tư thật trên các phiếu đó (và tên đang dùng trong công thức đã lưu) được đăng ký thành danh mục vật tư động.
+let registryKey = "";
+function syncMaterialRegistry() {
+  const approved = materialReceipts().filter(countsAsCost);
+  const recs = Object.values(state.recipes || {});
+  const key = `${approved.length}|${approved.reduce((t, r) => Math.max(t, Number(r.updatedAt || r.purchaseDate || 0)), 0)}|${recs.length}|${recs.reduce((t, r) => Math.max(t, Number(r.updatedAt || 0)), 0)}`;
+  if (key !== registryKey) { registryKey = key; registerDynamicMaterials(buildDynamicMaterials(approved, recs.flatMap((r) => r.lines || []))); }
+  return approved;
+}
+function currentCosts() { return materialCosts(syncMaterialRegistry()); }
 function recipeLinesFor(item) { return state.recipes[item.id]?.lines?.map((l) => ({ ...l })) ?? draftRecipeFor(item.name); }
 function renderRecipes() {
   const host = $("#recipe-list");
   if (!host) return;
-  const { costs, unconvertible } = currentCosts();
+  const { costs, unconvertible, unmatched } = currentCosts();
   const priced = MATERIALS.filter((m) => costs[m.id]).length;
   $("#recipe-note").textContent = state.recipeError || `${priced}/${MATERIALS.length} vật tư đã có giá từ phiếu chi${unconvertible.length ? ` · ${unconvertible.length} dòng phiếu không quy đổi được đơn vị` : ""}${state.simulation ? " · ĐANG MÔ PHỎNG" : ""}${state.demo ? " · ĐANG XEM DỮ LIỆU DEMO" : ""}.`;
   const cats = new Map(state.menuCats.map((c) => [String(c.id), c]));
@@ -1949,8 +1963,8 @@ function renderRecipes() {
   host.querySelectorAll("[data-menu-id]").forEach((b) => b.addEventListener("click", () => openRecipe(b.dataset.menuId)));
   $("#material-costs").innerHTML = `<div class="table-wrap"><table class="mat-table"><thead><tr><th>Vật tư</th><th>Loại</th><th>Giá</th><th>Nguồn</th></tr></thead><tbody>${MATERIALS.map((m) => {
     const c = costs[m.id];
-    return `<tr class="${c ? "" : "dim"}"><td>${escapeHtml(m.name)}</td><td>${KIND_LABELS[m.kind]}</td><td>${c ? unitPriceLabel(m, c.unitCost) : "chưa có"}</td><td>${c ? `${c.source} · ${c.buys} lần` : ""}</td></tr>`;
-  }).join("")}</tbody></table></div>`;
+    return `<tr class="${c ? "" : "dim"}"><td>${escapeHtml(m.name)}</td><td>${KIND_LABELS[m.kind]}${m.dynamic ? " · tên từ phiếu chi" : ""}</td><td>${c ? unitPriceLabel(m, c.unitCost) : "chưa có"}</td><td>${c ? `${c.source} · ${c.buys} lần<small class="muted"> · ${c.sources.map((x) => `${escapeHtml(receiptCode(findReceipt(x.receiptId) || { code: x.code, id: x.receiptId }))}${x.name ? ` “${escapeHtml(x.name)}”` : ""}`).join("; ")}</small>` : ""}</td></tr>`;
+  }).join("")}</tbody></table></div>${unmatched.length ? `<p class="reimb-sub">Dòng phiếu đã duyệt chưa ghép được vật tư chuẩn · ${unmatched.length}</p><p class="muted">Các dòng này chưa tính vào giá vật tư. Sửa tên dòng cho đúng vật tư trong danh mục (hoặc chọn từ danh sách khi nhập phiếu).</p><ul class="rc-list">${unmatched.slice(0, 30).map((x) => `<li><b>${escapeHtml(x.name)}</b> · ${x.qty} ${escapeHtml(x.unit)} · ${money(x.amount)} — phiếu ${escapeHtml(receiptCode(findReceipt(x.receiptId) || { code: x.code, id: x.receiptId }))}</li>`).join("")}</ul>` : ""}`;
 }
 function openRecipe(menuId) {
   const item = state.menuItems.find((m) => m.id === menuId);
@@ -1959,7 +1973,12 @@ function openRecipe(menuId) {
   $("#recipe-title").textContent = `${item.name} · ${money(item.price)}`;
   $("#recipe-meta").textContent = state.recipes[item.id] ? "Công thức đã lưu. Kéo thanh để tăng giảm định lượng." : "Bản nháp gợi ý, chưa lưu. Kéo thanh cho đúng định lượng của quán rồi bấm Lưu.";
   $("#recipe-error").textContent = "";
-  $("#recipe-add-select").innerHTML = `<option value="">Chọn vật tư…</option>${MATERIALS.filter((m) => m.kind !== "VH").map((m) => `<option value="${m.id}">${escapeHtml(m.name)} (${m.base})</option>`).join("")}`;
+  recipeEdit.lines.forEach((l) => { l.confirmed = false; delete l.confirmedAt; delete l.confirmedBy; });
+  syncMaterialRegistry();
+  const { costs: pickCosts } = currentCosts();
+  const opt = (m) => `<option value="${m.id}">${escapeHtml(m.name)} (${m.base})${pickCosts[m.id] ? ` · ${unitPriceLabel(m, pickCosts[m.id].unitCost)}` : ""}</option>`;
+  const pickable = MATERIALS.filter((m) => m.kind !== "VH" && !m.stub);
+  $("#recipe-add-select").innerHTML = `<option value="">Chọn vật tư…</option><optgroup label="Tên thật từ phiếu chi đã duyệt">${pickable.filter((m) => m.dynamic).map(opt).join("")}</optgroup><optgroup label="Danh mục chuẩn">${pickable.filter((m) => !m.dynamic).map(opt).join("")}</optgroup>`;
   renderRecipeLines();
   $("#recipe-dialog").showModal();
 }
@@ -1970,8 +1989,24 @@ function renderRecipeLines() {
     const m = materialById.get(l.materialId);
     const spec = sliderSpec(m?.base, l.qty);
     const c = costs[l.materialId];
-    return `<div class="recipe-line" data-i="${i}"><div class="recipe-line-head"><strong>${escapeHtml(m?.name ?? l.materialId)}</strong><span data-cost>${c ? money(Math.round(l.qty * c.unitCost)) : "chưa có giá"}</span><button type="button" class="text-button" data-remove="${i}" aria-label="Bỏ ${escapeHtml(m?.name ?? "")}">Bỏ</button></div><div class="recipe-line-ctl"><input type="range" id="rq-${i}" min="${spec.min}" max="${spec.max}" step="${spec.step}" value="${l.qty}" aria-label="Định lượng ${escapeHtml(m?.name ?? "")}" /><input type="number" id="rn-${i}" min="0" step="${spec.step}" value="${l.qty}" aria-label="Số lượng" /><span class="unit">${escapeHtml(m?.base ?? "")}</span></div></div>`;
+    const dups = similarMaterials(l.materialId);
+    const choice = (x, checked) => `<label class="recipe-dup-opt"><input type="radio" name="dup-${i}" value="${escapeHtml(x.id)}" ${checked ? "checked" : ""} /> <span><b>${escapeHtml(x.name)}</b>${x.dynamic ? " <small>(tên từ phiếu chi)</small>" : ""} · ${costs[x.id] ? `${unitPriceLabel(x, costs[x.id].unitCost)}${costs[x.id].sources?.[0] ? ` · ${escapeHtml(receiptCode(findReceipt(costs[x.id].sources[0].receiptId) || { code: costs[x.id].sources[0].code, id: costs[x.id].sources[0].receiptId }))}` : ""}` : "chưa có giá"}</span></label>`;
+    const dupHtml = !dups.length ? "" : l.confirmed
+      ? `<p class="recipe-dup ok">✓ Đã xác nhận loại vật tư: <b>${escapeHtml(m?.name ?? "")}</b></p>`
+      : `<div class="recipe-dup warn" data-dup="${i}"><p>⚠ Vật tư này có thể trùng loại với vật tư khác. Chọn đúng loại tại thời điểm cập nhật công thức rồi bấm xác nhận:</p>${choice(m || { id: l.materialId, name: l.materialId, base: "" }, true)}${dups.map((x) => choice(x, false)).join("")}<button type="button" class="btn" data-confirm="${i}">XÁC NHẬN LOẠI VẬT TƯ NÀY</button></div>`;
+    return `<div class="recipe-line" data-i="${i}"><div class="recipe-line-head"><strong>${escapeHtml(m?.name ?? l.name ?? l.materialId)}</strong><span data-cost>${c ? money(Math.round(l.qty * c.unitCost)) : "chưa có giá"}</span><button type="button" class="text-button" data-remove="${i}" aria-label="Bỏ ${escapeHtml(m?.name ?? "")}">Bỏ</button></div><div class="recipe-line-ctl"><input type="range" id="rq-${i}" min="${spec.min}" max="${spec.max}" step="${spec.step}" value="${l.qty}" aria-label="Định lượng ${escapeHtml(m?.name ?? "")}" /><input type="number" id="rn-${i}" min="0" step="${spec.step}" value="${l.qty}" aria-label="Số lượng" /><span class="unit">${escapeHtml(m?.base ?? "")}</span></div>${dupHtml}</div>`;
   }).join("") || '<p class="muted">Chưa có vật tư. Chọn vật tư bên dưới để thêm.</p>';
+  host.querySelectorAll("[data-dup] input[type=radio]").forEach((radio) => radio.addEventListener("change", () => {
+    const i = Number(radio.closest("[data-dup]").dataset.dup);
+    recipeEdit.lines[i].materialId = radio.value;
+    recipeEdit.lines[i].name = materialById.get(radio.value)?.name;
+    renderRecipeLines();
+  }));
+  host.querySelectorAll("[data-confirm]").forEach((b) => b.addEventListener("click", () => {
+    const l = recipeEdit.lines[Number(b.dataset.confirm)];
+    l.confirmed = true; l.confirmedAt = Date.now(); l.confirmedBy = myName();
+    renderRecipeLines();
+  }));
   host.querySelectorAll(".recipe-line").forEach((row) => {
     const i = Number(row.dataset.i);
     const range = row.querySelector('input[type="range"]');
@@ -2001,7 +2036,10 @@ function updateRecipeTotal() {
   pctEl.className = `cost-chip ${r.missing.length ? "unknown" : costLevel(r.percent, isFoodCategory(cat))}`;
 }
 async function saveRecipe() {
-  const lines = recipeEdit.lines.filter((l) => Number(l.qty) > 0).map((l) => ({ materialId: l.materialId, qty: Math.round(Number(l.qty) * 100) / 100 }));
+  const live = recipeEdit.lines.filter((l) => Number(l.qty) > 0);
+  const pending = live.filter((l) => similarMaterials(l.materialId).length && !l.confirmed);
+  if (pending.length) { $("#recipe-error").textContent = `Còn ${pending.length} vật tư có thể trùng loại, hãy chọn đúng loại và bấm XÁC NHẬN: ${pending.map((l) => materialById.get(l.materialId)?.name ?? l.materialId).join(", ")}.`; return; }
+  const lines = live.map((l) => { const m = materialById.get(l.materialId); return { materialId: l.materialId, qty: Math.round(Number(l.qty) * 100) / 100, name: m?.name ?? l.name ?? "", base: m?.base ?? l.base ?? "", ...(l.confirmedAt ? { confirmedAt: l.confirmedAt, confirmedBy: l.confirmedBy || "" } : {}) }; });
   const payload = { id: recipeEdit.item.id, menuItemId: recipeEdit.item.id, menuName: recipeEdit.item.name, lines, updatedAt: Date.now(), updatedBy: myName() };
   try {
     await setDoc(doc(db, ...root, "recipes", recipeEdit.item.id), payload);
@@ -2014,12 +2052,12 @@ async function saveRecipe() {
 $("#reload-recipes").addEventListener("click", () => { state.recipesLoaded = false; loadRecipes(); });
 $("#close-recipe").addEventListener("click", () => $("#recipe-dialog").close());
 $("#recipe-save").addEventListener("click", saveRecipe);
-$("#recipe-draft").addEventListener("click", () => { recipeEdit.lines = draftRecipeFor(recipeEdit.item.name); renderRecipeLines(); });
+$("#recipe-draft").addEventListener("click", () => { recipeEdit.lines = draftRecipeFor(recipeEdit.item.name).map((l) => ({ ...l, confirmed: false })); renderRecipeLines(); });
 $("#recipe-add").addEventListener("click", () => {
   const id = $("#recipe-add-select").value;
   if (!id) return;
   const m = materialById.get(id);
-  recipeEdit.lines.push({ materialId: id, qty: m.base === "g" || m.base === "ml" ? 10 : 1 });
+  recipeEdit.lines.push({ materialId: id, name: m.name, qty: m.base === "g" || m.base === "ml" ? 10 : 1, confirmed: false });
   renderRecipeLines();
 });
 
@@ -2115,6 +2153,7 @@ $("#demo-delete").addEventListener("click", deleteDemo);
 function renderUsageCheck() {
   const host = $("#usage-check");
   if (!host) return;
+  syncMaterialRegistry();
   const { sales, source } = state.demo && !Object.keys(averageDailySales(state.dailyDocs, dailyKeys(7))).length ? { sales: DEFAULT_DAILY_SALES, source: "lượng bán giả định của bộ demo" } : salesForDemo();
   const usage = dailyMaterialUsage(sales, recipeByName);
   const to = new Date(); const toMs = new Date(to.getFullYear(), to.getMonth(), to.getDate() + 1).getTime();

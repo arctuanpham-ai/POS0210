@@ -1,4 +1,4 @@
-:root { color-scheme: light; --bg: #f6f0e5; --card: #fffcf7; --line: #dfcfb8; --ink: #2f241d; --muted: #77685b; --brand: #34241b; --accent: #6e432d; --danger: #a33125; --ok: #2f6b3f; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+:root { color-scheme: light; --bg: #f5f3ed; --card: #fffdfa; --line: #e0d2bb; --ink: #1e1e1e; --muted: #6b6f63; --brand: #1e1e1e; --accent: #6b4f3a; --danger: #a33125; --ok: #2f6b3f; font-family: Montserrat, Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
 body { margin: 0; background: var(--bg); color: var(--ink); line-height: 1.45; }
@@ -110,3 +110,9 @@ label.radio input { width: 20px; height: 20px; margin: 0; }
 .order-chips { display: flex; gap: 8px; margin-bottom: 10px; } .order-chips button { padding: 6px 12px; border: 1px solid #d1bea8; border-radius: 999px; background: #fffaf3; font-family: ui-monospace, monospace; font-weight: 700; }
 .order-chips button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 @media (min-width: 700px) { .hero { margin: 0 0 8px; border-radius: 0 0 20px 20px; overflow: hidden; } .cat-chips { margin: 0; padding-left: 0; padding-right: 0; } }
+
+.logo.wide { height: 52px; width: auto; border: 0; border-radius: 0; background: none; }
+.logo.wide.small { height: 30px; }
+.hero-photo img { object-position: center 60%; }
+.hero h1, .menu-section h2 { font-weight: 800; letter-spacing: .01em; }
+.tagline { letter-spacing: .02em; }

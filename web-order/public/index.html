@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Đặt món online · 0210</title>
   <meta name="description" content="Đặt món online tại 0210: chọn món, gửi đơn, thanh toán bằng QR. Không cần đăng nhập, không cần cài app." />
-  <meta name="theme-color" content="#34241b" />
+  <meta name="theme-color" content="#1e1e1e" />
   <meta name="format-detection" content="telephone=no" />
 
   <!-- Thẻ xem trước khi gửi link qua Zalo / Messenger / Facebook. Đổi tên miền trong og:url và og:image sau khi gắn tên miền riêng. -->
@@ -23,9 +23,12 @@
   <meta name="twitter:description" content="Chọn món, gửi đơn, thanh toán bằng QR. Không cần đăng nhập, không cần cài app." />
   <meta name="twitter:image" content="https://datmon0210.web.app/assets/og.png" />
 
-  <link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
-  <link rel="apple-touch-icon" href="assets/logo.svg" />
+  <link rel="icon" href="assets/icon.png" type="image/png" />
+  <link rel="apple-touch-icon" href="assets/icon.png" />
   <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700;800&display=swap" />
   <link rel="stylesheet" href="order.css" />
 </head>
 <body>
@@ -37,7 +40,7 @@
           <img src="assets/shop.jpg" alt="Ảnh quán" width="640" height="320" decoding="async" onerror="this.parentElement.hidden=true" />
         </div>
         <div class="hero-head">
-          <img class="logo" src="assets/logo.svg" alt="Logo quán" width="64" height="64" />
+          <img class="logo wide" src="assets/logo.png" alt="0210 Breakfast Coffee Drinks" width="124" height="52" />
           <div>
             <h1 id="shop-name">0210</h1>
             <p class="tagline" id="shop-tagline" hidden></p>
@@ -65,7 +68,7 @@
     <!-- ===== Màn hình theo dõi đơn ===== -->
     <div id="screen-track" hidden>
       <header class="track-head">
-        <img class="logo small" src="assets/logo.svg" alt="" width="40" height="40" />
+        <img class="logo wide small" src="assets/logo.png" alt="" width="70" height="30" />
         <b id="track-name">0210</b>
         <button type="button" class="text-button" id="back-to-menu">← Xem menu</button>
       </header>

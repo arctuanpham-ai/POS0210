@@ -20,7 +20,7 @@ export const APP_CHECK_SITE_KEY = "";
 // và lưu ở online_config/shop; các giá trị dưới đây chỉ dùng khi chưa có dữ liệu đó. Để trống thì trang ẩn dòng tương ứng.
 export const DEFAULT_SHOP = {
   name: "0210",
-  tagline: "Cà phê · Ăn sáng · Cơm trưa",
+  tagline: "Bữa sáng ngon · Cuộc sống đẹp hơn",
   address: "",
   phone: "",
   hours: "",

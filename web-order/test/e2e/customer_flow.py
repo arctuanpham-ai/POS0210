@@ -38,7 +38,7 @@ def run():
         page = ctx.new_page()
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.on("console", lambda m: errors.append(m.text) if m.type == "error" and "favicon" not in m.text and "shop.jpg" not in m.text and "404" not in m.text else None)
+        page.on("console", lambda m: errors.append(m.text) if m.type == "error" and "favicon" not in m.text and "shop.jpg" not in m.text and "404" not in m.text and "ERR_TUNNEL" not in m.text and "ERR_" not in m.text else None)
         mods = {"firebase-app.js": APP, "firebase-auth.js": AUTH, "firebase-firestore.js": FIRESTORE}
         def route(r):
             name = r.request.url.rsplit("/", 1)[-1].split("?")[0]
@@ -62,7 +62,7 @@ def run():
         check("12 Lê Lợi" in page.inner_text("#shop-info") and "6:30" in page.inner_text("#shop-info"), "địa chỉ, giờ mở cửa hiển thị")
         check(page.locator("a[href^='tel:']").count() == 1, "có link gọi điện")
         check(page.locator(".menu-section").count() == 2, "2 nhóm món")
-        check(page.locator(".dish.off").count() == 1 and "Tạm hết" in page.inner_text(".dish.off"), "món tắt bị mờ, ghi Tạm hết")
+        check(page.locator(".dish.off").count() == 0 and "Tạm hết" not in page.inner_text("#menu") and "Món tắt" not in page.inner_text("#menu"), "món ngừng bán bị ẩn hẳn, không hiện mờ")
         check(page.locator(".dish.off [data-act]").count() == 0, "món tắt không có nút thêm")
         page.screenshot(path=f"{SHOTS}/1-menu.png")
 

@@ -1,5 +1,5 @@
 // Danh mục vật tư chuẩn, giá vốn từ phiếu chi chi tiết và giá vốn món từ công thức. Hàm thuần, không Firebase, không DOM.
-import { normalizeText, isSummaryReceipt, groupLabelOf } from "./expense-rules.js?v=20261019-01";
+import { normalizeText, isSummaryReceipt, groupLabelOf } from "./expense-rules.js?v=20261019-02";
 
 export const KIND_LABELS = { NL: "Nguyên liệu", BB: "Bao bì theo món", VH: "Vận hành" };
 
@@ -60,6 +60,8 @@ export const MATERIALS = [
   M("giay_an", "Giấy ăn", "VESINH", "VH", "gói", [["gói", 1]], ["giay an"]),
   M("nuoc_rua_chen", "Nước rửa chén", "VESINH", "VH", "chai", [["chai", 1], ["can", 1]], ["nuoc rua chen"]),
 ];
+/** Danh mục chuẩn gốc: quy tắc ghép tên / tên gọi khác chỉ áp cho nhóm này. Vật tư động (từ phiếu chi) thêm vào MATERIALS sau. */
+const STATIC_MATERIALS = MATERIALS.slice();
 export const materialById = new Map(MATERIALS.map((m) => [m.id, m]));
 
 /** Quy tắc nhóm theo đúng tên vật tư chuẩn, để ô nhóm tự điền khi chọn từ danh mục. */
@@ -67,18 +69,97 @@ export const catalogRules = MATERIALS.map((m) => ({ name: normalizeText(m.name),
 
 /** Vật tư chuẩn của một dòng phiếu: theo materialId nếu có, rồi tên trùng, rồi tên gọi khác dài nhất có trong tên. */
 export const matchMaterial = (line) => {
-  if (line?.materialId && materialById.has(line.materialId)) return materialById.get(line.materialId);
+  if (line?.materialId && materialById.has(line.materialId) && !materialById.get(line.materialId).dynamic) return materialById.get(line.materialId);
   const name = normalizeText(line?.materialName);
   if (!name) return null;
-  const exact = MATERIALS.find((m) => normalizeText(m.name) === name);
+  const exact = STATIC_MATERIALS.find((m) => normalizeText(m.name) === name);
   if (exact) return exact;
   let best = null, bestLen = 0;
   const padded = ` ${name} `;
-  for (const m of MATERIALS) for (const a of m.aliases) {
+  for (const m of STATIC_MATERIALS) for (const a of m.aliases) {
     const n = normalizeText(a);
     if (n && padded.includes(` ${n} `) && n.length > bestLen) { best = m; bestLen = n.length; }
   }
   return best;
+};
+
+/* ---------- Vật tư động: tên thật trên phiếu chi đã duyệt (sát thực tế hơn danh mục chuẩn) ---------- */
+const WEIGHT_UNITS = { kg: 1000, g: 1, gam: 1, gram: 1, gr: 1, kilogram: 1000, kilo: 1000 };
+const VOLUME_UNITS = { lit: 1000, l: 1000, ml: 1 };
+/** Đơn vị định lượng suy ra từ đơn vị mua: cân nặng -> g, thể tích -> ml, còn lại giữ nguyên đơn vị. */
+export const dynamicBase = (unit) => {
+  const u = normalizeText(unit);
+  if (!u) return null;
+  if (u in WEIGHT_UNITS) return { base: "g", factor: WEIGHT_UNITS[u] };
+  if (u in VOLUME_UNITS) return { base: "ml", factor: VOLUME_UNITS[u] };
+  return { base: String(unit).trim().toLocaleLowerCase("vi"), factor: 1 };
+};
+export const dynamicIdOf = (name) => `rm:${normalizeText(name).replace(/ /g, "_")}`;
+const STATIC_NAME_KEYS = new Set(STATIC_MATERIALS.map((m) => normalizeText(m.name)));
+/** Vật tư động của một dòng phiếu: có tên và KHÔNG trùng đúng tên vật tư chuẩn (trùng đúng tên thì dùng vật tư chuẩn). */
+const dynamicFor = (line) => {
+  if (line?.materialId && materialById.has(line.materialId) && !materialById.get(line.materialId).dynamic) return null;
+  const key = normalizeText(line?.materialName);
+  if (!key || STATIC_NAME_KEYS.has(key)) return null;
+  return { id: dynamicIdOf(line.materialName), key };
+};
+/** Các vật tư mà một dòng phiếu được tính vào: vật tư chuẩn (theo quy tắc cũ) và/hoặc vật tư động theo đúng tên dòng. */
+export const lineTargets = (line) => {
+  const out = [];
+  const m = matchMaterial(line);
+  if (m) out.push({ id: m.id, factor: unitFactor(m, line.unit), base: m.base });
+  const d = dynamicFor(line);
+  if (d) { const b = dynamicBase(line.unit); out.push({ id: d.id, factor: b ? b.factor : null, base: b ? b.base : null, dynamic: true }); }
+  return out;
+};
+const BAOBI_LABEL = normalizeText(groupLabelOf("BAOBI"));
+/**
+ * Danh sách vật tư động từ phiếu chi (đã lọc phiếu hợp lệ) và từ dòng công thức đã lưu (để công thức cũ vẫn có tên khi phiếu không còn).
+ * Mỗi tên (không dấu) là một vật tư riêng: hãng khác, giá khác thì người nhập đặt tên khác.
+ */
+export const buildDynamicMaterials = (receipts, recipeLines = []) => {
+  const map = new Map();
+  for (const r of Array.isArray(receipts) ? receipts : []) {
+    if (!r || r.status === "DELETED" || r.status === "CANCELLED" || isSummaryReceipt(r)) continue;
+    const at = Number(r.purchaseDate || 0);
+    for (const line of r.items || []) {
+      const d = dynamicFor(line);
+      const b = dynamicBase(line.unit);
+      if (!d || !b || !(Number(line.qty) > 0)) continue;
+      const cur = map.get(d.id);
+      if (cur && cur.base !== b.base) continue;
+      const label = String(line.expenseGroup || line.materialGroup || "").trim();
+      if (!cur) map.set(d.id, { id: d.id, name: String(line.materialName).trim(), group: null, groupLabel: label, kind: normalizeText(label) === BAOBI_LABEL ? "BB" : "NL", base: b.base, units: [{ unit: b.base === "g" ? "kg" : b.base === "ml" ? "lít" : b.base, per: b.base === "g" || b.base === "ml" ? 1000 : 1 }, { unit: b.base, per: 1 }], aliases: [], dynamic: true, at, lastUnit: String(line.unit || "").trim() });
+      else if (at >= cur.at) Object.assign(cur, { name: String(line.materialName).trim(), at, lastUnit: String(line.unit || "").trim(), groupLabel: label || cur.groupLabel });
+    }
+  }
+  for (const l of recipeLines) {
+    if (!l || !String(l.materialId || "").startsWith("rm:") || map.has(l.materialId)) continue;
+    const base = l.base || "g";
+    map.set(l.materialId, { id: l.materialId, name: String(l.name || l.materialId.slice(3).replace(/_/g, " ")), group: null, groupLabel: "", kind: "NL", base, units: [{ unit: base, per: 1 }], aliases: [], dynamic: true, at: 0, lastUnit: base, stub: true });
+  }
+  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, "vi"));
+};
+/** Cập nhật MATERIALS / materialById tại chỗ để mọi nơi dùng danh mục thấy cả vật tư động. */
+export const registerDynamicMaterials = (list) => {
+  for (let i = MATERIALS.length - 1; i >= 0; i--) if (MATERIALS[i].dynamic) { materialById.delete(MATERIALS[i].id); MATERIALS.splice(i, 1); }
+  for (const m of list) { MATERIALS.push(m); materialById.set(m.id, m); }
+};
+
+const GENERIC_TOKENS = new Set(["ca", "phe", "hat", "loai", "tuoi", "100", "kg", "goi", "hop"]);
+const tokensOf = (name) => normalizeText(name).split(" ").filter((t) => t.length >= 3 && !GENERIC_TOKENS.has(t));
+const groupKeyOf = (m) => normalizeText(m.dynamic ? m.groupLabel : groupLabelOf(m.group));
+/**
+ * Vật tư có thể trùng loại với `id`: cùng đơn vị định lượng, cùng nhóm, và (một trong hai là tên thật từ phiếu chi, hoặc có chung từ khoá).
+ * Dùng để buộc người chỉnh công thức xác nhận đúng loại vật tư tại thời điểm cập nhật.
+ */
+export const similarMaterials = (id) => {
+  const x = materialById.get(id);
+  if (!x || x.kind === "VH") return [];
+  const gx = groupKeyOf(x);
+  const tx = new Set(tokensOf(x.name));
+  return MATERIALS.filter((y) => y.id !== id && y.kind !== "VH" && !y.stub && y.base === x.base && gx && groupKeyOf(y) === gx
+    && (x.dynamic || y.dynamic || tokensOf(y.name).some((t) => tx.has(t)))).slice(0, 8);
 };
 
 const UNIT_ALIASES = { gam: "g", gram: "g", gr: "g", kilogram: "kg", kilo: "kg", lit: "lít", l: "lít", lít: "lít", "lit ": "lít" };
@@ -104,20 +185,23 @@ export const materialCosts = (receipts, { now = Date.now(), windowDays = 30 } = 
     if (!r || r.status === "DELETED" || r.status === "CANCELLED" || isSummaryReceipt(r)) continue;
     const at = Number(r.purchaseDate || 0);
     for (const line of r.items || []) {
-      const m = matchMaterial(line);
       const qty = Number(line.qty || 0);
       const amount = Number(line.amount ?? qty * Number(line.unitPrice || 0));
-      if (!m) { if (qty > 0 && amount > 0 && String(line?.materialName || "").trim()) unmatched.push({ name: String(line.materialName).trim(), qty, unit: line.unit || "", amount, receiptId: r.id, code: r.code || "", at }); continue; }
-      const f = unitFactor(m, line.unit);
+      const targets = lineTargets(line);
+      if (!targets.length) { if (qty > 0 && amount > 0 && String(line?.materialName || "").trim()) unmatched.push({ name: String(line.materialName).trim(), qty, unit: line.unit || "", amount, receiptId: r.id, code: r.code || "", at }); continue; }
       if (!(qty > 0) || !(amount > 0)) continue;
-      if (!f) { unconvertible.push({ materialId: m.id, name: line.materialName, unit: line.unit, receiptId: r.id }); continue; }
-      const a = acc.get(m.id) || { inWindowAmount: 0, inWindowQty: 0, last: null, buys: 0, srcs: [] };
-      a.srcs.push({ receiptId: r.id, code: r.code || "", at, name: String(line.materialName || ""), unitCost: amount / (qty * f) });
-      const baseQty = qty * f;
-      if (at >= from) { a.inWindowAmount += amount; a.inWindowQty += baseQty; }
-      if (!a.last || at > a.last.at) a.last = { at, unitCost: amount / baseQty };
-      a.buys += 1;
-      acc.set(m.id, a);
+      for (const t of targets) {
+        const f = t.factor;
+        if (!f) { unconvertible.push({ materialId: t.id, name: line.materialName, unit: line.unit, receiptId: r.id }); continue; }
+        const a = acc.get(t.id) || { inWindowAmount: 0, inWindowQty: 0, last: null, buys: 0, srcs: [], base: t.base };
+        if (a.base && t.base && a.base !== t.base) { unconvertible.push({ materialId: t.id, name: line.materialName, unit: line.unit, receiptId: r.id }); continue; }
+        a.srcs.push({ receiptId: r.id, code: r.code || "", at, name: String(line.materialName || ""), unitCost: amount / (qty * f) });
+        const baseQty = qty * f;
+        if (at >= from) { a.inWindowAmount += amount; a.inWindowQty += baseQty; }
+        if (!a.last || at > a.last.at) a.last = { at, unitCost: amount / baseQty };
+        a.buys += 1;
+        acc.set(t.id, a);
+      }
     }
   }
   const out = {};
@@ -207,10 +291,12 @@ export const usageVsPurchase = ({ receipts, usagePerDay, from, to }) => {
     const at = Number(r.purchaseDate || 0);
     if (at < from || at >= to) continue;
     for (const l of r.items || []) {
-      const m = matchMaterial(l);
-      const f = m && unitFactor(m, l.unit);
-      if (!m || !f) continue;
-      bought[m.id] = (bought[m.id] || 0) + Number(l.qty || 0) * f;
+      for (const t of lineTargets(l)) {
+        if (!t.factor) continue;
+        const reg = materialById.get(t.id);
+        if (t.dynamic && reg && reg.base !== t.base) continue;
+        bought[t.id] = (bought[t.id] || 0) + Number(l.qty || 0) * t.factor;
+      }
     }
   }
   const ids = new Set([...Object.keys(bought), ...Object.keys(usagePerDay || {}).filter((k) => usagePerDay[k] > 0)]);

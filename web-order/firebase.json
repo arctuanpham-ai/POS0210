@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "site": "pos0210-order",
+    "site": "datmon0210",
     "public": "public",
     "ignore": ["firebase.json", ".firebaserc", "**/.*", "**/node_modules/**"],
     "cleanUrls": true,

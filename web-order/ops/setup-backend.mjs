@@ -21,9 +21,9 @@ const fail = (m, extra) => { console.error("::error::" + m, extra ? JSON.stringi
 
 // ---- 1. Site hosting ----
 {
-  const r = await call("POST", `https://firebasehosting.googleapis.com/v1beta1/projects/${PROJECT}/sites?siteId=pos0210-order`, {});
-  if (r.ok) console.log("Đã tạo site pos0210-order");
-  else if (r.status === 409) console.log("Site pos0210-order đã có");
+  const r = await call("POST", `https://firebasehosting.googleapis.com/v1beta1/projects/${PROJECT}/sites?siteId=datmon0210`, {});
+  if (r.ok) console.log("Đã tạo site datmon0210");
+  else if (r.status === 409) console.log("Site datmon0210 đã có");
   else fail("Không tạo được site hosting", r);
 }
 

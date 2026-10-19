@@ -52,6 +52,10 @@ object OnlineOrderService {
     val orders: StateFlow<List<OnlineOrder>> = _orders
     private val _error = MutableStateFlow("")
     val error: StateFlow<String> = _error
+    private val SOS_UNITS = intArrayOf(1, 1, 1, 1, 1, 3, 3, 1, 3, 1, 3, 3, 1, 1, 1, 1, 1, 7)
+    private val _flash = MutableStateFlow(false)
+    /** true đúng lúc đèn nháy sáng: màn hình nháy trắng đồng bộ với đèn pin. */
+    val flash: StateFlow<Boolean> = _flash
     private val _connected = MutableStateFlow(false)
     val connected: StateFlow<Boolean> = _connected
 
@@ -96,8 +100,19 @@ object OnlineOrderService {
         job = scope.launch {
             var tick = 0
             launch {
-                var phase = false
+                // Nháy kiểu SOS (… --- …) bằng đèn pin và toàn màn hình, im lặng, tới khi mọi đơn mới được nhận/từ chối.
+                var idx = 0
                 while (isActive) {
+                    val waiting = _orders.value.any { it.status == OnlineOrderRules.NEW }
+                    if (waiting && lightOn(app)) {
+                        val on = idx % 2 == 0
+                        setTorch(app, on); _flash.value = on
+                        delay(SOS_UNITS[idx] * 220L)
+                        idx = (idx + 1) % SOS_UNITS.size
+                    } else { idx = 0; setTorch(app, false); _flash.value = false; delay(500L) }
+                }
+            }
+            while (isActive) {
                     val waiting = _orders.value.any { it.status == OnlineOrderRules.NEW }
                     if (waiting && lightOn(app)) { phase = !phase; setTorch(app, phase); lights(app, true) }
                     else { phase = false; lights(app, false) }

@@ -21,6 +21,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -206,6 +207,12 @@ fun App(vm: PosViewModel = viewModel()) {
     val dayDue by vm.dayCloseDate.collectAsState()
     if (dayDue != null && !reminder && !locked && sc != "CLOSE_DAY") DayCloseReminderDialog(vm, dayDue!!)
     if (locked) LockScreen(vm)
+    run {
+        val flashing by vn.ecohome.pos0210.cloud.OnlineOrderService.flash.collectAsState()
+        if (flashing) Box(Modifier.fillMaxSize().background(Color.White), contentAlignment = Alignment.Center) {
+            Text("ĐƠN ONLINE MỚI", fontSize = 40.sp, fontWeight = FontWeight.Black, color = Color(0xFFB3261E))
+        }
+    }
     val kitchenUi by vm.kitchenPrint.collectAsState()
     kitchenUi?.let { KitchenPrintOverlay(vm, it) }
     if (!locked && sc != "LOGIN") BankReceivedBanner(vm)

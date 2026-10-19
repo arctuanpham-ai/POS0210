@@ -27,14 +27,32 @@ export function nameIssues(items = []) {
   return { duplicates, spacing };
 }
 
-/** Món có trong số bán (dashboardDaily) nhưng không thấy trong menu web: theo mã món, rồi theo tên. */
+/** Combo được quản lý riêng trên máy POS (không thuộc nhóm món), dashboardDaily ghi tên dạng "COMBO · ...". */
+export const isComboName = (name) => /^\s*combo\s*[·•:\-]/i.test(String(name || ""));
+
+/** Combo đã bán (gộp theo tên) để hiện thông tin riêng, không báo lỗi. */
+export function soldCombos(dailyDocs = {}) {
+  const out = new Map();
+  for (const d of Object.values(dailyDocs || {})) {
+    for (const it of Array.isArray(d?.items) ? d.items : []) {
+      if (!isComboName(it.name)) continue;
+      const k = normName(it.name);
+      const cur = out.get(k) || { name: it.name, qty: 0 };
+      cur.qty += Number(it.qty || 0);
+      out.set(k, cur);
+    }
+  }
+  return [...out.values()].sort((a, b) => b.qty - a.qty);
+}
+
+/** Món có trong số bán (dashboardDaily) nhưng không thấy trong menu web: theo mã món, rồi theo tên. Combo không tính (quản lý riêng). */
 export function soldNotInMenu(dailyDocs = {}, items = []) {
   const ids = new Set(items.filter((m) => m.deleted !== true).map((m) => String(m.id)));
   const names = new Set(items.filter((m) => m.deleted !== true).map((m) => normName(m.name)));
   const out = new Map();
   for (const d of Object.values(dailyDocs || {})) {
     for (const it of Array.isArray(d?.items) ? d.items : []) {
-      if (ids.has(String(it.itemId)) || names.has(normName(it.name))) continue;
+      if (isComboName(it.name) || ids.has(String(it.itemId)) || names.has(normName(it.name))) continue;
       const k = normName(it.name);
       const cur = out.get(k) || { name: it.name, qty: 0 };
       cur.qty += Number(it.qty || 0);

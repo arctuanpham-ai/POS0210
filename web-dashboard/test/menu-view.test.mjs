@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { menuGroups, mergePlan, nameIssues, soldNotInMenu } from "../menu-view.js";
+import { menuGroups, mergePlan, nameIssues, soldCombos, soldNotInMenu } from "../menu-view.js";
 
 const cats = [{ id: "c2", name: "Trà", sortOrder: 2 }, { id: "c1", name: "Cà phê", sortOrder: 1 }];
 const items = [
@@ -51,4 +51,10 @@ test("kiểm tra món sửa trên web", () => {
   assert.match(menuEditProblem({ id: "2", name: "Mới", price: 30000, categoryId: "c", productCode: "CF-001" }, items), /đã thuộc/);
   assert.match(menuEditProblem({ id: "2", name: "Mới", price: 30200, categoryId: "c" }, items), /tròn 500/);
   assert.equal(menuEditProblem({ id: "1", name: "Bạc xỉu", price: 32000, categoryId: "c", productCode: "CF-001" }, items), "");
+});
+
+test("combo không bị báo thiếu trong menu, được liệt kê riêng", () => {
+  const docs = { d1: { items: [{ itemId: "c1", name: "COMBO · Trà Ngon [1×Trà chanh + 1×Cơm gà]", qty: 10 }, { itemId: "c2", name: "COMBO · Cam Đẹp [1×Nước ép cam]", qty: 5 }] } };
+  assert.deepEqual(soldNotInMenu(docs, items), []);
+  assert.deepEqual(soldCombos(docs).map((c) => c.qty), [10, 5]);
 });

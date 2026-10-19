@@ -55,8 +55,39 @@ object OnlineOrderService {
     private val _connected = MutableStateFlow(false)
     val connected: StateFlow<Boolean> = _connected
 
-    fun voiceOn(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("voice", true)
-    fun setVoice(context: Context, on: Boolean) { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean("voice", on).apply() }
+    /** Kiểu báo đơn mới: SOUND = bíp + đọc giọng + rung; LIGHT = im lặng, chỉ đèn pin nháy + rung + đèn ngoài; BOTH = cả hai. */
+    fun mode(context: Context): String = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("mode", "SOUND") ?: "SOUND"
+    fun setMode(context: Context, value: String) { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("mode", value).apply(); if (!lightOn(context)) lights(context, false) }
+    private fun soundOn(context: Context) = mode(context) != "LIGHT"
+    private fun lightOn(context: Context) = mode(context) != "SOUND"
+    /** Đèn ngoài (ổ cắm/relay WiFi như Shelly, Sonoff Tasmota): gọi đường dẫn http bật khi có đơn chờ nhận, tắt khi hết. */
+    fun lampUrl(context: Context, on: Boolean) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(if (on) "lamp_on" else "lamp_off", "").orEmpty()
+    fun setLampUrls(context: Context, onUrl: String, offUrl: String) { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("lamp_on", onUrl.trim()).putString("lamp_off", offUrl.trim()).apply() }
+    fun testLamp(app: Application) { CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch { callLamp(lampUrl(app, true)); delay(3000L); callLamp(lampUrl(app, false)); _error.value = "" } }
+    private fun callLamp(url: String) {
+        if (!url.startsWith("http")) return
+        runCatching { (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply { connectTimeout = 3000; readTimeout = 3000 }.also { it.responseCode; it.disconnect() } }
+            .onFailure { _error.value = "Không gọi được đèn ngoài: ${it.message}" }
+    }
+    private var torchState = false
+    private var lampState = false
+    private fun setTorch(context: Context, on: Boolean) {
+        if (torchState == on) return
+        runCatching {
+            val cm = context.getSystemService(Context.CAMERA_SERVICE) as android.hardware.camera2.CameraManager
+            val id = cm.cameraIdList.firstOrNull { cm.getCameraCharacteristics(it).get(android.hardware.camera2.CameraCharacteristics.FLASH_INFO_AVAILABLE) == true } ?: return
+            cm.setTorchMode(id, on); torchState = on
+        }
+    }
+    /** Bật/tắt toàn bộ đèn cảnh báo (đèn pin nháy do vòng lặp riêng; đèn ngoài chỉ gọi khi đổi trạng thái). */
+    private fun lights(context: Context, on: Boolean) {
+        if (!on) setTorch(context, false)
+        if (on != lampState) {
+            lampState = on
+            val url = lampUrl(context, on)
+            if (url.isNotBlank()) CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch { callLamp(url) }
+        }
+    }
 
     private fun ms(v: Any?): Long? = when (v) { is Timestamp -> v.toDate().time; is Number -> v.toLong(); is Date -> v.time; else -> null }
 
@@ -64,6 +95,15 @@ object OnlineOrderService {
         if (job?.isActive == true) return
         job = scope.launch {
             var tick = 0
+            launch {
+                var phase = false
+                while (isActive) {
+                    val waiting = _orders.value.any { it.status == OnlineOrderRules.NEW }
+                    if (waiting && lightOn(app)) { phase = !phase; setTorch(app, phase); lights(app, true) }
+                    else { phase = false; lights(app, false) }
+                    delay(600L)
+                }
+            }
             while (isActive) {
                 runCatching { ensureAttached(app) }.onFailure { _error.value = it.message ?: it.javaClass.simpleName }
                 runCatching { remindAndSweep(app) }
@@ -104,7 +144,7 @@ object OnlineOrderService {
     private fun announce(app: Application, fresh: List<OnlineOrder>) {
         lastAnnounce = System.currentTimeMillis()
         val text = OnlineOrderRules.announceText(fresh)
-        DeliveryAnnouncer.announce(app, text, voiceOn(app))
+        DeliveryAnnouncer.announce(app, text, soundOn(app), vibrate = true, beep = soundOn(app))
         notify(app, fresh.size, text)
     }
 
@@ -114,7 +154,7 @@ object OnlineOrderService {
         val waiting = list.filter { it.status == OnlineOrderRules.NEW }
         if (waiting.isNotEmpty() && now - lastAnnounce >= REPEAT_MS) {
             lastAnnounce = now
-            DeliveryAnnouncer.announce(app, "Còn ${waiting.size} đơn online chưa nhận.", voiceOn(app))
+            DeliveryAnnouncer.announce(app, "Còn ${waiting.size} đơn online chưa nhận.", soundOn(app), vibrate = true, beep = soundOn(app))
         }
         if (_connected.value) OnlineOrderRules.overdueToClose(list, now).forEach { o ->
             CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch { runCatching { apply(app, o.id, "expire", "POS") } }

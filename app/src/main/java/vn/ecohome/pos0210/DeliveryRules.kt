@@ -104,7 +104,7 @@ object PaymentFixPolicy {
 
 /** Còi + rung + đọc giọng tiếng Việt (nếu máy có giọng vi-VN). Mọi lỗi đều bị nuốt để không ảnh hưởng bán hàng. */
 object DeliveryAnnouncer {
-    fun announce(context: Context, text: String, speak: Boolean, vibrate: Boolean = true) {
+    fun announce(context: Context, text: String, speak: Boolean, vibrate: Boolean = true, beep: Boolean = true) {
         if (vibrate) runCatching {
             val vibrator = if (Build.VERSION.SDK_INT >= 31) context.getSystemService(VibratorManager::class.java).defaultVibrator
             else @Suppress("DEPRECATION") (context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator)
@@ -112,7 +112,7 @@ object DeliveryAnnouncer {
             if (Build.VERSION.SDK_INT >= 26) vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1))
             else @Suppress("DEPRECATION") vibrator.vibrate(pattern, -1)
         }
-        runCatching {
+        if (beep) runCatching {
             val tone = ToneGenerator(AudioManager.STREAM_MUSIC, 90)
             tone.startTone(ToneGenerator.TONE_PROP_BEEP2, 600)
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ runCatching { tone.release() } }, 900)

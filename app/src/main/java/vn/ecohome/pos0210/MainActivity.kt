@@ -313,7 +313,9 @@ fun Tables(vm: PosViewModel) {
             val online by vm.onlineOrders.collectAsState()
             val need = online.count { it.status == vn.ecohome.pos0210.cloud.OnlineOrderRules.NEW }
             val overdue = vn.ecohome.pos0210.cloud.OnlineOrderRules.attention(online, timerNow) - need
-            if (need + overdue > 0) Surface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).clickable { vm.screen.value = "ONLINE" }, color = Color(0xFFB3261E), shape = RoundedCornerShape(8.dp)) {
+            val flashT by androidx.compose.animation.core.rememberInfiniteTransition(label = "online-flash").animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(500), androidx.compose.animation.core.RepeatMode.Reverse), label = "t")
+            val flash = androidx.compose.ui.graphics.lerp(Color(0xFFB3261E), Color(0xFFFF6A00), flashT)
+            if (need + overdue > 0) Surface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).clickable { vm.screen.value = "ONLINE" }, color = if (need > 0) flash else Color(0xFFB3261E), shape = RoundedCornerShape(8.dp)) {
                 Column(Modifier.padding(10.dp)) {
                     Text("🔔 ĐƠN ONLINE: $need đơn mới chờ nhận" + (if (overdue > 0) " · $overdue đơn quá hạn thanh toán" else ""), color = Color.White, fontWeight = FontWeight.Black, fontSize = 14.sp)
                     Text("Bấm để nhận / từ chối / xác nhận đã thu tiền.", color = Color.White, fontSize = 12.sp)

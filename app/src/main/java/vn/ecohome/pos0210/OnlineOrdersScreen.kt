@@ -36,7 +36,10 @@ fun OnlineOrdersScreen(vm: PosViewModel) {
     val connected by OnlineOrderService.connected.collectAsState()
     val error by OnlineOrderService.error.collectAsState()
     val message by vm.onlineMessage.collectAsState()
-    var voice by remember { mutableStateOf(OnlineOrderService.voiceOn(context)) }
+    var mode by remember { mutableStateOf(OnlineOrderService.mode(context)) }
+    var lampOpen by remember { mutableStateOf(false) }
+    var lampOn by remember { mutableStateOf(OnlineOrderService.lampUrl(context, true)) }
+    var lampOff by remember { mutableStateOf(OnlineOrderService.lampUrl(context, false)) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var rejecting by remember { mutableStateOf<OnlineOrder?>(null) }
     LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(1000L); now = System.currentTimeMillis() } }
@@ -55,8 +58,23 @@ fun OnlineOrdersScreen(vm: PosViewModel) {
         Header("Đơn online · ${R.attention(orders, now)}") { vm.screen.value = "TABLES" }
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(if (connected) "● Đang nghe đơn mới" else "○ Chưa kết nối", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = if (connected) Color(0xFF2F7D32) else Color(0xFFB3261E), modifier = Modifier.weight(1f))
-            Text("Đọc to qua loa", fontSize = 13.sp)
-            Switch(voice, { voice = it; OnlineOrderService.setVoice(context, it) }, Modifier.padding(start = 8.dp))
+            TextButton(onClick = { lampOpen = !lampOpen }) { Text(if (lampOpen) "ẨN CÀI ĐẶT BÁO ĐƠN" else "CÀI ĐẶT BÁO ĐƠN", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+        }
+        if (lampOpen) Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Cách báo khi có đơn mới", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("SOUND" to "Âm thanh", "LIGHT" to "Chỉ đèn (im lặng)", "BOTH" to "Cả hai").forEach { (k, v) ->
+                    FilterChip(mode == k, { mode = k; OnlineOrderService.setMode(context, k) }, { Text(v, fontSize = 12.sp, maxLines = 1, softWrap = false) })
+                }
+            }
+            Text("Chế độ đèn: đèn pin của máy POS nháy liên tục + rung, tới khi đơn được nhận hoặc từ chối. Đặt máy POS nơi nhân viên nhìn thấy đèn.", fontSize = 11.sp)
+            Text("Đèn ngoài (ổ cắm / relay WiFi Shelly, Sonoff...): dán đường dẫn http để BẬT và TẮT đèn, ví dụ http://192.168.1.50/relay/0?turn=on. Để trống nếu không dùng.", fontSize = 11.sp)
+            OutlinedTextField(lampOn, { lampOn = it }, label = { Text("Đường dẫn BẬT đèn") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(lampOff, { lampOff = it }, label = { Text("Đường dẫn TẮT đèn") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { OnlineOrderService.setLampUrls(context, lampOn, lampOff) }) { Text("LƯU") }
+                OutlinedButton(onClick = { OnlineOrderService.setLampUrls(context, lampOn, lampOff); OnlineOrderService.testLamp(context.applicationContext as android.app.Application) }) { Text("THỬ ĐÈN 3 GIÂY") }
+            }
         }
         if (error.isNotBlank()) Text(error, Modifier.padding(horizontal = 16.dp), color = Color(0xFFB3261E), fontSize = 12.sp, fontWeight = FontWeight.Bold)
         if (message.isNotBlank()) Text(message, Modifier.padding(horizontal = 16.dp), color = Brown, fontSize = 12.sp, fontWeight = FontWeight.Bold)

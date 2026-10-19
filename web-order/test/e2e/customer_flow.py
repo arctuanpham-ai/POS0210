@@ -142,7 +142,7 @@ def run():
         page.evaluate("([r]) => { window.__mockSet(r + '/online_limits/u_guest1', { pending: 1, lastAt: { __ms: Date.now() }, lastOrder: 'ZZZZZZ' }); window.__mockSet(r + '/online_limits/p_0912345678', { pending: 1, lastAt: { __ms: Date.now() }, lastOrder: 'ZZZZZZ' }); }", [ROOT])
         page.evaluate("(c) => { localStorage.setItem('pos0210o.codes', JSON.stringify([c])); }", code)
         page.reload(); page.wait_for_selector(".pay-card svg")
-        check("không được hoàn tiền hoặc huỷ" in page.inner_text("#track-body"), "cảnh báo: sau khi thanh toán không hoàn/huỷ")
+        check("không được hoàn tiền nếu huỷ đơn" in page.inner_text("#track-body"), "cảnh báo: sau khi thanh toán không hoàn/huỷ")
         check(page.locator("[data-act2='cancel']").count() == 1 and page.locator("[data-act2='edit']").count() == 1, "có nút Huỷ đơn và Sửa đơn")
         page.once("dialog", lambda d: d.dismiss())
         page.click("[data-act2='cancel']"); page.wait_for_timeout(300)

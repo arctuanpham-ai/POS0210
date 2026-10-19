@@ -449,3 +449,6 @@ button.paylist-row { width: 100%; font: inherit; color: inherit; cursor: pointer
 .menu-row .oo-vis { flex: 0 0 auto; margin-left: auto; padding: 4px 8px; font-size: 12px; border: 1px solid var(--line, #eee6dc); border-radius: 999px; background: #eef7ee; color: #2d6a2d; cursor: pointer; }
 .menu-row .oo-vis.is-hidden { background: #fdeaea; color: #a12626; border-color: #e9b8b8; font-weight: 700; }
 .menu-row.online-hidden { box-shadow: inset 3px 0 0 #c0392b; }
+
+.oo-del { margin-left: auto; padding: 6px 10px; font-size: 13px; border: 1px solid #e9b8b8; border-radius: 10px; background: #fdeaea; color: #a12626; cursor: pointer; }
+.oo-bulk { margin: 6px 0 12px; }

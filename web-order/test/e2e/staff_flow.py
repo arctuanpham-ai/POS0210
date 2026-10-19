@@ -51,9 +51,9 @@ export const onSnapshot = (ref, next, err) => {
 export const writeBatch = () => { const ops = []; const b = { set: (r, d) => { ops.push(['set', r, d]); return b; }, update: (r, d) => { ops.push(['update', r, d]); return b; }, delete: (r) => { ops.push(['delete', r]); return b; }, commit: async () => { for (const [k, r, d] of ops) { if (k === 'delete') delete S.docs[r.path]; else S.docs[r.path] = { ...(k === 'update' ? S.docs[r.path] : {}), ...d }; notify(r.path); } } }; return b; };
 export const runTransaction = async (db, fn) => {
   const pending = [];
-  const tx = { get: async (ref) => snapDoc(ref.path), update: (ref, d) => { pending.push([ref.path, d]); return tx; }, set: (ref, d) => { pending.push([ref.path, d, true]); return tx; }, delete: () => tx };
+  const tx = { get: async (ref) => snapDoc(ref.path), update: (ref, d) => { pending.push([ref.path, d]); return tx; }, set: (ref, d) => { pending.push([ref.path, d, true]); return tx; }, delete: (ref) => { pending.push([ref.path, null, false, true]); return tx; } };
   const out = await fn(tx);
-  for (const [p, d, whole] of pending) { S.writes.push([p, d]); S.docs[p] = { ...(whole ? {} : S.docs[p]), ...d }; notify(p); }
+  for (const [p, d, whole, del] of pending) { if (del) { delete S.docs[p]; notify(p); continue; } S.writes.push([p, d]); S.docs[p] = { ...(whole ? {} : S.docs[p]), ...d }; notify(p); }
   return out;
 };
 """
@@ -144,6 +144,15 @@ def run():
         print("Tắt nhận đơn & lưu thông tin quán")
         page.click("#oo-toggle")
         page.wait_for_function("document.querySelector('#oo-toggle').textContent.includes('TẠM NGƯNG')")
+        # --- xoá đơn thử (chủ quán) ---
+        n_before = page.locator(".oo-card").count()
+        check(n_before >= 2 and page.locator("[data-oo-del]").count() == n_before, "chủ quán thấy nút Xoá đơn trên mọi thẻ")
+        first_id = page.locator(".oo-card").first.get_attribute("data-oo")
+        page.locator(".oo-card").first.locator("[data-oo-del]").click(); page.wait_for_timeout(300)
+        check(page.evaluate(f"window.__mock.docs['{ROOT}/online_orders/{first_id}']") is None, "xoá 1 đơn: tài liệu biến mất")
+        page.locator("[data-oo-del-all]").click(); page.wait_for_timeout(500)
+        check(page.evaluate(f"Object.keys(window.__mock.docs).filter(k => k.includes('/online_orders/')).length") == 0, "xoá tất cả đơn đang hiển thị")
+        check(page.evaluate(f"window.__mock.docs['{ROOT}/online_limits/u_g1'].pending") >= 0, "bộ đếm không âm")
         check(page.evaluate(f"window.__mock.docs['{ROOT}/online_config/shop'].orderingEnabled") is False, "ghi orderingEnabled=false")
         page.click("#oo-config summary")
         page.fill("#oo-form [name='address']", "12 Lê Lợi, Hồng Bàng, Hải Phòng")

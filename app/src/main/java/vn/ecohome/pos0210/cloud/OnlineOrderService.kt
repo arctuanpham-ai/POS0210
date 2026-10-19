@@ -113,13 +113,6 @@ object OnlineOrderService {
                 }
             }
             while (isActive) {
-                    val waiting = _orders.value.any { it.status == OnlineOrderRules.NEW }
-                    if (waiting && lightOn(app)) { phase = !phase; setTorch(app, phase); lights(app, true) }
-                    else { phase = false; lights(app, false) }
-                    delay(600L)
-                }
-            }
-            while (isActive) {
                 runCatching { ensureAttached(app) }.onFailure { _error.value = it.message ?: it.javaClass.simpleName }
                 runCatching { remindAndSweep(app) }
                 tick++

@@ -25,7 +25,7 @@ export const signOut = async () => {{}};
 FS = """
 const ts = (ms) => ({ toMillis: () => ms, seconds: Math.floor(ms / 1000), nanoseconds: 0, __ms: ms });
 const S = (window.__mock = { docs: {}, listeners: new Set(), writes: [] });
-const snapDoc = (p) => ({ id: p.split('/').pop(), exists: () => p in S.docs, data: () => S.docs[p] });
+const snapDoc = (p) => ({ id: p.split('/').pop(), ref: { path: p }, exists: () => p in S.docs, data: () => S.docs[p] });
 const inCol = (p, base) => p.startsWith(base + '/') && p.slice(base.length + 1).indexOf('/') === -1;
 const match = (d, filters) => (filters || []).every((f) => { const v = d[f.f]; const x = v && v.toMillis ? v.toMillis() : v; const y = f.v && f.v.toMillis ? f.v.toMillis() : f.v; return f.op === '>=' ? x >= y : f.op === '==' ? x === y : true; });
 const colSnap = (base, filters) => { const docs = Object.keys(S.docs).filter((p) => inCol(p, base) && match(S.docs[p], filters)).map(snapDoc); return { docs, empty: !docs.length, size: docs.length, docChanges: () => docs, forEach: (fn) => docs.forEach(fn) }; };
@@ -77,7 +77,7 @@ def run():
         page.on("pageerror", lambda e: errors.append(str(e)))
         dialogs = []
         def on_dialog(d):
-            dialogs.append((d.type, d.message)); d.accept("Hết món Bạc xỉu" if d.type == "prompt" else None)
+            dialogs.append((d.type, d.message)); d.accept(("XOA" if "XOA" in d.message else "Hết món Bạc xỉu") if d.type == "prompt" else None)
         page.on("dialog", on_dialog)
         mods = {"firebase-app.js": APP, "firebase-auth.js": AUTH, "firebase-firestore.js": FS}
         page.route("https://www.gstatic.com/firebasejs/**", lambda r: r.fulfill(status=200, content_type="application/javascript", body=mods[r.request.url.rsplit("/", 1)[-1].split("?")[0]]))
@@ -153,6 +153,11 @@ def run():
         page.locator("[data-oo-del-all]").click(); page.wait_for_timeout(500)
         check(page.evaluate(f"Object.keys(window.__mock.docs).filter(k => k.includes('/online_orders/')).length") == 0, "xoá tất cả đơn đang hiển thị")
         check(page.evaluate(f"window.__mock.docs['{ROOT}/online_limits/u_g1'].pending") >= 0, "bộ đếm không âm")
+        # --- dọn toàn bộ dữ liệu thử ---
+        page.evaluate("([r]) => { window.__mockSet(r + '/online_orders/OLD999', { id: 'OLD999', code: 'OLD999', uid: 'g1', status: 'done', total: 1, items: [], createdAt: { __ms: Date.now() - 9 * 86400000 } }); window.__mockSet(r + '/online_limits/u_old', { pending: 1, lastAt: { __ms: Date.now() } }); }", [ROOT])
+        page.click("#oo-clean > summary"); page.click("#oo-clean-btn"); page.wait_for_timeout(500)
+        check(page.evaluate(f"Object.keys(window.__mock.docs).filter(k => k.includes('/online_orders/') || k.includes('/online_limits/')).length") == 0, "dọn dữ liệu thử: xoá hết đơn (kể cả cũ) và bộ đếm")
+        check(page.evaluate(f"Object.keys(window.__mock.docs).filter(k => k.includes('/menu/')).length") >= 0, "không đụng dữ liệu khác")
         check(page.evaluate(f"window.__mock.docs['{ROOT}/online_config/shop'].orderingEnabled") is False, "ghi orderingEnabled=false")
         page.click("#oo-config summary")
         page.fill("#oo-form [name='address']", "12 Lê Lợi, Hồng Bàng, Hải Phòng")

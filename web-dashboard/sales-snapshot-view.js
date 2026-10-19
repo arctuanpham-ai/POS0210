@@ -104,6 +104,9 @@ export const liveSummary = (dashboard = {}) => {
       openedAt: table.openedAt == null ? null : Number(table.openedAt),
       currentTotal: Number(table.currentTotal || 0),
       serviceStatus: String(table.serviceStatus || ""),
+      items: (Array.isArray(table.items) ? table.items : [])
+        .map((it) => ({ itemName: String(it?.name ?? "Món"), qty: Number(it?.qty || 0), unitPrice: Number(it?.price || 0), note: String(it?.note || "") }))
+        .filter((it) => it.qty !== 0),
     }))
     .sort((a, b) => (a.openedAt ?? Infinity) - (b.openedAt ?? Infinity));
   return {

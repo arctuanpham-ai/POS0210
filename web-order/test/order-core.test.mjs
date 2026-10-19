@@ -142,5 +142,5 @@ test("menu hiển thị: theo nhóm, bỏ món xoá, nhóm không bán được 
 });
 
 test("hằng số trạng thái", () => {
-  assert.deepEqual(Object.values(STATUS).sort(), ["awaiting_payment", "delivering", "done", "expired", "new", "paid", "rejected"]);
+  assert.deepEqual(Object.values(STATUS).sort(), ["awaiting_payment", "cancelled", "delivering", "done", "expired", "new", "paid", "rejected"]);
 });

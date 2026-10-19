@@ -1,10 +1,10 @@
 /* Đơn đặt món online: logic cho nhân viên (thuần, kiểm thử được). Khớp với trang khách web-order và Firestore rules online-orders.rules. */
 
-export const OO_STATUS = Object.freeze({ NEW: "new", REJECTED: "rejected", AWAITING_PAYMENT: "awaiting_payment", EXPIRED: "expired", PAID: "paid", DELIVERING: "delivering", DONE: "done" });
+export const OO_STATUS = Object.freeze({ NEW: "new", REJECTED: "rejected", AWAITING_PAYMENT: "awaiting_payment", EXPIRED: "expired", PAID: "paid", DELIVERING: "delivering", DONE: "done", CANCELLED: "cancelled" });
 export const OO_PAY_MINUTES = 10;
 export const OO_LABELS = Object.freeze({
   new: "Chờ quán xác nhận", rejected: "Đã từ chối", awaiting_payment: "Chờ khách thanh toán", expired: "Hết hạn",
-  paid: "Đã nhận tiền · đang làm", delivering: "Đang giao", done: "Hoàn thành",
+  paid: "Đã nhận tiền · đang làm", delivering: "Đang giao", done: "Hoàn thành", cancelled: "Khách đã huỷ",
 });
 export const OO_MODE_LABELS = Object.freeze({ delivery: "Giao tận nơi", pickup: "Mang đi", dinein: "Tại quán" });
 export const OO_REJECT_REASONS = Object.freeze(["Hết món", "Quán sắp đóng cửa", "Ngoài khu vực giao hàng", "Quán đang quá tải, xin lỗi bạn"]);
@@ -35,14 +35,15 @@ export const nextActions = (order, nowMs = Date.now()) => {
         ? [{ key: "paid", label: "Đã nhận tiền" }, { key: "expire", label: "Đóng đơn hết hạn" }]
         : [{ key: "paid", label: "Đã nhận tiền" }, { key: "expire", label: "Huỷ (khách không trả)" }];
     case OO_STATUS.EXPIRED: return [{ key: "paid", label: "Khách trả muộn: đã nhận tiền" }];
+    case OO_STATUS.CANCELLED: return [{ key: "paid", label: "Khách đã chuyển tiền trước khi huỷ: ghi nhận" }];
     case OO_STATUS.PAID: return order.mode === "delivery" ? [{ key: "deliver", label: "Đang giao" }, { key: "done", label: "Hoàn thành" }] : [{ key: "done", label: "Hoàn thành" }];
     case OO_STATUS.DELIVERING: return [{ key: "done", label: "Hoàn thành" }];
     default: return [];
   }
 };
 
-// "paid" cũng được từ "expired": khách chuyển tiền muộn sau khi đơn đã đóng, nhân viên vẫn ghi nhận được.
-const FROM = { accept: ["new"], reject: ["new"], paid: ["awaiting_payment", "expired"], expire: ["awaiting_payment"], deliver: ["paid"], done: ["paid", "delivering"] };
+// "paid" cũng được từ "expired"/"cancelled": khách chuyển tiền muộn sau khi đơn đã đóng, nhân viên vẫn ghi nhận được.
+const FROM = { accept: ["new"], reject: ["new"], paid: ["awaiting_payment", "expired", "cancelled"], expire: ["awaiting_payment"], deliver: ["paid"], done: ["paid", "delivering"] };
 
 /**
  * Kết quả của một hành động: patch cho tài liệu đơn + có phải trừ bộ đếm giới hạn không.
@@ -78,7 +79,7 @@ export const groupOrders = (orders, nowMs = Date.now()) => {
     needAction: list.filter((o) => o.status === OO_STATUS.NEW).sort(byTime),
     awaiting: list.filter((o) => o.status === OO_STATUS.AWAITING_PAYMENT).sort(byTime),
     making: list.filter((o) => o.status === OO_STATUS.PAID || o.status === OO_STATUS.DELIVERING).sort(byTime),
-    recent: list.filter((o) => [OO_STATUS.DONE, OO_STATUS.REJECTED, OO_STATUS.EXPIRED].includes(o.status) && (ooToMillis(o.createdAt) || 0) >= startOfDay.getTime()).sort((a, b) => byTime(b, a)),
+    recent: list.filter((o) => [OO_STATUS.DONE, OO_STATUS.REJECTED, OO_STATUS.EXPIRED, OO_STATUS.CANCELLED].includes(o.status) && (ooToMillis(o.createdAt) || 0) >= startOfDay.getTime()).sort((a, b) => byTime(b, a)),
   };
 };
 

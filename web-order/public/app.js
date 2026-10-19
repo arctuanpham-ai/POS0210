@@ -497,15 +497,17 @@ function renderTrack() {
   const text = STATUS_TEXT[view.status] || STATUS_TEXT.new;
   let extra = "";
   if (view.status === STATUS.AWAITING_PAYMENT) {
-    extra = `<p class="countdown-line">Thời gian còn lại <b id="countdown">${countdownText(view.remainingMs ?? 0)}</b></p>${paymentHtml(order)}`;
+    extra = `<p class="countdown-line">Thời gian còn lại <b id="countdown">${countdownText(view.remainingMs ?? 0)}</b></p>${paymentHtml(order)}<p class="pay-warning">⚠️ Lưu ý: sau khi thanh toán, đơn sẽ <b>không được hoàn tiền hoặc huỷ</b>. Mong bạn thông cảm.</p>`;
   }
   if (view.status === STATUS.REJECTED) extra = `<p class="reject-reason"><b>Lý do:</b> ${esc(order.rejectReason || "Quán chưa nhận được đơn lúc này.")}</p>`;
   const spinner = view.status === STATUS.NEW ? '<div class="spinner" aria-hidden="true"></div>' : "";
   const phone = state.shop.phone ? `<p class="muted small">Cần hỗ trợ? Gọi quán <a href="tel:${esc(String(state.shop.phone).replace(/[^\d+]/g, ""))}">${esc(state.shop.phone)}</a></p>` : "";
-  const actions = view.status === STATUS.EXPIRED
+  const canEdit = view.status === STATUS.NEW || view.status === STATUS.AWAITING_PAYMENT;
+  const editRow = canEdit ? `<div class="cancel-row"><button type="button" class="secondary" data-act2="edit">✏️ Sửa đơn</button><button type="button" class="danger-link" data-act2="cancel">Huỷ đơn</button></div><p class="muted small">Chỉ huỷ/sửa được khi bạn chưa thanh toán. Nếu đã chuyển khoản, vui lòng không huỷ mà gọi quán.</p>` : "";
+  const actions = editRow + (view.status === STATUS.EXPIRED
     ? `<button type="button" class="primary" data-act2="reorder">Đặt lại đơn này</button>`
-    : view.isFinal ? `<button type="button" class="primary" data-act2="new">Đặt đơn mới</button>` : "";
-  const showProgress = ![STATUS.REJECTED, STATUS.EXPIRED].includes(view.status);
+    : view.isFinal ? `<button type="button" class="primary" data-act2="new">Đặt đơn mới</button>` : "");
+  const showProgress = ![STATUS.REJECTED, STATUS.EXPIRED, STATUS.CANCELLED].includes(view.status);
   body.innerHTML = `${chips}<div class="status-card s-${view.status}">${spinner}<p class="eyebrow">Mã đơn <b class="code">${esc(order.code)}</b></p><h2>${esc(text.title)}</h2>${text.hint ? `<p class="muted">${esc(text.hint)}</p>` : ""}${showProgress ? progressHtml(order, view) : ""}${extra}${actions}</div>${summaryHtml(order)}${phone}`;
 }
 
@@ -608,12 +610,52 @@ $("#track-body").addEventListener("click", async (event) => {
     stopWatch();
     showScreen("menu");
     renderCartBar();
+  } else if (act === "cancel") {
+    cancelCurrentOrder(false);
+  } else if (act === "edit") {
+    cancelCurrentOrder(true);
   } else if (act === "new") {
     if (state.code) forgetCode(state.code);
     stopWatch();
     showScreen("menu");
   }
 });
+
+/* ---------- Khách tự huỷ / sửa đơn (chỉ khi chưa thanh toán) ---------- */
+async function cancelCurrentOrder(thenEdit) {
+  const order = state.order;
+  if (!order || ![STATUS.NEW, STATUS.AWAITING_PAYMENT].includes(order.status) || state.cancelling) return;
+  const ask = thenEdit
+    ? "Huỷ đơn này để chọn lại món?\n\nNếu bạn ĐÃ chuyển khoản thì vui lòng KHÔNG huỷ, hãy gọi quán."
+    : "Huỷ đơn này?\n\nNếu bạn ĐÃ chuyển khoản thì vui lòng KHÔNG huỷ, hãy gọi quán.";
+  if (!window.confirm(ask)) return;
+  state.cancelling = true;
+  try {
+    const keys = [limitKeyForUid(order.uid), limitKeyForPhone(order.phone)];
+    const limits = await Promise.all(keys.map((k) => readLimit("online_limits", k)));
+    const batch = writeBatch(db);
+    batch.update(ref("online_orders", order.code), { status: STATUS.CANCELLED, cancelledAt: serverTimestamp() });
+    keys.forEach((key, i) => { const n = Number(limits[i]?.pending) || 0; if (limits[i] && n > 0) batch.update(ref("online_limits", key), { pending: n - 1, released: order.code }); });
+    await batch.commit();
+  } catch {
+    state.cancelling = false;
+    $("#toast").textContent = "Không huỷ được: quán vừa cập nhật đơn. Vui lòng xem trạng thái mới của đơn.";
+    $("#toast").hidden = false; setTimeout(() => { $("#toast").hidden = true; }, 4000);
+    return;
+  }
+  state.cancelling = false;
+  if (!thenEdit) return; // màn theo dõi tự chuyển sang "Bạn đã huỷ đơn này" qua onSnapshot
+  state.cart = cartFromOrder(order, menuById(), catById());
+  persistCart();
+  if (state.code) forgetCode(state.code);
+  stopWatch();
+  renderMenu();
+  showScreen("menu");
+  renderCartBar();
+  openSheet();
+  $("#toast").textContent = "Đã huỷ đơn cũ. Bạn chỉnh món rồi gửi lại nhé.";
+  $("#toast").hidden = false; setTimeout(() => { $("#toast").hidden = true; }, 3500);
+}
 
 /* ---------- Lịch sử đơn hàng ---------- */
 const fmtWhen = (ms) => { if (!ms) return ""; const d = new Date(ms); const p = (n) => String(n).padStart(2, "0"); return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`; };
@@ -632,7 +674,7 @@ async function openHistory() {
   body.innerHTML = list.map((o) => {
     const v = orderView(o, serverNow());
     const done = v.status === STATUS.DONE;
-    const label = done ? "Đã hoàn thành" : v.status === STATUS.REJECTED ? "Quán không nhận" : "Hết hạn";
+    const label = done ? "Đã hoàn thành" : v.status === STATUS.REJECTED ? "Quán không nhận" : v.status === STATUS.CANCELLED ? "Bạn đã huỷ" : "Hết hạn";
     return `<article class="hist-card${done ? "" : " dim"}"><header><b class="code">${esc(o.code || o.id)}</b><span class="badge${done ? "" : " bad"}">${label}</span><span class="when">${esc(fmtWhen(toMillis(o.createdAt)))}</span></header><ul>${(o.items || []).map((l) => `<li>${Number(l.qty)}× ${esc(String(l.name || "").trim())}${l.note ? ` <small class="muted">(${esc(l.note)})</small>` : ""}</li>`).join("")}</ul><div class="hist-actions"><span class="tot">${money(o.total)}</span><button type="button" class="secondary" data-reorder="${esc(o.id)}">Đặt lại</button></div></article>`;
   }).join("");
 }

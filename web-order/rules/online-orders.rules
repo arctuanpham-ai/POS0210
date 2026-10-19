@@ -70,15 +70,16 @@ match /users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/online_orders/{code} {
   allow read: if isShopOwner() || (request.auth != null && resource.data.uid == request.auth.uid);
   // Khách chỉ được TẠO đơn mới, đúng định dạng, đúng giá menu, kèm 2 bộ đếm giới hạn trong cùng một batch.
   allow create: if isGuest() && validNewOrder(code);
-  // Chỉ nhân viên (POS/web dashboard) được đổi trạng thái hoặc xoá. Khách KHÔNG sửa/xoá được.
-  allow update, delete: if isShopOwner();
+  // Nhân viên (POS/web dashboard) đổi trạng thái / xoá. Khách chỉ được TỰ HUỶ đơn của mình khi đơn còn chờ (chưa nhận tiền); không sửa/xoá gì khác.
+  allow update: if isShopOwner() || guestCancel();
+  allow delete: if isShopOwner();
 }
 
 // ---- Bộ đếm "tối đa 2 đơn đang chờ" cho mỗi uid (u_<uid>) và mỗi SĐT (p_<sđt>) ----
 match /users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/online_limits/{key} {
   allow get: if request.auth != null;
   allow list: if isShopOwner();
-  allow create, update: if isShopOwner() || (isGuest() && validLimitWrite(key));
+  allow create, update: if isShopOwner() || (isGuest() && (validLimitWrite(key) || validLimitRelease(key)));
   allow delete: if isShopOwner();
 }
 
@@ -169,4 +170,35 @@ function validLimitWrite(key) {
     && d.pending is int
     && d.pending == base + 1
     && d.pending <= 2;
+}
+
+// Khách tự huỷ đơn của mình: chỉ đổi status -> 'cancelled' (+ cancelledAt) và chỉ khi đơn đang 'new' hoặc 'awaiting_payment'.
+// Đơn đã 'paid' trở đi khách không huỷ được.
+function guestCancel() {
+  let d = request.resource.data;
+  return isGuest()
+    && resource.data.uid == request.auth.uid
+    && resource.data.status in ['new', 'awaiting_payment']
+    && d.status == 'cancelled'
+    && d.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt'])
+    && d.cancelledAt == request.time;
+}
+
+// Trả lại 1 lượt giới hạn khi khách huỷ đơn: chỉ giảm bộ đếm 1 đơn vị, trong CÙNG batch với việc huỷ đúng đơn đó (released = mã đơn).
+function validLimitRelease(key) {
+  let d = request.resource.data;
+  let before = get(orderRef(d.released)).data;
+  let after = getAfter(orderRef(d.released)).data;
+  return d.keys().hasOnly(['pending', 'lastAt', 'lastOrder', 'released'])
+    && d.keys().hasAll(['pending', 'lastAt', 'lastOrder', 'released'])
+    && d.released is string && d.released.matches('^[A-HJ-NP-Z2-9]{6}$')
+    && resource != null
+    && d.lastAt == resource.data.lastAt
+    && d.lastOrder == resource.data.lastOrder
+    && d.pending is int
+    && d.pending == (resource.data.pending > 0 ? resource.data.pending - 1 : 0)
+    && before.status in ['new', 'awaiting_payment']
+    && after.status == 'cancelled'
+    && after.uid == request.auth.uid
+    && (key == 'u_' + request.auth.uid || key == 'p_' + after.phone);
 }

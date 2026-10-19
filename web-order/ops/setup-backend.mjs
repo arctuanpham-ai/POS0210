@@ -37,14 +37,21 @@ else {
   const oldSrc = cur.json.source?.files?.[0]?.content ?? "";
   const oldName = cur.json.source?.files?.[0]?.name ?? "firestore.rules";
   console.log("----- RULES HIỆN TẠI -----\n" + oldSrc + "\n----- HẾT -----");
-  if (oldSrc.includes(MARK)) { console.log("Rules đặt món đã có, bỏ qua bước gộp"); rulesDone = true; }
+  const strip = (t) => t.replace(/\s+/g, "");
+  const markLine = "// ===== " + MARK + " =====";
+  const markIdx = oldSrc.indexOf(markLine);
+  const tailMatch = oldSrc.match(/\}\s*\}\s*$/);
+  // baseSrc = rules cũ của bạn KHÔNG có khối đặt món (nếu khối đã có thì cắt ra để cập nhật lên bản mới).
+  const baseSrc = markIdx >= 0 && tailMatch ? oldSrc.slice(0, markIdx).replace(/\s+$/, "\n  ") + tailMatch[0] : oldSrc;
+  const existingBlock = markIdx >= 0 && tailMatch ? oldSrc.slice(markIdx + markLine.length, tailMatch.index) : "";
+  if (markIdx >= 0 && strip(existingBlock) === strip(addon)) { console.log("Rules đặt món đã là bản mới nhất, bỏ qua"); rulesDone = true; }
   else if (!oldSrc) fail("Rules hiện tại trống/không đọc được", cur);
   else {
     // chèn khối mới ngay trước 2 dấu } cuối cùng (đóng match /databases và service)
-    const m = oldSrc.match(/\}\s*\}\s*$/);
+    const m = baseSrc.match(/\}\s*\}\s*$/);
     if (!m) fail("Không tìm thấy 2 dấu } cuối của rules cũ, dừng để an toàn");
     else {
-      const newSrc = oldSrc.slice(0, m.index) + "\n  // ===== " + MARK + " =====\n" + addon + "\n" + m[0];
+      const newSrc = baseSrc.slice(0, m.index) + "\n  " + markLine + "\n" + addon + "\n" + m[0];
       const anon = { uid: "anon-test-uid", token: { firebase: { sign_in_provider: "anonymous" } } };
       const t = (expectation, path, method, auth, extra = {}) => ({ expectation, request: { auth, path: BASE + path, method, ...extra } });
       const cases = [
@@ -63,10 +70,10 @@ else {
       ];
       const run = async (source) => call("POST", `https://firebaserules.googleapis.com/v1/projects/${PROJECT}:test`, { source: { files: [{ name: oldName, content: source }] }, testSuite: { testCases: cases } });
       // 2a. rules CŨ phải đã chặn khách ẩn danh đọc bills; nếu không thì dừng, KHÔNG bật Anonymous
-      const before = await run(oldSrc);
+      const before = await run(baseSrc);
       const oldLeak = (before.json.testResults || []).some((x, i) => i < 3 && x.state !== "SUCCESS");
       console.log("Test rules cũ:", JSON.stringify(before.json.testResults?.map((x) => x.state)));
-      const reviewedOk = oldSrc.replace(/\s+/g, "") === REVIEWED_OLD_RULES;
+      const reviewedOk = strip(baseSrc) === REVIEWED_OLD_RULES;
       if (!before.ok && before.status === 403 && reviewedOk) {
         console.log("API test bị từ chối quyền, nhưng rules cũ trùng bản đã rà soát (khách ẩn danh bị chặn). Tiếp tục không có bước test.");
         const rs = await call("POST", `https://firebaserules.googleapis.com/v1/projects/${PROJECT}/rulesets`, { source: { files: [{ name: oldName, content: newSrc }] } });

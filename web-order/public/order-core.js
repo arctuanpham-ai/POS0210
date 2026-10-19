@@ -8,12 +8,13 @@ export const STATUS = Object.freeze({
   PAID: "paid",
   DELIVERING: "delivering",
   DONE: "done",
+  CANCELLED: "cancelled",
 });
 
 /** Trạng thái còn "đang chờ" (tính vào giới hạn 2 đơn). */
 export const PENDING_STATUSES = Object.freeze([STATUS.NEW, STATUS.AWAITING_PAYMENT]);
 /** Trạng thái đã kết thúc: khách có thể đặt đơn mới. */
-export const FINAL_STATUSES = Object.freeze([STATUS.REJECTED, STATUS.EXPIRED, STATUS.DONE]);
+export const FINAL_STATUSES = Object.freeze([STATUS.REJECTED, STATUS.EXPIRED, STATUS.DONE, STATUS.CANCELLED]);
 
 // Các hằng số này PHẢI khớp firestore rules (test/rules-contract.test.mjs kiểm tra).
 export const LIMITS = Object.freeze({
@@ -188,6 +189,7 @@ export const STATUS_TEXT = Object.freeze({
   paid: { title: "Quán đã nhận tiền và đang làm món", hint: "" },
   delivering: { title: "Đơn đang trên đường giao đến bạn", hint: "" },
   done: { title: "Đơn đã hoàn thành. Cảm ơn bạn!", hint: "" },
+  cancelled: { title: "Bạn đã huỷ đơn này", hint: "Bạn có thể đặt lại bất cứ lúc nào." },
 });
 
 /** Các bước thanh toán trên thanh tiến độ (không tính trạng thái từ chối/hết hạn). */

@@ -16,41 +16,44 @@ import {
   where,
   orderBy,
   limit,
+  onSnapshot,
+  Timestamp,
   setDoc as rawSetDoc,
   writeBatch as rawWriteBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261019-05";
-import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, freshenDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261019-05";
-import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261019-05";
-import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261019-05";
-import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261019-05";
-import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261019-05";
-import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261019-05";
-import { buildSimulation } from "./sim-data.js?v=20261019-05";
-import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261019-05";
-import { menuCsv } from "./menu-export.js?v=20261019-05";
-import { KIND_LABELS, MATERIALS, buildDynamicMaterials, catalogRules, registerDynamicMaterials, similarMaterials, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261019-05";
-import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261019-05";
-import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261019-05";
-import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261019-05";
-import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261019-05";
-import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261019-05";
-import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261019-05";
-import { otherCostRows } from "./other-costs.js?v=20261019-05";
-import { paybackStatus } from "./payback.js?v=20261019-05";
-import { topSellers } from "./top-banner.js?v=20261019-05";
-import { reconcileDays, reconcileRevenue } from "./revenue-check.js?v=20261019-05";
-import { prepList, profitRanking, tomorrowSales } from "./plan-profit.js?v=20261019-05";
-import { menuEditProblem, menuGroups, mergePlan, nameIssues, nextProductCode, normName, soldCombos, soldNotInMenu } from "./menu-view.js?v=20261019-05";
-import { POS_CEILING, SPARK, dayUsage, lastPacificDays, nextReset, pacificDay, usageTrend } from "./usage.js?v=20261019-05";
-import { AI_SCOPES, buildAiPack, scopeRange } from "./ai-export.js?v=20261019-05";
-import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261019-05";
-import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261019-05";
-import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261019-05";
-import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261019-05";
-import { compareKeys, compareRows, weekTotals } from "./day-compare.js?v=20261019-05";
-import { comboCount, formatBaseQty, materialConsumption, outputRows } from "./item-output.js?v=20261019-05";
-import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261019-05";
+import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261019-06";
+import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, freshenDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261019-06";
+import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261019-06";
+import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261019-06";
+import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261019-06";
+import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261019-06";
+import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261019-06";
+import { buildSimulation } from "./sim-data.js?v=20261019-06";
+import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261019-06";
+import { menuCsv } from "./menu-export.js?v=20261019-06";
+import { KIND_LABELS, MATERIALS, buildDynamicMaterials, catalogRules, registerDynamicMaterials, similarMaterials, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261019-06";
+import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261019-06";
+import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261019-06";
+import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261019-06";
+import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261019-06";
+import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261019-06";
+import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261019-06";
+import { otherCostRows } from "./other-costs.js?v=20261019-06";
+import { paybackStatus } from "./payback.js?v=20261019-06";
+import { topSellers } from "./top-banner.js?v=20261019-06";
+import { reconcileDays, reconcileRevenue } from "./revenue-check.js?v=20261019-06";
+import { prepList, profitRanking, tomorrowSales } from "./plan-profit.js?v=20261019-06";
+import { OO_LABELS, OO_MODE_LABELS, OO_REJECT_REASONS, attentionCount, buildTransition, groupOrders, limitKeys, minutesAgoText, newOrderCodes, nextActions, ooToMillis, overdueOrders, releasedCount, validateShopConfig } from "./online-orders.js?v=20261019-06";
+import { menuEditProblem, menuGroups, mergePlan, nameIssues, nextProductCode, normName, soldCombos, soldNotInMenu } from "./menu-view.js?v=20261019-06";
+import { POS_CEILING, SPARK, dayUsage, lastPacificDays, nextReset, pacificDay, usageTrend } from "./usage.js?v=20261019-06";
+import { AI_SCOPES, buildAiPack, scopeRange } from "./ai-export.js?v=20261019-06";
+import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261019-06";
+import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261019-06";
+import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261019-06";
+import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261019-06";
+import { compareKeys, compareRows, weekTotals } from "./day-compare.js?v=20261019-06";
+import { comboCount, formatBaseQty, materialConsumption, outputRows } from "./item-output.js?v=20261019-06";
+import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261019-06";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",
@@ -2303,6 +2306,7 @@ async function loadMembers() {
 /** Chưa có chủ quán nào có PIN: lần đầu vào thì tạo PIN chủ quán. */
 const needsBootstrap = () => !state.members.some((m) => m.role === ROLE_OWNER && m.pinHash && m.active !== false);
 function showPinView() {
+  stopOnlineOrders();
   const boot = needsBootstrap();
   $("#login-view").hidden = true;
   $("#dashboard-view").hidden = true;
@@ -2328,6 +2332,7 @@ function enterAs(member) {
   renderAccount();
   showTab();
   refreshDashboard();
+  startOnlineOrders();
 }
 async function submitPin() {
   const err = $("#pin-error");
@@ -3543,8 +3548,200 @@ async function ensureReceiptsLoaded() {
   } catch (error) { $("#sync-status").textContent = `Không tải được phiếu cũ: ${error.message}`; }
 }
 
+
+/* ---------- Đơn đặt món online (khách đặt qua trang web-order; nhân viên xử lý ở đây) ---------- */
+const OO_SITE_DEFAULT = "https://pos0210-order.web.app/";
+const oo = { orders: [], unsub: null, shop: null, seen: null, clockOffset: 0, timer: null, error: "", busy: new Set(), loaded: false };
+const ooNow = () => Date.now() + oo.clockOffset;
+const ooSiteUrl = () => (oo.shop?.siteUrl || OO_SITE_DEFAULT).replace(/\/?$/, "/");
+
+async function syncOoClock() {
+  try {
+    const started = Date.now();
+    const response = await fetch(`${location.pathname}?_=${started}`, { method: "HEAD", cache: "no-store" });
+    const header = response.headers.get("date");
+    const server = header ? new Date(header).getTime() : NaN;
+    if (Number.isFinite(server)) oo.clockOffset = server - (started + Date.now()) / 2;
+  } catch { /* giữ giờ máy */ }
+}
+
+function startOnlineOrders() {
+  if (oo.unsub || !state.role) return;
+  syncOoClock();
+  loadOnlineShop();
+  oo.seen = null;
+  const since = Timestamp.fromMillis(Date.now() - 48 * 3_600_000);
+  oo.unsub = onSnapshot(
+    query(collection(db, ...root, "online_orders"), where("createdAt", ">=", since)),
+    (snap) => {
+      countUsage("reads", Math.max(1, snap.docChanges().length));
+      oo.orders = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
+      oo.error = "";
+      oo.loaded = true;
+      if (oo.seen === null) oo.seen = new Set(oo.orders.map((o) => o.id)); // đơn có sẵn lúc mở trang: không phát chuông
+      const fresh = newOrderCodes(oo.orders, oo.seen);
+      if (fresh.length) { fresh.forEach((c) => oo.seen.add(c)); ooBeep(); }
+      renderOnline();
+      sweepOverdue();
+    },
+    (error) => { oo.error = error.code === "permission-denied" ? "Chưa có quyền đọc đơn online: hãy dán rules đặt món vào Firestore (xem hướng dẫn)." : (error.message || "lỗi không rõ"); renderOnline(); },
+  );
+  oo.timer = setInterval(() => { if (!document.hidden) { renderOnline(); sweepOverdue(); } }, 10_000);
+}
+
+function stopOnlineOrders() {
+  if (oo.unsub) { oo.unsub(); oo.unsub = null; }
+  if (oo.timer) { clearInterval(oo.timer); oo.timer = null; }
+  oo.orders = []; oo.loaded = false; oo.seen = null;
+  const badge = $("#donline-badge"); if (badge) badge.hidden = true;
+}
+
+async function loadOnlineShop() {
+  try { const snap = await rawGetDoc(doc(db, ...root, "online_config", "shop")); oo.shop = snap.exists() ? snap.data() : {}; }
+  catch { oo.shop = oo.shop || {}; }
+  renderOnline();
+}
+
+function ooBeep() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new Ctx();
+    [[880, 0], [1175, 0.22], [880, 0.44]].forEach(([freq, at]) => {
+      const osc = ctx.createOscillator(); const gain = ctx.createGain();
+      osc.frequency.value = freq; osc.type = "sine";
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime + at);
+      gain.gain.exponentialRampToValueAtTime(0.35, ctx.currentTime + at + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + at + 0.2);
+      osc.connect(gain).connect(ctx.destination); osc.start(ctx.currentTime + at); osc.stop(ctx.currentTime + at + 0.22);
+    });
+    setTimeout(() => ctx.close(), 1200);
+  } catch { /* trình duyệt chặn âm thanh khi chưa chạm vào trang */ }
+  if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+}
+
+const toFirestorePatch = (patch) => Object.fromEntries(Object.entries(patch).map(([k, v]) => [k, /At$/.test(k) && typeof v === "number" ? Timestamp.fromMillis(v) : v]));
+
+/** Đổi trạng thái đơn trong MỘT transaction: đọc lại đơn (tránh hai nhân viên bấm cùng lúc) và trừ bộ đếm giới hạn khi đóng đơn. */
+async function applyOnlineAction(order, action, { reason = "", auto = false } = {}) {
+  const key = `${order.id}:${action}`;
+  if (oo.busy.has(order.id)) return;
+  oo.busy.add(order.id);
+  try {
+    await runTransaction(db, async (tx) => {
+      const orderRef = doc(db, ...root, "online_orders", order.id);
+      const snap = await tx.get(orderRef);
+      if (!snap.exists()) throw new Error("Đơn không còn tồn tại.");
+      const current = { ...snap.data(), id: snap.id };
+      const t = buildTransition(current, action, { now: ooNow(), who: state.me?.name || "", reason });
+      const limitRefs = t.releasesLimit ? limitKeys(current).map((k) => doc(db, ...root, "online_limits", k)) : [];
+      const limitSnaps = [];
+      for (const ref of limitRefs) limitSnaps.push(await tx.get(ref));
+      tx.update(orderRef, toFirestorePatch(t.patch));
+      limitSnaps.forEach((ls, i) => { if (ls.exists()) tx.update(limitRefs[i], { pending: releasedCount(ls.data()) }); });
+    });
+    $("#oo-note").textContent = "";
+  } catch (error) {
+    if (!auto) $("#oo-note").textContent = `Không cập nhật được đơn ${order.code}: ${error.message || error}`;
+  } finally { oo.busy.delete(order.id); renderOnline(); }
+}
+
+function sweepOverdue() {
+  for (const order of overdueOrders(oo.orders, ooNow())) applyOnlineAction(order, "expire", { auto: true });
+}
+
+function ooCardHtml(order, now) {
+  const created = ooToMillis(order.createdAt);
+  const items = (order.items || []).map((l) => `<li><span>${Number(l.qty)}× ${escapeHtml(String(l.name || "").trim())}${l.note ? `<small>${escapeHtml(l.note)}</small>` : ""}</span><b>${money(Number(l.price) * Number(l.qty))}</b></li>`).join("");
+  const where = order.mode === "delivery" ? `Giao tận nơi: ${escapeHtml(order.address || "")}` : order.mode === "dinein" ? `Tại quán · bàn ${escapeHtml(order.table || "")}` : "Mang đi";
+  const expires = ooToMillis(order.expiresAt);
+  let extra = "";
+  if (order.status === "awaiting_payment" && expires) {
+    const left = expires - now;
+    extra = left > 0 ? `<span class="oo-countdown">Còn ${Math.floor(left / 60000)}:${String(Math.floor(left / 1000) % 60).padStart(2, "0")}</span>` : `<span class="oo-countdown">Quá hạn thanh toán</span>`;
+  }
+  if (order.status === "rejected" && order.rejectReason) extra = `<span class="muted">Lý do: ${escapeHtml(order.rejectReason)}</span>`;
+  const phone = String(order.phone || "");
+  const buttons = nextActions(order, now).map((a, i) => `<button type="button" class="${i === 0 ? "main" : ""}" data-oo-act="${a.key}" data-oo-id="${escapeHtml(order.id)}"${oo.busy.has(order.id) ? " disabled" : ""}>${escapeHtml(a.label)}</button>`).join("");
+  return `<article class="oo-card s-${escapeHtml(order.status)}" data-oo="${escapeHtml(order.id)}">
+    <div class="oo-head"><span class="oo-code">${escapeHtml(order.code || order.id)}</span><span class="oo-status">${escapeHtml(OO_LABELS[order.status] || order.status)}</span><span class="oo-time">${escapeHtml(minutesAgoText(created, now))}</span></div>
+    <p class="oo-who"><b>${escapeHtml(order.name || "")}</b> · <a href="tel:${escapeHtml(phone)}">${escapeHtml(phone)}</a></p>
+    <p class="oo-mode">${escapeHtml(OO_MODE_LABELS[order.mode] || "")}${order.mode === "pickup" ? "" : ` · ${where}`}</p>
+    <ul class="oo-items">${items}</ul>
+    ${order.note ? `<p class="oo-note-line"><b>Ghi chú:</b> ${escapeHtml(order.note)}</p>` : ""}
+    <div class="oo-foot"><strong>${money(order.total)}</strong>${extra}${buttons}</div>
+  </article>`;
+}
+
+function renderOnline() {
+  const badge = $("#donline-badge");
+  const now = ooNow();
+  const count = attentionCount(oo.orders, now);
+  if (badge) { badge.hidden = !count; badge.textContent = String(count); }
+  const toggle = $("#oo-toggle");
+  if (!toggle) return;
+  const enabled = oo.shop?.orderingEnabled !== false;
+  toggle.textContent = oo.shop === null ? "Đang tải…" : enabled ? "Đang NHẬN đơn online (bấm để tạm ngưng)" : "Đang TẠM NGƯNG nhận đơn (bấm để mở lại)";
+  toggle.className = `secondary ${oo.shop === null ? "" : enabled ? "on" : "off"}`;
+  const site = ooSiteUrl();
+  $("#oo-link-line").innerHTML = `Link khách: <a href="${escapeHtml(site)}" target="_blank" rel="noopener">${escapeHtml(site.replace(/^https?:\/\//, ""))}</a> · <a href="${escapeHtml(site)}qr.html" target="_blank" rel="noopener">Mã QR để in</a>`;
+  const host = $("#oo-list");
+  if (oo.error) { host.innerHTML = `<p class="warn-text">${escapeHtml(oo.error)}</p>`; return; }
+  if (!oo.loaded) { host.innerHTML = '<p class="muted">Đang tải đơn…</p>'; return; }
+  const g = groupOrders(oo.orders, now);
+  const section = (title, list) => list.length ? `<h3 class="oo-group-title">${title} (${list.length})</h3>${list.map((o) => ooCardHtml(o, now)).join("")}` : "";
+  host.innerHTML = section("CẦN XÁC NHẬN", g.needAction) + section("CHỜ KHÁCH THANH TOÁN", g.awaiting) + section("ĐANG LÀM / ĐANG GIAO", g.making) + section("ĐÃ XONG HÔM NAY", g.recent)
+    || '<p class="muted empty-state">Chưa có đơn online nào. Đơn mới sẽ hiện ở đây và phát chuông (cần chạm vào trang một lần để trình duyệt cho phép âm thanh).</p>';
+}
+
+$("#oo-list").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-oo-act]");
+  if (!button) return;
+  const order = oo.orders.find((o) => o.id === button.dataset.ooId);
+  if (!order) return;
+  const action = button.dataset.ooAct;
+  if (action === "reject") {
+    const reason = window.prompt(`Lý do từ chối (khách sẽ thấy). Gợi ý: ${OO_REJECT_REASONS.join(" / ")}`, OO_REJECT_REASONS[0]);
+    if (reason === null) return;
+    applyOnlineAction(order, "reject", { reason });
+  } else if (action === "expire" && !window.confirm(`Huỷ đơn ${order.code}? Khách sẽ thấy đơn hết hạn.`)) {
+    return;
+  } else if (action === "paid" && !window.confirm(`Xác nhận ĐÃ NHẬN ${money(order.total)} cho đơn ${order.code} (nội dung ${order.transferContent || ""})?`)) {
+    return;
+  } else if (action !== "reject") applyOnlineAction(order, action);
+});
+
+$("#oo-toggle").addEventListener("click", async () => {
+  if (oo.shop === null) return;
+  const next = oo.shop?.orderingEnabled === false;
+  try { await setDoc(doc(db, ...root, "online_config", "shop"), { orderingEnabled: next }, { merge: true }); oo.shop = { ...oo.shop, orderingEnabled: next }; $("#oo-note").textContent = ""; }
+  catch (error) { $("#oo-note").textContent = `Không lưu được: ${error.message || error}`; }
+  renderOnline();
+});
+
+$("#oo-config").addEventListener("toggle", (event) => {
+  if (!event.target.open) return;
+  const form = $("#oo-form");
+  const s = oo.shop || {};
+  for (const name of ["name", "tagline", "address", "phone", "hours", "notice", "siteUrl", "bank", "account", "holder"]) form.elements[name].value = s[name] || "";
+});
+
+$("#oo-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const err = $("#oo-form-error"); err.textContent = "";
+  if (!canTreasure(state.role)) { err.textContent = "Chỉ chủ quán hoặc thủ quỹ được sửa thông tin quán."; return; }
+  const form = event.target;
+  const checked = validateShopConfig({ ...Object.fromEntries(["name", "tagline", "address", "phone", "hours", "notice", "siteUrl", "bank", "account", "holder"].map((n) => [n, form.elements[n].value])), orderingEnabled: oo.shop?.orderingEnabled !== false });
+  if (!checked.ok) { err.textContent = Object.values(checked.errors)[0]; return; }
+  try {
+    await setDoc(doc(db, ...root, "online_config", "shop"), { ...checked.value, updatedAt: Date.now() }, { merge: true });
+    oo.shop = { ...oo.shop, ...checked.value };
+    err.textContent = "Đã lưu.";
+    renderOnline();
+  } catch (error) { err.textContent = error.code === "permission-denied" ? "Không có quyền ghi: hãy dán rules đặt món vào Firestore." : `Không lưu được: ${error.message || error}`; }
+});
+
 /* ---------- Chia tab: mỗi tab là một trang riêng theo #hash, nút Back của trình duyệt hoạt động ---------- */
-const TABS = ["ban", "doanhthu", "bill", "taichinh", "giavon", "hoanung", "taikhoan"];
+const TABS = ["ban", "donline", "doanhthu", "bill", "taichinh", "giavon", "hoanung", "taikhoan"];
 function showTab() {
   if (location.hash === "#thanhtoan") history.replaceState(null, "", "#bill"); // tab cũ đã gộp vào Lịch sử bill
   const allowed = TABS;
@@ -3555,6 +3752,7 @@ function showTab() {
   if (name === "giavon" && state.role && !state.recipesLoaded) loadRecipes();
   if (name === "hoanung" && state.role && !state.reimbLoaded) loadReimbursements();
   if (name === "taikhoan" && state.role) renderAccount();
+  if (name === "donline" && state.role) { startOnlineOrders(); renderOnline(); }
   if (name === "doanhthu" && state.role) loadTopBanner();
 }
 window.addEventListener("hashchange", showTab);
@@ -3563,7 +3761,7 @@ showTab();
 onAuthStateChanged(auth, async (user) => {
   state.user = user || null;
   state.role = null; state.me = null;
-  if (!user) { $("#pin-view").hidden = true; $("#dashboard-view").hidden = true; $("#login-view").hidden = false; return; }
+  if (!user) { stopOnlineOrders(); $("#pin-view").hidden = true; $("#dashboard-view").hidden = true; $("#login-view").hidden = false; return; }
   $("#login-view").hidden = true;
   await loadMembers();
   // Máy này đã có người vào trước đó thì vào luôn; muốn đổi thì bấm "Đổi người".

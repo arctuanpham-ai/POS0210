@@ -175,6 +175,7 @@ fun App(vm: PosViewModel = viewModel()) {
         "PRICING" -> PricingManager(vm)
         "BUY_GET" -> BuyGetManager(vm)
         "DELIVERY" -> DeliveryQueue(vm)
+        "ONLINE" -> OnlineOrdersScreen(vm)
         "PREPAID_ORDERS" -> PrepaidOrders(vm)
         "FROZEN_REFUNDS" -> FrozenRefundsScreen(vm)
         "UNPAID_PREPAID" -> UnpaidPrepaidScreen(vm)
@@ -309,6 +310,17 @@ fun Tables(vm: PosViewModel) {
         }
         KitchenWarningBanner(vm)
         run {
+            val online by vm.onlineOrders.collectAsState()
+            val need = online.count { it.status == vn.ecohome.pos0210.cloud.OnlineOrderRules.NEW }
+            val overdue = vn.ecohome.pos0210.cloud.OnlineOrderRules.attention(online, timerNow) - need
+            if (need + overdue > 0) Surface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).clickable { vm.screen.value = "ONLINE" }, color = Color(0xFFB3261E), shape = RoundedCornerShape(8.dp)) {
+                Column(Modifier.padding(10.dp)) {
+                    Text("🔔 ĐƠN ONLINE: $need đơn mới chờ nhận" + (if (overdue > 0) " · $overdue đơn quá hạn thanh toán" else ""), color = Color.White, fontWeight = FontWeight.Black, fontSize = 14.sp)
+                    Text("Bấm để nhận / từ chối / xác nhận đã thu tiền.", color = Color.White, fontSize = 12.sp)
+                }
+            }
+        }
+        run {
             // Cảnh báo phục vụ: món chờ lâu, bàn mở mà chưa gửi món, giỏ món chưa gửi. Chỉ đọc dữ liệu trên máy.
             val drafts by vm.cartDrafts.collectAsState()
             val draftBs by vm.draftBatches.collectAsState()
@@ -374,6 +386,8 @@ fun Tables(vm: PosViewModel) {
             FilterChip(!byItem, { byItem = false }, { Text("BÁN HÀNG", maxLines = 1, softWrap = false) })
             val waitingTotalQty = waitingItemRows.sumOf { it.remaining }
             FilterChip(byItem, { byItem = true }, { Text("THEO MÓN" + if (waitingTotalQty > 0) " · $waitingTotalQty" else "", maxLines = 1, softWrap = false) })
+            run { val online by vm.onlineOrders.collectAsState(); val n = online.count { it.status in listOf("new", "awaiting_payment", "paid", "delivering") }
+                FilterChip(false, { vm.screen.value = "ONLINE" }, { Text("ĐƠN ONLINE" + if (n > 0) " · $n" else "", maxLines = 1, softWrap = false) }) }
             if (prepaidMode)
                 FilterChip(false, { vm.screen.value = "PREPAID_ORDERS" }, { Text("ĐƠN HÔM NAY", maxLines = 1, softWrap = false) })
             if (canReport) {

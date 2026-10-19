@@ -1458,6 +1458,33 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
   return if(result.isSuccess){dao.markPrintSuccess(job.id,System.currentTimeMillis());audit("PRINT",b.id,"KITCHEN_PRINTED","prepaid,printer=${kitchenPrinterName()},job=${job.id}");printerMessage.value="ĐÃ IN PHIẾU BẾP #${b.serviceNo.toString().padStart(3,'0')}";null}
   else{val msg=result.exceptionOrNull()?.message?:"UNKNOWN";dao.markPrintFailed(job.id,msg);audit("PRINT",b.id,"KITCHEN_PRINT_FAILED","prepaid,job=${job.id}");msg}
  }
+ /** Đơn online: nhân viên thao tác ngay trên POS (không cần mở web). Lỗi in không chặn việc đổi trạng thái. */
+ val onlineMessage=MutableStateFlow("")
+ val onlineOrders=vn.ecohome.pos0210.cloud.OnlineOrderService.orders
+ fun onlineAction(o:vn.ecohome.pos0210.cloud.OnlineOrder,action:String,reason:String=""){
+  viewModelScope.launch{
+   val who=currentEmployee.value?.name.orEmpty()
+   val r=withContext(Dispatchers.IO){vn.ecohome.pos0210.cloud.OnlineOrderService.apply(getApplication(),o.id,action,who,reason)}
+   if(r.isFailure){onlineMessage.value="Không cập nhật được đơn ${o.code}: ${r.exceptionOrNull()?.message}";return@launch}
+   onlineMessage.value=""
+   if(action=="paid")printOnlineTicket(o)
+  }
+ }
+ fun printOnlineTicket(o:vn.ecohome.pos0210.cloud.OnlineOrder){
+  viewModelScope.launch{
+   val profile=printerProfile()
+   val lines=o.items.filter{it.qty>0}.map{Triple(it.name,it.qty,it.note)}
+   val where=when(o.mode){"delivery"->"GIAO: ${o.address}";"dinein"->"TẠI QUÁN · BÀN ${o.table}";else->"MANG ĐI"}
+   val footer=listOf("${o.name} · ${o.phone}",where,if(o.note.isNotBlank())"GHI CHÚ ĐƠN: ${o.note}" else "").filter{it.isNotBlank()}.joinToString("\n")
+   val flow=if(o.status==vn.ecohome.pos0210.cloud.OnlineOrderRules.PAID||o.status==vn.ecohome.pos0210.cloud.OnlineOrderRules.DELIVERING)"ĐƠN ONLINE · ĐÃ THU TIỀN" else "ĐƠN ONLINE · LÀM NGAY"
+   val bmp=withContext(Dispatchers.Default){vn.ecohome.pos0210.printing.ReceiptRenderer.kitchen("ONLINE ${o.code}",0,0,o.name,lines,profile,flow,System.currentTimeMillis(),"#${o.code}",footer)}
+   if(printerMode()!="BLUETOOTH"){kitchenPreview.value="ONLINE ${o.code}" to listOf(bmp);return@launch}
+   val mac=kitchenPrinterMac()
+   if(mac.isBlank()){onlineMessage.value="Chưa chọn máy in bếp";return@launch}
+   val r=withContext(Dispatchers.IO){vn.ecohome.pos0210.printing.BluetoothPrinter.printBitmap(getApplication(),mac,bmp,profile,vn.ecohome.pos0210.printing.PrintJobType.KITCHEN)}
+   onlineMessage.value=if(r.isSuccess)"Đã in phiếu bếp đơn ${o.code}" else "Chưa in được phiếu đơn ${o.code}: ${r.exceptionOrNull()?.message}"
+  }
+ }
  val kitchenPrint=MutableStateFlow<KitchenPrintUi?>(null)
  /** Cảnh báo phiếu bếp in lỗi: không chặn order tiếp, nhân viên bấm đóng hoặc vào Đơn chờ giao để in lại. */
  val kitchenWarning=MutableStateFlow<String?>(null)

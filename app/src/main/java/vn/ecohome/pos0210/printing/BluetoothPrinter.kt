@@ -291,13 +291,13 @@ object ReceiptRenderer {
 
     /** Phiếu làm hàng: số thẻ/bàn to nhất, số đơn, giờ, trạng thái thu tiền, rồi từng món (số lượng lớn) + ghi chú. */
     @Synchronized
-    fun kitchen(table:String,sequence:Int,serviceNo:Int,orderer:String,items:List<Triple<String,Int,String>>,profile:PrinterProfile=PrinterProfile.MM58,flowTag:String="",at:Long=System.currentTimeMillis()):Bitmap{
+    fun kitchen(table:String,sequence:Int,serviceNo:Int,orderer:String,items:List<Triple<String,Int,String>>,profile:PrinterProfile=PrinterProfile.MM58,flowTag:String="",at:Long=System.currentTimeMillis(),label:String?=null,footer:String?=null):Bitmap{
         dimensions(profile)
-        val h=760+items.size*420
+        val h=760+items.size*420+(if(footer!=null)600 else 0)
         val (b,c)=canvas(h)
         invertedBar(c,0f,112f,table.uppercase(),if(table.length>7)50f else 66f)
         var y=176f
-        c.drawText("#${serviceNo.toString().padStart(3,'0')}",PAD,y,paint(64f,true))
+        c.drawText(label?:"#${serviceNo.toString().padStart(3,'0')}",PAD,y,paint(if(label!=null&&label.length>5)46f else 64f,true))
         c.drawText(hhmm(at),W-PAD,y,paint(38f,true,Paint.Align.RIGHT));y+=16
         if(flowTag.isNotBlank()){
             val tagPaint=paint(25f,true,Paint.Align.CENTER)
@@ -320,7 +320,8 @@ object ReceiptRenderer {
         }
         val total=items.sumOf{it.second.coerceAtLeast(0)}
         c.drawText("TỔNG: $total món",PAD,y,paint(30f,true));y+=40f
-        c.drawText("Đơn #$sequence · $orderer",PAD,y,paint(22f,true))
+        if(footer!=null){footer.split("\n").forEach{ln->y=wrap(c,ln,PAD,y,W-PAD*2,paint(26f,true),32f)+6f}}
+        else c.drawText("Đơn #$sequence · $orderer",PAD,y,paint(22f,true))
         return crop(b,(y+30).toInt())
     }
 

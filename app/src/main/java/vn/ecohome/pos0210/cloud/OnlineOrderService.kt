@@ -1,0 +1,159 @@
+package vn.ecohome.pos0210.cloud
+
+import android.Manifest
+import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
+import com.google.firebase.Timestamp
+import com.google.firebase.firestore.DocumentReference
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.Query
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import vn.ecohome.pos0210.DeliveryAnnouncer
+import vn.ecohome.pos0210.MainActivity
+import vn.ecohome.pos0210.data.PosDatabase
+import java.util.Date
+
+/**
+ * Đơn online cho nhân viên ngay trên app POS: nghe users/{uid}/stores/0210/online_orders (24 giờ gần nhất),
+ * phát chuông + đọc giọng qua loa của máy (loa bluetooth nếu đang kết nối) khi có đơn mới, nhắc lại mỗi 45 giây tới khi xử lý,
+ * và đổi trạng thái bằng transaction giống hệt trang quản lý web (kèm trả lượt giới hạn 2 đơn chờ của khách).
+ * Chỉ chạy khi tiến trình app còn sống. Không đọc/ghi bill, doanh thu hay dữ liệu bán hàng.
+ */
+object OnlineOrderService {
+    private const val PREFS = "pos0210_online_orders"
+    private const val CHANNEL = "online_orders_v1"
+    private const val REPEAT_MS = 45_000L
+    private var job: Job? = null
+    private var registration: ListenerRegistration? = null
+    private var attachedUid: String? = null
+    private var attachedAt = 0L
+    private val seen = HashSet<String>()
+    private var lastAnnounce = 0L
+    private val busy = HashSet<String>()
+
+    private val _orders = MutableStateFlow<List<OnlineOrder>>(emptyList())
+    val orders: StateFlow<List<OnlineOrder>> = _orders
+    private val _error = MutableStateFlow("")
+    val error: StateFlow<String> = _error
+    private val _connected = MutableStateFlow(false)
+    val connected: StateFlow<Boolean> = _connected
+
+    fun voiceOn(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("voice", true)
+    fun setVoice(context: Context, on: Boolean) { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean("voice", on).apply() }
+
+    private fun ms(v: Any?): Long? = when (v) { is Timestamp -> v.toDate().time; is Number -> v.toLong(); is Date -> v.time; else -> null }
+
+    fun start(app: Application, scope: CoroutineScope) {
+        if (job?.isActive == true) return
+        job = scope.launch {
+            var tick = 0
+            while (isActive) {
+                runCatching { ensureAttached(app) }.onFailure { _error.value = it.message ?: it.javaClass.simpleName }
+                runCatching { remindAndSweep(app) }
+                tick++
+                delay(15_000L)
+            }
+        }
+    }
+
+    private suspend fun ensureAttached(app: Application) {
+        val enabled = PosDatabase.get(app).dao().cloudSyncStateSnapshot()?.enabled == true
+        val uid = if (enabled) FirebaseCloudSync.currentUid(app) else null
+        val stale = System.currentTimeMillis() - attachedAt > 6 * 3_600_000L
+        if (uid == attachedUid && !stale && registration != null) return
+        registration?.remove(); registration = null; attachedUid = null; _connected.value = false
+        if (uid == null) return
+        val config = FirebaseCloudSync.config(app)
+        if (!config.valid) return
+        val fs = FirebaseFirestore.getInstance(FirebaseCloudSync.firebaseApp(app, config))
+        val since = Timestamp(Date(System.currentTimeMillis() - 24 * 3_600_000L))
+        val query = fs.collection("users").document(uid).collection("stores").document("0210").collection("online_orders")
+            .whereGreaterThanOrEqualTo("createdAt", since).orderBy("createdAt", Query.Direction.DESCENDING)
+        attachedAt = System.currentTimeMillis(); attachedUid = uid
+        registration = query.addSnapshotListener { snap, err ->
+            if (err != null) { _error.value = "Không nghe được đơn online: ${err.message}"; _connected.value = false; return@addSnapshotListener }
+            if (snap == null) return@addSnapshotListener
+            _error.value = ""; _connected.value = true
+            val list = snap.documents.mapNotNull { d -> d.data?.let { OnlineOrderRules.fromMap(d.id, it, ::ms) } }
+            _orders.value = list
+            val fresh = OnlineOrderRules.unseenNew(list, seen)
+            if (fresh.isNotEmpty()) {
+                seen.addAll(fresh.map { it.id })
+                announce(app, fresh)
+            }
+        }
+    }
+
+    private fun announce(app: Application, fresh: List<OnlineOrder>) {
+        lastAnnounce = System.currentTimeMillis()
+        val text = OnlineOrderRules.announceText(fresh)
+        DeliveryAnnouncer.announce(app, text, voiceOn(app))
+        notify(app, fresh.size, text)
+    }
+
+    private fun remindAndSweep(app: Application) {
+        val now = System.currentTimeMillis()
+        val list = _orders.value
+        val waiting = list.filter { it.status == OnlineOrderRules.NEW }
+        if (waiting.isNotEmpty() && now - lastAnnounce >= REPEAT_MS) {
+            lastAnnounce = now
+            DeliveryAnnouncer.announce(app, "Còn ${waiting.size} đơn online chưa nhận.", voiceOn(app))
+        }
+        if (_connected.value) OnlineOrderRules.overdueToClose(list, now).forEach { o ->
+            CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch { runCatching { apply(app, o.id, "expire", "POS") } }
+        }
+    }
+
+    private fun notify(context: Context, count: Int, text: String) {
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+        if (Build.VERSION.SDK_INT >= 26) {
+            (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                .createNotificationChannel(NotificationChannel(CHANNEL, "Đơn online", NotificationManager.IMPORTANCE_HIGH))
+        }
+        val open = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val n = NotificationCompat.Builder(context, CHANNEL).setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle("POS 0210 · đơn online mới").setContentText(text).setAutoCancel(true).setContentIntent(open)
+            .setPriority(NotificationCompat.PRIORITY_HIGH).build()
+        runCatching { NotificationManagerCompat.from(context).notify(7001, n) }
+    }
+
+    /** Đổi trạng thái trong MỘT transaction (đọc lại đơn để tránh hai máy bấm cùng lúc; trả lượt giới hạn khi đóng đơn). */
+    suspend fun apply(app: Application, orderId: String, action: String, who: String, reason: String = ""): Result<Unit> = runCatching {
+        if (!busy.add(orderId)) return@runCatching
+        try {
+            val uid = attachedUid ?: FirebaseCloudSync.currentUid(app) ?: error("Chưa đăng nhập Firebase")
+            val fs = FirebaseFirestore.getInstance(FirebaseCloudSync.firebaseApp(app, FirebaseCloudSync.config(app)))
+            val root: DocumentReference = fs.collection("users").document(uid).collection("stores").document("0210")
+            val orderRef = root.collection("online_orders").document(orderId)
+            fs.runTransaction { tx ->
+                val snap = tx.get(orderRef)
+                if (!snap.exists()) throw IllegalStateException("Đơn không còn tồn tại.")
+                val current = OnlineOrderRules.fromMap(snap.id, snap.data.orEmpty(), ::ms)
+                val t = OnlineOrderRules.transition(current, action, System.currentTimeMillis(), who, reason)
+                val limitRefs = if (t.releasesLimit) OnlineOrderRules.limitKeys(current).map { root.collection("online_limits").document(it) } else emptyList()
+                val limitSnaps = limitRefs.map { tx.get(it) }
+                tx.update(orderRef, t.patch.mapValues { (k, v) -> if (k.endsWith("At") && v is Long) Timestamp(Date(v)) else v })
+                limitSnaps.forEachIndexed { i, ls -> if (ls.exists()) tx.update(limitRefs[i], "pending", OnlineOrderRules.releasedCount(ls.get("pending"))) }
+                null
+            }.await()
+        } finally { busy.remove(orderId) }
+    }
+}

@@ -46,7 +46,7 @@ const store = {
   set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* đầy hoặc bị chặn: bỏ qua */ } },
   del(key) { try { localStorage.removeItem(key); } catch { /* bỏ qua */ } },
 };
-const KEYS = { cart: "pos0210o.cart", codes: "pos0210o.codes", profile: "pos0210o.profile", menu: "pos0210o.menu2", thumbs: "pos0210o.thumbs" };
+const KEYS = { cart: "pos0210o.cart", codes: "pos0210o.codes", profile: "pos0210o.profile", menu: "pos0210o.menu3", thumbs: "pos0210o.thumbs" };
 const MENU_TTL = 5 * 60_000;
 const THUMB_TTL = 24 * 3_600_000;
 
@@ -145,8 +145,10 @@ async function loadMenu(force = false) {
     const [itemSnap, catSnap, hiddenSnap] = await Promise.all([getDocs(col("menu")), getDocs(col("menuCategories")), getDoc(ref("online_config", "menu")).catch(() => null)]);
     // Món chủ quán đã ẩn khỏi đặt món online: loại hẳn, không vào bộ nhớ đệm, không hiển thị dưới bất kỳ dạng nào.
     const hidden = new Set(Array.isArray(hiddenSnap?.data?.()?.hidden) ? hiddenSnap.data().hidden : []);
-    const items = itemSnap.docs.map((d) => ({ ...d.data(), id: d.id })).filter((m) => m.deleted !== true && m.name && !hidden.has(m.id));
     const cats = catSnap.docs.map((d) => ({ ...d.data(), id: d.id }));
+    const catOff = new Set(cats.filter((c) => c.active === false).map((c) => c.id));
+    // Món ngừng bán (active=false), món thuộc nhóm đang tắt, món bị ẩn riêng: loại hẳn, không hiện mờ.
+    const items = itemSnap.docs.map((d) => ({ ...d.data(), id: d.id })).filter((m) => m.deleted !== true && m.name && m.active !== false && !hidden.has(m.id) && !catOff.has(m.categoryId));
     store.set(KEYS.menu, { at: Date.now(), items, cats });
     applyMenu(items, cats);
     $("#menu-error").hidden = true;

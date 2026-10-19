@@ -50,9 +50,10 @@ export const writeBatch = () => {
   const ops = [];
   return {
     set(ref, data) { ops.push([ref.path, data]); },
+    update(ref, data) { ops.push([ref.path, data, true]); },
     async commit() {
       if (S.denyNext > 0) { S.denyNext -= 1; const e = new Error('denied'); e.code = 'permission-denied'; throw e; }
-      for (const [p, d] of ops) { S.docs[p] = resolve(d); S.batches.push([p, S.docs[p]]); window.__persist(); notify(p); }
+      for (const [p, d, merge] of ops) { S.docs[p] = merge ? { ...(S.docs[p] || {}), ...resolve(d) } : resolve(d); S.batches.push([p, S.docs[p]]); window.__persist(); notify(p); }
     },
   };
 };

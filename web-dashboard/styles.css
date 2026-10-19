@@ -452,3 +452,4 @@ button.paylist-row { width: 100%; font: inherit; color: inherit; cursor: pointer
 
 .oo-del { margin-left: auto; padding: 6px 10px; font-size: 13px; border: 1px solid #e9b8b8; border-radius: 10px; background: #fdeaea; color: #a12626; cursor: pointer; }
 .oo-bulk { margin: 6px 0 12px; }
+.oo-card.s-cancelled { opacity: .75; border-style: dashed; }

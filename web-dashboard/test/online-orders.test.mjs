@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { OO_STATUS, attentionCount, buildTransition, groupOrders, isOverdue, newOrderCodes, nextActions, overdueOrders, releasedCount, validateShopConfig, limitKeys, minutesAgoText } from "../online-orders.js";
+import { OO_LABELS, OO_STATUS, isPending, attentionCount, buildTransition, groupOrders, isOverdue, newOrderCodes, nextActions, overdueOrders, releasedCount, validateShopConfig, limitKeys, minutesAgoText } from "../online-orders.js";
 import { STATUS as CUSTOMER_STATUS } from "../../web-order/public/order-core.js";
 
 const now = 1_700_000_000_000;
@@ -98,6 +98,20 @@ test("form thông tin quán", () => {
 
 test("rules cho phép nhân viên (uid chủ quán) sửa đơn và bộ đếm", () => {
   const rules = readFileSync(new URL("../../web-order/rules/online-orders.rules", import.meta.url), "utf8");
-  assert.match(rules, /allow update, delete: if isShopOwner\(\);/);
-  assert.match(rules, /allow create, update: if isShopOwner\(\) \|\| \(isGuest\(\) && validLimitWrite\(key\)\);/);
+  assert.match(rules, /allow update: if isShopOwner\(\) \|\| guestCancel\(\);/);
+  assert.match(rules, /allow delete: if isShopOwner\(\);/);
+  assert.match(rules, /allow create, update: if isShopOwner\(\) \|\| \(isGuest\(\) && \(validLimitWrite\(key\) \|\| validLimitRelease\(key\)\)\);/);
+});
+
+test("đơn khách đã huỷ: nhân viên chỉ ghi nhận được nếu khách đã chuyển tiền; không trừ bộ đếm lần nữa", () => {
+  const order = { code: "K7P2QX", status: "cancelled", uid: "g", phone: "0912345678", mode: "pickup" };
+  assert.deepEqual(nextActions(order).map((a) => a.key), ["paid"]);
+  const t = buildTransition(order, "paid", { now: 1 });
+  assert.equal(t.patch.status, "paid");
+  assert.equal(t.releasesLimit, false);
+  assert.throws(() => buildTransition(order, "accept"));
+  assert.equal(isPending(order), false);
+  assert.equal(OO_LABELS.cancelled, "Khách đã huỷ");
+  const now = Date.now();
+  assert.equal(groupOrders([{ ...order, id: "a", createdAt: now - 1000 }], now).recent.length, 1);
 });

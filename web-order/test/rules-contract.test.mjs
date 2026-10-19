@@ -65,7 +65,8 @@ test("rules: quyền công khai chỉ là ĐỌC menu/nhóm/ảnh/cấu hình; k
   assert.ok(!/write|create|update|delete/.test(menu.body));
   const orders = blocks.find((b) => b.path.includes("online_orders"));
   assert.match(orders.body, /allow create: if isGuest\(\) && validNewOrder\(code\);/);
-  assert.match(orders.body, /allow update, delete: if isShopOwner\(\);/);
+  assert.match(orders.body, /allow update: if isShopOwner\(\) \|\| guestCancel\(\);/);
+  assert.match(orders.body, /allow delete: if isShopOwner\(\);/);
   assert.match(orders.body, /resource\.data\.uid == request\.auth\.uid/);
 });
 
@@ -173,4 +174,21 @@ test("mô hình rules: bộ đếm chỉ tăng đúng 1, tối đa 2, tự reset
   assert.ok(modelValidLimit(w(1, { key: "p_0912345678" })));
   assert.equal(modelValidLimit(w(1, { key: "p_0999999999" })), false, "bộ đếm SĐT phải khớp SĐT của đơn");
   assert.equal(modelValidLimit(w(1, { orderAfter: { uid: "other", phone: "0912345678" } })), false);
+});
+
+test("rules: khách chỉ được tự huỷ đơn còn chờ của chính mình, không sửa trường nào khác", () => {
+  const fn = (name) => code.slice(code.indexOf(`function ${name}`)).split(/\nfunction /)[0];
+  const cancel = fn("guestCancel");
+  assert.match(cancel, /resource\.data\.uid == request\.auth\.uid/);
+  assert.match(cancel, /resource\.data\.status in \['new', 'awaiting_payment'\]/);
+  assert.match(cancel, /d\.status == 'cancelled'/);
+  assert.match(cancel, /affectedKeys\(\)\.hasOnly\(\['status', 'cancelledAt'\]\)/);
+  assert.match(cancel, /d\.cancelledAt == request\.time/);
+  const release = fn("validLimitRelease");
+  assert.match(release, /hasOnly\(\['pending', 'lastAt', 'lastOrder', 'released'\]\)/);
+  assert.match(release, /d\.pending == \(resource\.data\.pending > 0 \? resource\.data\.pending - 1 : 0\)/);
+  assert.match(release, /before\.status in \['new', 'awaiting_payment'\]/);
+  assert.match(release, /after\.status == 'cancelled'/);
+  assert.match(release, /after\.uid == request\.auth\.uid/);
+  assert.match(code, /allow create, update: if isShopOwner\(\) \|\| \(isGuest\(\) && \(validLimitWrite\(key\) \|\| validLimitRelease\(key\)\)\);/);
 });

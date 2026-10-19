@@ -231,3 +231,8 @@ label.radio input { width: 20px; height: 20px; margin: 0; }
 #open-history { display: inline-flex; margin: 0 0 0 auto; }
 .pill { flex: none; padding: 7px 12px; border: 1px solid #d1bea8; border-radius: 999px; background: #fffaf3; color: var(--accent); font-size: 13px; font-weight: 700; white-space: nowrap; }
 .hero-note { margin: 0; padding: 0 16px 14px; color: var(--muted); font-size: 13px; }
+
+.pay-warning { margin: 4px 0 0; padding: 10px 12px; border-radius: 12px; background: #fff3e3; border: 1px solid #e7c79d; color: #6b3e12; font-size: 13px; line-height: 1.4; }
+.cancel-row { display: flex; gap: 10px; align-items: center; margin-top: 4px; }
+.cancel-row .secondary { flex: 1; }
+.danger-link { padding: 10px 14px; border: 1px solid #e1b1aa; border-radius: 12px; background: #fdf4f2; color: var(--danger); font-weight: 700; }

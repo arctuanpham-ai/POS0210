@@ -46,7 +46,7 @@ const store = {
   set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* đầy hoặc bị chặn: bỏ qua */ } },
   del(key) { try { localStorage.removeItem(key); } catch { /* bỏ qua */ } },
 };
-const KEYS = { cart: "pos0210o.cart", codes: "pos0210o.codes", profile: "pos0210o.profile", menu: "pos0210o.menu3", thumbs: "pos0210o.thumbs" };
+const KEYS = { cart: "pos0210o.cart", codes: "pos0210o.codes", profile: "pos0210o.profile", menu: "pos0210o.menu3", thumbs: "pos0210o.thumbs", hist: "pos0210o.hist" };
 const MENU_TTL = 5 * 60_000;
 const THUMB_TTL = 24 * 3_600_000;
 
@@ -317,6 +317,7 @@ async function submitOrder(event) {
     const result = await sendOrder(uid, checked.value, lines);
     store.set(KEYS.profile, { name: checked.value.name, phone: checked.value.phone, address: form.address.value.trim(), delivery: form.receive.value === "delivery" });
     store.set(KEYS.codes, rememberCode(store.get(KEYS.codes, []), result.code));
+    store.set(KEYS.hist, rememberCode(store.get(KEYS.hist, []), result.code, 40));
     state.cart = {};
     persistCart();
     form.note.value = "";
@@ -393,12 +394,11 @@ async function handleSubmitError(error, lines) {
 function stopWatch() { if (state.watch) { state.watch(); state.watch = null; } clearInterval(tickTimer); tickTimer = null; }
 let tickTimer = null;
 
-function watchOrder(code) {
+function watchOrder(code, { quiet = false } = {}) {
   stopWatch();
   state.code = code;
   state.order = null;
-  showScreen("track");
-  renderTrack();
+  if (!quiet) { showScreen("track"); renderTrack(); }
   state.watch = onSnapshot(
     ref("online_orders", code),
     (snap) => {
@@ -407,9 +407,15 @@ function watchOrder(code) {
       const wasStatus = state.order?.status;
       state.order = { ...snap.data(), id: snap.id };
       if (first && shouldDropOld(state.order)) { forgetCode(code); showScreen("menu"); stopWatch(); return; }
+      // Mở lại link: đơn đã kết thúc thì KHÔNG bật màn theo dõi, chỉ nằm trong Lịch sử.
+      if (first && quiet) {
+        if (orderView(state.order, serverNow()).isFinal) { forgetCode(code); stopWatch(); showScreen("menu"); return; }
+        showScreen("track");
+      }
       if (state.order.status === STATUS.AWAITING_PAYMENT && wasStatus !== STATUS.AWAITING_PAYMENT) syncClock();
       renderTrack();
       startTick();
+      updateBanner();
     },
     (error) => {
       if (isDenied(error)) { forgetCode(code); showScreen("menu"); stopWatch(); }
@@ -503,10 +509,19 @@ function renderTrack() {
   body.innerHTML = `${chips}<div class="status-card s-${view.status}">${spinner}<p class="eyebrow">Mã đơn <b class="code">${esc(order.code)}</b></p><h2>${esc(text.title)}</h2>${text.hint ? `<p class="muted">${esc(text.hint)}</p>` : ""}${showProgress ? progressHtml(order, view) : ""}${extra}${actions}</div>${summaryHtml(order)}${phone}`;
 }
 
+/** Banner "đơn đang theo dõi" chỉ cho đơn CHƯA kết thúc. Đơn đã xong/từ chối/hết hạn chuyển sang Lịch sử. */
+function updateBanner(name = !$("#screen-menu").hidden ? "menu" : "") {
+  const active = state.code && !(state.order && orderView(state.order, serverNow()).isFinal);
+  $("#track-banner").hidden = !(name === "menu" && active);
+  const hasHist = (store.get(KEYS.hist, []) || []).length > 0;
+  $("#open-history").hidden = !hasHist;
+}
+
 function showScreen(name) {
   $("#screen-menu").hidden = name !== "menu";
   $("#screen-track").hidden = name !== "track";
-  $("#track-banner").hidden = !(name === "menu" && state.code);
+  $("#screen-history").hidden = name !== "history";
+  updateBanner(name);
   window.scrollTo(0, 0);
   renderCartBar();
 }
@@ -514,7 +529,7 @@ function showScreen(name) {
 /* ---------- Mở lại link: tìm đơn đang theo dõi ---------- */
 async function restoreOrder() {
   const codes = store.get(KEYS.codes, []) || [];
-  if (codes.length) { watchOrder(codes[0]); return; }
+  if (codes.length) { watchOrder(codes[0], { quiet: true }); return; }
   try {
     const uid = await ensureUid();
     if (!uid) return;
@@ -522,7 +537,7 @@ async function restoreOrder() {
     const orders = snap.docs.map((d) => ({ ...d.data(), id: d.id })).sort((a, b) => (toMillis(b.createdAt) || 0) - (toMillis(a.createdAt) || 0));
     // Chỉ khôi phục đơn CÒN đang diễn ra; đơn đã kết thúc (kể cả quá hạn thanh toán) không tự hiện lại.
     const latest = orders.find((o) => !orderView(o, serverNow()).isFinal);
-    if (latest) { store.set(KEYS.codes, rememberCode([], latest.id)); watchOrder(latest.id); }
+    if (latest) { store.set(KEYS.codes, rememberCode([], latest.id)); watchOrder(latest.id, { quiet: true }); }
   } catch { /* không có đơn nào để khôi phục */ }
 }
 
@@ -600,6 +615,43 @@ $("#track-body").addEventListener("click", async (event) => {
   }
 });
 
+/* ---------- Lịch sử đơn hàng ---------- */
+const fmtWhen = (ms) => { if (!ms) return ""; const d = new Date(ms); const p = (n) => String(n).padStart(2, "0"); return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`; };
+let histOrders = [];
+async function openHistory() {
+  showScreen("history");
+  const body = $("#history-body");
+  body.innerHTML = '<p class="muted center">Đang tải lịch sử…</p>';
+  try {
+    const uid = await ensureUid();
+    const snap = await getDocs(query(col("online_orders"), where("uid", "==", uid), limit(30)));
+    histOrders = snap.docs.map((d) => ({ ...d.data(), id: d.id })).sort((x, y) => (toMillis(y.createdAt) || 0) - (toMillis(x.createdAt) || 0));
+  } catch { body.innerHTML = '<p class="notice error">Không tải được lịch sử. Vui lòng kiểm tra mạng.</p>'; return; }
+  const list = histOrders.filter((o) => orderView(o, serverNow()).isFinal);
+  if (!list.length) { body.innerHTML = '<p class="muted center">Chưa có đơn nào đã hoàn tất.</p>'; return; }
+  body.innerHTML = list.map((o) => {
+    const v = orderView(o, serverNow());
+    const done = v.status === STATUS.DONE;
+    const label = done ? "Đã hoàn thành" : v.status === STATUS.REJECTED ? "Quán không nhận" : "Hết hạn";
+    return `<article class="hist-card${done ? "" : " dim"}"><header><b class="code">${esc(o.code || o.id)}</b><span class="badge${done ? "" : " bad"}">${label}</span><span class="when">${esc(fmtWhen(toMillis(o.createdAt)))}</span></header><ul>${(o.items || []).map((l) => `<li>${Number(l.qty)}× ${esc(String(l.name || "").trim())}${l.note ? ` <small class="muted">(${esc(l.note)})</small>` : ""}</li>`).join("")}</ul><div class="hist-actions"><span class="tot">${money(o.total)}</span><button type="button" class="secondary" data-reorder="${esc(o.id)}">Đặt lại</button></div></article>`;
+  }).join("");
+}
+$("#open-history").addEventListener("click", openHistory);
+$("#history-back").addEventListener("click", () => showScreen("menu"));
+$("#history-body").addEventListener("click", (event) => {
+  const id = event.target.closest("[data-reorder]")?.dataset.reorder;
+  const order = histOrders.find((o) => o.id === id);
+  if (!order) return;
+  state.cart = cartFromOrder(order, menuById(), catById());
+  persistCart();
+  renderMenu();
+  showScreen("menu");
+  renderCartBar();
+  $("#toast").textContent = Object.keys(state.cart).length ? "Đã thêm các món còn bán vào giỏ." : "Các món trong đơn này hiện không còn bán.";
+  $("#toast").hidden = false;
+  setTimeout(() => { $("#toast").hidden = true; }, 3000);
+});
+
 $("#back-to-menu").addEventListener("click", () => { showScreen("menu"); });
 $("#track-banner").addEventListener("click", () => { if (state.code) showScreen("track"); });
 
@@ -608,7 +660,10 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 /* ---------- Khởi động ---------- */
 renderShop();
 renderMenu();
+{ let h = store.get(KEYS.hist, []) || []; for (const c of [...(store.get(KEYS.codes, []) || [])].reverse()) h = rememberCode(h, c, 40); store.set(KEYS.hist, h); }
+{ let h = store.get(KEYS.hist, []) || []; for (const c of [...(store.get(KEYS.codes, []) || [])].reverse()) h = rememberCode(h, c, 40); store.set(KEYS.hist, h); }
 renderCartBar();
+updateBanner();
 syncClock();
 loadShop();
 loadMenu();

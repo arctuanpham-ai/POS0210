@@ -74,3 +74,16 @@ test("ngưỡng màu và thanh kéo", () => {
   assert.deepEqual(sliderSpec("g", 400), { min: 0, max: 1200, step: 5 });
   assert.deepEqual(sliderSpec("quả", 2), { min: 0, max: 6, step: 0.5 });
 });
+
+test('"Arabica 100%" không tự ghép vào espresso: thành dòng chưa ghép, hiện rõ phiếu nguồn', () => {
+  assert.equal(matchMaterial({ materialName: "Arabica 100%" }), null);
+  const receipts = [{ id: "r1", code: "PC1910-TRONG-55D", purchaseDate: NOW, items: [
+    { materialName: "Arabica 100%", qty: 0.25, unit: "kg", amount: 200000 },
+    { materialName: "Cà phê hạt espresso", qty: 1, unit: "kg", amount: 700000 },
+  ] }];
+  const r = materialCosts(receipts, { now: NOW });
+  assert.equal(r.costs.cf_espresso.unitCost, 700);
+  assert.deepEqual(r.costs.cf_espresso.sources.map((s) => s.code), ["PC1910-TRONG-55D"]);
+  assert.equal(r.unmatched.length, 1);
+  assert.equal(r.unmatched[0].name, "Arabica 100%"); assert.equal(r.unmatched[0].code, "PC1910-TRONG-55D");
+});

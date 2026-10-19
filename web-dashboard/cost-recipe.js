@@ -1,5 +1,5 @@
 // Danh mục vật tư chuẩn, giá vốn từ phiếu chi chi tiết và giá vốn món từ công thức. Hàm thuần, không Firebase, không DOM.
-import { normalizeText, isSummaryReceipt, groupLabelOf } from "./expense-rules.js?v=20261018-09";
+import { normalizeText, isSummaryReceipt, groupLabelOf } from "./expense-rules.js?v=20261019-01";
 
 export const KIND_LABELS = { NL: "Nguyên liệu", BB: "Bao bì theo món", VH: "Vận hành" };
 
@@ -9,7 +9,7 @@ const W = [["kg", 1000], ["g", 1]];
 const V = [["lít", 1000], ["ml", 1]];
 export const MATERIALS = [
   M("cf_phin", "Cà phê hạt pha phin", "CAPHE", "NL", "g", W, ["ca phe phin", "cafe phin", "robusta"]),
-  M("cf_espresso", "Cà phê hạt espresso", "CAPHE", "NL", "g", W, ["espresso", "arabica"]),
+  M("cf_espresso", "Cà phê hạt espresso", "CAPHE", "NL", "g", W, ["espresso"]),
   M("cf_coldbrew", "Cà phê hạt cold brew", "CAPHE", "NL", "g", W, ["cold brew", "coldbrew"]),
   M("sua_dac", "Sữa đặc", "SUA", "NL", "g", [["hộp", 380], ["thùng", 380 * 48], ...W], ["sua dac", "ong tho", "ngoi sao phuong nam"]),
   M("sua_tuoi", "Sữa tươi không đường", "SUA", "NL", "ml", [["hộp", 1000], ...V], ["sua tuoi"]),
@@ -99,18 +99,20 @@ export const materialCosts = (receipts, { now = Date.now(), windowDays = 30 } = 
   const from = now - windowDays * 86400000;
   const acc = new Map();
   const unconvertible = [];
+  const unmatched = [];
   for (const r of Array.isArray(receipts) ? receipts : []) {
     if (!r || r.status === "DELETED" || r.status === "CANCELLED" || isSummaryReceipt(r)) continue;
     const at = Number(r.purchaseDate || 0);
     for (const line of r.items || []) {
       const m = matchMaterial(line);
-      if (!m) continue;
       const qty = Number(line.qty || 0);
       const amount = Number(line.amount ?? qty * Number(line.unitPrice || 0));
+      if (!m) { if (qty > 0 && amount > 0 && String(line?.materialName || "").trim()) unmatched.push({ name: String(line.materialName).trim(), qty, unit: line.unit || "", amount, receiptId: r.id, code: r.code || "", at }); continue; }
       const f = unitFactor(m, line.unit);
       if (!(qty > 0) || !(amount > 0)) continue;
       if (!f) { unconvertible.push({ materialId: m.id, name: line.materialName, unit: line.unit, receiptId: r.id }); continue; }
-      const a = acc.get(m.id) || { inWindowAmount: 0, inWindowQty: 0, last: null, buys: 0 };
+      const a = acc.get(m.id) || { inWindowAmount: 0, inWindowQty: 0, last: null, buys: 0, srcs: [] };
+      a.srcs.push({ receiptId: r.id, code: r.code || "", at, name: String(line.materialName || ""), unitCost: amount / (qty * f) });
       const baseQty = qty * f;
       if (at >= from) { a.inWindowAmount += amount; a.inWindowQty += baseQty; }
       if (!a.last || at > a.last.at) a.last = { at, unitCost: amount / baseQty };
@@ -121,9 +123,9 @@ export const materialCosts = (receipts, { now = Date.now(), windowDays = 30 } = 
   const out = {};
   for (const [id, a] of acc) {
     const avg = a.inWindowQty > 0 ? a.inWindowAmount / a.inWindowQty : null;
-    out[id] = { unitCost: avg ?? a.last.unitCost, source: avg !== null ? `bình quân ${windowDays} ngày` : "lần mua gần nhất", lastAt: a.last.at, lastUnitCost: a.last.unitCost, buys: a.buys };
+    out[id] = { unitCost: avg ?? a.last.unitCost, source: avg !== null ? `bình quân ${windowDays} ngày` : "lần mua gần nhất", lastAt: a.last.at, lastUnitCost: a.last.unitCost, buys: a.buys, sources: a.srcs.sort((x, y) => y.at - x.at).slice(0, 4) };
   }
-  return { costs: out, unconvertible };
+  return { costs: out, unconvertible, unmatched };
 };
 
 /** Giá vốn một món theo công thức. missing: vật tư chưa có giá; percent null khi giá bán 0. */

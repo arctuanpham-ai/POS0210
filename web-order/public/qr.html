@@ -6,8 +6,11 @@
   <meta name="robots" content="noindex" />
   <title>Mã QR đặt món · 0210</title>
   <link rel="icon" href="assets/icon.png" type="image/png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700;800&display=swap" />
   <style>
-    :root { font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #2f241d; }
+    :root { font-family: Montserrat, Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #2f241d; }
     body { margin: 0; background: #f6f0e5; }
     main { max-width: 560px; margin: 0 auto; padding: 20px 16px 40px; display: grid; gap: 16px; }
     .tools { display: grid; gap: 10px; padding: 14px; border: 1px solid #dfcfb8; border-radius: 16px; background: #fffcf7; }
@@ -23,6 +26,7 @@
     .scan { font-size: 22px; font-weight: 800; }
     .qr { width: min(360px, 80vw); } .qr svg { width: 100%; height: auto; display: block; }
     .url { font-size: 15px; color: #58483a; word-break: break-all; }
+    .info { display: grid; gap: 4px; margin-top: 6px; padding-top: 12px; border-top: 1px solid #dfcfb8; font-size: 14px; color: #3d332b; width: 100%; }
     .hint { font-size: 13px; color: #77685b; }
     @media print {
       body { background: #fff; } .tools, .hint { display: none !important; }
@@ -38,15 +42,15 @@
         <input id="url" type="url" inputmode="url" autocomplete="off" />
       </label>
       <div class="row"><button type="button" id="print">In ra giấy</button><button type="button" class="alt" id="download">Tải ảnh PNG</button></div>
-      <p class="hint">In khổ A5 hoặc A6 rồi dán tại bàn, quầy. Nên thử quét bằng điện thoại trước khi in.</p>
+      <p class="hint">In khổ A5 hoặc A6 rồi dán tại bàn, quầy. Ảnh PNG tải về có đủ logo và thông tin quán. Nên thử quét bằng điện thoại trước khi in.</p>
     </section>
     <section class="poster" id="poster">
       <img class="logo" src="assets/logo.png" alt="0210" style="height:64px;width:auto;border:0;background:none" />
-      <h1 id="name">0210</h1>
       <p class="scan">Quét mã để đặt món</p>
       <div class="qr" id="qr"></div>
       <p class="url" id="url-text"></p>
       <p>Không cần đăng nhập · Không cần cài app</p>
+      <div class="info" id="info" hidden></div>
     </section>
   </main>
   <script type="module">
@@ -66,30 +70,59 @@
     input.addEventListener("input", draw);
     draw();
     document.getElementById("print").addEventListener("click", () => window.print());
-    document.getElementById("download").addEventListener("click", () => {
+    let shop = {};
+    const loadImage = (src) => new Promise((resolve, reject) => { const i = new Image(); i.onload = () => resolve(i); i.onerror = reject; i.src = src; });
+    const wrap = (ctx, text, maxWidth) => {
+      const words = String(text).split(/\s+/); const lines = []; let line = "";
+      for (const w of words) { const t = line ? `${line} ${w}` : w; if (ctx.measureText(t).width > maxWidth && line) { lines.push(line); line = w; } else line = t; }
+      if (line) lines.push(line); return lines;
+    };
+    // Ảnh PNG đầy đủ như tờ in: logo, kêu gọi quét, mã QR, đường dẫn, thông tin quán.
+    document.getElementById("download").addEventListener("click", async () => {
+      try { await document.fonts.ready; } catch { /* dùng font hệ thống */ }
       const svg = document.querySelector("#qr svg");
-      const image = new Image();
-      const size = 1200;
-      image.onload = () => {
-        const canvas = document.createElement("canvas");
-        canvas.width = size; canvas.height = size;
-        const ctx = canvas.getContext("2d");
-        ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, size, size);
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(image, 0, 0, size, size);
-        const link = document.createElement("a");
-        link.download = "qr-dat-mon.png";
-        link.href = canvas.toDataURL("image/png");
-        link.click();
-      };
-      image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(new XMLSerializer().serializeToString(svg))}`;
+      const [logo, qr] = await Promise.all([
+        loadImage("assets/logo.png"),
+        loadImage(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(new XMLSerializer().serializeToString(svg))}`),
+      ]);
+      const W = 1240, H = 1754, pad = 90, font = "Montserrat, Inter, Arial, sans-serif";
+      const canvas = document.createElement("canvas"); canvas.width = W; canvas.height = H;
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
+      ctx.lineWidth = 8; ctx.strokeStyle = "#1e1e1e"; ctx.beginPath(); ctx.roundRect(36, 36, W - 72, H - 72, 56); ctx.stroke();
+      ctx.textAlign = "center"; ctx.textBaseline = "top";
+      const info = [];
+      if (shop.address) info.push(...wrap((ctx.font = `600 40px ${font}`, ctx), `Địa chỉ: ${shop.address}`, W - 2 * pad - 60));
+      if (shop.phone) info.push(`Điện thoại: ${shop.phone}`);
+      if (shop.hours) info.push(`Giờ mở cửa: ${shop.hours}`);
+      const logoW = 560, logoH = Math.round(logo.height * logoW / logo.width), qrS = 680;
+      const total = logoH + 70 + 84 + 50 + qrS + 50 + 52 + 20 + 46 + (info.length ? 60 + info.length * 58 : 0);
+      let y = Math.max(100, Math.round((H - total) / 2));
+      ctx.drawImage(logo, (W - logoW) / 2, y, logoW, logoH); y += logoH + 70;
+      ctx.fillStyle = "#1e1e1e"; ctx.font = `800 76px ${font}`; ctx.fillText("Quét mã để đặt món", W / 2, y); y += 84 + 50;
+      ctx.fillStyle = "#fff"; ctx.imageSmoothingEnabled = false; ctx.drawImage(qr, (W - qrS) / 2, y, qrS, qrS); ctx.imageSmoothingEnabled = true; y += qrS + 50;
+      ctx.fillStyle = "#58483a"; ctx.font = `700 46px ${font}`; ctx.fillText(document.getElementById("url-text").textContent, W / 2, y); y += 52 + 20;
+      ctx.font = `500 38px ${font}`; ctx.fillText("Không cần đăng nhập · Không cần cài app", W / 2, y); y += 46;
+      if (info.length) {
+        y += 30; ctx.strokeStyle = "#dfcfb8"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W - pad, y); ctx.stroke(); y += 30;
+        ctx.fillStyle = "#3d332b"; ctx.font = `600 40px ${font}`;
+        for (const line of info) { ctx.fillText(line, W / 2, y); y += 58; }
+      }
+      const link = document.createElement("a");
+      link.download = "qr-dat-mon-0210.png"; link.href = canvas.toDataURL("image/png"); link.click();
     });
-    // Tên quán lấy từ cấu hình đặt món (không bắt buộc).
+    // Thông tin quán (địa chỉ, SĐT, giờ mở) lấy từ cấu hình đặt món, hiện trên tờ in và trong ảnh PNG.
     try {
       const db = getFirestore(initializeApp(firebaseConfig));
       const snap = await getDoc(doc(db, "users", STORE_OWNER_UID, "stores", STORE_ID, "online_config", "shop"));
-      if (snap.exists() && snap.data().name) document.getElementById("name").textContent = snap.data().name;
-    } catch { /* giữ tên mặc định */ }
+      if (snap.exists()) {
+        shop = snap.data();
+        const rows = [["Địa chỉ", shop.address], ["Điện thoại", shop.phone], ["Giờ mở cửa", shop.hours]].filter(([, v]) => v);
+        const box = document.getElementById("info");
+        box.innerHTML = rows.map(([k, v]) => `<div><b>${k}:</b> ${String(v).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]))}</div>`).join("");
+        box.hidden = !rows.length;
+      }
+    } catch { /* không có thông tin quán thì chỉ in logo + QR */ }
   </script>
 </body>
 </html>

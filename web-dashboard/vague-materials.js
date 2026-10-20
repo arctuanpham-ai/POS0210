@@ -1,7 +1,7 @@
 // Tìm vật tư tính theo đơn vị đóng gói (túi, gói, hộp…) mà không có định lượng rõ ràng (g, kg, ml, lít) trong đơn vị hoặc tên.
 // Hàm thuần: không Firebase, không DOM.
-import { normalizeText, normalizeQuantity } from "./expense-rules.js?v=20261020-10";
-import { NON_MATERIAL } from "./expense-kind.js?v=20261020-10";
+import { normalizeText, normalizeQuantity } from "./expense-rules.js?v=20261020-12";
+import { NON_MATERIAL } from "./expense-kind.js?v=20261020-12";
 
 /** Đơn vị đo được (đã quy đổi được ra kg / lít). */
 const MEASURED = new Set(["g", "gr", "gam", "kg", "ml", "l", "lit", "cl"]);
@@ -28,15 +28,24 @@ export const unitClass = (unit) => {
  * receipts: phiếu còn hiệu lực. Chỉ xét dòng mua hàng, bỏ dòng đã ghi định lượng trong tên.
  * Trả về { rows, hintedCount } với rows sắp theo tổng tiền giảm dần.
  */
-export const vagueMaterials = (receipts) => {
+export const vagueKey = (code, name) => code || `n:${normalizeText(name)}`;
+/** Tập khoá đã duyệt bỏ qua (theo mã và theo tên chuẩn hoá) từ các quy tắc UNIT_OK đã lưu. */
+export const approvedKeys = (rules) => {
+  const set = new Set();
+  for (const r of rules || []) { if (r?.kind !== "UNIT_OK") continue; if (r.code) set.add(r.code); if (r.name) set.add(`n:${normalizeText(r.name)}`); if (r.key) set.add(r.key); }
+  return set;
+};
+export const vagueMaterials = (receipts, approved = new Set()) => {
   const map = new Map();
   let hinted = new Set();
+  const skipped = new Set();
   for (const r of receipts || []) {
     for (const it of r.items || []) {
       if (NON_MATERIAL.has(it.kind) || !String(it.materialName || "").trim()) continue;
       const cls = unitClass(it.unit);
       if (!cls) continue;
-      const key = it.materialCode || `n:${normalizeText(it.materialName)}`;
+      const key = vagueKey(it.materialCode, it.materialName);
+      if (approved.has(key) || approved.has(`n:${normalizeText(it.materialName)}`)) { skipped.add(key); continue; }
       if (hasQuantityInName(it.materialName)) { hinted.add(key); continue; }
       const row = map.get(key) || { key, name: it.materialName, code: it.materialCode || "", units: new Map(), receipts: new Map(), amount: 0, lastAt: 0, lastReceiptId: "", classes: new Set() };
       const at = Number(r.purchaseDate || 0);
@@ -50,5 +59,5 @@ export const vagueMaterials = (receipts) => {
   }
   const rows = [...map.values()].map((x) => ({ ...x, receiptCount: x.receipts.size, receiptIds: [...x.receipts.keys()], unitList: [...x.units].map(([unit, qty]) => ({ unit, qty })), kind: x.classes.has("packaged") ? "packaged" : "unknown" }))
     .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name, "vi"));
-  return { rows, hintedCount: [...hinted].filter((k) => !map.has(k)).length };
+  return { rows, hintedCount: [...hinted].filter((k) => !map.has(k)).length, approvedCount: skipped.size };
 };

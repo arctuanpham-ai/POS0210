@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { vagueMaterials, unitClass, hasQuantityInName } from "../vague-materials.js";
+import { vagueMaterials, unitClass, hasQuantityInName, approvedKeys } from "../vague-materials.js";
 
 test("phân loại đơn vị", () => {
   assert.equal(unitClass("kg"), ""); assert.equal(unitClass("g"), ""); assert.equal(unitClass("lít"), ""); assert.equal(unitClass("ml"), "");
@@ -22,4 +22,13 @@ test("gom theo mã, bỏ dòng đã có định lượng và dòng không phải
   assert.equal(rows[0].code, "C1"); assert.equal(rows[0].receiptCount, 2); assert.equal(rows[0].amount, 130000);
   assert.deepEqual(rows[0].unitList, [{ unit: "túi", qty: 2 }, { unit: "gói", qty: 1 }]);
   assert.equal(rows[0].lastReceiptId, "b"); assert.equal(hintedCount, 1);
+});
+
+test("đã duyệt bỏ qua thì không vào diện mơ hồ nữa, kể cả lần nhập sau (theo mã hoặc theo tên)", () => {
+  const rc = [{ id: "a", purchaseDate: 1, items: [{ materialName: "Rau húng", materialCode: "R1", unit: "bó", qty: 1, unitPrice: 5000 }, { materialName: "Sốt gà", materialCode: "G1", unit: "gói", qty: 2, unitPrice: 10000 }] },
+    { id: "b", purchaseDate: 9, items: [{ materialName: "rau hung", materialCode: "R-KHAC", unit: "bó", qty: 3, unitPrice: 5000 }] }];
+  const ok = approvedKeys([{ kind: "UNIT_OK", code: "R1", name: "Rau húng" }, { kind: "GROUP", name: "x" }]);
+  const { rows, approvedCount } = vagueMaterials(rc, ok);
+  assert.deepEqual(rows.map((x) => x.code), ["G1"]);
+  assert.equal(approvedCount >= 1, true);
 });

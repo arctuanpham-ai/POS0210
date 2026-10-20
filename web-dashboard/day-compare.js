@@ -1,6 +1,6 @@
 // So sánh ngày với ngày và cùng thứ tuần trước: số bill, giá trị bill trung bình, số món làm ra, doanh thu. Hàm thuần.
 // Ngày thiếu snapshot là "không có dữ liệu" (null), tuyệt đối không tính thành 0.
-import { outputRows } from "./item-output.js?v=20261020-09";
+import { outputRows } from "./item-output.js?v=20261020-10";
 
 const pad = (n) => String(n).padStart(2, "0");
 const keyOf = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;

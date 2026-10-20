@@ -47,6 +47,28 @@ for (const [i, c] of cases.entries()) {
   if (!r.ok) failed++;
   for (const p of [`online_orders/${code}`, `online_limits/${keyU}`, `online_limits/${keyP}`]) await fetch(`https://firestore.googleapis.com/v1/${root}/${p}`, { method: "DELETE", headers: { authorization: `Bearer ${admin}` } });
 }
+// Bộ đếm lượt truy cập: khách ẩn danh tăng đúng 1 (tạo rồi cập nhật) được; tăng 2 hoặc bộ đếm lạ thì bị chặn. Dọn tài liệu thử bằng quyền chủ quán.
+{
+  const statDoc = `${root}/online_stats/20000101`;
+  const commitStat = async (transforms) => {
+    const r = await fetch(`https://firestore.googleapis.com/v1/${db}:commit`, { method: "POST", headers: { authorization: `Bearer ${signIn.idToken}`, "content-type": "application/json" }, body: JSON.stringify({ writes: [{ update: { name: statDoc, fields: {} }, updateTransforms: transforms }] }) });
+    return r.status;
+  };
+  const inc = (field, n = 1) => ({ fieldPath: field, increment: { integerValue: String(n) } });
+  const results = [
+    ["tạo bộ đếm +1", await commitStat([inc("visit"), inc("vh09")]), true],
+    ["cập nhật +1", await commitStat([inc("visit"), inc("vh09")]), true],
+    ["tăng +2 bị chặn", await commitStat([inc("visit", 2)]), false],
+    ["bộ đếm lạ bị chặn", await commitStat([inc("hack")]), false],
+    ["tăng 3 bộ đếm một lần bị chặn", await commitStat([inc("visit"), inc("menu"), inc("add")]), false],
+  ];
+  for (const [label, status, wantOk] of results) {
+    const ok = status >= 200 && status < 300;
+    console.log(`[thống kê] ${label} -> HTTP ${status} ${ok === wantOk ? "ĐÚNG" : "SAI"}`);
+    if (ok !== wantOk) failed++;
+  }
+  await fetch(`https://firestore.googleapis.com/v1/${statDoc}`, { method: "DELETE", headers: { authorization: `Bearer ${admin}` } });
+}
 await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:delete?key=${firebaseConfig.apiKey}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ idToken: signIn.idToken }) });
 console.log(cases.length ? (failed ? `CÓ ${failed} LỖI` : "TẤT CẢ ĐẶT THỬ ĐỀU QUA, đã dọn dữ liệu thử") : "Không có món/combo để thử");
 process.exit(failed ? 1 : 0);

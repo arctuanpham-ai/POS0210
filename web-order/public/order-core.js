@@ -33,7 +33,7 @@ export const LIMITS = Object.freeze({
 });
 
 export const ORDER_KEYS = Object.freeze([
-  "code", "createdAt", "uid", "name", "phone", "mode", "address", "table", "note", "items", "total", "status", "rejectReason", "transferContent", "expiresAt",
+  "code", "createdAt", "uid", "name", "phone", "mode", "address", "table", "note", "items", "total", "discount", "surcharge", "status", "rejectReason", "transferContent", "expiresAt",
 ]);
 export const LINE_KEYS = Object.freeze(["id", "name", "qty", "note", "price"]);
 export const LIMIT_KEYS = Object.freeze(["pending", "lastAt", "lastOrder"]);
@@ -125,7 +125,7 @@ export const validateCheckout = ({ name, phone, delivery, address, table, note, 
  * Tài liệu đơn mới. createdAt do nơi gọi gán bằng serverTimestamp() (rules bắt createdAt == request.time).
  * Trường rejectReason/transferContent/expiresAt khởi tạo rỗng: rules bắt đúng giá trị này khi tạo.
  */
-export const buildOrderDoc = ({ code, uid, value, lines }) => ({
+export const buildOrderDoc = ({ code, uid, value, lines, pricing }) => ({
   code,
   uid,
   name: value.name,
@@ -135,7 +135,9 @@ export const buildOrderDoc = ({ code, uid, value, lines }) => ({
   table: value.table,
   note: value.note,
   items: lines.map((l) => ({ id: l.id, name: l.name, qty: l.qty, note: l.note, price: l.price })),
-  total: linesTotal(lines),
+  total: pricing ? pricing.total : linesTotal(lines),
+  discount: pricing ? pricing.discount : 0,
+  surcharge: pricing ? pricing.surcharge : 0,
   status: STATUS.NEW,
   rejectReason: "",
   transferContent: "",
@@ -242,3 +244,37 @@ export const comboItemsFrom = (combos, hidden = new Set()) =>
       description: (Array.isArray(c.items) ? c.items : []).filter((p) => p && p.name).map((p) => `${Number(p.qty) > 1 ? `${Number(p.qty)}× ` : ""}${String(p.name).trim()}`).join(" + ") || String(c.description || ""),
     }));
 export const comboTools = Object.freeze({ COMBO_CATEGORY, comboItemsFrom });
+
+/* ---------- Khuyến mãi / phụ thu tự động của POS (online_config/promo do máy POS đẩy lên) ---------- */
+const ruleInTime = (rule, now) => {
+  const t = now.getTime();
+  if (rule.startAt != null && t < Number(rule.startAt)) return false;
+  if (rule.endAt != null && t > Number(rule.endAt)) return false;
+  const start = rule.startMinute, end = rule.endMinute;
+  if (start != null && end != null) {
+    const minute = now.getHours() * 60 + now.getMinutes();
+    const ok = start <= end ? minute >= start && minute <= end : minute >= start || minute <= end;
+    if (!ok) return false;
+  }
+  return true;
+};
+
+/**
+ * Tính giá như POS (PricingCore.calculatePricing, phần tự động áp dụng): giá combo là giá cố định nên chỉ tính trên món lẻ.
+ * total = subtotal + surcharge - discount. promo = { rules: [{ name, kind: DISCOUNT|SURCHARGE, percent, startAt, endAt, startMinute, endMinute }] }.
+ */
+export const pricingFor = (lines, promo, now = new Date()) => {
+  const subtotal = linesTotal(lines);
+  const comboSub = lines.filter((l) => String(l.id).startsWith(COMBO_ID_PREFIX)).reduce((a, l) => a + l.price * l.qty, 0);
+  const base = Math.max(0, subtotal - comboSub);
+  const rules = (Array.isArray(promo?.rules) ? promo.rules : []).filter((r) => r && Number(r.percent) > 0 && ruleInTime(r, now));
+  const surchargeRules = rules.filter((r) => r.kind === "SURCHARGE");
+  const surcharge = surchargeRules.reduce((a, r) => a + Math.floor((base * Math.floor(Number(r.percent))) / 100), 0);
+  const after = base + surcharge;
+  let discount = 0, best = null;
+  for (const r of rules.filter((x) => x.kind === "DISCOUNT")) {
+    const d = Math.floor((after * Math.floor(Number(r.percent))) / 100);
+    if (d > discount) { discount = d; best = r; }
+  }
+  return { subtotal, surcharge, discount, total: Math.max(0, subtotal + surcharge - discount), discountName: best?.name || "", surchargeNames: surchargeRules.map((r) => r.name).filter(Boolean) };
+};

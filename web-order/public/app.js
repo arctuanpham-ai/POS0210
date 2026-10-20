@@ -15,7 +15,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { APP_CHECK_SITE_KEY, DEFAULT_SHOP, STORE_ID, STORE_OWNER_UID, firebaseConfig } from "./config.js";
 import {
-  FINAL_STATUSES, LIMITS, comboTools, MODE_LABELS, STATUS, STATUS_TEXT, buildOrderDoc, cartFromOrder, cartLines, changeQty, countdownText, isOrderable,
+  FINAL_STATUSES, LIMITS, comboTools, pricingFor, MODE_LABELS, STATUS, STATUS_TEXT, buildOrderDoc, cartFromOrder, cartLines, changeQty, countdownText, isOrderable,
   limitKeyForPhone, limitKeyForUid, linesCount, linesTotal, makeOrderCode, menuSections, money, orderView, pendingBase, progressSteps, rememberCode,
   setNote, toMillis, validateCheckout,
 } from "./order-core.js";
@@ -51,6 +51,7 @@ const MENU_TTL = 5 * 60_000;
 const THUMB_TTL = 24 * 3_600_000;
 
 const state = {
+  promo: null,
   uid: null,
   shop: { ...DEFAULT_SHOP },
   items: [],
@@ -93,8 +94,9 @@ const ensureUid = async () => (await authPromise) || state.uid;
 /* ---------- Thông tin quán ---------- */
 async function loadShop() {
   try {
-    const snap = await getDoc(ref("online_config", "shop"));
+    const [snap, promoSnap] = await Promise.all([getDoc(ref("online_config", "shop")), getDoc(ref("online_config", "promo")).catch(() => null)]);
     if (snap.exists()) state.shop = { ...DEFAULT_SHOP, ...snap.data() };
+    state.promo = promoSnap?.exists?.() ? promoSnap.data() : null;
   } catch { /* dùng mặc định */ }
   renderShop();
 }
@@ -226,7 +228,7 @@ function renderCartBar() {
   const closed = state.shop.orderingEnabled === false;
   bar.hidden = !lines.length || !$("#screen-track").hidden;
   $("#cart-count").textContent = `${linesCount(lines)} món`;
-  $("#cart-total").textContent = money(linesTotal(lines));
+  $("#cart-total").textContent = money(pricingFor(lines, state.promo).total);
   $("#cart-open").disabled = closed;
   $("#cart-open").textContent = closed ? "Tạm ngưng nhận đơn" : "Xem giỏ & đặt";
   document.body.classList.toggle("has-cart", !bar.hidden);
@@ -239,8 +241,17 @@ function sheetLinesHtml(lines) {
 function renderSheet() {
   const lines = currentLines();
   $("#sheet-lines").innerHTML = sheetLinesHtml(lines);
-  $("#sheet-total").textContent = money(linesTotal(lines));
-  $("#submit-total").textContent = money(linesTotal(lines));
+  const pr = pricingFor(lines, state.promo);
+  $("#sheet-total").textContent = money(pr.total);
+  $("#submit-total").textContent = money(pr.total);
+  const promoRows = [];
+  if (pr.surcharge > 0 || pr.discount > 0) {
+    promoRows.push(`<span>Tạm tính</span><span>${money(pr.subtotal)}</span>`);
+    if (pr.surcharge > 0) promoRows.push(`<span>Phụ thu${pr.surchargeNames.length ? ` (${esc(pr.surchargeNames.join(", "))})` : ""}</span><span>+${money(pr.surcharge)}</span>`);
+    if (pr.discount > 0) promoRows.push(`<span>Khuyến mãi${pr.discountName ? ` (${esc(pr.discountName)})` : ""}</span><span class="promo-minus">−${money(pr.discount)}</span>`);
+  }
+  $("#sheet-promo").innerHTML = promoRows.join("");
+  $("#sheet-promo").hidden = !promoRows.length;
   if (!lines.length) closeSheet();
 }
 
@@ -359,7 +370,7 @@ async function sendOrder(uid, value, lines) {
     if (uBase >= LIMITS.maxPendingOrders || pBase >= LIMITS.maxPendingOrders) throw Object.assign(new Error("limit"), { code: "limit" });
     const code = makeOrderCode();
     const batch = writeBatch(db);
-    batch.set(ref("online_orders", code), { ...buildOrderDoc({ code, uid, value, lines }), createdAt: serverTimestamp() });
+    batch.set(ref("online_orders", code), { ...buildOrderDoc({ code, uid, value, lines, pricing: pricingFor(lines, state.promo) }), createdAt: serverTimestamp() });
     batch.set(ref("online_limits", limitKeyForUid(uid)), { pending: uBase + 1, lastAt: serverTimestamp(), lastOrder: code });
     batch.set(ref("online_limits", limitKeyForPhone(value.phone)), { pending: pBase + 1, lastAt: serverTimestamp(), lastOrder: code });
     try {

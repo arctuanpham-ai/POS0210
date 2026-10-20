@@ -106,7 +106,9 @@ function modelValidOrder({ code: id, auth, d, now, menu, limits }) {
     if (!m || m.price !== l.price || m.name !== l.name || m.active === false || m.deleted === true) return false;
     sum += l.price * l.qty;
   }
-  if (d.total !== sum) return false;
+  if (!isInt(d.discount) || d.discount < 0 || d.discount * 100 > sum * 60) return false;
+  if (!isInt(d.surcharge) || d.surcharge < 0 || d.surcharge * 100 > sum * 30) return false;
+  if (d.total !== sum + d.surcharge - d.discount) return false;
   return limits[limitKeyForUid(auth.uid)]?.lastOrder === id && limits[limitKeyForPhone(d.phone)]?.lastOrder === id;
 }
 function modelValidLimit({ key, d, before, auth, orderAfter, orderBefore, now }) {

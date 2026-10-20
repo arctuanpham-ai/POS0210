@@ -139,7 +139,7 @@ object OnlineOrderService {
             if (err != null) { _error.value = "Không nghe được đơn online: ${err.message}"; _connected.value = false; return@addSnapshotListener }
             if (snap == null) return@addSnapshotListener
             _error.value = ""; _connected.value = true
-            val list = snap.documents.mapNotNull { d -> d.data?.let { OnlineOrderRules.fromMap(d.id, it, ::ms) } }
+            val list = snap.documents.mapNotNull { d -> d.data?.let { OnlineOrderRules.fromMap(d.id, it, ::ms) } }.filterNot { OnlineOrderRules.isTest(it) }
             _orders.value = list
             val fresh = OnlineOrderRules.unseenNew(list, seen)
             if (fresh.isNotEmpty()) {

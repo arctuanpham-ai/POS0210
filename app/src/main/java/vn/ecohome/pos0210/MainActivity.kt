@@ -130,6 +130,7 @@ fun App(vm: PosViewModel = viewModel()) {
     val t by vm.currentTable.collectAsState()
     val s by vm.currentSession.collectAsState()
     val locked by vm.locked.collectAsState()
+    LaunchedEffect(Unit) { vm.watchOnlineBilling() }
     LaunchedEffect(Unit) {
         var tick = 0
         vm.autoCloseIfStale()

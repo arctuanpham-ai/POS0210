@@ -69,3 +69,11 @@ class OnlineOrderRulesTest {
         assertEquals(1, o.items.size); assertEquals("ít đá", o.items[0].note); assertEquals(5L, o.createdAt); assertEquals(50000L, o.total)
     }
 }
+
+class OnlineOrderTestFilterTest {
+    @org.junit.Test fun automatedTestOrdersAreIgnored() {
+        val o = OnlineOrder("X", "X", "u", OnlineOrderRules.TEST_NAME, "0900000000", "pickup", "", "", "", emptyList(), 0, "new", "", 0L, null, null)
+        org.junit.Assert.assertTrue(OnlineOrderRules.isTest(o))
+        org.junit.Assert.assertFalse(OnlineOrderRules.isTest(o.copy(name = "An")))
+    }
+}

@@ -18,6 +18,10 @@ object OnlineOrderRules {
     val ACTIVE_STATUSES = listOf(NEW, AWAITING, PAID, DELIVERING)
     val REJECT_REASONS = listOf("Hết món", "Quán sắp đóng cửa", "Ngoài khu vực giao hàng", "Quán đang quá tải, xin lỗi bạn")
 
+    /** Đơn kiểm thử tự động của hệ thống (sau mỗi lần deploy web): POS không báo chuông, không hiển thị, không tính doanh thu. */
+    const val TEST_NAME = "KIEM THU TU DONG"
+    fun isTest(o: OnlineOrder) = o.name == TEST_NAME
+
     fun label(status: String) = when (status) {
         NEW -> "Chờ quán xác nhận"; REJECTED -> "Đã từ chối"; AWAITING -> "Chờ khách thanh toán"; EXPIRED -> "Hết hạn"
         PAID -> "Đã nhận tiền · đang làm"; DELIVERING -> "Đang giao"; DONE -> "Hoàn thành"; CANCELLED -> "Khách đã huỷ"; else -> status

@@ -332,6 +332,26 @@ class PosRepository(private val db:PosDatabase){
         }
     }
 
+    /**
+     * Ghi đơn online ĐÃ THU TIỀN thành bill thật (chuyển khoản) để vào báo cáo doanh thu. Mỗi mã đơn chỉ ghi một lần
+     * (đánh dấu bằng audit ONLINE_ORDER/BILL_RECORDED). Dùng đúng đường openSession -> createBatch -> completePayment của POS,
+     * bàn ảo "ONLINE", lô món ghi sẵn là đã giao nên không vào hàng chờ bếp. Trả về mã bill, hoặc null nếu đã ghi rồi.
+     */
+    suspend fun recordOnlineSale(code:String,lines:Map<String,Int>,notes:Map<String,String>,cashierId:String):String? {
+        if(dao.onlineBillRecorded(code)>0) return null
+        require(lines.isNotEmpty()) { "EMPTY_ORDER" }
+        val session=openSession("ONLINE",cashierId,"LIVE","prepaid")
+        val items=prepareCart(lines,notes).map{it.copy(deliveredQty=it.qty)}
+        val batch=createBatch(session.id,1,cashierId,items)
+        val now=System.currentTimeMillis()
+        dao.deliverDraftNow(batch.id,now,cashierId)
+        val total=dao.sessionTotalSnapshot(session.id)
+        val fresh=dao.sessionSnapshotById(session.id) ?: error("SESSION_MISSING")
+        val result=completePayment(fresh,PricingPreview(total,0L,0L,total,emptyList(),null),"TRANSFER",cashierId,"ON-$code")
+        dao.audit(AuditEventEntity(UUID.randomUUID().toString(),"ONLINE_ORDER",code,"BILL_RECORDED",cashierId,null,System.currentTimeMillis(),"bill=${result.bill.billNo},total=$total"))
+        return result.bill.billNo
+    }
+
     suspend fun deleteBillsAtomic(
         targets:List<BillEntity>,
         reason:String,

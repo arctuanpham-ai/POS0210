@@ -9,7 +9,9 @@ import {
   limit,
   onSnapshot,
   query,
+  increment,
   serverTimestamp,
+  setDoc,
   where,
   writeBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
@@ -20,6 +22,7 @@ import {
   setNote, toMillis, validateCheckout,
 } from "./order-core.js";
 import { vietQrPayload } from "./vietqr.js";
+import { STATS_COLLECTION, decide, keysFor, vnDayKey } from "./stats-core.js";
 import { qrSvg } from "./qr.js";
 
 const $ = (selector) => document.querySelector(selector);
@@ -68,6 +71,24 @@ const state = {
 };
 
 const serverNow = () => Date.now() + state.clockOffset;
+
+/* ---------- Đếm lượt truy cập theo cấp (phễu): lỗi hay bị chặn thì bỏ qua, không ảnh hưởng đặt món ---------- */
+const STATS_SESSION_KEY = "pos0210o.stats.session";
+function track(event) {
+  try {
+    const now = Date.now();
+    let session = {}, device = {};
+    try { session = JSON.parse(sessionStorage.getItem(STATS_SESSION_KEY) || "{}") || {}; } catch { /* không có sessionStorage: coi như phiên mới */ }
+    device = store.get("pos0210o.stats.device", {}) || {};
+    const result = decide(event, now, session, device);
+    try { sessionStorage.setItem(STATS_SESSION_KEY, JSON.stringify(result.session)); } catch { /* bỏ qua */ }
+    store.set("pos0210o.stats.device", result.device);
+    if (!result.count) return;
+    const patch = {};
+    for (const key of keysFor(event, now)) patch[key] = increment(1);
+    authPromise.then((uid) => { if (uid) return setDoc(ref(STATS_COLLECTION, vnDayKey(now)), patch, { merge: true }); return null; }).catch(() => { /* đếm lỗi: bỏ qua */ });
+  } catch { /* không bao giờ làm hỏng trang vì bộ đếm */ }
+}
 const menuById = () => Object.fromEntries(state.items.map((m) => [m.id, m]));
 const catById = () => Object.fromEntries(state.cats.map((c) => [c.id, c]));
 const currentLines = () => cartLines(state.cart, menuById(), catById());
@@ -89,6 +110,7 @@ let authReady;
 const authPromise = new Promise((resolve) => { authReady = resolve; });
 onAuthStateChanged(auth, (user) => { if (user) { state.uid = user.uid; authReady(user.uid); } });
 signInAnonymously(auth).catch((error) => { state.authError = error; authReady(null); });
+track("visit"); track("device");
 const ensureUid = async () => (await authPromise) || state.uid;
 
 /* ---------- Thông tin quán ---------- */
@@ -137,6 +159,7 @@ function applyMenu(items, cats) {
   if (changed) store.set(KEYS.cart, state.cart);
   renderMenu();
   renderCartBar();
+  if (items.length) track("menu");
 }
 
 async function loadMenu(force = false) {
@@ -265,6 +288,7 @@ function openSheet() {
   syncReceiveFields();
   clearErrors();
   state.sheetOpen = true;
+  track("cart");
   $("#sheet").hidden = false;
   document.body.classList.add("sheet-open");
   renderSheet();
@@ -332,6 +356,7 @@ async function submitOrder(event) {
   try {
     const uid = await ensureUid();
     if (!uid) throw Object.assign(new Error("auth"), { code: "auth" });
+    track("submit");
     const result = await sendOrder(uid, checked.value, lines);
     store.set(KEYS.profile, { name: checked.value.name, phone: checked.value.phone, address: form.address.value.trim(), delivery: form.receive.value === "delivery" });
     store.set(KEYS.codes, rememberCode(store.get(KEYS.codes, []), result.code));
@@ -575,6 +600,7 @@ $("#menu").addEventListener("click", (event) => {
     return;
   }
   state.cart = changeQty(state.cart, id, delta);
+  if (delta > 0) track("add");
   persistCart();
   refreshDish(id);
   renderCartBar();

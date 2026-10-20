@@ -83,6 +83,36 @@ match /users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/online_orders/{code} {
   allow delete: if isShopOwner();
 }
 
+// ---- Đếm lượt truy cập trang đặt món theo cấp (phễu): mỗi ngày một tài liệu online_stats/<yyyymmdd> ----
+// Khách chỉ được TĂNG đúng 1 các bộ đếm đã định sẵn (tối đa 2 bộ đếm mỗi lần ghi); chỉ chủ quán đọc được.
+function statKeys() {
+  return ['visit', 'device', 'menu', 'add', 'cart', 'submit', 'vh00', 'vh01', 'vh02', 'vh03', 'vh04', 'vh05', 'vh06', 'vh07', 'vh08', 'vh09', 'vh10', 'vh11', 'vh12', 'vh13', 'vh14', 'vh15', 'vh16', 'vh17', 'vh18', 'vh19', 'vh20', 'vh21', 'vh22', 'vh23'];
+}
+
+function statOne(k) {
+  return !(k in request.resource.data) || request.resource.data[k] == 1;
+}
+
+function statInc(k) {
+  let a = request.resource.data.diff(resource.data).affectedKeys();
+  return !(k in a) || request.resource.data[k] == resource.data.get(k, 0) + 1;
+}
+
+match /users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/online_stats/{day} {
+  allow read: if isShopOwner();
+  allow create: if isGuest()
+    && day.matches('^20[0-9]{6}$')
+    && request.resource.data.keys().hasOnly(statKeys())
+    && request.resource.data.keys().size() <= 2
+    && statOne('visit') && statOne('device') && statOne('menu') && statOne('add') && statOne('cart') && statOne('submit') && statOne('vh00') && statOne('vh01') && statOne('vh02') && statOne('vh03') && statOne('vh04') && statOne('vh05') && statOne('vh06') && statOne('vh07') && statOne('vh08') && statOne('vh09') && statOne('vh10') && statOne('vh11') && statOne('vh12') && statOne('vh13') && statOne('vh14') && statOne('vh15') && statOne('vh16') && statOne('vh17') && statOne('vh18') && statOne('vh19') && statOne('vh20') && statOne('vh21') && statOne('vh22') && statOne('vh23');
+  allow update: if isGuest()
+    && day.matches('^20[0-9]{6}$')
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(statKeys())
+    && request.resource.data.diff(resource.data).affectedKeys().size() <= 2
+    && statInc('visit') && statInc('device') && statInc('menu') && statInc('add') && statInc('cart') && statInc('submit') && statInc('vh00') && statInc('vh01') && statInc('vh02') && statInc('vh03') && statInc('vh04') && statInc('vh05') && statInc('vh06') && statInc('vh07') && statInc('vh08') && statInc('vh09') && statInc('vh10') && statInc('vh11') && statInc('vh12') && statInc('vh13') && statInc('vh14') && statInc('vh15') && statInc('vh16') && statInc('vh17') && statInc('vh18') && statInc('vh19') && statInc('vh20') && statInc('vh21') && statInc('vh22') && statInc('vh23');
+  allow delete: if isShopOwner();
+}
+
 // ---- Bộ đếm "tối đa 2 đơn đang chờ" cho mỗi uid (u_<uid>) và mỗi SĐT (p_<sđt>) ----
 match /users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/online_limits/{key} {
   allow get: if request.auth != null;

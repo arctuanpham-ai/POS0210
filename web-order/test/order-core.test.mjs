@@ -160,3 +160,19 @@ test("combo hiện thành nhóm Combo, id có tiền tố c_, bỏ combo tắt/�
   const sections = menuSections(items, [COMBO_CATEGORY]);
   assert.equal(sections[0].name, "Combo");
 });
+
+import { pricingFor } from "../public/order-core.js";
+test("khuyến mãi tự động như POS: giảm % trên món lẻ, combo giữ giá cố định, phụ thu tính trước khi giảm", () => {
+  const lines = [{ id: "a", name: "A", qty: 2, note: "", price: 30000 }, { id: "c_k1", name: "Combo", qty: 1, note: "", price: 69000 }];
+  const noon = new Date(2026, 9, 20, 12, 0);
+  const promo = { rules: [{ name: "Giảm 10%", kind: "DISCOUNT", percent: 10 }, { name: "Giờ vàng", kind: "DISCOUNT", percent: 20, startMinute: 360, endMinute: 540 }] };
+  const p = pricingFor(lines, promo, noon);
+  assert.equal(p.subtotal, 129000);
+  assert.equal(p.discount, 6000); // 10% của 60.000 (combo không giảm)
+  assert.equal(p.total, 123000);
+  const morning = pricingFor(lines, promo, new Date(2026, 9, 20, 7, 0));
+  assert.equal(morning.discount, 12000);
+  const sur = pricingFor(lines, { rules: [{ kind: "SURCHARGE", percent: 10 }, { kind: "DISCOUNT", percent: 10 }] }, noon);
+  assert.equal(sur.surcharge, 6000); assert.equal(sur.discount, 6600); assert.equal(sur.total, 129000 + 6000 - 6600);
+  assert.equal(pricingFor(lines, null, noon).total, 129000);
+});

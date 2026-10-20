@@ -185,6 +185,9 @@ function dishHtml(item, cat) {
   const entry = state.cart[item.id];
   const sellable = isOrderable(item, cat);
   const thumb = state.thumbs[`menu_${item.id}`] || state.thumbs[item.id];
+  // Combo: ghép ảnh các món thành phần, dấu + ở giữa.
+  const tile = (id, name) => { const t = state.thumbs[`menu_${id}`] || state.thumbs[id]; return t ? `<img src="${esc(t)}" alt="" loading="lazy" width="56" height="56" />` : `<span class="dish-initial small">${esc(String(name || "?").trim().charAt(0).toUpperCase())}</span>`; };
+  const comboImg = item.parts?.length ? item.parts.map((p) => `<span class="ct">${tile(p.id, p.name)}</span>`).join('<b class="plus">+</b>') : "";
   const img = thumb ? `<img src="${esc(thumb)}" alt="" loading="lazy" width="72" height="72" />` : `<span class="dish-initial">${esc(String(item.name).trim().charAt(0).toUpperCase())}</span>`;
   const control = !sellable
     ? `<span class="soldout">Tạm hết</span>`
@@ -192,7 +195,7 @@ function dishHtml(item, cat) {
       ? `<div class="stepper"><button type="button" data-act="dec" data-id="${esc(item.id)}" aria-label="Bớt 1 ${esc(item.name.trim())}">−</button><b aria-live="polite">${entry.qty}</b><button type="button" data-act="inc" data-id="${esc(item.id)}" aria-label="Thêm 1 ${esc(item.name.trim())}">+</button></div>`
       : `<button type="button" class="add" data-act="inc" data-id="${esc(item.id)}">Thêm</button>`;
   const note = sellable && entry ? `<input class="dish-note" data-note="${esc(item.id)}" maxlength="${LIMITS.maxLineNote}" placeholder="Ghi chú món (ít đá, ít ngọt…)" value="${esc(entry.note)}" autocomplete="off" />` : "";
-  return `<article class="dish${sellable ? "" : " off"}" data-dish="${esc(item.id)}"><div class="dish-img">${img}</div><div class="dish-body"><h3>${esc(item.name.trim())}</h3>${item.description ? `<p class="desc">${esc(item.description)}</p>` : ""}<b class="price">${money(item.price)}</b></div><div class="dish-ctl">${control}</div>${note}</article>`;
+  return `<article class="dish${sellable ? "" : " off"}${comboImg ? " combo-dish" : ""}" data-dish="${esc(item.id)}"><div class="dish-img${comboImg ? " combo" : ""}">${comboImg || img}</div><div class="dish-body"><h3>${esc(item.name.trim())}</h3>${item.description ? `<p class="desc">${esc(item.description)}</p>` : ""}<b class="price">${money(item.price)}</b></div><div class="dish-ctl">${control}</div>${note}</article>`;
 }
 
 function renderMenu() {

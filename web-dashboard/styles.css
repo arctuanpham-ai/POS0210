@@ -462,3 +462,26 @@ button.paylist-row { width: 100%; font: inherit; color: inherit; cursor: pointer
 .filter-label label { margin: 0; font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; }
 .filter-panel .filter-row { flex-wrap: wrap; overflow: visible; padding: 0; }
 .filter-panel select { width: 100%; margin: 0; }
+
+/* Mục thu gọn: mặc định gọn, bấm mũi tên để xem chi tiết */
+.fold { margin: 0 0 8px; border: 1px solid #dfcfb8; border-radius: 12px; background: #fff9f0; }
+.fold > summary { display: flex; align-items: center; gap: 10px; padding: 11px 14px; cursor: pointer; list-style: none; font-weight: 800; font-size: 15px; color: #3a2a20; }
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary::before { content: "▸"; font-size: 13px; color: #8a7461; transition: transform .15s; }
+.fold[open] > summary::before { transform: rotate(90deg); }
+.fold-title { flex: 1 1 auto; min-width: 0; }
+.fold-count { flex: 0 0 auto; min-width: 24px; padding: 2px 9px; border-radius: 999px; background: #efe4d6; color: #6e432d; font-size: 12px; font-weight: 800; text-align: center; }
+.fold-count.warn { background: #fde4dc; color: #a3361d; }
+.fold-body { padding: 0 14px 12px; }
+.fold-body > .muted { margin: 0 0 8px; }
+.fold-warn { border-color: #ecb7a6; }
+.fold.is-empty > summary { color: #8a7461; font-weight: 700; }
+.fold-group { margin: 18px 0 8px; font-size: 12px; font-weight: 800; letter-spacing: .08em; color: #8a7461; }
+/* Nút nhập phiếu gọn: nút chính một hàng, hai nút phụ chung một hàng, bỏ dòng mô tả trên điện thoại */
+@media (max-width: 640px) {
+  .action-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .action-btn { min-height: 0; padding: 11px 12px; }
+  .action-btn.main { grid-column: 1 / -1; }
+  .action-btn small { display: none; }
+  .action-btn.main small { display: block; }
+}

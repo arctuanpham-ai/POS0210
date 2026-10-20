@@ -8,6 +8,7 @@ data class OnlineOrder(
     val mode: String, val address: String, val table: String, val note: String,
     val items: List<OnlineLine>, val total: Long, val status: String, val rejectReason: String,
     val createdAt: Long, val expiresAt: Long?, val paidAt: Long?,
+    val discount: Long = 0L, val surcharge: Long = 0L,
 )
 
 object OnlineOrderRules {
@@ -91,6 +92,7 @@ object OnlineOrderRules {
         } ?: emptyList()
         fun s(k: String) = d[k]?.toString().orEmpty()
         return OnlineOrder(id, s("code").ifBlank { id }, s("uid"), s("name"), s("phone"), s("mode"), s("address"), s("table"), s("note"), items,
-            (d["total"] as? Number)?.toLong() ?: 0L, s("status"), s("rejectReason"), ms(d["createdAt"]) ?: 0L, ms(d["expiresAt"]), ms(d["paidAt"]))
+            (d["total"] as? Number)?.toLong() ?: 0L, s("status"), s("rejectReason"), ms(d["createdAt"]) ?: 0L, ms(d["expiresAt"]), ms(d["paidAt"]),
+            (d["discount"] as? Number)?.toLong() ?: 0L, (d["surcharge"] as? Number)?.toLong() ?: 0L)
     }
 }

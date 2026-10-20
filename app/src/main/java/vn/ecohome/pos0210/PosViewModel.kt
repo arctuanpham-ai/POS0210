@@ -1482,7 +1482,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
       if(o.items.isEmpty())continue
       val lines=LinkedHashMap<String,Int>();val notes=HashMap<String,String>()
       for(l in o.items){val id=if(l.id.startsWith("c_"))"combo:"+l.id.removePrefix("c_") else l.id;if(id.isBlank())continue;lines[id]=(lines[id]?:0)+l.qty;if(l.note.isNotBlank())notes[id]=l.note}
-      runCatching{repo.recordOnlineSale(o.code,lines,notes,me.id)}
+      runCatching{repo.recordOnlineSale(o.code,lines,notes,me.id,o.surcharge,o.discount)}
        .onSuccess{bill->if(bill!=null)onlineMessage.value="Đã ghi đơn online ${o.code} vào doanh thu (bill $bill)"}
        .onFailure{onlineMessage.value="Chưa ghi được đơn ${o.code} vào doanh thu: ${it.message}"}
      }

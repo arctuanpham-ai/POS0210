@@ -77,3 +77,13 @@ class OnlineOrderTestFilterTest {
         org.junit.Assert.assertFalse(OnlineOrderRules.isTest(o.copy(name = "An")))
     }
 }
+
+class OnlineOrderPricingFieldsTest {
+    @org.junit.Test fun parsesDiscountAndSurcharge() {
+        val o = OnlineOrderRules.fromMap("X", mapOf("code" to "X", "status" to "paid", "total" to 54000L, "discount" to 6000L, "surcharge" to 0L), { it as? Long })
+        org.junit.Assert.assertEquals(6000L, o.discount)
+        org.junit.Assert.assertEquals(0L, o.surcharge)
+        val legacy = OnlineOrderRules.fromMap("Y", mapOf("code" to "Y", "status" to "paid", "total" to 1000L), { it as? Long })
+        org.junit.Assert.assertEquals(0L, legacy.discount)
+    }
+}

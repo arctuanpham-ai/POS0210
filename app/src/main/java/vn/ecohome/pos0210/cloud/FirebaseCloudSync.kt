@@ -191,6 +191,17 @@ object FirebaseCloudSync {
             val comboParts=dao.allComboItemsSnapshot().groupBy{it.comboId}
             writeMaps(fs,root.collection("combos"),dao.allCombosSnapshot().map{c->c.id to mapOf("id" to c.id,"name" to c.name,"price" to c.price,"sortOrder" to c.sortOrder,"active" to c.active,"description" to c.description,"items" to comboParts[c.id].orEmpty().map{part->mapOf("menuItemId" to part.menuItemId,"name" to (menuNames[part.menuItemId]?:"Món đã xoá"),"qty" to part.qty)})})
         }
+        // Khuyến mãi/phụ thu TỰ ĐỘNG của POS cho trang đặt món online (khách thấy đúng giá như tại quán). Lỗi ở đây không chặn đồng bộ chính.
+        runCatching{
+            val promoRules=dao.allPricingRulesSnapshot().filter{it.active&&it.autoApply&&it.percent>0&&(it.kind=="DISCOUNT"||it.kind=="SURCHARGE")}
+                .map{r->mapOf("id" to r.id,"name" to r.name,"kind" to r.kind,"percent" to r.percent,"startAt" to r.startAt,"endAt" to r.endAt,"startMinute" to r.startMinute,"endMinute" to r.endMinute)}
+            val promoHash=promoRules.toString().hashCode().toString()
+            val sp=fs.app.applicationContext.getSharedPreferences("pos0210_online_promo",Context.MODE_PRIVATE)
+            if(sp.getString("hash",null)!=promoHash){
+                FirestoreServerWriter.set(root.collection("online_config").document("promo"),mapOf("rules" to promoRules,"updatedAt" to System.currentTimeMillis()))
+                sp.edit().putString("hash",promoHash).apply()
+            }
+        }
         writeMaps(fs,root.collection("areas"),dao.allAreasSnapshot().map{a->a.id to mapOf("id" to a.id,"name" to a.name,"sortOrder" to a.sortOrder,"active" to a.active)})
         writeMaps(fs,root.collection("sessions"),sessions.map{s->s.id to mapOf("id" to s.id,"tableId" to s.tableId,"openedAt" to s.openedAt,"openedBy" to s.openedBy,"status" to s.status,"version" to s.version,"flow" to s.flow)})
         writeMaps(fs,root.collection("orderBatches"),dao.cloudOrderBatchesSnapshot().map{b->b.id to mapOf("id" to b.id,"sessionId" to b.sessionId,"sequence" to b.sequence,"ordererId" to b.ordererId,"createdAt" to b.createdAt,"sentAt" to b.sentAt,"status" to b.status,"serviceNo" to b.serviceNo,"deliveredAt" to b.deliveredAt,"deliveredBy" to b.deliveredBy)})

@@ -54,7 +54,7 @@ test("rules: regex mã đơn, SĐT và uid chủ quán", () => {
 test("rules: quyền công khai chỉ là ĐỌC menu/nhóm/ảnh/cấu hình; không có quyền ghi công khai", () => {
   const blocks = [...code.matchAll(/match (\S+) \{([^}]*)\}/g)].map((m) => ({ path: m[1], body: m[2] }));
   const publicRead = blocks.filter((b) => /allow read: if true;/.test(b.body)).map((b) => b.path.split("/").slice(-2)[0]).sort();
-  assert.deepEqual(publicRead, ["menu", "menuCategories", "menuThumbs", "online_config"]);
+  assert.deepEqual(publicRead, ["combos", "menu", "menuCategories", "menuThumbs", "online_config"]);
   for (const b of blocks) {
     for (const m of b.body.matchAll(/allow ([a-z, ]+): if ([^;]+);/g)) {
       const ops = m[1], cond = m[2].trim();

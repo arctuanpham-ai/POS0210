@@ -15,7 +15,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { APP_CHECK_SITE_KEY, DEFAULT_SHOP, STORE_ID, STORE_OWNER_UID, firebaseConfig } from "./config.js";
 import {
-  FINAL_STATUSES, LIMITS, MODE_LABELS, STATUS, STATUS_TEXT, buildOrderDoc, cartFromOrder, cartLines, changeQty, countdownText, isOrderable,
+  FINAL_STATUSES, LIMITS, comboTools, MODE_LABELS, STATUS, STATUS_TEXT, buildOrderDoc, cartFromOrder, cartLines, changeQty, countdownText, isOrderable,
   limitKeyForPhone, limitKeyForUid, linesCount, linesTotal, makeOrderCode, menuSections, money, orderView, pendingBase, progressSteps, rememberCode,
   setNote, toMillis, validateCheckout,
 } from "./order-core.js";
@@ -121,6 +121,7 @@ function renderShop() {
 }
 
 /* ---------- Menu ---------- */
+const { COMBO_CATEGORY, comboItemsFrom } = comboTools;
 function applyMenu(items, cats) {
   state.items = items;
   state.cats = cats;
@@ -142,13 +143,16 @@ async function loadMenu(force = false) {
   else if (cached && cached.items && !state.items.length) applyMenu(cached.items, cached.cats); // hiện bản cũ trong lúc tải bản mới
   if (!force && cached && Date.now() - cached.at < MENU_TTL) { loadThumbs(); return; }
   try {
-    const [itemSnap, catSnap, hiddenSnap] = await Promise.all([getDocs(col("menu")), getDocs(col("menuCategories")), getDoc(ref("online_config", "menu")).catch(() => null)]);
+    const [itemSnap, catSnap, hiddenSnap, comboSnap] = await Promise.all([getDocs(col("menu")), getDocs(col("menuCategories")), getDoc(ref("online_config", "menu")).catch(() => null), getDocs(col("combos")).catch(() => null)]);
     // Món chủ quán đã ẩn khỏi đặt món online: loại hẳn, không vào bộ nhớ đệm, không hiển thị dưới bất kỳ dạng nào.
     const hidden = new Set(Array.isArray(hiddenSnap?.data?.()?.hidden) ? hiddenSnap.data().hidden : []);
     const cats = catSnap.docs.map((d) => ({ ...d.data(), id: d.id }));
+    const combos = comboSnap ? comboSnap.docs.map((d) => ({ ...d.data(), id: d.id })) : [];
     const catOff = new Set(cats.filter((c) => c.active === false).map((c) => c.id));
     // Món ngừng bán (active=false), món thuộc nhóm đang tắt, món bị ẩn riêng: loại hẳn, không hiện mờ.
     const items = itemSnap.docs.map((d) => ({ ...d.data(), id: d.id })).filter((m) => m.deleted !== true && m.name && m.active !== false && !hidden.has(m.id) && !catOff.has(m.categoryId));
+    const comboItems = comboItemsFrom(combos, hidden);
+    if (comboItems.length) { items.push(...comboItems); cats.push(COMBO_CATEGORY); }
     store.set(KEYS.menu, { at: Date.now(), items, cats });
     applyMenu(items, cats);
     $("#menu-error").hidden = true;

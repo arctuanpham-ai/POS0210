@@ -144,3 +144,19 @@ test("menu hiển thị: theo nhóm, bỏ món xoá, nhóm không bán được 
 test("hằng số trạng thái", () => {
   assert.deepEqual(Object.values(STATUS).sort(), ["awaiting_payment", "cancelled", "delivering", "done", "expired", "new", "paid", "rejected"]);
 });
+
+import { comboItemsFrom, COMBO_CATEGORY } from "../public/order-core.js";
+test("combo hiện thành nhóm Combo, id có tiền tố c_, bỏ combo tắt/ẩn", () => {
+  const combos = [
+    { id: "a1", name: "Cafe Ngon", price: 45000, active: true, sortOrder: 2, items: [{ name: "Cafe sữa", qty: 1 }, { name: "Bánh mì", qty: 2 }] },
+    { id: "a2", name: "Tắt", price: 1000, active: false },
+    { id: "a3", name: "Ẩn", price: 1000, active: true },
+    { id: "a4", name: "Trà", price: 30000, active: true, sortOrder: 1, items: [] , description: "Trà + bánh" },
+  ];
+  const items = comboItemsFrom(combos, new Set(["c_a3"]));
+  assert.deepEqual(items.map((i) => i.id), ["c_a4", "c_a1"]);
+  assert.equal(items[1].description, "Cafe sữa + 2× Bánh mì");
+  assert.equal(items[0].description, "Trà + bánh");
+  const sections = menuSections(items, [COMBO_CATEGORY]);
+  assert.equal(sections[0].name, "Combo");
+});

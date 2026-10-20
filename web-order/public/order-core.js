@@ -228,3 +228,16 @@ export const menuSections = (items, categories) => {
   const sellable = (s) => s.active && s.items.some((m) => isOrderable(m));
   return sections.map((s, i) => ({ s, i })).sort((a, b) => Number(sellable(b.s)) - Number(sellable(a.s)) || a.i - b.i).map(({ s }) => s);
 };
+
+/** Combo của quán (users/.../combos) hiển thị như một nhóm "Combo"; id dòng món = "c_" + id combo để rules tra đúng bảng. */
+export const COMBO_ID_PREFIX = "c_";
+export const COMBO_CATEGORY = Object.freeze({ id: "_combo", name: "Combo", sortOrder: -1, active: true });
+export const comboItemsFrom = (combos, hidden = new Set()) =>
+  (combos || [])
+    .filter((c) => c && c.name && c.active !== false && c.deleted !== true && Number(c.price) > 0 && !hidden.has(`${COMBO_ID_PREFIX}${c.id}`))
+    .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0))
+    .map((c) => ({
+      id: `${COMBO_ID_PREFIX}${c.id}`, name: String(c.name).trim(), price: Math.round(Number(c.price)), categoryId: COMBO_CATEGORY.id, sortOrder: Number(c.sortOrder || 0), active: true,
+      description: (Array.isArray(c.items) ? c.items : []).filter((p) => p && p.name).map((p) => `${Number(p.qty) > 1 ? `${Number(p.qty)}× ` : ""}${String(p.name).trim()}`).join(" + ") || String(c.description || ""),
+    }));
+export const comboTools = Object.freeze({ COMBO_CATEGORY, comboItemsFrom });

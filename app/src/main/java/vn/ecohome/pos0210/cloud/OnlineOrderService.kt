@@ -122,15 +122,19 @@ object OnlineOrderService {
     }
 
     private suspend fun ensureAttached(app: Application) {
-        val enabled = PosDatabase.get(app).dao().cloudSyncStateSnapshot()?.enabled == true
-        val uid = if (enabled) FirebaseCloudSync.currentUid(app) else null
         val stale = System.currentTimeMillis() - attachedAt > 6 * 3_600_000L
-        if (uid == attachedUid && !stale && registration != null) return
+        if (registration != null && !stale && FirebaseCloudSync.currentUid(app) == attachedUid) return
         registration?.remove(); registration = null; attachedUid = null; _connected.value = false
-        if (uid == null) return
+        val enabled = PosDatabase.get(app).dao().cloudSyncStateSnapshot()?.enabled == true
+        if (!enabled) { _error.value = "Đồng bộ cloud đang tắt: vào Quản lý > Đồng bộ cloud để bật, rồi đơn online mới về máy."; return }
         val config = FirebaseCloudSync.config(app)
-        if (!config.valid) return
-        val fs = FirebaseFirestore.getInstance(FirebaseCloudSync.firebaseApp(app, config))
+        if (!config.valid) { _error.value = "Chưa cài cấu hình Firebase trong app."; return }
+        // Khởi tạo app Firebase trước (nếu chưa có) rồi mới lấy người dùng đã đăng nhập.
+        val fbApp = FirebaseCloudSync.firebaseApp(app, config)
+        val uid = com.google.firebase.auth.FirebaseAuth.getInstance(fbApp).currentUser?.uid
+        if (uid == null) { _error.value = "Chưa đăng nhập Firebase trên máy này: vào Đồng bộ cloud, đăng nhập rồi đồng bộ 1 lần."; return }
+        _error.value = ""
+        val fs = FirebaseFirestore.getInstance(fbApp)
         val since = Timestamp(Date(System.currentTimeMillis() - 24 * 3_600_000L))
         val query = fs.collection("users").document(uid).collection("stores").document("0210").collection("online_orders")
             .whereGreaterThanOrEqualTo("createdAt", since).orderBy("createdAt", Query.Direction.DESCENDING)

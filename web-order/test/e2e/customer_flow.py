@@ -76,6 +76,10 @@ def run():
         page.screenshot(path=f"{SHOTS}/2-cart.png")
         page.click("#cart-open")
         check(page.is_visible("#sheet"), "mở form đặt đơn")
+        stats = page.evaluate("window.__stats || []")
+        stat_keys = {k for e in stats for k in e["data"].keys()}
+        check({"visit", "menu", "add", "cart"} <= stat_keys, f"đếm lượt truy cập theo cấp: {sorted(stat_keys)}")
+        check(all("/online_stats/" in e["path"] for e in stats) and len([e for e in stats if "visit" in e["data"]]) == 1, "lượt vào chỉ đếm 1 lần mỗi phiên")
         page.screenshot(path=f"{SHOTS}/3-sheet.png")
 
         print("3. Kiểm tra form")

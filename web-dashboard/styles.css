@@ -485,3 +485,20 @@ button.paylist-row { width: 100%; font: inherit; color: inherit; cursor: pointer
   .action-btn small { display: none; }
   .action-btn.main small { display: block; }
 }
+
+/* Thống kê lượt truy cập */
+.st-funnel { display: grid; gap: 6px; margin: 4px 0 12px; }
+.st-step { display: grid; gap: 3px; }
+.st-step-head { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
+.st-step-head b { font-variant-numeric: tabular-nums; }
+.st-bar { height: 8px; border-radius: 999px; background: #efe4d6; overflow: hidden; }
+.st-bar > i { display: block; height: 100%; background: #8a5a3c; border-radius: 999px; }
+.st-step small { color: #7a6a5c; font-size: 12px; }
+.st-scroll { overflow-x: auto; margin: 6px 0 12px; }
+.st-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.st-table th, .st-table td { padding: 6px 8px; border-top: 1px solid #efe4d6; text-align: right; white-space: nowrap; }
+.st-table th:first-child, .st-table td:first-child { text-align: left; }
+.st-table thead th { border-top: 0; color: #6c5849; font-size: 12px; }
+.st-hours { display: grid; grid-template-columns: repeat(24, 1fr); gap: 2px; align-items: end; height: 70px; margin: 6px 0 2px; }
+.st-hours i { display: block; background: #8a5a3c; border-radius: 3px 3px 0 0; min-height: 2px; }
+.st-hours-axis { display: flex; justify-content: space-between; font-size: 11px; color: #8a7461; }

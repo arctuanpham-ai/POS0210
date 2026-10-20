@@ -40,6 +40,8 @@ export const where = (f, op, v) => ({ kind: 'where', f, op, v });
 export const limit = (n) => ({ kind: 'limit', n });
 export const query = (col, ...cs) => ({ ...col, filters: cs.filter((c) => c.kind === 'where').map((c) => ({ f: c.f, v: c.v })) });
 export const serverTimestamp = () => ({ __ts: true });
+export const increment = (n) => ({ __inc: n });
+export const setDoc = async (ref, data) => { (window.__stats = window.__stats || []).push({ path: ref.path, data }); };
 export const onSnapshot = (ref, next, err) => {
   const set = S.listeners.get(ref.path) || S.listeners.set(ref.path, new Set()).get(ref.path);
   const l = { next }; set.add(l);

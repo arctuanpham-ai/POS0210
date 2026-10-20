@@ -182,6 +182,8 @@ export const myAlerts = ({ myId, role, me = null, receipts = [], batches = [], m
   const mine = receipts.filter((r) => isMine(r, myId));
   const rejected = mine.filter((r) => reviewStatus(r) === "REJECTED");
   if (rejected.length) out.push({ key: "rejected", level: "warn", count: rejected.length, text: `${rejected.length} phiếu của bạn bị trả lại: xem lý do, sửa rồi lưu để gửi duyệt lại.` });
+  const flaggedMine = mine.filter(isFlagOpen);
+  if (flaggedMine.length) out.push({ key: "flagged", level: "warn", count: flaggedMine.length, text: `${flaggedMine.length} phiếu của bạn bị đánh dấu SAI: xem lý do, sửa lại rồi lưu để chủ quán duyệt lại.` });
   const paidMine = batches.filter((b) => b.status === "PAID" && isMine(b, myId));
   if (paidMine.length) {
     const late = paidMine.filter((b) => needsReminder(b, now)).length;
@@ -191,6 +193,12 @@ export const myAlerts = ({ myId, role, me = null, receipts = [], batches = [], m
   if (waitingMine.length) out.push({ key: "waiting", level: "info", count: 0, text: `${waitingMine.length} phiếu của bạn đang chờ thủ quỹ (${vnd(sum(waitingMine, "total"))}).` });
   if (myId && (!me?.bank || !me?.account) && (waitingMine.length || role === ROLE_BUYER)) out.push({ key: "bank", level: "warn", count: waitingMine.length ? 1 : 0, text: "Bạn chưa nhập tài khoản ngân hàng: vào Tài khoản để thủ quỹ tạo được QR hoàn tiền." });
   if (!canTreasure(role)) return { items: out, badge: out.reduce((s, x) => s + x.count, 0) };
+  if (role === ROLE_OWNER) {
+    const fixed = receipts.filter(needsOwnerReview);
+    if (fixed.length) out.push({ key: "flagfixed", level: "warn", count: fixed.length, text: `${fixed.length} phiếu đã sửa theo yêu cầu đánh dấu sai, chờ chủ quán duyệt lại (${vnd(sum(fixed, "total"))}).` });
+  }
+  const waitingFix = receipts.filter(isFlagOpen).filter((r) => !isMine(r, myId));
+  if (waitingFix.length) out.push({ key: "flagwait", level: "info", count: 0, text: `${waitingFix.length} phiếu đã đánh dấu sai, đang chờ người tạo sửa: ${[...new Set(waitingFix.map((r) => r.enteredByName || "Chưa rõ"))].join(", ")}.` });
   // Phần của thủ quỹ: phiếu của chính mình do người khác duyệt nên không tính vào việc của mình.
   const review = receipts.filter((r) => !selfReviewBlocked(r, myId, members));
   const pending = review.filter((r) => reimbursementStatus(r) === "PENDING");
@@ -242,6 +250,33 @@ export const reviewStatus = (r) => {
 };
 /** Phiếu được tính vào chi phí (báo cáo, chia cổ đông): còn hiệu lực và đã duyệt. */
 export const countsAsCost = (r) => reviewStatus(r) === "APPROVED";
+
+// ---------- Đánh dấu phiếu sai: yêu cầu người tạo phiếu sửa, sửa xong chủ quán duyệt lại ----------
+export const FLAG_OPEN = "OPEN";     // đang yêu cầu sửa
+export const FLAG_FIXED = "FIXED";   // người tạo đã sửa, chờ chủ quán duyệt lại
+export const FLAG_CLOSED = "CLOSED"; // chủ quán đã duyệt lại / gỡ đánh dấu
+/** Dấu "phiếu sai" còn hiệu lực (OPEN hoặc FIXED) của phiếu chưa huỷ; không có thì null. */
+export const receiptFlag = (r) => (r && reviewStatus(r) !== "NONE" && r.flag && (r.flag.status === FLAG_OPEN || r.flag.status === FLAG_FIXED) ? r.flag : null);
+export const isFlagOpen = (r) => receiptFlag(r)?.status === FLAG_OPEN;
+/** Phiếu đã sửa theo yêu cầu: chỉ chủ quán mới duyệt lại được. */
+export const needsOwnerReview = (r) => receiptFlag(r)?.status === FLAG_FIXED;
+export const buildFlag = ({ reason, byName, byId, now }) => ({ status: FLAG_OPEN, reason: String(reason || "").trim().slice(0, 300), byName: byName || "", byId: byId || "", at: now });
+/** Flag mới sau khi người tạo phiếu lưu bản sửa. `reviewAfterEdit` là trạng thái duyệt phiếu nhận được sau khi sửa. */
+export const flagAfterEdit = (flag, reviewAfterEdit, now, byName) => {
+  if (!flag || (flag.status !== FLAG_OPEN && flag.status !== FLAG_FIXED)) return flag;
+  return reviewAfterEdit === "APPROVED"
+    ? { ...flag, status: FLAG_CLOSED, fixedAt: now, fixedBy: byName || "", closedAt: now, closedBy: byName || "" }
+    : { ...flag, status: FLAG_FIXED, fixedAt: now, fixedBy: byName || "" };
+};
+/** Chủ quán duyệt lại -> đóng đánh dấu; trả lại -> mở lại kèm lý do mới. */
+export const flagAfterReview = (flag, status, reason, now, byName) => {
+  if (!flag || flag.status !== FLAG_FIXED) return flag;
+  return status === "APPROVED"
+    ? { ...flag, status: FLAG_CLOSED, closedAt: now, closedBy: byName || "" }
+    : { ...flag, status: FLAG_OPEN, reason: String(reason || flag.reason || "").slice(0, 300), at: now, byName: byName || flag.byName };
+};
+/** Trả về lý do không được duyệt (chuỗi), hoặc "" nếu được. Phiếu đã sửa theo yêu cầu chỉ chủ quán duyệt. */
+export const flagApprovalProblem = (r, role) => (needsOwnerReview(r) && role !== ROLE_OWNER ? "Phiếu này đã sửa theo yêu cầu đánh dấu sai: chỉ chủ quán duyệt lại được." : "");
 /**
  * Trạng thái duyệt khi người nhập lưu phiếu: chờ người khác duyệt; chỉ tự duyệt khi quán chưa có ai khác duyệt được
  * (không thì không ai duyệt được phiếu).

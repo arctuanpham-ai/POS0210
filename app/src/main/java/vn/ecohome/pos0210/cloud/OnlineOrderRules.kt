@@ -1,7 +1,7 @@
 package vn.ecohome.pos0210.cloud
 
 /** Đơn đặt món online (khách đặt trên datmon0210.web.app). Logic thuần, khớp web-dashboard/online-orders.js và Firestore rules. */
-data class OnlineLine(val name: String, val qty: Int, val note: String, val price: Long)
+data class OnlineLine(val name: String, val qty: Int, val note: String, val price: Long, val id: String = "")
 
 data class OnlineOrder(
     val id: String, val code: String, val uid: String, val name: String, val phone: String,
@@ -83,7 +83,7 @@ object OnlineOrderRules {
 
     fun fromMap(id: String, d: Map<String, Any?>, ms: (Any?) -> Long?): OnlineOrder {
         val items = (d["items"] as? List<*>)?.mapNotNull { e ->
-            (e as? Map<*, *>)?.let { OnlineLine(it["name"]?.toString().orEmpty(), (it["qty"] as? Number)?.toInt() ?: 0, it["note"]?.toString().orEmpty(), (it["price"] as? Number)?.toLong() ?: 0L) }
+            (e as? Map<*, *>)?.let { OnlineLine(it["name"]?.toString().orEmpty(), (it["qty"] as? Number)?.toInt() ?: 0, it["note"]?.toString().orEmpty(), (it["price"] as? Number)?.toLong() ?: 0L, it["id"]?.toString().orEmpty()) }
         } ?: emptyList()
         fun s(k: String) = d[k]?.toString().orEmpty()
         return OnlineOrder(id, s("code").ifBlank { id }, s("uid"), s("name"), s("phone"), s("mode"), s("address"), s("table"), s("note"), items,

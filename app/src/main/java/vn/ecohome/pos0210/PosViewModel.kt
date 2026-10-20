@@ -1473,7 +1473,13 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
  fun printOnlineTicket(o:vn.ecohome.pos0210.cloud.OnlineOrder){
   viewModelScope.launch{
    val profile=printerProfile()
-   val lines=o.items.filter{it.qty>0}.map{Triple(it.name,it.qty,it.note)}
+   val comboParts=withContext(Dispatchers.IO){dao.allComboItemsSnapshot().groupBy{it.comboId}}
+   val menuNames=withContext(Dispatchers.IO){dao.allMenuSnapshot().associate{it.id to it.name}}
+   val lines=o.items.filter{it.qty>0}.map{l->
+    // Combo đặt online (id "c_<id combo>"): ghi rõ các món thành phần để bếp làm đủ.
+    val parts=if(l.id.startsWith("c_"))comboParts[l.id.removePrefix("c_")].orEmpty().joinToString(", "){p->"${menuNames[p.menuItemId]?:"món"} x${p.qty*l.qty}"} else ""
+    Triple(l.name,l.qty,listOf(if(parts.isNotBlank())"GỒM: $parts" else "",l.note).filter{it.isNotBlank()}.joinToString(" · "))
+   }
    val where=when(o.mode){"delivery"->"GIAO: ${o.address}";"dinein"->"TẠI QUÁN · BÀN ${o.table}";else->"MANG ĐI"}
    val footer=listOf("${o.name} · ${o.phone}",where,if(o.note.isNotBlank())"GHI CHÚ ĐƠN: ${o.note}" else "").filter{it.isNotBlank()}.joinToString("\n")
    val flow=if(o.status==vn.ecohome.pos0210.cloud.OnlineOrderRules.PAID||o.status==vn.ecohome.pos0210.cloud.OnlineOrderRules.DELIVERING)"ĐƠN ONLINE · ĐÃ THU TIỀN" else "ĐƠN ONLINE · LÀM NGAY"

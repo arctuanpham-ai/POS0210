@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20261020-13" />
+    <link rel="stylesheet" href="styles.css?v=20261020-14" />
     <title>0210 · Manager</title>
   </head>
   <body>
@@ -218,26 +218,53 @@
           <button id="open-summary" type="button" class="action-btn"><strong>+ Phiếu tổng</strong><small>Hoá đơn cũ không nhớ chi tiết</small></button>
           <button id="open-entry" type="button" class="action-btn"><strong>+ Thu chi khác</strong><small>Lương, góp vốn, rút tiền, tài sản</small></button>
         </div>
-        <p class="muted">Ai trả tiền thì ghi đúng <strong>Nguồn tiền</strong>: tiền túi mình → "Tiền cá nhân" (cần hoàn); tiền quỹ quán do thủ quỹ chi (tiền mặt hay CK) → "Quỹ quán", không cần hoàn. Phiếu tiền cá nhân: người mua nhập bằng PIN của mình → thủ quỹ thấy cảnh báo, <strong>Duyệt</strong> → <strong>Hoàn tiền</strong> bằng QR động tạo từ tài khoản ngân hàng người mua đã nhập, nội dung CK là mã đợt hoàn → người mua thấy cảnh báo, kiểm tra tài khoản và bấm <strong>Tôi đã nhận tiền</strong> (xác nhận chậm cũng được).</p>
-        <p id="reimb-note" class="panel-total" role="status"></p><p class="muted">Tab này chỉ hiện phiếu <b>cần xử lý</b> (chờ duyệt, chờ hoàn, chờ nhận tiền) và vài phiếu gần đây. Xem <b>toàn bộ phiếu</b>, lọc theo ngày / người chi: <a href="#taichinh">Tài chính → Danh sách phiếu chi</a>.</p>
-        <section class="section-heading compact"><div><p class="eyebrow">CỦA TÔI</p><h2>Phiếu tôi đã ứng tiền</h2></div></section>
-        <section id="reimb-flagged" class="reimb-list"></section>
-        <section id="reimb-mine" class="reimb-list"></section>
+        <p id="reimb-note" class="panel-total" role="status"></p>
+        <details class="fold " data-fold="reimb-help">
+          <summary><span class="fold-title">Hướng dẫn nhập phiếu &amp; hoàn tiền</span><span class="fold-count" data-fold-count="reimb-help" hidden></span></summary>
+          <div class="fold-body">
+<p class="muted">Ai trả tiền thì ghi đúng <strong>Nguồn tiền</strong>: tiền túi mình → "Tiền cá nhân" (cần hoàn); tiền quỹ quán do thủ quỹ chi (tiền mặt hay CK) → "Quỹ quán", không cần hoàn. Phiếu tiền cá nhân: người mua nhập bằng PIN của mình → thủ quỹ thấy cảnh báo, <strong>Duyệt</strong> → <strong>Hoàn tiền</strong> bằng QR động tạo từ tài khoản ngân hàng người mua đã nhập, nội dung CK là mã đợt hoàn → người mua thấy cảnh báo, kiểm tra tài khoản và bấm <strong>Tôi đã nhận tiền</strong> (xác nhận chậm cũng được).</p>
+<p class="muted">Tab này chỉ hiện phiếu <b>cần xử lý</b> (chờ duyệt, chờ hoàn, chờ nhận tiền) và vài phiếu gần đây. Xem <b>toàn bộ phiếu</b>, lọc theo ngày / người chi: <a href="#taichinh">Tài chính → Danh sách phiếu chi</a>.</p>
+</div>
+        </details>
+        <p class="fold-group">CỦA TÔI</p>
+        <details class="fold fold-warn" data-fold="reimb-flagged">
+          <summary><span class="fold-title">Phiếu bị đánh dấu sai · cần sửa</span><span class="fold-count" data-fold-count="reimb-flagged" hidden></span></summary>
+          <div class="fold-body"><section id="reimb-flagged" class="reimb-list"></section></div>
+        </details>
+        <details class="fold " data-fold="reimb-mine">
+          <summary><span class="fold-title">Phiếu tôi đã ứng tiền</span><span class="fold-count" data-fold-count="reimb-mine" hidden></span></summary>
+          <div class="fold-body"><section id="reimb-mine" class="reimb-list"></section></div>
+        </details>
         <div id="reimb-treasurer-zone" hidden>
-        <section class="section-heading compact"><div><p class="eyebrow">THỦ QUỸ</p><h2>Tổng quan</h2></div></section>
+        <p class="fold-group">THỦ QUỸ</p>
         <div class="panel">
           <div class="field-row"><label for="reimb-person">Xem theo người</label><select id="reimb-person"><option value="">Tất cả</option></select></div>
         </div>
         <section id="reimb-counters" class="summary-grid"></section>
-        <section id="reimb-paylist" class="paylist"></section>
-        <section id="reimb-shopreview" class="reimb-list"></section>
-        <section id="reimb-unknown"></section>
-        <section class="section-heading compact"><div><p class="eyebrow">CẦN XỬ LÝ</p><h2>Theo người mua</h2></div></section>
-        <section id="reimb-queues" class="reimb-list"></section>
-        <section class="section-heading compact"><div><p class="eyebrow">ĐÃ HOÀN</p><h2>Chờ người nhận xác nhận</h2></div></section>
-        <section id="reimb-paid" class="reimb-list"></section>
-        <section class="section-heading compact"><div><p class="eyebrow">LỊCH SỬ</p><h2>Đợt hoàn đã xác nhận</h2></div></section>
-        <section id="reimb-history" class="reimb-list"></section>
+        <details class="fold " data-fold="reimb-paylist">
+          <summary><span class="fold-title">Cần hoàn tiền theo người</span><span class="fold-count" data-fold-count="reimb-paylist" hidden></span></summary>
+          <div class="fold-body"><section id="reimb-paylist" class="paylist"></section></div>
+        </details>
+        <details class="fold " data-fold="reimb-shopreview">
+          <summary><span class="fold-title">Phiếu quỹ quán / phiếu sửa · chờ duyệt</span><span class="fold-count" data-fold-count="reimb-shopreview" hidden></span></summary>
+          <div class="fold-body"><section id="reimb-shopreview" class="reimb-list"></section></div>
+        </details>
+        <details class="fold " data-fold="reimb-unknown">
+          <summary><span class="fold-title">Phiếu chưa rõ nguồn tiền</span><span class="fold-count" data-fold-count="reimb-unknown" hidden></span></summary>
+          <div class="fold-body"><section id="reimb-unknown"></section></div>
+        </details>
+        <details class="fold " data-fold="reimb-queues">
+          <summary><span class="fold-title">Cần xử lý · theo người mua</span><span class="fold-count" data-fold-count="reimb-queues" hidden></span></summary>
+          <div class="fold-body"><section id="reimb-queues" class="reimb-list"></section></div>
+        </details>
+        <details class="fold " data-fold="reimb-paid">
+          <summary><span class="fold-title">Đã hoàn · chờ người nhận xác nhận</span><span class="fold-count" data-fold-count="reimb-paid" hidden></span></summary>
+          <div class="fold-body"><section id="reimb-paid" class="reimb-list"></section></div>
+        </details>
+        <details class="fold " data-fold="reimb-history">
+          <summary><span class="fold-title">Lịch sử đợt hoàn đã xác nhận</span><span class="fold-count" data-fold-count="reimb-history" hidden></span></summary>
+          <div class="fold-body"><section id="reimb-history" class="reimb-list"></section></div>
+        </details>
         </div>
         <datalist id="payee-names"></datalist><datalist id="bank-choices"></datalist>
         </div>
@@ -647,7 +674,7 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261020-13"></script>
+    <script type="module" src="app.js?v=20261020-14"></script>
     <script>
       // Trang không chạy được (thường do trình duyệt còn giữ file cũ): báo rõ thay vì để nút đăng nhập "chết".
       setTimeout(function () {

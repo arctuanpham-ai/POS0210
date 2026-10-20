@@ -46,7 +46,7 @@ const store = {
   set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* đầy hoặc bị chặn: bỏ qua */ } },
   del(key) { try { localStorage.removeItem(key); } catch { /* bỏ qua */ } },
 };
-const KEYS = { cart: "pos0210o.cart", codes: "pos0210o.codes", profile: "pos0210o.profile", menu: "pos0210o.menu3", thumbs: "pos0210o.thumbs", hist: "pos0210o.hist" };
+const KEYS = { cart: "pos0210o.cart", codes: "pos0210o.codes", profile: "pos0210o.profile", menu: "pos0210o.menu4", thumbs: "pos0210o.thumbs", hist: "pos0210o.hist" };
 const MENU_TTL = 5 * 60_000;
 const THUMB_TTL = 24 * 3_600_000;
 

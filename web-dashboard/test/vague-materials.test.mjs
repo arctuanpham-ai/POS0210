@@ -32,3 +32,11 @@ test("đã duyệt bỏ qua thì không vào diện mơ hồ nữa, kể cả l�
   assert.deepEqual(rows.map((x) => x.code), ["G1"]);
   assert.equal(approvedCount >= 1, true);
 });
+
+test("lạng là đơn vị đo: 1 lạng = 0,1 kg", async () => {
+  const { normalizeQuantity } = await import("../expense-rules.js");
+  assert.deepEqual(normalizeQuantity(2, "Lạng"), { baseQty: 0.2, baseUnit: "kg" });
+  assert.equal(unitClass("Lạng"), "");
+  const { dynamicBase } = await import("../cost-recipe.js");
+  assert.deepEqual(dynamicBase("lạng"), { base: "g", factor: 100 });
+});

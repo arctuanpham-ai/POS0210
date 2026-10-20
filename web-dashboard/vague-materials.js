@@ -1,10 +1,10 @@
 // Tìm vật tư tính theo đơn vị đóng gói (túi, gói, hộp…) mà không có định lượng rõ ràng (g, kg, ml, lít) trong đơn vị hoặc tên.
 // Hàm thuần: không Firebase, không DOM.
-import { normalizeText, normalizeQuantity } from "./expense-rules.js?v=20261020-12";
-import { NON_MATERIAL } from "./expense-kind.js?v=20261020-12";
+import { normalizeText, normalizeQuantity } from "./expense-rules.js?v=20261020-13";
+import { NON_MATERIAL } from "./expense-kind.js?v=20261020-13";
 
 /** Đơn vị đo được (đã quy đổi được ra kg / lít). */
-const MEASURED = new Set(["g", "gr", "gam", "kg", "ml", "l", "lit", "cl"]);
+const MEASURED = new Set(["lang", "g", "gr", "gam", "kg", "ml", "l", "lit", "cl"]);
 /** Đơn vị đếm rõ ràng: mỗi đơn vị là một vật cụ thể, không cần định lượng. */
 const COUNTABLE = new Set(["cai", "qua", "trai", "con", "ly", "o", "mieng", "chiec", "cay", "to", "quyen", "bo", "doi", "suat", "phan", "lan", "tam", "mon", "chai nho"]);
 /** Đơn vị đóng gói: bên trong chứa bao nhiêu không rõ. */

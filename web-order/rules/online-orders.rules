@@ -146,8 +146,12 @@ function lineValid(l) {
 
 // Đơn giá và tên món phải đúng menu thật; món đã tắt/xoá không đặt được.
 function menuMatches(l) {
-  // Combo: id dòng = "c_" + id combo, tra bảng combos (vẫn đúng 1 lần get cho mỗi dòng).
-  let m = l.id.matches('^c_.+') ? get(comboRef(l.id.replace('c_', ''))).data : get(menuRef(l.id)).data;
+  // Combo: id dòng = "c_" + id combo, tra bảng combos; món thường tra bảng menu. Mỗi dòng đúng 1 lần get (&& / || có đoản mạch).
+  return (l.id.matches('^c_.+') && itemOk(get(comboRef(l.id.replace('c_', ''))).data, l))
+    || (!l.id.matches('^c_.+') && itemOk(get(menuRef(l.id)).data, l));
+}
+
+function itemOk(m, l) {
   return m.price == l.price
     && m.name == l.name
     && m.get('active', true) != false

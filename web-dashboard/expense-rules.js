@@ -100,7 +100,7 @@ export const materialCodeFor = (groupCode, name) => {
 /** Id tài liệu quy tắc đã học: ổn định theo tên chuẩn hoá. */
 export const ruleIdFor = (name) => `r_${fnv(normalizeText(name), 2166136261)}${fnv(normalizeText(name), 3735928559)}`;
 
-const UNIT_FACTORS = { gam: ["kg", 0.001], g: ["kg", 0.001], kg: ["kg", 1], ml: ["lít", 0.001], lít: ["lít", 1], l: ["lít", 1] };
+const UNIT_FACTORS = { lạng: ["kg", 0.1], lang: ["kg", 0.1], gam: ["kg", 0.001], g: ["kg", 0.001], kg: ["kg", 1], ml: ["lít", 0.001], lít: ["lít", 1], l: ["lít", 1] };
 /** Quy đổi về đơn vị gốc để cộng và so giá: gam→kg, ml→lít; đơn vị khác giữ nguyên. */
 export const normalizeQuantity = (qty, unit) => {
   const u = String(unit ?? "").trim().toLocaleLowerCase("vi");

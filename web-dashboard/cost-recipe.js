@@ -1,5 +1,5 @@
 // Danh mục vật tư chuẩn, giá vốn từ phiếu chi chi tiết và giá vốn món từ công thức. Hàm thuần, không Firebase, không DOM.
-import { normalizeText, isSummaryReceipt, groupLabelOf } from "./expense-rules.js?v=20261020-12";
+import { normalizeText, isSummaryReceipt, groupLabelOf } from "./expense-rules.js?v=20261020-13";
 
 export const KIND_LABELS = { NL: "Nguyên liệu", BB: "Bao bì theo món", VH: "Vận hành" };
 
@@ -84,7 +84,7 @@ export const matchMaterial = (line) => {
 };
 
 /* ---------- Vật tư động: tên thật trên phiếu chi đã duyệt (sát thực tế hơn danh mục chuẩn) ---------- */
-const WEIGHT_UNITS = { kg: 1000, g: 1, gam: 1, gram: 1, gr: 1, kilogram: 1000, kilo: 1000 };
+const WEIGHT_UNITS = { lang: 100, kg: 1000, g: 1, gam: 1, gram: 1, gr: 1, kilogram: 1000, kilo: 1000 };
 const VOLUME_UNITS = { lit: 1000, l: 1000, ml: 1 };
 /** Đơn vị định lượng suy ra từ đơn vị mua: cân nặng -> g, thể tích -> ml, còn lại giữ nguyên đơn vị. */
 export const dynamicBase = (unit) => {
@@ -166,6 +166,7 @@ const UNIT_ALIASES = { gam: "g", gram: "g", gr: "g", kilogram: "kg", kilo: "kg",
 /** Số đơn vị định lượng trong một đơn vị mua, null nếu đơn vị không quy đổi được. */
 export const unitFactor = (material, unit) => {
   const u = normalizeText(unit);
+  if (u === "lang") { const g = material.units.find((x) => normalizeText(x.unit) === "g"); return g ? g.per * 100 : null; } // 1 lạng = 100 g = 0,1 kg
   const canon = UNIT_ALIASES[u] ?? u;
   const hit = material.units.find((x) => normalizeText(x.unit) === normalizeText(canon));
   return hit ? hit.per : null;

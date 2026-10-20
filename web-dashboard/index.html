@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20261020-06" />
+    <link rel="stylesheet" href="styles.css?v=20261020-07" />
     <title>0210 · Manager</title>
   </head>
   <body>
@@ -357,22 +357,31 @@
           <div class="tool-row"><button id="fund-save" type="button" class="btn strong">Lưu đối soát tháng</button></div>
         </details>
 
-        <div class="panel">
-          <div class="filter-row" id="period-filters">
-            <button data-period="today" class="filter active">Hôm nay</button>
-            <button data-period="yesterday" class="filter">Hôm qua</button>
-            <button data-period="7d" class="filter">7 ngày</button>
-            <button data-period="month" class="filter">Tháng này</button>
-            <button data-period="all" class="filter">Tất cả</button>
-            <button data-period="custom" class="filter">Tùy chọn</button>
+        <div class="panel filter-panel">
+          <input id="transaction-search" type="search" aria-label="Tìm phiếu" placeholder="Tìm vật tư, mã, ghi chú (mọi ngày)" />
+          <div class="filter-group"><span class="filter-label">Kỳ</span>
+            <div class="filter-row" id="period-filters">
+              <button data-period="today" class="filter active">Hôm nay</button>
+              <button data-period="yesterday" class="filter">Hôm qua</button>
+              <button data-period="7d" class="filter">7 ngày</button>
+              <button data-period="month" class="filter">Tháng này</button>
+              <button data-period="all" class="filter">Tất cả</button>
+              <button data-period="custom" class="filter">Tùy chọn</button>
+            </div>
           </div>
           <div id="custom-range" class="custom-range" hidden>
             <label>Từ ngày<input id="from-date" type="date" /></label>
             <label>Đến ngày<input id="to-date" type="date" /></label>
             <button id="apply-range" type="button" class="btn">Áp dụng</button>
           </div>
-          <div class="field-row">
-            <label for="payer-filter">Người chi</label>
+          <div class="filter-group"><span class="filter-label">Loại</span>
+            <div class="filter-row" id="transaction-filters">
+              <button data-kind="ALL" class="filter active">Tất cả</button>
+              <button data-kind="EXPENSE" class="filter">Chi</button>
+              <button data-kind="MOVEMENT" class="filter">Thu / vốn / hoàn ứng</button>
+            </div>
+          </div>
+          <div class="filter-group"><span class="filter-label"><label for="payer-filter">Người chi</label></span>
             <select id="payer-filter"><option value="ALL">Tất cả người chi</option></select>
           </div>
           <p id="payer-total" class="panel-total"></p>
@@ -380,14 +389,8 @@
         <section id="period-summary" class="summary-grid" aria-label="Tổng quan theo kỳ"></section>
 
         <section class="section-heading compact">
-          <div><p class="eyebrow">DANH SÁCH PHIẾU</p><h2>Theo kỳ và người chi đang chọn</h2></div>
+          <div><p class="eyebrow">DANH SÁCH PHIẾU</p><h2>Theo bộ lọc đang chọn</h2></div>
         </section>
-        <div class="filter-row" id="transaction-filters">
-          <button data-kind="ALL" class="filter active">Tất cả</button>
-          <button data-kind="EXPENSE" class="filter">Chi</button>
-          <button data-kind="MOVEMENT" class="filter">Thu / vốn / hoàn ứng</button>
-        </div>
-        <div class="field-row"><label for="transaction-search">Tìm</label><input id="transaction-search" type="search" placeholder="Mã vật tư, tên vật tư, ghi chú, mã phiếu…" /></div>
         <section id="payer-breakdown" class="paylist"></section>
         <section id="transactions" class="transaction-list"></section>
 
@@ -636,7 +639,7 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261020-06"></script>
+    <script type="module" src="app.js?v=20261020-07"></script>
     <script>
       // Trang không chạy được (thường do trình duyệt còn giữ file cũ): báo rõ thay vì để nút đăng nhập "chết".
       setTimeout(function () {

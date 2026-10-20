@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20261020-08" />
+    <link rel="stylesheet" href="styles.css?v=20261020-09" />
     <title>0210 · Manager</title>
   </head>
   <body>
@@ -221,6 +221,7 @@
         <p class="muted">Ai trả tiền thì ghi đúng <strong>Nguồn tiền</strong>: tiền túi mình → "Tiền cá nhân" (cần hoàn); tiền quỹ quán do thủ quỹ chi (tiền mặt hay CK) → "Quỹ quán", không cần hoàn. Phiếu tiền cá nhân: người mua nhập bằng PIN của mình → thủ quỹ thấy cảnh báo, <strong>Duyệt</strong> → <strong>Hoàn tiền</strong> bằng QR động tạo từ tài khoản ngân hàng người mua đã nhập, nội dung CK là mã đợt hoàn → người mua thấy cảnh báo, kiểm tra tài khoản và bấm <strong>Tôi đã nhận tiền</strong> (xác nhận chậm cũng được).</p>
         <p id="reimb-note" class="panel-total" role="status"></p><p class="muted">Tab này chỉ hiện phiếu <b>cần xử lý</b> (chờ duyệt, chờ hoàn, chờ nhận tiền) và vài phiếu gần đây. Xem <b>toàn bộ phiếu</b>, lọc theo ngày / người chi: <a href="#taichinh">Tài chính → Danh sách phiếu chi</a>.</p>
         <section class="section-heading compact"><div><p class="eyebrow">CỦA TÔI</p><h2>Phiếu tôi đã ứng tiền</h2></div></section>
+        <section id="reimb-flagged" class="reimb-list"></section>
         <section id="reimb-mine" class="reimb-list"></section>
         <div id="reimb-treasurer-zone" hidden>
         <section class="section-heading compact"><div><p class="eyebrow">THỦ QUỸ</p><h2>Tổng quan</h2></div></section>
@@ -639,7 +640,7 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261020-08"></script>
+    <script type="module" src="app.js?v=20261020-09"></script>
     <script>
       // Trang không chạy được (thường do trình duyệt còn giữ file cũ): báo rõ thay vì để nút đăng nhập "chết".
       setTimeout(function () {

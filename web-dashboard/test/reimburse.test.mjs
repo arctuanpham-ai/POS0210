@@ -188,3 +188,35 @@ test("phiếu đã hoàn: sửa được nếu giữ nguyên tổng tiền, ngu�
   assert.match(paidEditProblem(paid, { ...paid, enteredByName: "Tuấn" }), /người mua/);
   assert.equal(paidEditProblem({ ...paid, reimbursement: { status: "APPROVED" } }, { ...paid, total: 1 }), "", "chưa hoàn thì sửa tự do");
 });
+
+import { buildFlag, flagAfterEdit, flagAfterReview, receiptFlag, isFlagOpen, needsOwnerReview, flagApprovalProblem, myAlerts as _myAlerts, ROLE_OWNER as _OWNER, ROLE_TREASURER as _TREAS, ROLE_BUYER as _BUYER } from "../reimburse.js";
+import test2 from "node:test";
+import assert2 from "node:assert/strict";
+test2("flag: mở -> sửa -> chờ chủ quán -> duyệt đóng", () => {
+  const f = buildFlag({ reason: "  Sai nhóm  ", byName: "Thủ quỹ", byId: "t", now: 1 });
+  assert2.equal(f.status, "OPEN"); assert2.equal(f.reason, "Sai nhóm");
+  const fixed = flagAfterEdit(f, "PENDING", 2, "Mua");
+  assert2.equal(fixed.status, "FIXED");
+  const r = { id: "a", status: "ACTIVE", review: "PENDING", flag: fixed };
+  assert2.ok(needsOwnerReview(r)); assert2.ok(!isFlagOpen(r));
+  assert2.match(flagApprovalProblem(r, _TREAS), /chỉ chủ quán/);
+  assert2.equal(flagApprovalProblem(r, _OWNER), "");
+  assert2.equal(flagAfterReview(fixed, "APPROVED", "", 3, "Chủ").status, "CLOSED");
+  const back = flagAfterReview(fixed, "REJECTED", "Vẫn sai", 3, "Chủ");
+  assert2.equal(back.status, "OPEN"); assert2.equal(back.reason, "Vẫn sai");
+});
+test2("flag: không ai khác duyệt được thì sửa xong tự đóng; phiếu huỷ không còn dấu", () => {
+  const f = buildFlag({ reason: "x", now: 1 });
+  assert2.equal(flagAfterEdit(f, "APPROVED", 2, "A").status, "CLOSED");
+  assert2.equal(receiptFlag({ status: "DELETED", flag: f }), null);
+  assert2.equal(receiptFlag({ status: "ACTIVE", review: "APPROVED", flag: { status: "CLOSED" } }), null);
+});
+test2("flag: nhắc người tạo và chủ quán", () => {
+  const f = buildFlag({ reason: "x", now: 1 });
+  const open = { id: "1", status: "ACTIVE", review: "APPROVED", payerId: "m1", enteredByName: "Mua", total: 1000, flag: f, items: [] };
+  const mine = _myAlerts({ myId: "m1", role: _BUYER, me: { id: "m1", bank: "MB", account: "1" }, receipts: [open], batches: [], members: [], payees: [] });
+  assert2.ok(mine.items.some((x) => x.key === "flagged"));
+  const fixed = { ...open, review: "PENDING", flag: { ...f, status: "FIXED" } };
+  const owner = _myAlerts({ myId: "o", role: _OWNER, me: { id: "o" }, receipts: [fixed], batches: [], members: [], payees: [] });
+  assert2.ok(owner.items.some((x) => x.key === "flagfixed"));
+});

@@ -21,39 +21,39 @@ import {
   setDoc as rawSetDoc,
   writeBatch as rawWriteBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261020-08";
-import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, freshenDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261020-08";
-import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261020-08";
-import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261020-08";
-import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261020-08";
-import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261020-08";
-import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261020-08";
-import { buildSimulation } from "./sim-data.js?v=20261020-08";
-import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261020-08";
-import { menuCsv } from "./menu-export.js?v=20261020-08";
-import { KIND_LABELS, MATERIALS, buildDynamicMaterials, catalogRules, registerDynamicMaterials, similarMaterials, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261020-08";
-import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261020-08";
-import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261020-08";
-import { BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261020-08";
-import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261020-08";
-import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261020-08";
-import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261020-08";
-import { otherCostRows } from "./other-costs.js?v=20261020-08";
-import { paybackStatus } from "./payback.js?v=20261020-08";
-import { topSellers } from "./top-banner.js?v=20261020-08";
-import { reconcileDays, reconcileRevenue } from "./revenue-check.js?v=20261020-08";
-import { prepList, profitRanking, tomorrowSales } from "./plan-profit.js?v=20261020-08";
-import { OO_LABELS, OO_MODE_LABELS, OO_REJECT_REASONS, attentionCount, buildTransition, groupOrders, isPending, limitKeys, minutesAgoText, newOrderCodes, nextActions, ooToMillis, overdueOrders, releasedCount, validateShopConfig } from "./online-orders.js?v=20261020-08";
-import { menuEditProblem, menuGroups, mergePlan, nameIssues, nextProductCode, normName, soldCombos, soldNotInMenu } from "./menu-view.js?v=20261020-08";
-import { POS_CEILING, SPARK, dayUsage, lastPacificDays, nextReset, pacificDay, usageTrend } from "./usage.js?v=20261020-08";
-import { AI_SCOPES, buildAiPack, scopeRange } from "./ai-export.js?v=20261020-08";
-import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261020-08";
-import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261020-08";
-import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261020-08";
-import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261020-08";
-import { compareKeys, compareRows, weekTotals } from "./day-compare.js?v=20261020-08";
-import { comboCount, formatBaseQty, materialConsumption, outputRows } from "./item-output.js?v=20261020-08";
-import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261020-08";
+import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261020-09";
+import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, freshenDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261020-09";
+import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261020-09";
+import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions } from "./material-search.js?v=20261020-09";
+import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261020-09";
+import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261020-09";
+import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261020-09";
+import { buildSimulation } from "./sim-data.js?v=20261020-09";
+import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261020-09";
+import { menuCsv } from "./menu-export.js?v=20261020-09";
+import { KIND_LABELS, MATERIALS, buildDynamicMaterials, catalogRules, registerDynamicMaterials, similarMaterials, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261020-09";
+import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261020-09";
+import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261020-09";
+import { buildFlag, flagAfterEdit, flagAfterReview, flagApprovalProblem, isFlagOpen, needsOwnerReview, receiptFlag, BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261020-09";
+import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261020-09";
+import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261020-09";
+import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261020-09";
+import { otherCostRows } from "./other-costs.js?v=20261020-09";
+import { paybackStatus } from "./payback.js?v=20261020-09";
+import { topSellers } from "./top-banner.js?v=20261020-09";
+import { reconcileDays, reconcileRevenue } from "./revenue-check.js?v=20261020-09";
+import { prepList, profitRanking, tomorrowSales } from "./plan-profit.js?v=20261020-09";
+import { OO_LABELS, OO_MODE_LABELS, OO_REJECT_REASONS, attentionCount, buildTransition, groupOrders, isPending, limitKeys, minutesAgoText, newOrderCodes, nextActions, ooToMillis, overdueOrders, releasedCount, validateShopConfig } from "./online-orders.js?v=20261020-09";
+import { menuEditProblem, menuGroups, mergePlan, nameIssues, nextProductCode, normName, soldCombos, soldNotInMenu } from "./menu-view.js?v=20261020-09";
+import { POS_CEILING, SPARK, dayUsage, lastPacificDays, nextReset, pacificDay, usageTrend } from "./usage.js?v=20261020-09";
+import { AI_SCOPES, buildAiPack, scopeRange } from "./ai-export.js?v=20261020-09";
+import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261020-09";
+import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261020-09";
+import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261020-09";
+import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261020-09";
+import { compareKeys, compareRows, weekTotals } from "./day-compare.js?v=20261020-09";
+import { comboCount, formatBaseQty, materialConsumption, outputRows } from "./item-output.js?v=20261020-09";
+import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261020-09";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",
@@ -760,6 +760,52 @@ function renderFinanceMetadata() {
 
 const REVIEW_TAG = { PENDING: ["Chờ duyệt · chưa tính", "warn"], REJECTED: ["Bị trả lại · chưa tính", "warn"], INITIAL: ["Ghi chép ban đầu · không tính", "warn"] };
 const FUND_SHORT = { PERSONAL: "tiền cá nhân", SHOP_CASH: "quỹ quán", SHOP_BANK: "quỹ quán" };
+/** Nhãn / lời nhắc / nút cho phiếu bị đánh dấu sai. */
+function flagTag(rec) {
+  const f = receiptFlag(rec);
+  if (!f) return "";
+  return f.status === "OPEN" ? ' <span class="bill-tag warn flag-tag">⚠ Cần sửa</span>' : ' <span class="bill-tag warn flag-tag">Đã sửa · chờ chủ quán duyệt lại</span>';
+}
+function flagNoteHtml(rec) {
+  const f = receiptFlag(rec);
+  if (!f) return "";
+  const who = f.byName ? ` (${escapeHtml(f.byName)}, ${dateTime(f.at)})` : "";
+  return f.status === "OPEN"
+    ? `<small class="warn-text flag-note">⚠ Phiếu bị đánh dấu sai${who}: ${escapeHtml(f.reason || "cần kiểm tra lại")}. ${escapeHtml(rec.enteredByName || "Người tạo phiếu")} cần sửa lại, sau đó chủ quán duyệt lại mới tính vào chi phí.</small>`
+    : `<small class="warn-text flag-note">Đã sửa theo yêu cầu "${escapeHtml(f.reason || "")}" · chờ chủ quán duyệt lại, chưa tính vào chi phí.</small>`;
+}
+function flagButtons(rec) {
+  if (!canTreasure(state.role)) return "";
+  const f = receiptFlag(rec);
+  if (!f) return `<button type="button" class="text-button danger" data-flag-receipt="${escapeHtml(rec.id)}">Đánh dấu sai</button>`;
+  if (f.status === "OPEN") return `<button type="button" class="text-button" data-unflag-receipt="${escapeHtml(rec.id)}">Gỡ đánh dấu</button>`;
+  return "";
+}
+async function saveFlag(rec, flag, note) {
+  const now = Date.now();
+  const next = { ...rec, flag, updatedAt: Math.max(now, Number(rec.updatedAt || 0) + 1), ...(rec.source === "ANDROID_POS" ? { editedBy: "WEB_MANAGER" } : {}) };
+  try {
+    await setDoc(doc(db, ...root, receiptCollection(), rec.id), next);
+    replaceLocalReceipt(next);
+    state.openReceipts = state.openReceipts.map((x) => (x.id === rec.id ? next : x));
+    render(); if (typeof renderReimbursements === "function") renderReimbursements();
+    flashNote(note);
+  } catch (error) { flashNote(`Không lưu được: ${error.message || error}`); }
+}
+function flagReceipt(id) {
+  const rec = findReceipt(id);
+  if (!rec || !canTreasure(state.role) || receiptFlag(rec)) return;
+  const reason = window.prompt(`Phiếu ${receiptCode(rec)} sai ở đâu? (ví dụ: sai tên / sai nhóm vật tư, sai số lượng, thiếu hoá đơn)\nNgười tạo phiếu sẽ nhận lời nhắc và phải sửa lại.`, "");
+  if (reason === null) return;
+  if (!reason.trim()) { flashNote("Cần ghi lý do để người tạo phiếu biết sửa gì."); return; }
+  saveFlag(rec, buildFlag({ reason, byName: myName(), byId: state.me?.id || "", now: Date.now() }), `Đã đánh dấu ${receiptCode(rec)} cần sửa; ${rec.enteredByName || "người tạo phiếu"} sẽ nhận lời nhắc.`);
+}
+function unflagReceipt(id) {
+  const rec = findReceipt(id);
+  if (!rec || !canTreasure(state.role) || !isFlagOpen(rec)) return;
+  if (!window.confirm(`Gỡ đánh dấu sai của ${receiptCode(rec)}? (phiếu giữ nguyên, không cần sửa nữa)`)) return;
+  saveFlag(rec, { ...rec.flag, status: "CLOSED", closedAt: Date.now(), closedBy: myName() }, `Đã gỡ đánh dấu ${receiptCode(rec)}.`);
+}
 function renderTransactions() {
   const term = normalizeMaterial($("#transaction-search")?.value || "");
   // Đang tìm theo từ khoá (vật tư, mã, ghi chú…) thì tìm trên toàn bộ thời gian, không bị giới hạn bởi kỳ đang chọn.
@@ -828,9 +874,10 @@ function renderTransactions() {
     node.className = "transaction-card";
     const meta = [dateTime(r.at), r.person, r.kind === "EXPENSE" ? r.fund : ""].filter(Boolean).join(" · ");
     const rec = r.kind === "EXPENSE" && !r.readonly ? findReceipt(r.id) : null;
-    const tag = REVIEW_TAG[r.review] ? ` <span class="bill-tag ${REVIEW_TAG[r.review][1]}">${REVIEW_TAG[r.review][0]}</span>` : "";
-    const actions = rec ? `<div class="row-actions"><button type="button" class="text-button" data-edit-receipt="${escapeHtml(r.id)}">${canEditReceipt(rec) ? "Xem / sửa" : "Xem chi tiết"}</button>${canEditReceipt(rec) && !isPaidOut(rec) ? `<button type="button" class="text-button danger" data-cancel-receipt="${escapeHtml(r.id)}">Huỷ phiếu</button>` : ""}</div>` : "";
-    node.innerHTML = `<div><strong>${escapeHtml(r.title)}</strong>${tag}<small>${escapeHtml(meta)}</small><p>${escapeHtml(r.note)}</p>${actions}</div><b${r.review !== "APPROVED" ? ' class="muted"' : ""}>${money(r.amount)}</b>`;
+    const tag = (REVIEW_TAG[r.review] ? ` <span class="bill-tag ${REVIEW_TAG[r.review][1]}">${REVIEW_TAG[r.review][0]}</span>` : "") + flagTag(rec);
+    const flagNote = rec ? flagNoteHtml(rec) : "";
+    const actions = rec ? `<div class="row-actions">${flagButtons(rec)}<button type="button" class="text-button" data-edit-receipt="${escapeHtml(r.id)}">${canEditReceipt(rec) ? "Xem / sửa" : "Xem chi tiết"}</button>${canEditReceipt(rec) && !isPaidOut(rec) ? `<button type="button" class="text-button danger" data-cancel-receipt="${escapeHtml(r.id)}">Huỷ phiếu</button>` : ""}</div>` : "";
+    node.innerHTML = `<div><strong>${escapeHtml(r.title)}</strong>${tag}<small>${escapeHtml(meta)}</small><p>${escapeHtml(r.note)}</p>${flagNote}${actions}</div><b${r.review !== "APPROVED" ? ' class="muted"' : ""}>${money(r.amount)}</b>`;
     return node;
   }));
 }
@@ -1083,7 +1130,10 @@ async function saveExpenseReceipt(event) {
     const reimbursed = withReimbursement(typed, original, now);
     // Phiếu cần người khác duyệt mới tính vào chi phí; phiếu đã hoàn tiền giữ nguyên đã duyệt.
     // Mọi lần sửa (kể cả phiếu đã hoàn tiền) đều phải được người khác duyệt lại.
-    return withDemoFlags({ ...reimbursed, review: initialReview(reimbursed.payerId || state.me?.id, people()), reviewReason: "", ...(original && isPaidOut(original) ? { editedAfterPaidAt: now } : {}) });
+    // Phiếu bị đánh dấu sai: sửa xong luôn quay về chờ duyệt (chủ quán duyệt lại mới tính vào chi phí), giữ lý do để đối chiếu.
+    const reviewAfter = initialReview(reimbursed.payerId || state.me?.id, people());
+    const flagged = original?.flag ? { flag: flagAfterEdit(original.flag, reviewAfter, now, myName()) } : {};
+    return withDemoFlags({ ...reimbursed, review: reviewAfter, reviewReason: "", ...flagged, ...(original && isPaidOut(original) ? { editedAfterPaidAt: now } : {}) });
   });
   try {
     const batch = writeBatch(db);
@@ -1484,7 +1534,11 @@ $("#transactions").addEventListener("click", (event) => {
   const edit = event.target.closest?.("[data-edit-receipt]");
   if (edit) { openReceiptEditor(edit.dataset.editReceipt); return; }
   const cancel = event.target.closest?.("[data-cancel-receipt]");
-  if (cancel) cancelReceipt(cancel.dataset.cancelReceipt);
+  if (cancel) { cancelReceipt(cancel.dataset.cancelReceipt); return; }
+  const flag = event.target.closest?.("[data-flag-receipt]");
+  if (flag) { flagReceipt(flag.dataset.flagReceipt); return; }
+  const unflag = event.target.closest?.("[data-unflag-receipt]");
+  if (unflag) unflagReceipt(unflag.dataset.unflagReceipt);
 });
 $("#add-expense-line").addEventListener("click", () => { applyExpenseInputs(); expenseDraft.items.push({ id: uuid(), materialName: "", materialCode: "", expenseGroup: "", qty: 1, unit: "kg", unitPrice: 0 }); renderExpenseDraft(); });
 $("#expense-lines").addEventListener("click", (event) => { const id = event.target.dataset.removeLine; if (!id || expenseDraft.items.length < 2) return; applyExpenseInputs(); expenseDraft.items = expenseDraft.items.filter((item) => item.id !== id); renderExpenseDraft(); });
@@ -2426,7 +2480,7 @@ function renderAlerts() {
 function receiptLine(r, dup, extra = "", showEdit = true) {
   const items = (r.items || []).slice(0, 3).map((i) => i.materialName).join(", ") + ((r.items || []).length > 3 ? "…" : "");
   const diff = changedAfterPaid(r);
-  return `<div class="reimb-receipt"><div><strong>${escapeHtml(receiptCode(r))}</strong> · ${dateTime(r.purchaseDate)} · <b>${money(r.total)}</b><small>${escapeHtml(items)}${r.note ? ` · ${escapeHtml(r.note)}` : ""}</small>${dup ? `<small class="warn-text">Nghi trùng với ${escapeHtml(dup.join(", "))}: kiểm tra hoá đơn trước khi duyệt</small>` : ""}${diff ? `<small class="warn-text">Phiếu bị sửa sau khi hoàn: chênh ${money(diff)}</small>` : ""}${isPaidOut(r) && reviewStatus(r) === "PENDING" ? '<small class="warn-text">Đã hoàn tiền · vừa sửa nội dung (tổng tiền không đổi) · chờ duyệt lại</small>' : ""}${reimbursementStatus(r) === "REJECTED" && r.reimbursement?.rejectReason ? `<small class="warn-text">Lý do không duyệt: ${escapeHtml(r.reimbursement.rejectReason)}</small>` : ""}</div><div class="row-actions">${extra}${showEdit ? `<button type="button" class="text-button" data-edit-receipt="${escapeHtml(r.id)}">${canEditReceipt(r) ? "Xem / sửa" : "Xem"}</button>` : ""}</div></div>`;
+  return `<div class="reimb-receipt"><div><strong>${escapeHtml(receiptCode(r))}</strong> · ${dateTime(r.purchaseDate)} · <b>${money(r.total)}</b><small>${escapeHtml(items)}${r.note ? ` · ${escapeHtml(r.note)}` : ""}</small>${dup ? `<small class="warn-text">Nghi trùng với ${escapeHtml(dup.join(", "))}: kiểm tra hoá đơn trước khi duyệt</small>` : ""}${flagNoteHtml(r)}${diff ? `<small class="warn-text">Phiếu bị sửa sau khi hoàn: chênh ${money(diff)}</small>` : ""}${isPaidOut(r) && reviewStatus(r) === "PENDING" ? '<small class="warn-text">Đã hoàn tiền · vừa sửa nội dung (tổng tiền không đổi) · chờ duyệt lại</small>' : ""}${reimbursementStatus(r) === "REJECTED" && r.reimbursement?.rejectReason ? `<small class="warn-text">Lý do không duyệt: ${escapeHtml(r.reimbursement.rejectReason)}</small>` : ""}</div><div class="row-actions">${extra}${flagButtons(r)}${showEdit ? `<button type="button" class="text-button" data-edit-receipt="${escapeHtml(r.id)}">${canEditReceipt(r) ? "Xem / sửa" : "Xem"}</button>` : ""}</div></div>`;
 }
 
 function batchCard(b) {
@@ -2455,7 +2509,18 @@ function renderMine() {
   ].join("");
   host.innerHTML = html ? `<article class="reimb-card">${html}</article>` : `<p class="muted">Chưa có phiếu nào ${isBuyer() ? "bạn" : `${escapeHtml(myName())}`} ứng tiền. Bấm <b>+ Phiếu chi</b> để nhập.</p>`;
 }
+/** Danh sách phiếu bị đánh dấu sai: người tạo thấy phiếu của mình; chủ quán / thủ quỹ thấy tất cả. */
+function renderFlagged() {
+  const host = $("#reimb-flagged");
+  if (!host) return;
+  const me = myId();
+  const list = reimbReceipts().filter((r) => receiptFlag(r) && (canTreasure(state.role) || isMine(r, me))).sort((a, b) => Number(a.flag.at || 0) - Number(b.flag.at || 0));
+  if (!list.length) { host.innerHTML = ""; return; }
+  const open = list.filter(isFlagOpen).length;
+  host.innerHTML = `<p class="reimb-sub warn-text">⚠ Phiếu bị đánh dấu sai · ${open} cần sửa${list.length - open ? ` · ${list.length - open} đã sửa, chờ chủ quán duyệt lại` : ""}</p>${list.map((r) => receiptLine(r, null, isFlagOpen(r) && canEditReceipt(r) ? '<span class="muted">Bấm Xem / sửa để sửa lại</span>' : "")).join("")}`;
+}
 function renderReimbursements() {
+  renderFlagged();
   const host = $("#reimb-queues");
   if (!host || !state.role) return;
   const all = reimbReceipts();
@@ -2504,9 +2569,12 @@ async function updateReceiptReimb(id, patch) {
   if (!r) return;
   const now = Date.now();
   const st = patch.reimbursement?.status;
+  const blocked = st === "APPROVED" ? flagApprovalProblem(r, state.role) : "";
+  if (blocked) { flashNote(blocked); return; }
   const review = st === "APPROVED" ? "APPROVED" : st === "REJECTED" ? "REJECTED" : st === "PENDING" && !patch.fundSource ? "PENDING" : patch.fundSource ? (patch.fundSource === FUND_PERSONAL ? initialReview(r.payerId || memberOf(r, people())?.id, people()) : "APPROVED") : (r.review || undefined);
   const next = { ...r, ...(review ? { review, reviewBy: myName(), reviewAt: now, reviewReason: st === "REJECTED" ? patch.reimbursement.rejectReason : "" } : {}), ...(patch.fundSource ? { fundSource: patch.fundSource } : {}), code: receiptCode(r), reimbursement: { ...(r.reimbursement || {}), ...patch.reimbursement, updatedAt: now, by: myName() }, updatedAt: Math.max(now, Number(r.updatedAt || 0) + 1), ...(r.source === "ANDROID_POS" ? { editedBy: "WEB_MANAGER" } : {}) };
   if (!next.payerId) { const id = memberOf(next, people())?.id; if (id) next.payerId = id; }
+  if (r.flag && (st === "APPROVED" || st === "REJECTED")) next.flag = flagAfterReview(r.flag, st, patch.reimbursement?.rejectReason, now, myName());
   try {
     await setDoc(doc(db, ...root, receiptCollection(), id), next);
     replaceLocalReceipt(next);
@@ -2518,7 +2586,7 @@ async function updateReceiptReimb(id, patch) {
 async function approveAll(payer) {
   const all = reimbReceipts();
   const dups = duplicateSuspects(all.filter((r) => reimbursementStatus(r) !== "NONE"));
-  const list = all.filter((r) => r.enteredByName === payer && reimbursementStatus(r) === "PENDING" && !selfBlocked(r));
+  const list = all.filter((r) => r.enteredByName === payer && reimbursementStatus(r) === "PENDING" && !selfBlocked(r) && !flagApprovalProblem(r, state.role));
   const ok = list.filter((r) => !dups.has(r.id));
   if (!ok.length) { flashNote("Các phiếu đều nghi trùng: duyệt từng phiếu sau khi kiểm tra."); return; }
   if (!window.confirm(`Duyệt ${ok.length} phiếu của ${payer} · ${money(ok.reduce((t, r) => t + Number(r.total || 0), 0))}?${ok.length < list.length ? ` (${list.length - ok.length} phiếu nghi trùng để lại xem riêng)` : ""}`)) return;
@@ -2530,7 +2598,9 @@ async function updateReceiptReview(id, status, reason) {
   const r = reimbReceipts().find((x) => x.id === id);
   if (!r) return;
   const now = Date.now();
-  const next = { ...r, review: status, reviewReason: reason, reviewBy: myName(), reviewById: state.me?.id || "", reviewAt: now, updatedAt: Math.max(now, Number(r.updatedAt || 0) + 1), ...(r.source === "ANDROID_POS" ? { editedBy: "WEB_MANAGER" } : {}) };
+  const blocked = status === "APPROVED" ? flagApprovalProblem(r, state.role) : "";
+  if (blocked) { flashNote(blocked); return; }
+  const next = { ...r, ...(r.flag ? { flag: flagAfterReview(r.flag, status, reason, now, myName()) } : {}), review: status, reviewReason: reason, reviewBy: myName(), reviewById: state.me?.id || "", reviewAt: now, updatedAt: Math.max(now, Number(r.updatedAt || 0) + 1), ...(r.source === "ANDROID_POS" ? { editedBy: "WEB_MANAGER" } : {}) };
   try {
     await setDoc(doc(db, ...root, receiptCollection(), id), next);
     replaceLocalReceipt(next);
@@ -2715,6 +2785,8 @@ $("[data-page=hoanung]").addEventListener("click", (e) => {
   else if (t.dataset.notReceived) reportNotReceived(t.dataset.notReceived);
   else if (t.dataset.cancelMine) cancelReceipt(t.dataset.cancelMine).then(() => renderReimbursements());
   else if (t.dataset.editReceipt) openReceiptEditor(t.dataset.editReceipt);
+  else if (t.dataset.flagReceipt) flagReceipt(t.dataset.flagReceipt);
+  else if (t.dataset.unflagReceipt) unflagReceipt(t.dataset.unflagReceipt);
 });
 
 /* ---------- Tài khoản: thông tin cá nhân + ngân hàng + PIN của mỗi người, chủ quán quản lý thành viên ---------- */

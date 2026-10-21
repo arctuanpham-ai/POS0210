@@ -1,5 +1,5 @@
 // Danh mục vật tư chuẩn, giá vốn từ phiếu chi chi tiết và giá vốn món từ công thức. Hàm thuần, không Firebase, không DOM.
-import { normalizeText, isSummaryReceipt, groupLabelOf } from "./expense-rules.js?v=20261021-02";
+import { normalizeText, isSummaryReceipt, groupLabelOf } from "./expense-rules.js?v=20261021-03";
 
 export const KIND_LABELS = { NL: "Nguyên liệu", BB: "Bao bì theo món", VH: "Vận hành" };
 
@@ -49,7 +49,7 @@ export const MATERIALS = [
   M("sot_tieu", "Sốt tiêu đen", "GIAVI", "NL", "g", W, ["sot tieu"]),
   M("hat_huong_duong", "Hạt hướng dương", "KHAC", "NL", "g", W, ["huong duong"]),
   M("hat_dua", "Hạt dưa", "KHAC", "NL", "g", W, ["hat dua"]),
-  M("da_vien", "Đá viên", "DA", "NL", "bao", [["bao", 1]], ["da vien", "da"]),
+  M("da_vien", "Đá viên", "DA", "NL", "g", W, ["da vien", "da"]), // mua theo kg (trước đây tính theo bao nên phiếu ghi kg không quy đổi được)
   M("ly_nhua", "Ly nhựa + nắp", "BAOBI", "BB", "cái", [["cái", 1], ["cây", 50]], ["ly nhua", "coc nhua"]),
   M("ly_giay", "Ly giấy nóng", "BAOBI", "BB", "cái", [["cái", 1], ["cây", 50]], ["ly giay", "coc giay"]),
   M("ong_hut", "Ống hút", "BAOBI", "BB", "cái", [["cái", 1]], ["ong hut"]),

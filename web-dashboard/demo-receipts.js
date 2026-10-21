@@ -1,8 +1,8 @@
 // Bộ phiếu chi DEMO để chạy thử quy trình tài chính trước khi nhập thật.
 // Mọi phiếu mang demo:true + demoBatch, nằm trong collection riêng demoExpenseReceipts (máy POS không đọc),
 // nên xoá hết sau khi thử mà không đụng dữ liệu thật. Hàm thuần: không Firebase, không DOM.
-import { normalizeText, groupLabelOf, materialCodeFor, buildSummaryLines } from "./expense-rules.js?v=20261021-02";
-import { materialById, draftRecipeFor } from "./cost-recipe.js?v=20261021-02";
+import { normalizeText, groupLabelOf, materialCodeFor, buildSummaryLines } from "./expense-rules.js?v=20261021-03";
+import { materialById, draftRecipeFor } from "./cost-recipe.js?v=20261021-03";
 
 export const DEMO_COLLECTION = "demoExpenseReceipts";
 
@@ -114,7 +114,7 @@ export const buildDemoReceipts = ({ now = Date.now(), days = 30, dailySales = DE
     // Vận hành và bao bì: không theo công thức món.
     const ops = [];
     const push = (id, unit, qty, price) => { const m = materialById.get(id); if (m && qty > 0) ops.push(line(lineId(), m, unit, qty, round100(price))); };
-    push("da_vien", "bao", Math.max(1, Math.round((drinks * 0.8) / 40)), 25000);
+    push("da_vien", "kg", Math.max(1, Math.round((drinks * 0.8) / 40)) * 20, 1250);
     if (dayIndex % 5 === 0) push("gas", "bình", 1, 480000);
     if (dayIndex % 2 === 0) push("nuoc_loc", "bình", 2, 18000);
     if (dayIndex % 7 === 3) { push("ly_nhua", "cây", Math.max(1, Math.ceil((drinks * 0.3 * 7) / 50)), 60000); push("ly_giay", "cây", 1, 75000); push("ong_hut", "cái", Math.ceil(drinks * 0.3 * 7 / 100) * 100, 200); push("hop_mang_ve", "cái", Math.ceil(food * 0.2 * 7 / 50) * 50, 2500); push("tui", "cái", 200, 500); push("giay_an", "gói", 10, 25000); }

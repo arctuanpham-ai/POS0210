@@ -513,3 +513,6 @@ button.paylist-row { width: 100%; font: inherit; color: inherit; cursor: pointer
 .recipe-results small { color: #7a6a5c; white-space: nowrap; }
 .recipe-results .recipe-empty { padding: 10px 12px; color: #7a6a5c; font-size: 14px; }
 .recipe-results mark { background: #f6d9a8; color: inherit; border-radius: 3px; }
+
+/* Gợi ý nổi khi nhập phiếu chi (nằm trong hộp thoại nên vẫn hiện trên cùng) */
+.suggest-float { position: fixed; z-index: 60; }

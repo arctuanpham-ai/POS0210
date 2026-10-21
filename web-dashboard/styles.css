@@ -502,3 +502,14 @@ button.paylist-row { width: 100%; font: inherit; color: inherit; cursor: pointer
 .st-hours { display: grid; grid-template-columns: repeat(24, 1fr); gap: 2px; align-items: end; height: 70px; margin: 6px 0 2px; }
 .st-hours i { display: block; background: #8a5a3c; border-radius: 3px 3px 0 0; min-height: 2px; }
 .st-hours-axis { display: flex; justify-content: space-between; font-size: 11px; color: #8a7461; }
+
+/* Tìm vật tư khi thêm vào công thức: gõ chữ, danh sách thu hẹp ngay */
+.recipe-pick { position: relative; flex: 1; min-width: 0; }
+.recipe-pick input { width: 100%; margin: 0; }
+.recipe-results { position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + 4px); max-height: 42vh; overflow-y: auto; margin: 0; padding: 4px; list-style: none; border: 1px solid #c9b29a; border-radius: 12px; background: #fffcf7; box-shadow: 0 8px 24px rgba(52, 36, 27, .18); }
+.recipe-results li { margin: 0; }
+.recipe-results button { display: flex; justify-content: space-between; gap: 10px; width: 100%; padding: 10px 12px; border: 0; border-radius: 8px; background: transparent; color: #3a2a20; font: inherit; text-align: left; cursor: pointer; }
+.recipe-results button:hover, .recipe-results button.active { background: #f3e6d4; }
+.recipe-results small { color: #7a6a5c; white-space: nowrap; }
+.recipe-results .recipe-empty { padding: 10px 12px; color: #7a6a5c; font-size: 14px; }
+.recipe-results mark { background: #f6d9a8; color: inherit; border-radius: 3px; }

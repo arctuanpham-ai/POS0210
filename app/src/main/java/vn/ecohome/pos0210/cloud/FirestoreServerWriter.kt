@@ -34,6 +34,8 @@ internal object FirestoreServerWriter {
     }
     private suspend fun execute(fs:FirebaseFirestore,paths:List<String>,operation:String,deleting:Boolean,encode:(String)->List<Map<String,Any?>>) {
         if(paths.isEmpty())return
+        // Bản DEV: chỉ đọc từ cloud, tuyệt đối không ghi/xoá lên cloud.
+        if(vn.ecohome.pos0210.BuildConfig.DEV_OFFLINE)error("DEV_NO_WRITE: bản DEV không được ghi lên cloud")
         CloudQuotaGuard.check(fs)
         val user=FirebaseAuth.getInstance(fs.app).currentUser?:error("AUTH_SESSION_MISSING")
         val expected=vn.ecohome.pos0210.data.PosDatabase.get(fs.app.applicationContext).dao().cloudSyncStateSnapshot()?.syncedUid

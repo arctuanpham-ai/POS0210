@@ -190,6 +190,7 @@ object OnlineOrderService {
 
     /** Đổi trạng thái trong MỘT transaction (đọc lại đơn để tránh hai máy bấm cùng lúc; trả lượt giới hạn khi đóng đơn). */
     suspend fun apply(app: Application, orderId: String, action: String, who: String, reason: String = ""): Result<Unit> = runCatching {
+        check(!vn.ecohome.pos0210.BuildConfig.DEV_OFFLINE){"DEV_NO_WRITE: bản DEV không xử lý đơn online"}
         if (!busy.add(orderId)) return@runCatching
         try {
             val uid = attachedUid ?: FirebaseCloudSync.currentUid(app) ?: error("Chưa đăng nhập Firebase")
@@ -231,6 +232,7 @@ object OnlineOrderService {
     }
     /** Lưu ghi chú sở thích của khách (rỗng = xoá ghi chú). */
     suspend fun saveCustomerNote(app: Application, phone: String, name: String, note: String, who: String): Result<Unit> = runCatching {
+        check(!vn.ecohome.pos0210.BuildConfig.DEV_OFFLINE){"DEV_NO_WRITE: bản DEV không ghi lên cloud"}
         val root = storeRoot(app) ?: error("Chưa đăng nhập Firebase")
         val ref = root.collection("customerNotes").document(phone)
         val text = note.trim().take(500)

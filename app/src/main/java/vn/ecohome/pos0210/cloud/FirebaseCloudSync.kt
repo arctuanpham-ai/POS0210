@@ -66,12 +66,7 @@ object FirebaseCloudSync {
             settings["firebase_api_key"].orEmpty().ifBlank{DEFAULT_API_KEY}
         )
     }
-    internal fun firebaseApp(context:Context,c:FirebaseConfig):FirebaseApp {
-        // Bản DEV: tuyệt đối không tạo kết nối Firebase.
-        if(vn.ecohome.pos0210.BuildConfig.DEV_OFFLINE)throw IllegalStateException("BẢN DEV: đã tắt hoàn toàn đồng bộ cloud")
-        return firebaseAppReal(context,c)
-    }
-    private fun firebaseAppReal(context:Context,c:FirebaseConfig):FirebaseApp = CloudAppLifecycle.getOrCreate(
+    internal fun firebaseApp(context:Context,c:FirebaseConfig):FirebaseApp = CloudAppLifecycle.getOrCreate(
         find={FirebaseApp.getApps(context).firstOrNull{it.name==APP_NAME}},
         create={FirebaseApp.initializeApp(context.applicationContext,FirebaseOptions.Builder().setProjectId(c.projectId).setApplicationId(c.applicationId).setApiKey(c.apiKey).setStorageBucket("${c.projectId}.firebasestorage.app").build(),APP_NAME)
             ?: error("Không thể khởi tạo Firebase")}
@@ -339,6 +334,16 @@ object FirebaseCloudSync {
         }
     }
 
+    /** Bản DEV: chỉ ĐỌC từ cloud về máy (menu, nhóm món, tài chính). Không đẩy gì lên. */
+    suspend fun devPullNow(context:Context):Result<Unit> = CloudExecution.operation("DEV_PULL",CloudOperationGuard.mutex){
+        val c=config(context);require(c.valid){"Chưa cấu hình Firebase"}
+        val app=firebaseApp(context,c);val uid=authenticatedUid(context,app)
+        val root=FirebaseFirestore.getInstance(app).collection("users").document(uid).collection("stores").document("0210")
+        val dao=PosDatabase.get(context).dao()
+        pullCloudMenu(root,dao)
+        pullCloudFinance(root,dao)
+    }
+
     private suspend fun pullCloudMenu(root:com.google.firebase.firestore.DocumentReference,dao:PosDao){
         // Menu 2 chiều: web sửa menu thì tăng config/menuVersion. Mỗi lần đồng bộ chỉ đọc 1 document này;
         // chỉ tải lại cả menu khi phiên bản đổi (hoặc đã quá 24 giờ chưa tải). Tiết kiệm lượt đọc gói Spark.
@@ -401,6 +406,7 @@ object FirebaseCloudSync {
 
     /** Pulls only browser-entered expense receipts. It never touches sales collections. */
     private suspend fun pushPendingExpenseReceipts(root:com.google.firebase.firestore.DocumentReference,dao:PosDao){
+        if(vn.ecohome.pos0210.BuildConfig.DEV_OFFLINE)return // bản DEV không đẩy phiếu chi
         dao.recoverInflightSync()
         val pending=dao.pendingSync(System.currentTimeMillis(),500).filter{it.entityType=="EXPENSE_RECEIPT"}
         pending.forEach { queued ->

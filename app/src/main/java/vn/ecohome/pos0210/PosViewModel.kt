@@ -283,6 +283,7 @@ fun login(pin:String){viewModelScope.launch{val e=dao.employeeByPin(pin);if(e==n
  }
  fun setBusinessTestMode(enabled:Boolean){
   val e=currentEmployee.value?:return
+  if(BuildConfig.DEV_OFFLINE&&!enabled){printerMessage.value="BẢN DEV: luôn ở chế độ TEST, không chuyển sang LIVE";return}
   if(e.role!="ADMIN"&&e.role!="MANAGER"){printerMessage.value="CHỈ ADMIN/MANAGER ĐƯỢC BẬT TEST MODE";return}
   if(currentSession.value!=null){printerMessage.value="PHẢI KẾT THÚC BÀN HIỆN TẠI TRƯỚC KHI ĐỔI TEST MODE";return}
   businessTestMode.value=enabled

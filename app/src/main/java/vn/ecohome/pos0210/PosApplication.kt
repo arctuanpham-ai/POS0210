@@ -19,7 +19,7 @@ class PosApplication : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         val db=PosDatabase.get(this)
-        if(BuildConfig.DEV_OFFLINE)return // Bản DEV: không lịch đồng bộ, không nghe đơn online, không đẩy gì lên cloud.
+        if(BuildConfig.DEV_OFFLINE){DevAutopilot.start(this,appScope);return} // Bản DEV: chỉ kéo từ cloud về, không lịch đồng bộ, không nghe đơn online, không đẩy gì lên.
         FirebaseCloudSync.schedule(this)
         vn.ecohome.pos0210.cloud.RemoteSyncCommand.start(this,appScope)
         vn.ecohome.pos0210.cloud.OnlineOrderService.start(this,appScope)

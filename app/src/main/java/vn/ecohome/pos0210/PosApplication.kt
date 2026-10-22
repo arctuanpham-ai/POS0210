@@ -18,10 +18,11 @@ class PosApplication : Application(), ImageLoaderFactory {
     private val appScope=CoroutineScope(SupervisorJob()+Dispatchers.IO)
     override fun onCreate() {
         super.onCreate()
+        val db=PosDatabase.get(this)
+        if(BuildConfig.DEV_OFFLINE)return // Bản DEV: không lịch đồng bộ, không nghe đơn online, không đẩy gì lên cloud.
         FirebaseCloudSync.schedule(this)
         vn.ecohome.pos0210.cloud.RemoteSyncCommand.start(this,appScope)
         vn.ecohome.pos0210.cloud.OnlineOrderService.start(this,appScope)
-        val db=PosDatabase.get(this)
         val settingMutex=Mutex()
         var lastBusinessSettings:Map<String,String>?=null
         appScope.launch{settingMutex.withLock{lastBusinessSettings=CloudQuotaPolicy.businessSettings(db.dao().allSettingsSnapshot().associate{it.key to it.value})}}

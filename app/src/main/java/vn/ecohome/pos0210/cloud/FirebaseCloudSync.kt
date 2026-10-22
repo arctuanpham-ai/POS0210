@@ -67,6 +67,8 @@ object FirebaseCloudSync {
         )
     }
     internal fun firebaseApp(context:Context,c:FirebaseConfig):FirebaseApp = CloudAppLifecycle.getOrCreate(
+        // Bản DEV: tuyệt đối không tạo kết nối Firebase.
+        if(vn.ecohome.pos0210.BuildConfig.DEV_OFFLINE)throw IllegalStateException("BẢN DEV: đã tắt hoàn toàn đồng bộ cloud") else 
         find={FirebaseApp.getApps(context).firstOrNull{it.name==APP_NAME}},
         create={FirebaseApp.initializeApp(context.applicationContext,FirebaseOptions.Builder().setProjectId(c.projectId).setApplicationId(c.applicationId).setApiKey(c.apiKey).setStorageBucket("${c.projectId}.firebasestorage.app").build(),APP_NAME)
             ?: error("Không thể khởi tạo Firebase")}

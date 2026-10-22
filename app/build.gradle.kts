@@ -9,11 +9,12 @@ android {
     namespace = "vn.ecohome.pos0210"
     compileSdk = 35
     defaultConfig {
-        applicationId = "vn.ecohome.pos0210"
+        applicationId = "vn.ecohome.pos0210.dev"
         minSdk = 26
         targetSdk = 35
         versionCode = 192
-        versionName = "1.0.0-alpha159-pull-guard"
+        versionName = "1.0.0-alpha159-DEV-OFFLINE"
+        buildConfigField("boolean", "DEV_OFFLINE", "true")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {
@@ -26,7 +27,7 @@ android {
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { compose = true}
+    buildFeatures { compose = true; buildConfig = true }
 }
 dependencies {
     implementation("androidx.core:core-ktx:1.15.0")

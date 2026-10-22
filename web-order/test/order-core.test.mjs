@@ -71,8 +71,8 @@ test("validateCheckout: báo lỗi từng trường", () => {
   const r = validateCheckout({ name: "", phone: "12", delivery: true, address: "abc", table: "", note: "", lines: [] });
   assert.ok(!r.ok);
   assert.deepEqual(Object.keys(r.errors).sort(), ["address", "cart", "name", "phone"]);
-  const many = Array.from({ length: 8 }, (_, i) => ({ id: `m${i}`, name: "x", qty: 1, note: "", price: 1000 }));
-  assert.match(validateCheckout({ name: "A", phone: "0912345678", delivery: false, address: "", table: "", note: "", lines: many }).errors.cart, /tối đa 7/);
+  const many = Array.from({ length: 31 }, (_, i) => ({ id: `m${i}`, name: "x", qty: 1, note: "", price: 1000 }));
+  assert.match(validateCheckout({ name: "A", phone: "0912345678", delivery: false, address: "", table: "", note: "", lines: many }).errors.cart, /tối đa 30/);
   const big = [{ id: "a", name: "x", qty: 20, note: "", price: 300000 }];
   assert.match(validateCheckout({ name: "A", phone: "0912345678", delivery: false, address: "", table: "", note: "", lines: big }).errors.cart, /tối đa/);
 });

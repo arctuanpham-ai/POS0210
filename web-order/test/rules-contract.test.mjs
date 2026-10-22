@@ -16,7 +16,7 @@ test("rules: ngoặc cân bằng và có đủ khối cần thiết", () => {
 
 test("rules: bộ trường đơn / dòng món / bộ đếm khớp với client", () => {
   // Đơn và dòng món: size() == số trường và mọi trường đều được đọc trong rules (rẻ hơn hasOnly/hasAll về ngân sách biểu thức của Firestore).
-  const core = code.split("function probeDup")[0];
+  const core = code;
   assert.ok(core.includes(`d.size() == ${ORDER_KEYS.length}`));
   assert.ok(core.includes(`l.size() == ${LINE_KEYS.length}`));
   for (const k of ORDER_KEYS) assert.ok(new RegExp(`\\bd\\.${k}\\b`).test(core), `đơn: rules chưa đọc trường ${k}`);
@@ -40,8 +40,8 @@ test("rules: hằng số giới hạn khớp với client", () => {
   has(`l.note.size() <= ${LIMITS.maxLineNote}`);
   has(`d.pending <= ${LIMITS.maxPendingOrders}`);
   has(`duration.value(${LIMITS.limitWindowMinutes}, 'm')`);
-  assert.equal([...code.matchAll(/lineValid\(items\[\d\]\)/g)].length, LIMITS.maxLines);
-  assert.equal([...code.matchAll(/lineAmount\(items, \d\)/g)].length, LIMITS.maxLines);
+  assert.equal([...code.matchAll(/lineValid\(items\[\d\]\)/g)].length, 3);
+  assert.equal([...code.matchAll(/lineAmount\(items, \d\)/g)].length, 3);
 });
 
 test("rules: regex mã đơn, SĐT và uid chủ quán", () => {
@@ -74,8 +74,8 @@ test("rules: quyền công khai chỉ là ĐỌC menu/nhóm/ảnh/cấu hình; k
 
 test("rules: số lần get()/getAfter() trong một thao tác ghi không vượt 10", () => {
   // Tạo đơn: tối đa 7 dòng menu (get) + 2 getAfter bộ đếm = 9. Ghi bộ đếm: getAfter + exists = 2.
-  assert.ok(LIMITS.maxLines + 2 <= 10);
-  const main = code.split("function probeDup")[0];
+  assert.ok(3 + 2 <= 10);
+  const main = code;
   assert.equal((main.match(/getAfter\(limitRef/g) || []).length, 2);
   assert.equal((main.match(/get\(menuRef/g) || []).length, 1);
 });

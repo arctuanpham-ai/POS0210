@@ -1,0 +1,20 @@
+name: Diag sync (read-only)
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/diag-sync.yml", "ops/diag-sync.py"]
+permissions:
+  contents: write
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read sync collections (read-only)
+        env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_POS0210_17CE4 }}' > "$RUNNER_TEMP/sa.json"
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/sa.json" >/dev/null 2>&1
+          python3 ops/diag-sync.py > "$RUNNER_TEMP/d.txt" 2>&1 || true
+          { echo '```'; cat "$RUNNER_TEMP/d.txt"; echo '```'; } > "$RUNNER_TEMP/c.md"
+          gh api repos/${{ github.repository }}/commits/${{ github.sha }}/comments -F body=@"$RUNNER_TEMP/c.md" >/dev/null

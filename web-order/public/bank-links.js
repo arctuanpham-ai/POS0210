@@ -32,8 +32,8 @@ export function bankDeeplink(appId, { account, bank, amount, content, holder = "
   const acc = String(account ?? "").replace(/\s+/g, "");
   const am = Math.round(Number(amount));
   if (!appId || !code || !/^[0-9A-Za-z]{4,25}$/.test(acc) || !(am > 0) || !String(content ?? "").trim()) return "";
-  const q = [["app", appId], ["ba", `${acc}@${code}`], ["am", String(am)], ["tn", String(content).trim()]];
-  if (holder) q.push(["bn", String(holder).trim()]);
-  q.push(["url", returnUrl || "https://datmon0210.web.app/"]);
-  return `https://dl.vietqr.io/pay?${q.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&")}`;
+  // Định dạng GIỐNG HỆT ví dụ của VietQR Kit: dấu cách -> "+", giữ nguyên "@", "/" và ":" (một số app ngân hàng không giải mã %40 ở tham số ba).
+  const enc = (v) => encodeURIComponent(v).replace(/%40/g, "@").replace(/%2F/gi, "/").replace(/%3A/gi, ":").replace(/%20/g, "+");
+  const q = [["app", appId], ["am", String(am)], ["tn", String(content).trim()], ["ba", `${acc}@${code}`], ["url", returnUrl || "https://datmon0210.web.app/"]];
+  return `https://dl.vietqr.io/pay?${q.map(([k, v]) => `${k}=${enc(v)}`).join("&")}`;
 }

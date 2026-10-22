@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20261021-07" />
+    <link rel="stylesheet" href="styles.css?v=20261022-01" />
     <title>0210 · Manager</title>
   </head>
   <body>
@@ -61,10 +61,11 @@
         </nav>
 
         <div class="page" data-page="ban" hidden>
+        <p class="pending-banner" role="status"><b>Đang chờ cập nhật số liệu.</b> Các con số ở mục này đang được tính lại và sẽ hiện đầy đủ khi máy POS đồng bộ theo bản nâng cấp mới. Dữ liệu gốc (bill, phiếu chi) vẫn an toàn, không mất.</p>
         <section class="section-heading first-section">
           <div><p class="eyebrow">SƠ ĐỒ BÀN</p><h2>Trạng thái phục vụ realtime</h2></div>
         </section>
-        <section class="live-strip" aria-label="Tình trạng bàn realtime">
+        <section data-needs-sync class="live-strip" aria-label="Tình trạng bàn realtime">
           <article><span>Bàn đang phục vụ</span><strong id="live-open-tables">0</strong></article>
           <article><span>Tổng tạm tính bàn mở (chưa phải doanh thu)</span><strong id="live-open-total">0đ</strong></article>
           <article class="closed"><span>Doanh thu hôm nay đã chốt</span><strong id="live-revenue-today">—</strong></article>
@@ -72,11 +73,12 @@
           <article class="closed"><span>Tiền mặt hôm nay</span><strong id="live-cash-today">—</strong></article>
           <article class="closed"><span>Chuyển khoản hôm nay</span><strong id="live-transfer-today">—</strong></article>
         </section>
-        <p id="live-split-note" class="muted"></p>
-        <section id="tables" class="table-grid" aria-live="polite"></section>
+        <p data-needs-sync id="live-split-note" class="muted"></p>
+        <section data-needs-sync id="tables" class="table-grid" aria-live="polite"></section>
         </div>
 
         <div class="page" data-page="doanhthu" hidden>
+        <p class="pending-banner" role="status"><b>Đang chờ cập nhật số liệu.</b> Các con số ở mục này đang được tính lại và sẽ hiện đầy đủ khi máy POS đồng bộ theo bản nâng cấp mới. Dữ liệu gốc (bill, phiếu chi) vẫn an toàn, không mất.</p>
         <section id="top-banner" class="top-banner" aria-live="polite" hidden></section>
         <details class="panel revenue-check" id="revenue-check">
           <summary><strong>🔎 Đối chiếu doanh thu: số POS ↔ từng bill</strong> <span class="muted" id="rc-badge"></span></summary>
@@ -156,16 +158,17 @@
 
 
         <div class="page" data-page="giavon" hidden>
+        <p class="pending-banner" role="status"><b>Đang chờ cập nhật số liệu.</b> Các con số ở mục này đang được tính lại và sẽ hiện đầy đủ khi máy POS đồng bộ theo bản nâng cấp mới. Dữ liệu gốc (bill, phiếu chi) vẫn an toàn, không mất.</p>
         <section class="section-heading first-section">
           <div><p class="eyebrow">GIÁ VỐN MÓN</p><h2>Công thức và cost theo giá nhập</h2></div>
           <div class="heading-actions"><button id="reload-recipes" type="button" class="btn">Tải lại</button></div>
         </section>
-        <details class="panel plan-panel" id="prep-panel">
+        <details data-needs-sync class="panel plan-panel" id="prep-panel">
           <summary><strong>🥡 Chuẩn bị nguyên liệu ngày mai</strong> <span class="muted" id="prep-badge"></span></summary>
           <p class="muted">Ước lượng bán ngày mai theo lịch sử (ưu tiên cùng thứ các tuần trước) × định mức công thức món, cộng 10% dự phòng. Không cần kiểm kho; trừ đi phần còn trong tủ là ra lượng cần mua.</p>
           <section id="prep-view"></section>
         </details>
-        <details class="panel plan-panel" id="profit-panel">
+        <details data-needs-sync class="panel plan-panel" id="profit-panel">
           <summary><strong>💰 Xếp hạng món theo lãi gộp</strong> <span class="muted" id="profit-badge"></span></summary>
           <div class="filter-row" id="profit-period"></div>
           <section id="profit-view"></section>
@@ -368,6 +371,7 @@
         </div>
 
         <div class="page" data-page="taichinh" hidden>
+        <p class="pending-banner" role="status"><b>Đang chờ cập nhật số liệu.</b> Các con số ở mục này đang được tính lại và sẽ hiện đầy đủ khi máy POS đồng bộ theo bản nâng cấp mới. Dữ liệu gốc (bill, phiếu chi) vẫn an toàn, không mất.</p>
         <section class="section-heading first-section">
           <div><p class="eyebrow">TÀI CHÍNH</p><h2>Tình hình quán</h2></div>
         </section>
@@ -386,7 +390,7 @@
         </details>
         <p class="panel muted">Trang này chỉ để <strong>xem, theo dõi và phân tích</strong>. Mọi phiếu chi, phiếu tổng, thu chi khác nhập ở tab <a href="#hoanung"><strong>Phiếu chi</strong></a>.</p>
 
-        <details class="panel fund-close" id="payback-panel">
+        <details data-needs-sync class="panel fund-close" id="payback-panel">
           <summary><strong>Vốn đầu tư ban đầu &amp; hoàn vốn</strong> <span class="muted" id="payback-summary"></span></summary>
           <p class="muted">Nhập <strong>một con số</strong> tổng vốn đã bỏ ra trước khai trương (thiết bị, thi công, hàng hoá ban đầu…). Các phiếu lẻ ghi chép ban đầu cũ và <strong>mọi khoản chi trước tháng khai trương</strong> không tính vào đâu (đã nằm trong con số vốn), chỉ để tham khảo. Đã thu hồi = cộng dồn dòng tiền ròng từng tháng (doanh thu − chi vận hành − đầu tư bổ sung): tháng đã lưu đối soát dùng số đã lưu, tháng đang chạy dùng số tạm tính.</p>
           <div class="field-row"><label for="invest-amount">Vốn ban đầu</label><input id="invest-amount" type="number" inputmode="numeric" step="1000000" min="0" placeholder="vd 350000000" /></div>
@@ -396,7 +400,7 @@
           <p class="muted" id="invest-note-line" role="status"></p>
           <section id="payback-view"></section>
         </details>
-        <details class="panel fund-close" id="fund-close">
+        <details data-needs-sync class="panel fund-close" id="fund-close">
           <summary><strong>Đối soát quỹ &amp; chia tiền cổ đông</strong> <span class="muted">· theo tháng</span></summary>
           <p class="muted">Quỹ quán = toàn bộ tiền của quán (tiền mặt + tài khoản) thủ quỹ giữ. Lợi nhuận chia chỉ tính phiếu <strong>đã duyệt</strong>; đầu tư ban đầu (trước khai trương, đã góp và chia ngoài) không trừ vào tháng.</p>
           <div class="field-row"><label for="fund-month">Tháng</label><select id="fund-month"></select></div>
@@ -438,7 +442,7 @@
           </div>
           <p id="payer-total" class="panel-total"></p>
         </div>
-        <section id="period-summary" class="summary-grid" aria-label="Tổng quan theo kỳ"></section>
+        <section data-needs-sync id="period-summary" class="summary-grid" aria-label="Tổng quan theo kỳ"></section>
 
         <section class="section-heading compact">
           <div><p class="eyebrow">DANH SÁCH PHIẾU</p><h2>Theo bộ lọc đang chọn</h2></div>
@@ -449,7 +453,7 @@
         <section class="section-heading compact">
           <div><p class="eyebrow">TÍCH LŨY</p><h2>Chỉ số toàn thời gian</h2></div>
         </section>
-        <section id="summary" class="summary-grid cumulative-grid" aria-label="Chỉ số tích lũy"></section>
+        <section data-needs-sync id="summary" class="summary-grid cumulative-grid" aria-label="Chỉ số tích lũy"></section>
 
         <section class="section-heading compact">
           <div><p class="eyebrow">THEO THÁNG</p><h2>Doanh thu, chi phí và phần còn lại</h2></div>
@@ -461,7 +465,7 @@
           <button id="export-menu" type="button" class="btn">Tải menu</button>
         </div>
         <p id="monthly-note" class="muted" role="status"></p>
-        <section id="monthly-report" class="month-list" aria-live="polite"></section>
+        <section data-needs-sync id="monthly-report" class="month-list" aria-live="polite"></section>
 
         <section class="section-heading compact">
           <div><p class="eyebrow">RÀ SOÁT PHÂN LOẠI</p><h2>Phân nhóm vật tư đã đúng chưa</h2></div>
@@ -705,7 +709,7 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261021-07"></script>
+    <script type="module" src="app.js?v=20261022-01"></script>
     <script>
       // Trang không chạy được (thường do trình duyệt còn giữ file cũ): báo rõ thay vì để nút đăng nhập "chết".
       setTimeout(function () {

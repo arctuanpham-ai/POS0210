@@ -523,3 +523,9 @@ button.paylist-row { width: 100%; font: inherit; color: inherit; cursor: pointer
 .oo-cust-hist small { display: block; color: #6e5848; }
 .oo-cust-btns { display: flex; gap: 8px; margin-top: 6px !important; }
 .oo-cust-btns button { padding: 4px 10px; font-size: 12px; }
+
+/* Chờ máy POS thật đồng bộ lại sau sự cố 22/10: ẩn số tổng hợp nghi sai, hiện thông báo */
+.pending-banner { display: none; margin: 12px 0; padding: 12px 14px; border: 1px solid #c9a24f; border-radius: 12px; background: #fff6dc; color: #5a4310; font-size: 14px; line-height: 1.45; }
+.pending-sync .pending-banner { display: block; }
+.pending-sync [data-needs-sync] { display: none !important; }
+.pending-sync .page[data-page="doanhthu"] > :not(.pending-banner) { display: none !important; }

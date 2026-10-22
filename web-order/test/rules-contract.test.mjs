@@ -73,7 +73,7 @@ test("rules: quyền công khai chỉ là ĐỌC menu/nhóm/ảnh/cấu hình; k
 test("rules: số lần get()/getAfter() trong một thao tác ghi không vượt 10", () => {
   // Tạo đơn: tối đa 7 dòng menu (get) + 2 getAfter bộ đếm = 9. Ghi bộ đếm: getAfter + exists = 2.
   assert.ok(LIMITS.maxLines + 2 <= 10);
-  const main = code.split("// ---- TẠM THỜI")[0];
+  const main = code.split("function probeDup")[0];
   assert.equal((main.match(/getAfter\(limitRef/g) || []).length, 2);
   assert.equal((main.match(/get\(menuRef/g) || []).length, 1);
 });

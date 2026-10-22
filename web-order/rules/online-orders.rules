@@ -121,7 +121,7 @@ match /users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/online_limits/{key} {
   allow delete: if isShopOwner();
 }
 
-function validNewOrder(code) {
+function validOrderCore(code) {
   let d = request.resource.data;
   return d.keys().hasOnly(['code', 'createdAt', 'uid', 'name', 'phone', 'mode', 'address', 'table', 'note', 'items', 'total', 'discount', 'surcharge', 'status', 'rejectReason', 'transferContent', 'expiresAt'])
     && d.keys().hasAll(['code', 'createdAt', 'uid', 'name', 'phone', 'mode', 'address', 'table', 'note', 'items', 'total', 'discount', 'surcharge', 'status', 'rejectReason', 'transferContent', 'expiresAt'])
@@ -147,9 +147,13 @@ function validNewOrder(code) {
     && linesValid(d.items)
     && d.discount is int && d.discount >= 0 && d.discount * 100 <= linesSum(d.items) * 60
     && d.surcharge is int && d.surcharge >= 0 && d.surcharge * 100 <= linesSum(d.items) * 30
-    && d.total == linesSum(d.items) + d.surcharge - d.discount
+    && d.total == linesSum(d.items) + d.surcharge - d.discount;
+}
+
+function validNewOrder(code) {
+  return validOrderCore(code)
     && getAfter(limitRef('u_' + request.auth.uid)).data.lastOrder == code
-    && getAfter(limitRef('p_' + d.phone)).data.lastOrder == code;
+    && getAfter(limitRef('p_' + request.resource.data.phone)).data.lastOrder == code;
 }
 
 // Tối đa 7 dòng món/đơn: mỗi dòng cần 1 lần get() menu, giới hạn của Firestore là 10 lần truy cập tài liệu cho mỗi thao tác ghi
@@ -268,5 +272,6 @@ match /users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/dbg/{id} {
     || (id == 'dup12' && probeDup(request.resource.data.items[0]))
     || (id == 'two' && get(menuRef(request.resource.data.items[0].id)).data.price == request.resource.data.items[0].price && get(menuRef(request.resource.data.items[1].id)).data.price == request.resource.data.items[1].price)
     || (id == 'valid1' && linesValid([request.resource.data.items[0]]))
+    || (id == 'core' && validOrderCore(request.resource.data.code))
   );
 }

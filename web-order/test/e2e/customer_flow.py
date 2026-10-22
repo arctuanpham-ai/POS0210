@@ -119,10 +119,12 @@ def run():
         check("mời bạn thanh toán" in txt and "95.000" in txt, "hiện yêu cầu thanh toán + số tiền")
         check("NGUYEN VAN A" in txt and "19031234567890" in txt and "Techcombank" in txt, "hiện tên tài khoản, số TK, ngân hàng để đối chiếu")
         check(f"DM{code}" in txt, "hiện nội dung chuyển khoản")
-        hrefs = page.eval_on_selector_all(".bank-btn", "els => els.map(e => e.href)")
-        check(len(hrefs) >= 20, f"có nút mở app ngân hàng ({len(hrefs)} app)")
-        mb = [h for h in hrefs if "app=mb" in h]
-        check(bool(mb) and "ba=19031234567890@tcb" in mb[0] and "am=95000" in mb[0] and f"tn=DM{code}" in mb[0] and "dl.vietqr.io/pay" in mb[0], "liên kết app ngân hàng đủ STK@mã, số tiền, nội dung")
+        check(page.locator("[data-save-qr]").count() == 1, "có nút Lưu ảnh QR vào máy")
+        page.evaluate("() => { navigator.canShare = undefined; }")
+        with page.expect_download() as dl:
+            page.click("[data-save-qr]")
+        path = dl.value.path()
+        check(os.path.getsize(path) > 3000 and open(path, "rb").read(8) == b"\x89PNG\r\n\x1a\n", "tải về ảnh PNG mã QR hợp lệ")
         page.screenshot(path=f"{SHOTS}/8-pay-bank-apps.png", full_page=True)
         cd = page.inner_text("#countdown")
         check(cd in ("10:01", "10:00", "09:59", "09:58"), f"đồng hồ đếm ngược 10 phút ({cd})")

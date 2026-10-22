@@ -510,9 +510,9 @@ function paymentHtml(order) {
   let qr = "";
   try {
     const payload = vietQrPayload({ bank: s.bank, account: s.account, holder: s.holder || s.name, amount: order.total, info: order.transferContent });
-    const png = qrPngDataUrl(payload, { level: "M" });
+    const png = qrPngDataUrl(payload, { level: "M", caption: [money(order.total), order.transferContent, s.holder || s.name] });
     // Ảnh PNG thật (không phải SVG nội tuyến) để nhấn giữ -> "Lưu ảnh" hoạt động trên mọi trình duyệt, kể cả trong Zalo/Facebook.
-    qr = png ? `<img class="qr-img" src="${png}" alt="Mã QR thanh toán ${money(order.total)}" width="260" height="260" />` : qrSvg(payload, { level: "M" });
+    qr = png ? `<img class="qr-img" src="${png}" alt="Mã QR thanh toán ${money(order.total)}" width="260" />` : qrSvg(payload, { level: "M" });
   } catch (error) {
     qr = `<p class="error">Không tạo được mã QR (${esc(error.message)}). Vui lòng chuyển khoản thủ công theo thông tin bên dưới.</p>`;
   }

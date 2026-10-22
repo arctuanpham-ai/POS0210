@@ -1464,6 +1464,10 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
  fun onlineAction(o:vn.ecohome.pos0210.cloud.OnlineOrder,action:String,reason:String=""){
   viewModelScope.launch{
    val who=currentEmployee.value?.name.orEmpty()
+   if(action=="accept"){
+    val problems=vn.ecohome.pos0210.cloud.OnlineOrderRules.priceProblems(o,menu.value.associate{it.id to it.price},combos.value.associate{it.id to it.price})
+    if(problems.isNotEmpty()){onlineMessage.value="Đơn ${o.code} LỆCH GIÁ so với menu, không nhận được: ${problems.take(3).joinToString("; ")}. Hãy TỪ CHỐI đơn và báo khách đặt lại.";return@launch}
+   }
    val r=withContext(Dispatchers.IO){vn.ecohome.pos0210.cloud.OnlineOrderService.apply(getApplication(),o.id,action,who,reason)}
    if(r.isFailure){onlineMessage.value="Không cập nhật được đơn ${o.code}: ${r.exceptionOrNull()?.message}";return@launch}
    onlineMessage.value=""

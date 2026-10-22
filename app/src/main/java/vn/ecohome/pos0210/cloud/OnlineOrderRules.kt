@@ -82,6 +82,28 @@ object OnlineOrderRules {
     /** Đơn MỚI chưa từng báo. */
     fun unseenNew(orders: List<OnlineOrder>, seen: Set<String>) = orders.filter { it.status == NEW && it.id !in seen }
 
+    /**
+     * Đối chiếu đơn với menu/combo THẬT của quán. Đơn từ 4 dòng trở lên không được máy chủ kiểm giá từng dòng (giới hạn của Firestore Rules),
+     * nên POS kiểm trước khi cho NHẬN ĐƠN. menu: id món -> giá; combos: id combo (không có tiền tố "c_") -> giá. Trả danh sách lỗi (rỗng = khớp).
+     */
+    fun priceProblems(o: OnlineOrder, menu: Map<String, Long>, combos: Map<String, Long>): List<String> {
+        val out = mutableListOf<String>()
+        var sum = 0L
+        for (l in o.items) {
+            val real = if (l.id.startsWith("c_")) combos[l.id.removePrefix("c_")] else menu[l.id]
+            val label = l.name.trim().ifBlank { l.id.ifBlank { "?" } }
+            when {
+                l.id.isBlank() || l.qty < 1 || l.qty > 20 || l.price <= 0 -> out += "$label: dòng món không hợp lệ"
+                real == null -> out += "$label: không còn trong menu"
+                real != l.price -> out += "$label: khách gửi ${l.price}đ, menu hiện ${real}đ"
+            }
+            sum += l.price * l.qty.coerceAtLeast(0)
+        }
+        if (o.items.isEmpty()) out += "Đơn không có món"
+        if (o.total != sum + o.surcharge - o.discount) out += "Tổng tiền ${o.total}đ không khớp các dòng (${sum + o.surcharge - o.discount}đ)"
+        return out
+    }
+
     /** Câu đọc to qua loa. */
     fun announceText(fresh: List<OnlineOrder>): String =
         if (fresh.size == 1) "Có đơn online mới. ${modeLabel(fresh[0].mode)}, ${fresh[0].items.sumOf { it.qty }} món." else "Có ${fresh.size} đơn online mới."

@@ -86,4 +86,18 @@ class OnlineOrderPricingFieldsTest {
         val legacy = OnlineOrderRules.fromMap("Y", mapOf("code" to "Y", "status" to "paid", "total" to 1000L), { it as? Long })
         org.junit.Assert.assertEquals(0L, legacy.discount)
     }
+
+    @Test fun priceProblemsFlagsMismatchedLongOrders() {
+        fun line(id: String, price: Long, qty: Int = 1) = OnlineLine("Món $id", qty, "", price, id)
+        val items = listOf(line("a", 10000), line("b", 20000, 2), line("c_x", 30000), line("d", 5000))
+        val o = order("new").copy(items = items, total = 85000)
+        assertTrue(OnlineOrderRules.priceProblems(o, mapOf("a" to 10000L, "b" to 20000L, "d" to 5000L), mapOf("x" to 30000L)).isEmpty())
+        // khách giả giá món b, và tổng không khớp
+        val bad = o.copy(items = listOf(line("a", 10000), line("b", 1000, 2), line("c_x", 30000), line("d", 5000)))
+        val p = OnlineOrderRules.priceProblems(bad, mapOf("a" to 10000L, "b" to 20000L, "d" to 5000L), mapOf("x" to 30000L))
+        assertTrue(p.any { it.contains("menu hiện 20000") })
+        assertTrue(p.any { it.contains("Tổng tiền") })
+        // món không còn trong menu
+        assertTrue(OnlineOrderRules.priceProblems(o, mapOf("a" to 10000L), mapOf("x" to 30000L)).any { it.contains("không còn") })
+    }
 }

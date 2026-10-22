@@ -49,6 +49,11 @@ jobs:
           node web-order/ops/smoke-order.mjs 2>&1 | tee "$RUNNER_TEMP/smoke.log"; rc=${PIPESTATUS[0]}
           echo "::notice title=smoke::$(grep -E '^\[|TẤT CẢ|LỖI|Không có' "$RUNNER_TEMP/smoke.log" | cut -c1-230 | tr '\n' '|' | sed 's/%/ /g')"
           exit $rc
+      - name: Chẩn đoán luật đặt đơn (tạm thời)
+        continue-on-error: true
+        run: |
+          node web-order/ops/rules-debug.mjs 2>&1 | tee "$RUNNER_TEMP/dbg.log"
+          echo "::notice title=dbg::$(cut -c1-330 "$RUNNER_TEMP/dbg.log" | tr '\n' '|' | sed 's/%/ /g')"
       - name: Post setup log as commit comment
         if: always()
         continue-on-error: true

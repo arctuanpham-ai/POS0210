@@ -123,8 +123,8 @@ match /users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/online_limits/{key} {
 
 function orderBase(code) {
   let d = request.resource.data;
-  return d.keys().hasOnly(['code', 'createdAt', 'uid', 'name', 'phone', 'mode', 'address', 'table', 'note', 'items', 'total', 'discount', 'surcharge', 'status', 'rejectReason', 'transferContent', 'expiresAt'])
-    && d.keys().hasAll(['code', 'createdAt', 'uid', 'name', 'phone', 'mode', 'address', 'table', 'note', 'items', 'total', 'discount', 'surcharge', 'status', 'rejectReason', 'transferContent', 'expiresAt'])
+  return d.keys().hasAll(['code', 'createdAt', 'uid', 'name', 'phone', 'mode', 'address', 'table', 'note', 'items', 'total', 'discount', 'surcharge', 'status', 'rejectReason', 'transferContent', 'expiresAt'])
+    && d.size() == 17
     && code.matches('^[A-HJ-NP-Z2-9]{6}$')
     && d.code == code
     && d.uid == request.auth.uid
@@ -148,9 +148,10 @@ function orderBase(code) {
 }
 
 function orderSums(d) {
-  return d.discount >= 0 && d.discount * 100 <= linesSum(d.items) * 60
-    && d.surcharge >= 0 && d.surcharge * 100 <= linesSum(d.items) * 30
-    && d.total == linesSum(d.items) + d.surcharge - d.discount;
+  let sum = linesSum(d.items);
+  return d.discount >= 0 && d.discount * 100 <= sum * 60
+    && d.surcharge >= 0 && d.surcharge * 100 <= sum * 30
+    && d.total == sum + d.surcharge - d.discount;
 }
 
 function orderSumsLet(d) {
@@ -183,10 +184,8 @@ function linesValid(items) {
 }
 
 function lineValid(l) {
-  return l is map
-    && l.keys().hasOnly(['id', 'name', 'qty', 'note', 'price'])
-    && l.keys().hasAll(['id', 'name', 'qty', 'note', 'price'])
-    && l.id is string && l.id.size() >= 1 && l.id.size() <= 64 && l.id.matches('^[^/]+$')
+  return l.keys().hasAll(['id', 'name', 'qty', 'note', 'price']) && l.size() == 5
+    && l.id is string && l.id.matches('^[^/]{1,64}$')
     && l.name is string
     && l.note is string && l.note.size() <= 100
     && l.qty is int && l.qty >= 1 && l.qty <= 20
@@ -209,8 +208,8 @@ function menuOk(l) {
 
 // Combo: id dòng = "c_" + id combo, tra bảng combos; món thường tra bảng menu. Mỗi dòng đúng 1 lần get (&& / || có đoản mạch).
 function menuMatches(l) {
-  return (l.id.matches('^c_.+') && comboOk(l))
-    || (!l.id.matches('^c_.+') && menuOk(l));
+  let isCombo = l.id.matches('^c_.+');
+  return (isCombo && comboOk(l)) || (!isCombo && menuOk(l));
 }
 
 function lineAmount(items, i) {

@@ -15,12 +15,13 @@ test("rules: ngoặc cân bằng và có đủ khối cần thiết", () => {
 });
 
 test("rules: bộ trường đơn / dòng món / bộ đếm khớp với client", () => {
-  const [orderOnly, lineOnly, limitOnly] = keyArrays(code, "hasOnly");
+  // Đơn và dòng món: hasAll(đủ trường) + size() == số trường (tương đương hasOnly nhưng rẻ hơn về ngân sách biểu thức của Firestore).
+  const [limitOnly] = keyArrays(code, "hasOnly");
   const [orderAll, lineAll, limitAll] = keyArrays(code, "hasAll");
-  assert.deepEqual(orderOnly, [...ORDER_KEYS].sort());
   assert.deepEqual(orderAll, [...ORDER_KEYS].sort());
-  assert.deepEqual(lineOnly, [...LINE_KEYS].sort());
   assert.deepEqual(lineAll, [...LINE_KEYS].sort());
+  assert.ok(code.includes(`d.size() == ${ORDER_KEYS.length}`));
+  assert.ok(code.includes(`l.size() == ${LINE_KEYS.length}`));
   assert.deepEqual(limitOnly, [...LIMIT_KEYS].sort());
   assert.deepEqual(limitAll, [...LIMIT_KEYS].sort());
 });

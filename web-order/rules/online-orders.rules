@@ -177,17 +177,22 @@ function lineValid(l) {
 }
 
 // Đơn giá và tên món phải đúng menu thật; món đã tắt/xoá không đặt được.
-function menuMatches(l) {
-  // Combo: id dòng = "c_" + id combo, tra bảng combos; món thường tra bảng menu. Mỗi dòng đúng 1 lần get (&& / || có đoản mạch).
-  return (l.id.matches('^c_.+') && itemOk(get(comboRef(l.id.replace('c_', ''))).data, l))
-    || (!l.id.matches('^c_.+') && itemOk(get(menuRef(l.id)).data, l));
+// QUAN TRỌNG: tài liệu menu/combo được đọc đúng 1 lần bằng "let" trong mỗi hàm. Truyền thẳng get(...).data làm tham số hàm khiến
+// mỗi lần dùng m.xxx đọc lại tài liệu (4 lần/dòng) và đơn từ 2 dòng trở lên vượt giới hạn truy cập tài liệu của Firestore.
+function comboOk(l) {
+  let m = get(comboRef(l.id.replace('c_', ''))).data;
+  return m.price == l.price && m.name == l.name && m.get('active', true) != false && m.get('deleted', false) != true;
 }
 
-function itemOk(m, l) {
-  return m.price == l.price
-    && m.name == l.name
-    && m.get('active', true) != false
-    && m.get('deleted', false) != true;
+function menuOk(l) {
+  let m = get(menuRef(l.id)).data;
+  return m.price == l.price && m.name == l.name && m.get('active', true) != false && m.get('deleted', false) != true;
+}
+
+// Combo: id dòng = "c_" + id combo, tra bảng combos; món thường tra bảng menu. Mỗi dòng đúng 1 lần get (&& / || có đoản mạch).
+function menuMatches(l) {
+  return (l.id.matches('^c_.+') && comboOk(l))
+    || (!l.id.matches('^c_.+') && menuOk(l));
 }
 
 function lineAmount(items, i) {

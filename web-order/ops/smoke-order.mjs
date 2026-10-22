@@ -40,6 +40,8 @@ for (const m of (menu.documents || []).filter((d) => d !== plain && d.fields.act
     mk("combo rồi món", [combosL[0], plainsL[0]]);
     mk("3 món thường", [plainsL[0], plainsL[1], plainsL[2] || plainsL[1]]);
     mk("combo + 2 món", [combosL[0], plainsL[0], plainsL[1]]);
+    const seven = [...combosL.slice(0, 3), ...plainsL.slice(0, 4)];
+    if (seven.length === 7) mk("7 dòng (tối đa)", seven);
   }
 }
 let failed = 0;

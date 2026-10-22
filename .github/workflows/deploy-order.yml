@@ -39,6 +39,7 @@ jobs:
           entryPoint: web-order
         id: hosting
         continue-on-error: true
+        timeout-minutes: 3
       - name: Deploy Firebase Hosting bằng CLI (dự phòng, có log)
         if: steps.hosting.outcome == 'failure'
         working-directory: web-order

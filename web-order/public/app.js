@@ -22,6 +22,7 @@ import {
   setNote, toMillis, validateCheckout,
 } from "./order-core.js";
 import { vietQrPayload } from "./vietqr.js";
+import { BANK_APPS, bankDeeplink } from "./bank-links.js";
 import { STATS_COLLECTION, decide, keysFor, vnDayKey } from "./stats-core.js";
 import { qrSvg } from "./qr.js";
 
@@ -513,9 +514,19 @@ function paymentHtml(order) {
   } catch (error) {
     qr = `<p class="error">Không tạo được mã QR (${esc(error.message)}). Vui lòng chuyển khoản thủ công theo thông tin bên dưới.</p>`;
   }
+  const link = (app) => bankDeeplink(app.id, { account: s.account, bank: s.bank, amount: order.total, content: order.transferContent, holder: s.holder || s.name, returnUrl: `${location.origin}${location.pathname}` });
+  const btn = (app) => { const href = link(app); return href ? `<a class="bank-btn${app.autofill ? " auto" : ""}" href="${esc(href)}" target="_blank" rel="noopener">${esc(app.name)}</a>` : ""; };
+  const apps = BANK_APPS.some((a) => link(a))
+    ? `<div class="bank-apps"><b>Hoặc mở app ngân hàng để chuyển ngay (không cần lưu ảnh QR)</b>
+        <div class="bank-grid">${BANK_APPS.filter((a) => a.autofill).map(btn).join("")}</div>
+        <p class="muted small">Các app trên tự điền sẵn số tiền và nội dung, bạn chỉ cần xác nhận bằng vân tay/khuôn mặt hoặc mã PIN.</p>
+        <details><summary>App ngân hàng khác</summary><div class="bank-grid">${BANK_APPS.filter((a) => !a.autofill).map(btn).join("")}</div>
+        <p class="muted small">Các app này chỉ mở ứng dụng. Bạn dán số tiền và nội dung từ các nút Sao chép bên dưới (số tiền: ${copyButton(String(order.total), "Sao chép số tiền")}).</p></details></div>`
+    : "";
   return `<div class="pay-card">
     <div class="qr">${qr}</div>
     <p class="pay-amount">${money(order.total)}</p>
+    ${apps}
     <dl class="pay-info">
       <div><dt>Ngân hàng</dt><dd>${esc(s.bank)}</dd></div>
       <div><dt>Số tài khoản</dt><dd><b>${esc(s.account)}</b> ${copyButton(s.account, "Sao chép")}</dd></div>

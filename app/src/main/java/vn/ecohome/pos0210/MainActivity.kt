@@ -2023,6 +2023,12 @@ fun CloudSyncSettings(vm:PosViewModel){
             if(BuildConfig.DEV_OFFLINE){
                 Text("BẢN DEV · CHỈ ĐỌC TỪ CLOUD",fontWeight=FontWeight.Black,color=Color(0xFF9A4B3D))
                 Text("Đăng nhập tài khoản chủ quán để máy này tự kéo menu và dữ liệu mới nhất từ cloud mỗi 5 phút. Máy DEV không đẩy được bất cứ thứ gì lên cloud, nên không có nút đồng bộ lên, ghi lại, tạo hay khôi phục backup. Mọi dữ liệu tạo ra ở đây là TEST và tự xoá trong ngày.",fontSize=12.sp)
+                val pullCtx=androidx.compose.ui.platform.LocalContext.current
+                val pullScope=rememberCoroutineScope()
+                var pullStatus by remember{mutableStateOf("")}
+                var pulling by remember{mutableStateOf(false)}
+                Button({pulling=true;pullStatus="Đang kéo dữ liệu từ cloud…";pullScope.launch{val r=kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO){vn.ecohome.pos0210.cloud.FirebaseCloudSync.devPullNow(pullCtx.applicationContext)};pullStatus=if(r.isSuccess)"Đã kéo xong: menu, nhóm món, tài chính mới nhất từ cloud." else "Không kéo được: "+(r.exceptionOrNull()?.message?:"lỗi không rõ");pulling=false}},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null&&!pulling){Text("KÉO DỮ LIỆU TỪ CLOUD VỀ NGAY")}
+                if(pullStatus.isNotBlank())Text(pullStatus,fontSize=12.sp,fontWeight=FontWeight.Bold)
             }else{
             run{
                 val guardCtx=androidx.compose.ui.platform.LocalContext.current

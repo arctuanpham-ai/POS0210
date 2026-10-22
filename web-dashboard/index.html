@@ -277,6 +277,17 @@
           <button type="button" id="oo-toggle" class="secondary">Đang tải…</button>
           <span class="muted" id="oo-link-line"></span>
         </section>
+        <details class="fold" id="zalo-box">
+          <summary>Báo đơn qua Zalo (bot)</summary>
+          <p id="zalo-status" class="muted" role="status"></p>
+          <div class="filter-row">
+            <input id="zalo-token" type="password" placeholder="Dán token Zalo Bot" autocomplete="off" />
+            <input id="zalo-chat" type="text" placeholder="chat_id (không bắt buộc)" autocomplete="off" />
+            <button type="button" class="secondary" id="zalo-connect">Kết nối &amp; gửi thử</button>
+            <button type="button" class="secondary" id="zalo-off" hidden>Ngắt</button>
+          </div>
+          <p class="muted">Trước khi bấm: nhắn "hi" cho bot (hoặc nhắn trong nhóm có bot) để lấy mã cuộc trò chuyện. Token chỉ lưu trong trình duyệt này.</p>
+        </details>
         <p id="oo-note" class="muted" role="status"></p>
         <section id="oo-list" aria-live="polite"></section>
         <details class="fold" data-fold="oo-stats" id="oo-stats-fold">

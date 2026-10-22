@@ -22,6 +22,7 @@ import {
   deleteDoc as rawDeleteDoc,
   writeBatch as rawWriteBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+import { orderText as zaloOrderText, zaloClear, zaloConnect, zaloSend, zaloState } from "./zalo-web.js?v=20261021-07";
 import { buildProfile, profileHeadline } from "./customer-profile.js?v=20261021-07";
 import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261021-07";
 import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, freshenDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261021-07";
@@ -3923,7 +3924,12 @@ function startOnlineOrders() {
       oo.loaded = true;
       if (oo.seen === null) oo.seen = new Set(oo.orders.map((o) => o.id)); // đơn có sẵn lúc mở trang: không phát chuông
       const fresh = newOrderCodes(oo.orders, oo.seen);
-      if (fresh.length) { fresh.forEach((c) => oo.seen.add(c)); ooBeep(); }
+      if (fresh.length) {
+        fresh.forEach((c) => oo.seen.add(c));
+        ooBeep();
+        if (oo.zaloArmed) for (const o of oo.orders.filter((x) => fresh.includes(x.code || x.id) && x.name !== "KIEM THU TU DONG").slice(0, 5)) zaloSend(zaloOrderText(o, money));
+      }
+      oo.zaloArmed = true;
       renderOnline();
       sweepOverdue();
     },
@@ -4144,6 +4150,19 @@ function renderOnline() {
   host.innerHTML = bulk + section("CẦN XÁC NHẬN", g.needAction) + section("CHỜ KHÁCH THANH TOÁN", g.awaiting) + section("ĐANG LÀM / ĐANG GIAO", g.making) + section("ĐÃ XONG HÔM NAY", g.recent)
     || '<p class="muted empty-state">Chưa có đơn online nào. Đơn mới sẽ hiện ở đây và phát chuông (cần chạm vào trang một lần để trình duyệt cho phép âm thanh).</p>';
 }
+
+function renderZaloBox() {
+  const st = zaloState();
+  $("#zalo-status").textContent = st.ready ? "Zalo: đã kết nối trên trình duyệt này, có đơn mới bot sẽ nhắn." : "Zalo: chưa kết nối.";
+  $("#zalo-off").hidden = !st.ready;
+}
+$("#zalo-connect")?.addEventListener("click", async () => {
+  $("#zalo-status").textContent = "Đang kết nối…";
+  $("#zalo-status").textContent = await zaloConnect($("#zalo-token").value, $("#zalo-chat").value);
+  $("#zalo-token").value = ""; renderZaloBox();
+});
+$("#zalo-off")?.addEventListener("click", () => { zaloClear(); renderZaloBox(); });
+renderZaloBox();
 
 $("#oo-list").addEventListener("click", async (event) => {
   const histBtn = event.target.closest("[data-oo-hist]");

@@ -515,13 +515,13 @@ function paymentHtml(order) {
     qr = `<p class="error">Không tạo được mã QR (${esc(error.message)}). Vui lòng chuyển khoản thủ công theo thông tin bên dưới.</p>`;
   }
   const link = (app) => bankDeeplink(app.id, { account: s.account, bank: s.bank, amount: order.total, content: order.transferContent, holder: s.holder || s.name, returnUrl: `${location.origin}${location.pathname}` });
-  const btn = (app) => { const href = link(app); return href ? `<a class="bank-btn${app.autofill ? " auto" : ""}" href="${esc(href)}" target="_blank" rel="noopener">${esc(app.name)}</a>` : ""; };
+  const btn = (app) => { const href = link(app); return href ? `<a class="bank-btn${app.autofill ? " auto" : ""}" href="${esc(href)}" target="_blank" rel="noopener" data-bank-copy="${esc(order.transferContent)}">${esc(app.name)}</a>` : ""; };
   const apps = BANK_APPS.some((a) => link(a))
     ? `<div class="bank-apps"><b>Hoặc mở app ngân hàng để chuyển ngay (không cần lưu ảnh QR)</b>
         <div class="bank-grid">${BANK_APPS.filter((a) => a.autofill).map(btn).join("")}</div>
-        <p class="muted small">Các app trên tự điền sẵn số tiền và nội dung, bạn chỉ cần xác nhận bằng vân tay/khuôn mặt hoặc mã PIN.</p>
+        <p class="muted small">Bấm nút: app ngân hàng mở ra và <b>nội dung chuyển khoản được sao chép sẵn</b>. Một số app tự điền luôn số tiền (có thể phải đăng nhập trước). Nếu app không tự điền, vào Chuyển tiền, nhập số tài khoản và số tiền (nút Sao chép bên dưới), rồi dán nội dung.</p>
         <details><summary>App ngân hàng khác</summary><div class="bank-grid">${BANK_APPS.filter((a) => !a.autofill).map(btn).join("")}</div>
-        <p class="muted small">Các app này chỉ mở ứng dụng. Bạn dán số tiền và nội dung từ các nút Sao chép bên dưới (số tiền: ${copyButton(String(order.total), "Sao chép số tiền")}).</p></details></div>`
+        <p class="muted small">Các app này chỉ mở ứng dụng và sao chép sẵn nội dung. Số tiền: ${copyButton(String(order.total), "Sao chép số tiền")}, số tài khoản ở nút Sao chép bên dưới.</p></details></div>`
     : "";
   return `<div class="pay-card">
     <div class="qr">${qr}</div>
@@ -658,11 +658,17 @@ $("#order-form").addEventListener("submit", submitOrder);
 $("#menu-retry").addEventListener("click", () => loadMenu(true));
 
 $("#track-body").addEventListener("click", async (event) => {
+  const bank = event.target.closest("[data-bank-copy]");
+  if (bank) { // không chặn việc mở app: chỉ sao chép sẵn nội dung chuyển khoản để khách dán nếu app không tự điền
+    try { await navigator.clipboard.writeText(bank.dataset.bankCopy); } catch { /* bỏ qua: khách vẫn có nút Sao chép */ }
+    return;
+  }
   const copy = event.target.closest("[data-copy]");
   if (copy) {
+    const label = copy.textContent;
     try { await navigator.clipboard.writeText(copy.dataset.copy); copy.textContent = "Đã chép"; }
     catch { const area = document.createElement("textarea"); area.value = copy.dataset.copy; document.body.append(area); area.select(); try { document.execCommand("copy"); copy.textContent = "Đã chép"; } catch { copy.textContent = "Hãy chép tay"; } area.remove(); }
-    setTimeout(() => { copy.textContent = "Sao chép"; }, 1800);
+    setTimeout(() => { copy.textContent = label; }, 1800);
     return;
   }
   const sw = event.target.closest("[data-switch]");

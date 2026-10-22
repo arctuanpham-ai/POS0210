@@ -42,7 +42,9 @@ for (const m of (menu.documents || []).filter((d) => d !== plain && d.fields.act
     mk("combo + 2 món", [combosL[0], plainsL[0], plainsL[1]]);
     for (const k of [4, 5, 6]) { const part = [...combosL.slice(0, 2), ...plainsL.slice(0, 4)].slice(0, k); if (part.length === k) mk(`${k} dòng`, part); }
     const seven = [...combosL.slice(0, 3), ...plainsL.slice(0, 4)];
-    if (seven.length === 7) mk("7 dòng (tối đa)", seven);
+    if (seven.length === 7) mk("7 dòng", seven);
+    const many = [...combosL, ...plainsL].filter((x, i, a) => a.findIndex((y) => y.id === x.id) === i).slice(0, 12);
+    if (many.length >= 10) mk(`${many.length} dòng (nhánh đơn dài)`, many);
   }
 }
 let failed = 0;
@@ -66,32 +68,6 @@ for (const [i, c] of cases.entries()) {
   console.log(`[${c.label}] ${c.name} ${c.price}đ -> HTTP ${r.status} ${r.ok ? "ĐẶT ĐƯỢC" : text.slice(0, 300)}`);
   if (!r.ok) failed++;
   for (const p of [`online_orders/${code}`, `online_limits/${keyU}`, `online_limits/${keyP}`]) await fetch(`https://firestore.googleapis.com/v1/${root}/${p}`, { method: "DELETE", headers: { authorization: `Bearer ${admin}` } });
-}
-// TẠM THỜI: thăm dò từng biểu thức luật với dữ liệu thật để tìm lý do đơn nhiều dòng bị từ chối.
-{
-  const pl = cases.filter((x) => x.label !== "combo" && !x.multi).slice(0, 2);
-  if (pl.length === 2) {
-    const items = pl.map((x) => ({ id: x.id, name: x.name, qty: 1, note: "", price: x.price }));
-    const expect = items.reduce((a2, x) => a2 + x.price, 0);
-    // "core": toàn bộ điều kiện của đơn (trừ 2 getAfter bộ đếm) với 1, 2, 3, 7 dòng
-    const pool = cases.filter((x) => !x.multi && x.id).slice(0, 8);
-    for (const [probe, n] of [["core", 4], ["core", 5], ["core", 6], ["core", 7], ["baseLines", 5], ["baseLines", 6]]) {
-      const lines2 = pool.slice(0, n).map((x) => ({ id: x.id, name: x.name, qty: 1, note: "", price: x.price }));
-      const code = makeOrderCode();
-      const order = buildOrderDoc({ code, uid, value: { name: "KIEM THU", phone: "0900000777", mode: "pickup", address: "", table: "", note: "" }, lines: lines2 });
-      const { createdAt, ...rest } = order;
-      const name = `${root}/dbg/${probe}`;
-      const r = await fetch(`https://firestore.googleapis.com/v1/${db}:commit`, { method: "POST", headers: { authorization: `Bearer ${signIn.idToken}`, "content-type": "application/json" }, body: JSON.stringify({ writes: [{ update: { name, fields: fields(rest) }, updateTransforms: [{ fieldPath: "createdAt", setToServerValue: "REQUEST_TIME" }], currentDocument: { exists: false } }] }) });
-      console.log(`[dbg] ${probe} n=${n} -> HTTP ${r.status}`);
-      await fetch(`https://firestore.googleapis.com/v1/${name}`, { method: "DELETE", headers: { authorization: `Bearer ${admin}` } });
-    }
-    for (const id of ["sum", "valid1", "valid", "two", "dup12"]) {
-      const name = `${root}/dbg/${id}`;
-      const r = await fetch(`https://firestore.googleapis.com/v1/${db}:commit`, { method: "POST", headers: { authorization: `Bearer ${signIn.idToken}`, "content-type": "application/json" }, body: JSON.stringify({ writes: [{ update: { name, fields: fields({ items, expect }) }, currentDocument: { exists: false } }] }) });
-      console.log(`[dbg] ${id} -> HTTP ${r.status}`);
-      await fetch(`https://firestore.googleapis.com/v1/${name}`, { method: "DELETE", headers: { authorization: `Bearer ${admin}` } });
-    }
-  }
 }
 // Bộ đếm lượt truy cập: khách ẩn danh tăng đúng 1 (tạo rồi cập nhật) được; tăng 2 hoặc bộ đếm lạ thì bị chặn. Dọn tài liệu thử bằng quyền chủ quán.
 {

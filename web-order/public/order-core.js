@@ -18,7 +18,7 @@ export const FINAL_STATUSES = Object.freeze([STATUS.REJECTED, STATUS.EXPIRED, ST
 
 // Các hằng số này PHẢI khớp firestore rules (test/rules-contract.test.mjs kiểm tra).
 export const LIMITS = Object.freeze({
-  maxLines: 7,
+  maxLines: 30,
   maxQty: 20,
   maxLineNote: 100,
   maxNote: 200,

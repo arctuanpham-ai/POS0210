@@ -15,13 +15,14 @@ test("rules: ngoặc cân bằng và có đủ khối cần thiết", () => {
 });
 
 test("rules: bộ trường đơn / dòng món / bộ đếm khớp với client", () => {
-  // Đơn và dòng món: hasAll(đủ trường) + size() == số trường (tương đương hasOnly nhưng rẻ hơn về ngân sách biểu thức của Firestore).
+  // Đơn và dòng món: size() == số trường và mọi trường đều được đọc trong rules (rẻ hơn hasOnly/hasAll về ngân sách biểu thức của Firestore).
+  const core = code.split("function probeDup")[0];
+  assert.ok(core.includes(`d.size() == ${ORDER_KEYS.length}`));
+  assert.ok(core.includes(`l.size() == ${LINE_KEYS.length}`));
+  for (const k of ORDER_KEYS) assert.ok(new RegExp(`\\bd\\.${k}\\b`).test(core), `đơn: rules chưa đọc trường ${k}`);
+  for (const k of LINE_KEYS) assert.ok(new RegExp(`\\bl\\.${k}\\b`).test(core), `dòng: rules chưa đọc trường ${k}`);
   const [limitOnly] = keyArrays(code, "hasOnly");
-  const [orderAll, lineAll, limitAll] = keyArrays(code, "hasAll");
-  assert.deepEqual(orderAll, [...ORDER_KEYS].sort());
-  assert.deepEqual(lineAll, [...LINE_KEYS].sort());
-  assert.ok(code.includes(`d.size() == ${ORDER_KEYS.length}`));
-  assert.ok(code.includes(`l.size() == ${LINE_KEYS.length}`));
+  const [limitAll] = keyArrays(code, "hasAll");
   assert.deepEqual(limitOnly, [...LIMIT_KEYS].sort());
   assert.deepEqual(limitAll, [...LIMIT_KEYS].sort());
 });

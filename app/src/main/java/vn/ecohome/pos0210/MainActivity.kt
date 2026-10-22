@@ -2018,7 +2018,7 @@ fun CloudSyncSettings(vm:PosViewModel){
             OutlinedTextField(email,{email=it.trim()},Modifier.fillMaxWidth(),label={Text("Email Firebase")},singleLine=true)
             OutlinedTextField(password,{password=it},Modifier.fillMaxWidth(),label={Text("Mật khẩu")},visualTransformation=PasswordVisualTransformation(),singleLine=true)
             if(state?.syncedUid!=null&&sessionMissing)Text("Phiên đăng nhập Firebase đã hết. Dữ liệu bill/order trên máy vẫn giữ nguyên. Nhập lại mật khẩu của đúng tài khoản cũ để tiếp tục đồng bộ.",fontSize=12.sp,color=Color(0xFF9A4B3D),fontWeight=FontWeight.Bold)
-            if(state?.syncedUid==null||sessionMissing)Button({vm.firebaseSignIn(email,password);password=""},Modifier.fillMaxWidth(),enabled=email.isNotBlank()&&password.length>=6){Text(if(sessionMissing&&state?.syncedUid!=null)"ĐĂNG NHẬP LẠI · GIỮ NGUYÊN UID" else "ĐĂNG NHẬP & BẬT ĐỒNG BỘ")}
+            if(state?.syncedUid==null||sessionMissing)Button({vm.firebaseSignIn(email,password);password=""},Modifier.fillMaxWidth(),enabled=email.isNotBlank()&&password.length>=6){Text(if(BuildConfig.DEV_OFFLINE)"ĐĂNG NHẬP (CHỈ ĐỌC, KHÔNG ĐỒNG BỘ LÊN)" else if(sessionMissing&&state?.syncedUid!=null)"ĐĂNG NHẬP LẠI · GIỮ NGUYÊN UID" else "ĐĂNG NHẬP & BẬT ĐỒNG BỘ")}
             else OutlinedButton({vm.firebaseSignOut()},Modifier.fillMaxWidth()){Text("ĐĂNG XUẤT FIREBASE")}
             if(BuildConfig.DEV_OFFLINE){
                 Text("BẢN DEV · CHỈ ĐỌC TỪ CLOUD",fontWeight=FontWeight.Black,color=Color(0xFF9A4B3D))

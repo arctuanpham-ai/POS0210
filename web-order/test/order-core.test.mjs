@@ -176,3 +176,9 @@ test("khuyến mãi tự động như POS: giảm % trên món lẻ, combo giữ
   assert.equal(sur.surcharge, 6000); assert.equal(sur.discount, 6600); assert.equal(sur.total, 129000 + 6000 - 6600);
   assert.equal(pricingFor(lines, null, noon).total, 129000);
 });
+
+import { comboItemsFrom as _cif } from "../public/order-core.js";
+test("combo giữ nguyên tên gốc (kể cả khoảng trắng) để khớp luật máy chủ", () => {
+  const items = _cif([{ id: "x1", name: "Combo A ", price: 50000, active: true }]);
+  assert.equal(items[0].name, "Combo A ");
+});

@@ -236,10 +236,10 @@ export const COMBO_ID_PREFIX = "c_";
 export const COMBO_CATEGORY = Object.freeze({ id: "_combo", name: "Combo", sortOrder: -1, active: true });
 export const comboItemsFrom = (combos, hidden = new Set()) =>
   (combos || [])
-    .filter((c) => c && c.name && c.active !== false && c.deleted !== true && Number(c.price) > 0 && !hidden.has(`${COMBO_ID_PREFIX}${c.id}`))
+    .filter((c) => c && String(c.name || "").trim() && c.active !== false && c.deleted !== true && Number(c.price) > 0 && !hidden.has(`${COMBO_ID_PREFIX}${c.id}`))
     .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0))
     .map((c) => ({
-      id: `${COMBO_ID_PREFIX}${c.id}`, name: String(c.name).trim(), price: Math.round(Number(c.price)), categoryId: COMBO_CATEGORY.id, sortOrder: Number(c.sortOrder || 0), active: true,
+      id: `${COMBO_ID_PREFIX}${c.id}`, name: String(c.name), price: Math.round(Number(c.price)), categoryId: COMBO_CATEGORY.id, sortOrder: Number(c.sortOrder || 0), active: true,
       parts: (Array.isArray(c.items) ? c.items : []).filter((p) => p && p.menuItemId).map((p) => ({ id: String(p.menuItemId), name: String(p.name || "").trim() })).slice(0, 3),
       description: (Array.isArray(c.items) ? c.items : []).filter((p) => p && p.name).map((p) => `${Number(p.qty) > 1 ? `${Number(p.qty)}× ` : ""}${String(p.name).trim()}`).join(" + ") || String(c.description || ""),
     }));

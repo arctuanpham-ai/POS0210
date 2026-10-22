@@ -24,7 +24,10 @@ jobs:
           gcloud auth activate-service-account --key-file="$RUNNER_TEMP/sa.json"
       - name: Create hosting site (idempotent)
         id: site
-        run: node web-order/ops/setup-backend.mjs 2>&1 | tee "$RUNNER_TEMP/setup.log"; exit ${PIPESTATUS[0]}
+        run: |
+          node web-order/ops/setup-backend.mjs 2>&1 | tee "$RUNNER_TEMP/setup.log"; rc=${PIPESTATUS[0]}
+          echo "::notice title=setup::$(grep -iE 'rules|ruleset|Test|Anonymous|lỗi' "$RUNNER_TEMP/setup.log" | cut -c1-200 | tail -12 | tr '\n' '|' | sed 's/%/ /g')"
+          exit $rc
         continue-on-error: true
       - name: Deploy Firebase Hosting (order site)
         uses: FirebaseExtended/action-hosting-deploy@v0

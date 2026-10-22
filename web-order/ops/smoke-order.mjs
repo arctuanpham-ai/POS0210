@@ -74,14 +74,14 @@ for (const [i, c] of cases.entries()) {
     const expect = items.reduce((a2, x) => a2 + x.price, 0);
     // "core": toàn bộ điều kiện của đơn (trừ 2 getAfter bộ đếm) với 1, 2, 3, 7 dòng
     const pool = cases.filter((x) => !x.multi && x.id).slice(0, 8);
-    for (const n of [1, 2, 3, 7]) {
+    for (const [probe, n] of [["core", 2], ["core", 7], ["baseLines", 2], ["baseLines", 7], ["baseSums", 2], ["baseSums", 7], ["baseSumsLet", 2], ["baseSumsLet", 7], ["linesSums", 2], ["linesSums", 7], ["linesSumsLet", 2], ["linesSumsLet", 7]]) {
       const lines2 = pool.slice(0, n).map((x) => ({ id: x.id, name: x.name, qty: 1, note: "", price: x.price }));
       const code = makeOrderCode();
       const order = buildOrderDoc({ code, uid, value: { name: "KIEM THU", phone: "0900000777", mode: "pickup", address: "", table: "", note: "" }, lines: lines2 });
       const { createdAt, ...rest } = order;
-      const name = `${root}/dbg/core`;
+      const name = `${root}/dbg/${probe}`;
       const r = await fetch(`https://firestore.googleapis.com/v1/${db}:commit`, { method: "POST", headers: { authorization: `Bearer ${signIn.idToken}`, "content-type": "application/json" }, body: JSON.stringify({ writes: [{ update: { name, fields: fields(rest) }, updateTransforms: [{ fieldPath: "createdAt", setToServerValue: "REQUEST_TIME" }], currentDocument: { exists: false } }] }) });
-      console.log(`[dbg] core n=${n} (pool ${pool.length}) -> HTTP ${r.status}`);
+      console.log(`[dbg] ${probe} n=${n} -> HTTP ${r.status}`);
       await fetch(`https://firestore.googleapis.com/v1/${name}`, { method: "DELETE", headers: { authorization: `Bearer ${admin}` } });
     }
     for (const id of ["sum", "valid1", "valid", "two", "dup12"]) {

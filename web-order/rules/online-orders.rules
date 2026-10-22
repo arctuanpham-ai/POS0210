@@ -121,7 +121,7 @@ match /users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/online_limits/{key} {
   allow delete: if isShopOwner();
 }
 
-function validOrderCore(code) {
+function orderBase(code) {
   let d = request.resource.data;
   return d.keys().hasOnly(['code', 'createdAt', 'uid', 'name', 'phone', 'mode', 'address', 'table', 'note', 'items', 'total', 'discount', 'surcharge', 'status', 'rejectReason', 'transferContent', 'expiresAt'])
     && d.keys().hasAll(['code', 'createdAt', 'uid', 'name', 'phone', 'mode', 'address', 'table', 'note', 'items', 'total', 'discount', 'surcharge', 'status', 'rejectReason', 'transferContent', 'expiresAt'])
@@ -144,10 +144,24 @@ function validOrderCore(code) {
     && d.note is string && d.note.size() <= 200
     && d.items is list && d.items.size() >= 1 && d.items.size() <= 7
     && d.total is int && d.total > 0 && d.total <= 5000000
-    && linesValid(d.items)
-    && d.discount is int && d.discount >= 0 && d.discount * 100 <= linesSum(d.items) * 60
-    && d.surcharge is int && d.surcharge >= 0 && d.surcharge * 100 <= linesSum(d.items) * 30
+    && d.discount is int && d.surcharge is int;
+}
+
+function orderSums(d) {
+  return d.discount >= 0 && d.discount * 100 <= linesSum(d.items) * 60
+    && d.surcharge >= 0 && d.surcharge * 100 <= linesSum(d.items) * 30
     && d.total == linesSum(d.items) + d.surcharge - d.discount;
+}
+
+function orderSumsLet(d) {
+  let sum = linesSum(d.items);
+  return d.discount >= 0 && d.discount * 100 <= sum * 60
+    && d.surcharge >= 0 && d.surcharge * 100 <= sum * 30
+    && d.total == sum + d.surcharge - d.discount;
+}
+
+function validOrderCore(code) {
+  return orderBase(code) && linesValid(request.resource.data.items) && orderSums(request.resource.data);
 }
 
 function validNewOrder(code) {
@@ -273,5 +287,10 @@ match /users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/dbg/{id} {
     || (id == 'two' && get(menuRef(request.resource.data.items[0].id)).data.price == request.resource.data.items[0].price && get(menuRef(request.resource.data.items[1].id)).data.price == request.resource.data.items[1].price)
     || (id == 'valid1' && linesValid([request.resource.data.items[0]]))
     || (id == 'core' && validOrderCore(request.resource.data.code))
+    || (id == 'baseLines' && orderBase(request.resource.data.code) && linesValid(request.resource.data.items))
+    || (id == 'baseSums' && orderBase(request.resource.data.code) && orderSums(request.resource.data))
+    || (id == 'baseSumsLet' && orderBase(request.resource.data.code) && orderSumsLet(request.resource.data))
+    || (id == 'linesSums' && linesValid(request.resource.data.items) && orderSums(request.resource.data))
+    || (id == 'linesSumsLet' && linesValid(request.resource.data.items) && orderSumsLet(request.resource.data))
   );
 }

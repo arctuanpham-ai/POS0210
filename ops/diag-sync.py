@@ -1,22 +1,31 @@
-# Chỉ ĐỌC: tìm các tài liệu bị đẩy lên hàng loạt trong vài giờ qua (theo createTime) ở từng collection đồng bộ.
-import json, sys, subprocess, collections, urllib.request, urllib.parse
+# Chỉ ĐỌC: chi tiết các tài liệu tạo/sửa trong đợt đồng bộ nhầm (từ 14:00 UTC ngày 22/10).
+import json, subprocess, urllib.request
 tok = subprocess.check_output(["gcloud", "auth", "print-access-token"]).decode().strip()
 B = "https://firestore.googleapis.com/v1/projects/pos0210-17ce4/databases/(default)/documents/users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210"
 def get(url):
-    r = urllib.request.Request(url, headers={"Authorization": "Bearer " + tok})
-    return json.load(urllib.request.urlopen(r))
+    return json.load(urllib.request.urlopen(urllib.request.Request(url, headers={"Authorization": "Bearer " + tok})))
 def docs(col):
     out, page = [], ""
     while True:
-        d = get(f"{B}/{col}?pageSize=300&mask.fieldPaths=id" + (f"&pageToken={page}" if page else ""))
+        d = get(f"{B}/{col}?pageSize=300" + (f"&pageToken={page}" if page else ""))
         out += d.get("documents", [])
         page = d.get("nextPageToken", "")
         if not page: return out
-for col in ["bills","payments","sessions","orderBatches","orderItems","refunds","shifts","days","tableStatus","expenseReceipts","purchases","suppliers","menu","menuCategories","combos","areas"]:
-    try: ds = docs(col)
-    except Exception as e: print(col, "ERROR", e); continue
-    c = collections.Counter(d["createTime"][:16] for d in ds)  # theo phút
-    hours = collections.Counter(d["createTime"][:13] for d in ds)
-    print(f"== {col}: {len(ds)} tài liệu; tạo theo giờ UTC (5 giờ gần nhất):", sorted(hours.items())[-5:])
-    big = [(k, v) for k, v in sorted(c.items()) if v >= 15]
-    print("   phút có >=15 tài liệu được tạo:", big[-8:])
+def v(f):
+    for k in ("stringValue", "integerValue", "doubleValue", "booleanValue", "timestampValue"):
+        if k in f: return f[k]
+    return "…"
+CUT = "2026-10-22T14:00"
+for col in ["bills", "payments", "shifts", "days", "sessions", "refunds", "expenseReceipts", "purchases", "menu", "combos"]:
+    ds = docs(col)
+    created = [d for d in ds if d["createTime"] >= CUT]
+    updated_old = [d for d in ds if d["updateTime"] >= CUT and d["createTime"] < CUT]
+    print(f"== {col}: tạo mới sau {CUT}: {len(created)} | tạo trước nhưng bị GHI ĐÈ sau đó: {len(updated_old)}")
+    for tag, lst in (("MỚI", created[:6]), ("ĐÈ", updated_old[:6])):
+        for d in lst:
+            f = d.get("fields", {})
+            keys = ["billNo", "total", "status", "closedAt", "dataScope", "method", "amount", "date", "staffName", "name", "price"]
+            print("  ", tag, d["name"].split("/")[-1][:12], d["createTime"][11:19], d["updateTime"][11:19], {k: v(f[k]) for k in keys if k in f})
+for path in ["dashboard/current", "config/safe"]:
+    d = get(f"{B}/{path}")
+    print("==", path, "update", d.get("updateTime"), "create", d.get("createTime"))

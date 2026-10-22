@@ -2,7 +2,7 @@
 // Chạy trong GitHub Actions sau khi gcloud đã đăng nhập (dùng token quản trị chỉ để XOÁ các tài liệu thử vừa tạo).
 import { execSync } from "node:child_process";
 import { firebaseConfig, STORE_OWNER_UID, STORE_ID } from "../public/config.js";
-import { buildOrderDoc, makeOrderCode, limitKeyForUid, limitKeyForPhone } from "../public/order-core.js";
+import { buildOrderDoc, normalizePhone, makeOrderCode, limitKeyForUid, limitKeyForPhone } from "../public/order-core.js";
 
 const project = firebaseConfig.projectId;
 const db = `projects/${project}/databases/(default)/documents`;
@@ -29,14 +29,20 @@ if (plain) cases.push({ label: "món thường", id: plain.name.split("/").pop()
 for (const c of (combos.documents || []).filter((d) => d.fields.active?.booleanValue !== false && d.fields.name?.stringValue && priceOf(d) > 0).slice(0, 8)) cases.push({ label: "combo", id: `c_${c.name.split("/").pop()}`, name: c.fields.name.stringValue, price: priceOf(c) });
 for (const m of (menu.documents || []).filter((d) => d !== plain && d.fields.active?.booleanValue !== false && d.fields.name?.stringValue && priceOf(d) > 0).slice(0, 5)) cases.push({ label: "món", id: m.name.split("/").pop(), name: m.fields.name.stringValue, price: priceOf(m) });
 
+// Đơn giống khách thật: giao tận nơi, SĐT dạng +84, ghi chú, nhiều dòng (combo + món) số lượng >1, thử cả có khuyến mãi lẫn không.
+{
+  const c0 = cases.find((x) => x.label === "combo"), m0 = cases.find((x) => x.label !== "combo");
+  if (c0 && m0) cases.push({ label: "giao tận nơi nhiều dòng", multi: [{ ...c0, qty: 2 }, { ...m0, qty: 3 }], mode: "delivery", address: "28 Hai Bà Trưng, Thành Phố Hải Phòng, P. Lê Chân", note: "Giao tầm 11h", rawPhone: "+84900000999" });
+}
 let failed = 0;
 for (const [i, c] of cases.entries()) {
   const phone = `0900000${String(i).padStart(3, "0")}`;
   const code = makeOrderCode();
-  const lines = [{ id: c.id, name: c.name, qty: 1, note: "", price: c.price }];
-  const order = buildOrderDoc({ code, uid, value: { name: "KIEM THU TU DONG", phone, mode: "pickup", address: "", table: "", note: "" }, lines });
+  const lines = (c.multi || [c]).map((x) => ({ id: x.id, name: x.name, qty: x.qty || 1, note: "", price: x.price }));
+  const phoneVal = c.rawPhone ? normalizePhone(c.rawPhone) : phone;
+  const order = buildOrderDoc({ code, uid, value: { name: "KIEM THU TU DONG", phone: phoneVal, mode: c.mode || "pickup", address: c.address || "", table: "", note: c.note || "" }, lines });
   const { createdAt, ...rest } = order;
-  const keyU = limitKeyForUid(uid), keyP = limitKeyForPhone(phone);
+  const keyU = limitKeyForUid(uid), keyP = limitKeyForPhone(phoneVal);
   const body = {
     writes: [
       { update: { name: `${root}/online_orders/${code}`, fields: fields(rest) }, updateTransforms: [{ fieldPath: "createdAt", setToServerValue: "REQUEST_TIME" }], currentDocument: { exists: false } },

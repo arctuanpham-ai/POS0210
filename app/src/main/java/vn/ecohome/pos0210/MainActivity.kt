@@ -2020,6 +2020,18 @@ fun CloudSyncSettings(vm:PosViewModel){
             if(state?.syncedUid!=null&&sessionMissing)Text("Phiên đăng nhập Firebase đã hết. Dữ liệu bill/order trên máy vẫn giữ nguyên. Nhập lại mật khẩu của đúng tài khoản cũ để tiếp tục đồng bộ.",fontSize=12.sp,color=Color(0xFF9A4B3D),fontWeight=FontWeight.Bold)
             if(state?.syncedUid==null||sessionMissing)Button({vm.firebaseSignIn(email,password);password=""},Modifier.fillMaxWidth(),enabled=email.isNotBlank()&&password.length>=6){Text(if(sessionMissing&&state?.syncedUid!=null)"ĐĂNG NHẬP LẠI · GIỮ NGUYÊN UID" else "ĐĂNG NHẬP & BẬT ĐỒNG BỘ")}
             else OutlinedButton({vm.firebaseSignOut()},Modifier.fillMaxWidth()){Text("ĐĂNG XUẤT FIREBASE")}
+            run{
+                val guardCtx=androidx.compose.ui.platform.LocalContext.current
+                var blockPull by remember{mutableStateOf(vn.ecohome.pos0210.cloud.CloudPullGuard.blocked(guardCtx))}
+                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+                    Text("CHẶN kéo dữ liệu từ cloud về máy này (menu, phiếu chi web, tài chính). Bill/order vốn không bao giờ bị kéo về.",fontSize=12.sp,modifier=Modifier.weight(1f))
+                    Switch(blockPull,{blockPull=it;vn.ecohome.pos0210.cloud.CloudPullGuard.setBlocked(guardCtx,it)})
+                }
+                var confirmReupload by remember{mutableStateOf(false)}
+                OutlinedButton({confirmReupload=true},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null){Text("GHI LẠI TOÀN BỘ DỮ LIỆU MÁY NÀY LÊN CLOUD (CHỈ MÁY GỐC)")}
+                if(confirmReupload)AlertDialog(onDismissRequest={confirmReupload=false},title={Text("Chỉ làm trên máy POS thật")},text={Text("Máy này sẽ ghi đè lại mọi bill, ca làm, ngày chốt của nó lên cloud. TUYỆT ĐỐI không làm trên máy dev/máy thử.")},
+                    confirmButton={Button({confirmReupload=false;vn.ecohome.pos0210.cloud.CloudPullGuard.forgetAcks(guardCtx);vm.syncFirebase()}){Text("ĐÂY LÀ MÁY THẬT, GHI LẠI")}},dismissButton={TextButton({confirmReupload=false}){Text("HUỶ")}})
+            }
             Button({vm.syncFirebase()},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null&&!sessionMissing&&!realtimeBusy){Text(if(realtimeBusy)"TÁC VỤ CLOUD ĐANG CHẠY…" else "ĐỒNG BỘ REALTIME NGAY")}
             Button({vm.syncFullMenuToWeb()},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null){Text("ĐỒNG BỘ TOÀN BỘ MENU + ẢNH LÊN WEB")}
             Text("Làm một lần trên máy gốc: đẩy lại mọi nhóm món, món, ảnh và ảnh nhỏ cho web. Không sửa menu trên máy.",fontSize=11.sp)

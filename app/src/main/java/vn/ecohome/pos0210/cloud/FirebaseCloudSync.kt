@@ -155,9 +155,12 @@ object FirebaseCloudSync {
         // Otherwise a remote snapshot can overwrite an offline edit before upload.
         pushPendingCatalog(root,dao)
         pushPendingExpenseReceipts(root,dao)
-        pullCloudMenu(root,dao)
-        stage("PULL_WEB_EXPENSES"){pullWebExpenseReceipts(root,db,dao)}
-        pullCloudFinance(root,dao)
+        if(CloudPullGuard.blocked(context))CloudExecution.trace("PULL_BLOCKED_BY_GUARD")
+        else{
+            pullCloudMenu(root,dao)
+            stage("PULL_WEB_EXPENSES"){pullWebExpenseReceipts(root,db,dao)}
+            pullCloudFinance(root,dao)
+        }
         writeFinanceMirror(fs,root,dao)
         val tables=dao.cloudTablesSnapshot();val sessions=dao.cloudSessionsSnapshot();val bills=dao.cloudBillsSnapshot();val payments=dao.cloudPaymentsSnapshot();val paymentMirror=dao.cloudPaymentMirrorSnapshot()
         val batches=dao.cloudOrderBatchesSnapshot();val orderItems=dao.cloudOrderItemsSnapshot()

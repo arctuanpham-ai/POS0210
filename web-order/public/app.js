@@ -23,7 +23,7 @@ import {
 } from "./order-core.js";
 import { vietQrPayload } from "./vietqr.js";
 import { STATS_COLLECTION, decide, keysFor, vnDayKey } from "./stats-core.js";
-import { qrSvg } from "./qr.js";
+import { qrSvg, qrPngDataUrl } from "./qr.js";
 
 const $ = (selector) => document.querySelector(selector);
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -509,7 +509,10 @@ function paymentHtml(order) {
   }
   let qr = "";
   try {
-    qr = qrSvg(vietQrPayload({ bank: s.bank, account: s.account, holder: s.holder || s.name, amount: order.total, info: order.transferContent }), { level: "M" });
+    const payload = vietQrPayload({ bank: s.bank, account: s.account, holder: s.holder || s.name, amount: order.total, info: order.transferContent });
+    const png = qrPngDataUrl(payload, { level: "M" });
+    // Ảnh PNG thật (không phải SVG nội tuyến) để nhấn giữ -> "Lưu ảnh" hoạt động trên mọi trình duyệt, kể cả trong Zalo/Facebook.
+    qr = png ? `<img class="qr-img" src="${png}" alt="Mã QR thanh toán ${money(order.total)}" width="260" height="260" />` : qrSvg(payload, { level: "M" });
   } catch (error) {
     qr = `<p class="error">Không tạo được mã QR (${esc(error.message)}). Vui lòng chuyển khoản thủ công theo thông tin bên dưới.</p>`;
   }
@@ -517,7 +520,7 @@ function paymentHtml(order) {
     <div class="qr">${qr}</div>
     <p class="pay-amount">${money(order.total)}</p>
     <button type="button" class="secondary save-qr" data-save-qr>Lưu ảnh QR vào máy</button>
-    <p class="muted small">Mở app ngân hàng, chọn Quét QR rồi chọn ảnh vừa lưu trong thư viện.</p>
+    <p class="muted small">Hoặc <b>nhấn giữ vào mã QR</b> rồi chọn "Lưu ảnh". Sau đó mở app ngân hàng, chọn Quét QR và chọn ảnh trong thư viện.</p>
     <dl class="pay-info">
       <div><dt>Ngân hàng</dt><dd>${esc(s.bank)}</dd></div>
       <div><dt>Số tài khoản</dt><dd><b>${esc(s.account)}</b> ${copyButton(s.account, "Sao chép")}</dd></div>
@@ -528,29 +531,19 @@ function paymentHtml(order) {
   </div>`;
 }
 
-/** Lưu mã QR thanh toán thành ảnh PNG: ưu tiên bảng chia sẻ của điện thoại (có "Lưu ảnh"), không có thì tải về. */
+/** Lưu mã QR: bảng chia sẻ của điện thoại (có "Lưu ảnh") nếu có, không thì tải PNG. Mọi bước đồng bộ để còn trong thao tác bấm của khách. */
 async function saveQrImage(button) {
-  const svg = document.querySelector("#track-body .qr svg");
-  if (!svg) return;
+  const img = document.querySelector("#track-body .qr-img");
+  if (!img?.src.startsWith("data:image/png")) { button.textContent = "Hãy nhấn giữ vào mã QR để lưu ảnh"; setTimeout(() => { button.textContent = "Lưu ảnh QR vào máy"; }, 3000); return; }
   const label = button.textContent;
   try {
-    const xml = new XMLSerializer().serializeToString(svg);
-    const img = new Image();
-    await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(xml)}`; });
-    const size = 1000, pad = 60;
-    const canvas = document.createElement("canvas");
-    canvas.width = canvas.height = size;
-    const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, size, size);
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(img, pad, pad, size - pad * 2, size - pad * 2);
-    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
-    const file = new File([blob], `QR-${state.code || "thanh-toan"}.png`, { type: "image/png" });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file] }); }
-    else { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file.name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
+    const bytes = Uint8Array.from(atob(img.src.split(",")[1]), (ch) => ch.charCodeAt(0));
+    const file = new File([bytes], `QR-${state.code || "thanh-toan"}.png`, { type: "image/png" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) await navigator.share({ files: [file] });
+    else { const a = document.createElement("a"); a.href = img.src; a.download = file.name; document.body.append(a); a.click(); a.remove(); }
     button.textContent = "Đã lưu ảnh QR";
   } catch (error) {
-    if (error?.name !== "AbortError") button.textContent = "Không lưu được, hãy chụp màn hình mã QR";
+    if (error?.name !== "AbortError") button.textContent = "Chưa lưu được: hãy nhấn giữ vào mã QR";
   }
   setTimeout(() => { button.textContent = label; }, 2500);
 }

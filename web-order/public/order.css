@@ -251,3 +251,4 @@ label.radio input { width: 20px; height: 20px; margin: 0; }
 .promo-minus { color: #2f7d32; font-weight: 700; }
 
 .save-qr { width: 100%; }
+.qr-img { width: min(260px, 70vw); height: auto; image-rendering: pixelated; border-radius: 8px; -webkit-touch-callout: default; user-select: auto; }

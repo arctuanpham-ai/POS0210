@@ -1283,3 +1283,18 @@ export function qrSvg(text, { level = "M", margin = 4, dark = "#000", light = "#
   m.forEach((row, r) => { let c = 0; while (c < row.length) { if (!row[c]) { c += 1; continue; } let e = c; while (e < row.length && row[e]) e += 1; path += `M${c + margin} ${r + margin}h${e - c}v1h-${e - c}z`; c = e; } });
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges" role="img"><rect width="${size}" height="${size}" fill="${light}"/><path d="${path}" fill="${dark}"/></svg>`;
 }
+
+/** Mã QR dạng ảnh PNG (data URL), tạo ĐỒNG BỘ bằng canvas: dùng làm thẻ <img> để khách nhấn giữ -> Lưu ảnh, và để chia sẻ/tải ngay khi bấm nút. "" nếu không có canvas. */
+export function qrPngDataUrl(text, { level = "M", margin = 4, scale = 12 } = {}) {
+  if (typeof document === "undefined") return "";
+  const m = qrMatrix(text, level);
+  const n = m.length + margin * 2;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = n * scale;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return "";
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#000";
+  m.forEach((row, r) => row.forEach((on, c) => { if (on) ctx.fillRect((c + margin) * scale, (r + margin) * scale, scale, scale); }));
+  return canvas.toDataURL("image/png");
+}

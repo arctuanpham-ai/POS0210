@@ -34,6 +34,14 @@ jobs:
           channelId: live
           projectId: pos0210-17ce4
           entryPoint: web-order
+        id: hosting
+        continue-on-error: true
+      - name: Deploy Firebase Hosting bằng CLI (dự phòng, có log)
+        if: steps.hosting.outcome == 'failure'
+        working-directory: web-order
+        run: |
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          npx -y firebase-tools@latest deploy --only hosting --project pos0210-17ce4 --non-interactive 2>&1 | tee "$RUNNER_TEMP/hosting.log"; exit ${PIPESTATUS[0]}
       - name: Smoke test đặt hàng thật (món thường + combo, tự dọn)
         id: smoke
         continue-on-error: true
@@ -42,7 +50,7 @@ jobs:
         if: always()
         env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
         run: |
-          { echo '```'; head -c 50000 "$RUNNER_TEMP/setup.log" 2>/dev/null || echo "(không có log)"; echo "--- smoke ---"; cat "$RUNNER_TEMP/smoke.log" 2>/dev/null; echo '```'; } > "$RUNNER_TEMP/c.md"
+          { echo '```'; head -c 50000 "$RUNNER_TEMP/setup.log" 2>/dev/null || echo "(không có log)"; echo "--- hosting ---"; tail -c 6000 "$RUNNER_TEMP/hosting.log" 2>/dev/null; echo "--- smoke ---"; cat "$RUNNER_TEMP/smoke.log" 2>/dev/null; echo '```'; } > "$RUNNER_TEMP/c.md"
           gh api repos/${{ github.repository }}/commits/${{ github.sha }}/comments -F body=@"$RUNNER_TEMP/c.md" >/dev/null || true
       - name: Fail if backend setup failed
         if: steps.site.outcome == 'failure'

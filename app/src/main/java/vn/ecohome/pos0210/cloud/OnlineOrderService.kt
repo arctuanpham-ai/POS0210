@@ -208,4 +208,33 @@ object OnlineOrderService {
             }.await()
         } finally { busy.remove(orderId) }
     }
+
+    // ---- Hồ sơ khách theo số điện thoại: lịch sử mua + ghi chú sở thích (users/{uid}/stores/0210/customerNotes/{sđt}) ----
+    private val profileCache = HashMap<String, Pair<Long, CustomerProfile>>()
+    private fun storeRoot(app: Application): DocumentReference? {
+        val uid = attachedUid ?: FirebaseCloudSync.currentUid(app) ?: return null
+        val fs = FirebaseFirestore.getInstance(FirebaseCloudSync.firebaseApp(app, FirebaseCloudSync.config(app)))
+        return fs.collection("users").document(uid).collection("stores").document("0210")
+    }
+    /** Đọc đơn cũ (chỉ lọc theo số điện thoại, không cần chỉ mục) + ghi chú. Cache 60 giây mỗi số để thẻ đơn không đọc lại liên tục. */
+    suspend fun customerProfile(app: Application, phone: String, excludeCode: String, force: Boolean = false): Result<CustomerProfile> = runCatching {
+        val key = "$phone|$excludeCode"
+        val cached = profileCache[key]
+        if (!force && cached != null && System.currentTimeMillis() - cached.first < 60_000L) return@runCatching cached.second
+        val root = storeRoot(app) ?: error("Chưa đăng nhập Firebase")
+        val ordersSnap = root.collection("online_orders").whereEqualTo("phone", phone).limit(100).get().await()
+        val orders = ordersSnap.documents.mapNotNull { d -> d.data?.let { OnlineOrderRules.fromMap(d.id, it, ::ms) } }
+        val noteDoc = root.collection("customerNotes").document(phone).get().await()
+        val note = noteDoc.data?.let { CustomerNote(it["note"]?.toString().orEmpty(), ms(it["updatedAt"]) ?: 0L, it["updatedBy"]?.toString().orEmpty()) } ?: CustomerNote()
+        CustomerProfiles.build(phone, orders, note, excludeCode).also { profileCache[key] = System.currentTimeMillis() to it }
+    }
+    /** Lưu ghi chú sở thích của khách (rỗng = xoá ghi chú). */
+    suspend fun saveCustomerNote(app: Application, phone: String, name: String, note: String, who: String): Result<Unit> = runCatching {
+        val root = storeRoot(app) ?: error("Chưa đăng nhập Firebase")
+        val ref = root.collection("customerNotes").document(phone)
+        val text = note.trim().take(500)
+        if (text.isEmpty()) ref.delete().await()
+        else ref.set(mapOf("phone" to phone, "name" to name.take(50), "note" to text, "updatedAt" to Timestamp(Date()), "updatedBy" to who)).await()
+        profileCache.clear()
+    }
 }

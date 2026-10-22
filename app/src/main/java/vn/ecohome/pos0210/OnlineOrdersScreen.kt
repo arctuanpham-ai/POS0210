@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -18,6 +19,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import vn.ecohome.pos0210.cloud.CustomerNote
+import vn.ecohome.pos0210.cloud.CustomerProfile
 import vn.ecohome.pos0210.cloud.OnlineOrder
 import vn.ecohome.pos0210.cloud.OnlineOrderRules as R
 import vn.ecohome.pos0210.cloud.OnlineOrderService
@@ -123,6 +126,7 @@ private fun OnlineOrderCard(vm: PosViewModel, o: OnlineOrder, now: Long, onRejec
                 Text(vnd(o.total), fontSize = 22.sp, fontWeight = FontWeight.Black)
             }
             Text("${o.name} · ${o.phone}", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
+            if (o.status in R.ACTIVE_STATUSES) CustomerPanel(vm, o)
             Text(R.modeLabel(o.mode) + when (o.mode) { "delivery" -> ": ${o.address}"; "dinein" -> " · bàn ${o.table}"; else -> "" }, fontSize = 13.sp)
             HorizontalDivider(Modifier.padding(vertical = 6.dp))
             o.items.forEach { l ->
@@ -163,4 +167,65 @@ private fun OnlineOrderCard(vm: PosViewModel, o: OnlineOrder, now: Long, onRejec
         confirmButton = { Button(onClick = { confirmPaid = false; vm.onlineAction(o, "paid") }) { Text("ĐÃ NHẬN TIỀN") } },
         dismissButton = { TextButton(onClick = { confirmPaid = false }) { Text("CHƯA") } },
     )
+}
+
+/** Hồ sơ khách ngay trên thẻ đơn: số lần mua, tổng chi, món hay gọi, ghi chú sở thích; bấm để xem lịch sử các lần mua. */
+@Composable
+private fun CustomerPanel(vm: PosViewModel, o: OnlineOrder) {
+    val context = LocalContext.current
+    var profile by remember(o.phone, o.code) { mutableStateOf<CustomerProfile?>(null) }
+    var failed by remember(o.phone, o.code) { mutableStateOf(false) }
+    var open by remember(o.phone, o.code) { mutableStateOf(false) }
+    var editing by remember { mutableStateOf(false) }
+    var reload by remember { mutableIntStateOf(0) }
+    LaunchedEffect(o.phone, o.code, reload) {
+        val r = OnlineOrderService.customerProfile(context.applicationContext as android.app.Application, o.phone, o.code, force = reload > 0)
+        profile = r.getOrNull(); failed = r.isFailure
+    }
+    val p = profile
+    val day = remember { SimpleDateFormat("dd/MM/yy HH:mm", Locale.getDefault()) }
+    Column(Modifier.fillMaxWidth().padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        when {
+            p != null -> {
+                Text(p.headline() + (p.lastAt?.let { " · gần nhất ${SimpleDateFormat("dd/MM", Locale.getDefault()).format(Date(it))}" } ?: ""), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (p.isRepeat) Color(0xFF41633A) else Color(0xFF6E432D))
+                if (p.favorites.isNotEmpty()) Text("Hay gọi: " + p.favorites.joinToString(", ") { "${it.first} (${it.second})" }, fontSize = 12.sp)
+                if (p.note.note.isNotBlank()) Surface(color = Color(0xFFFFF3D6), shape = RoundedCornerShape(8.dp)) {
+                    Text("⭐ Sở thích/ghi chú khách: ${p.note.note}", Modifier.padding(8.dp), fontSize = 14.sp, fontWeight = FontWeight.Black, color = Color(0xFF7A4B00))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (p.history.isNotEmpty()) TextButton(onClick = { open = !open }, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)) { Text(if (open) "ẨN LỊCH SỬ" else "XEM LỊCH SỬ (${p.orderCount})", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                    TextButton(onClick = { editing = true }, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)) { Text(if (p.note.note.isBlank()) "+ GHI CHÚ SỞ THÍCH" else "SỬA GHI CHÚ", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                }
+                if (open) p.history.forEach { h ->
+                    Text("${day.format(Date(h.at))} · ${vnd(h.total)} · ${R.modeLabel(h.mode)}", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(h.items.joinToString(", ") { "${it.qty}× ${it.name}" + if (it.note.isNotBlank()) " (${it.note})" else "" }, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp))
+                }
+            }
+            failed -> Text("Chưa đọc được lịch sử khách (kiểm tra mạng).", fontSize = 11.sp, color = Color(0xFF9A9188))
+        }
+    }
+    if (editing) {
+        var text by remember { mutableStateOf(p?.note?.note.orEmpty()) }
+        AlertDialog(
+            onDismissRequest = { editing = false },
+            title = { Text("Ghi chú sở thích · ${o.name}") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Hiện ngay trên mọi đơn sau của số ${o.phone}. Ví dụ: ít đá, không đường, dị ứng đậu phộng, thích bàn cạnh cửa sổ.", fontSize = 12.sp)
+                    OutlinedTextField(text, { text = it.take(500) }, label = { Text("Ghi chú") }, minLines = 2, maxLines = 5)
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    editing = false
+                    val who = vm.currentEmployee.value?.name.orEmpty()
+                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                        OnlineOrderService.saveCustomerNote(context.applicationContext as android.app.Application, o.phone, o.name, text, who)
+                        reload++
+                    }
+                }) { Text("LƯU") }
+            },
+            dismissButton = { TextButton(onClick = { editing = false }) { Text("ĐÓNG") } },
+        )
+    }
 }

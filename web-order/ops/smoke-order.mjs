@@ -29,19 +29,17 @@ if (plain) cases.push({ label: "món thường", id: plain.name.split("/").pop()
 for (const c of (combos.documents || []).filter((d) => d.fields.active?.booleanValue !== false && d.fields.name?.stringValue && priceOf(d) > 0).slice(0, 8)) cases.push({ label: "combo", id: `c_${c.name.split("/").pop()}`, name: c.fields.name.stringValue, price: priceOf(c) });
 for (const m of (menu.documents || []).filter((d) => d !== plain && d.fields.active?.booleanValue !== false && d.fields.name?.stringValue && priceOf(d) > 0).slice(0, 5)) cases.push({ label: "món", id: m.name.split("/").pop(), name: m.fields.name.stringValue, price: priceOf(m) });
 
-// Đơn giống khách thật, tách từng yếu tố để biết cái nào bị chặn: nhiều dòng, số lượng >1, giao tận nơi, ghi chú, SĐT +84.
+// Đơn nhiều dòng: tách theo loại dòng để biết tổ hợp nào bị chặn.
 {
-  const c0 = cases.find((x) => x.label === "combo"), m0 = cases.find((x) => x.label !== "combo");
-  if (c0 && m0) {
-    const addr = "28 Hai Bà Trưng, Thành Phố Hải Phòng, P. Lê Chân";
-    const mk = (label, extra) => cases.push({ ...m0, label, ...extra });
-    mk("nhiều dòng", { multi: [{ ...c0 }, { ...m0 }] });
-    mk("số lượng 3", { multi: [{ ...m0, qty: 3 }] });
-    mk("giao tận nơi", { mode: "delivery", address: addr });
-    mk("có ghi chú", { note: "Giao tầm 11h" });
-    mk("SĐT +84", { rawPhone: "+84900000999" });
-    mk("combo x2 giao nơi", { multi: [{ ...c0, qty: 2 }], mode: "delivery", address: addr, note: "Giao tầm 11h" });
-    mk("tất cả", { multi: [{ ...c0, qty: 2 }, { ...m0, qty: 3 }], mode: "delivery", address: addr, note: "Giao tầm 11h", rawPhone: "+84900000998" });
+  const combosL = cases.filter((x) => x.label === "combo"), plainsL = cases.filter((x) => x.label !== "combo");
+  if (combosL.length >= 2 && plainsL.length >= 2) {
+    const mk = (label, multi) => cases.push({ ...plainsL[0], label, multi });
+    mk("2 món thường", [plainsL[0], plainsL[1]]);
+    mk("2 combo", [combosL[0], combosL[1]]);
+    mk("món rồi combo", [plainsL[0], combosL[0]]);
+    mk("combo rồi món", [combosL[0], plainsL[0]]);
+    mk("3 món thường", [plainsL[0], plainsL[1], plainsL[2] || plainsL[1]]);
+    mk("combo + 2 món", [combosL[0], plainsL[0], plainsL[1]]);
   }
 }
 let failed = 0;

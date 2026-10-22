@@ -2030,6 +2030,8 @@ fun CloudSyncSettings(vm:PosViewModel){
                 var pulling by remember{mutableStateOf(false)}
                 Button({pulling=true;pullStatus="Đang kéo dữ liệu từ cloud…";pullScope.launch{val r=kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO){vn.ecohome.pos0210.cloud.FirebaseCloudSync.devPullNow(pullCtx.applicationContext)};pullStatus=if(r.isSuccess)"Đã kéo xong: menu, nhóm món, tài chính mới nhất từ cloud." else "Không kéo được: "+(r.exceptionOrNull()?.message?:"lỗi không rõ");pulling=false}},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null&&!pulling){Text("KÉO DỮ LIỆU TỪ CLOUD VỀ NGAY")}
                 if(pullStatus.isNotBlank())Text(pullStatus,fontSize=12.sp,fontWeight=FontWeight.Bold)
+                OutlinedButton({confirmRestore=true},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null){Text("LẤY TOÀN BỘ DỮ LIỆU TỪ BẢN BACKUP CLOUD (BILL, BÀN…)")}
+                Text("Chỉ ĐỌC bản backup mới nhất của máy POS thật về máy này, thay dữ liệu hiện có. Không ghi gì lên cloud.",fontSize=11.sp)
             }else{
             run{
                 val guardCtx=androidx.compose.ui.platform.LocalContext.current
@@ -2055,8 +2057,10 @@ fun CloudSyncSettings(vm:PosViewModel){
             Text("Backup khi dữ liệu thay đổi, tối thiểu 1 giờ/lần có mạng · giữ 2 bản A/B luân phiên. Restore ưu tiên bản mới nhất hợp lệ và tự fallback sang bản còn lại nếu checksum lỗi.",fontSize=11.sp)
             if(message.isNotBlank())Text(message,fontWeight=FontWeight.Bold)
             val backupOnlyError=state?.lastError?.takeIf{it.startsWith("PRIVATE_BACKUP_ONLY:")}
+            if(!BuildConfig.DEV_OFFLINE){
             Text("Realtime sync: "+when{state?.syncedUid==null->"Chưa đăng nhập";sessionMissing->"Mất phiên đăng nhập · cần đăng nhập lại";realtimeBusy->"Đang chạy";state?.lastError!=null&&backupOnlyError==null->"Lần gần nhất chưa hoàn tất";state?.lastSuccessAt!=null->"Đã có lần thành công (xem thời gian bên dưới)";else->"Chưa có lần thành công"},fontWeight=FontWeight.Bold)
             state?.lastSuccessAt?.let{Text("Lần realtime thành công: ${time(it)}",fontSize=12.sp)}
+            }
             val backupConfirmed=current("cloud_backup_confirmed_at").toLongOrNull()
             Text("Cloud backup: "+if(backupOnlyError!=null)"Có lỗi" else if(backupConfirmed!=null)"Đã được server xác nhận" else "Chưa có xác nhận trên máy này",fontWeight=FontWeight.Bold)
             backupConfirmed?.let{Text("Backup server xác nhận: "+java.text.SimpleDateFormat("dd/MM/yyyy HH:mm:ss",java.util.Locale.getDefault()).format(java.util.Date(it)),fontSize=12.sp)}

@@ -13,7 +13,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 192
-        versionName = "1.0.0-alpha160-DEV-PULL-ONLY"
+        versionName = "1.0.0-alpha160-DEV-PULL-ONLY-r2"
         buildConfigField("boolean", "DEV_OFFLINE", "true")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

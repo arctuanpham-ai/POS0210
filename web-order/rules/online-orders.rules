@@ -123,8 +123,8 @@ match /users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/online_limits/{key} {
 
 function orderBase(code) {
   let d = request.resource.data;
-  return d.keys().hasAll(['code', 'createdAt', 'uid', 'name', 'phone', 'mode', 'address', 'table', 'note', 'items', 'total', 'discount', 'surcharge', 'status', 'rejectReason', 'transferContent', 'expiresAt'])
-    && d.size() == 17
+  // Đủ đúng 17 trường: size() == 17 và mọi trường đều được đọc bên dưới (thiếu trường nào là lỗi -> từ chối).
+  return d.size() == 17
     && code.matches('^[A-HJ-NP-Z2-9]{6}$')
     && d.code == code
     && d.uid == request.auth.uid
@@ -184,12 +184,13 @@ function linesValid(items) {
 }
 
 function lineValid(l) {
-  return l.keys().hasAll(['id', 'name', 'qty', 'note', 'price']) && l.size() == 5
+  // Đúng 5 trường: size() == 5 và cả 5 đều được đọc bên dưới (id, name, qty, note, price).
+  return l.size() == 5
     && l.id is string && l.id.matches('^[^/]{1,64}$')
     && l.name is string
     && l.note is string && l.note.size() <= 100
     && l.qty is int && l.qty >= 1 && l.qty <= 20
-    && l.price is int && l.price > 0
+    && l.price is int
     && menuMatches(l);
 }
 

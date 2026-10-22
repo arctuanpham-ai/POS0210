@@ -12,7 +12,6 @@ internal object CloudExecution {
         history.update { (it+"${System.currentTimeMillis()} $message").takeLast(60) }
     }
     suspend fun <T> operation(name:String,mutex:Mutex,block:suspend()->T):Result<T> {
-        if(vn.ecohome.pos0210.BuildConfig.DEV_OFFLINE)return Result.failure(IllegalStateException("BẢN DEV: đồng bộ cloud đã tắt hoàn toàn"))
         if(!mutex.tryLock()) {
             trace("$name MUTEX_BUSY")
             return Result.failure(IllegalStateException("$name MUTEX_BUSY: tác vụ cùng loại đang chạy; không chờ khóa"))

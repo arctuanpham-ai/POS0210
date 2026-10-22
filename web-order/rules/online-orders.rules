@@ -252,3 +252,21 @@ function validLimitRelease(key) {
     && after.uid == request.auth.uid
     && (key == 'u_' + request.auth.uid || key == 'p_' + after.phone);
 }
+
+// ---- TẠM THỜI: thăm dò giới hạn truy cập tài liệu (sẽ xoá sau khi tìm ra nguyên nhân đơn nhiều dòng bị từ chối) ----
+function probeDup(l) {
+  return get(menuRef(l.id)).data.price == l.price && get(menuRef(l.id)).data.price == l.price && get(menuRef(l.id)).data.price == l.price
+    && get(menuRef(l.id)).data.price == l.price && get(menuRef(l.id)).data.price == l.price && get(menuRef(l.id)).data.price == l.price
+    && get(menuRef(l.id)).data.price == l.price && get(menuRef(l.id)).data.price == l.price && get(menuRef(l.id)).data.price == l.price
+    && get(menuRef(l.id)).data.price == l.price && get(menuRef(l.id)).data.price == l.price && get(menuRef(l.id)).data.price == l.price;
+}
+
+match /users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/dbg/{id} {
+  allow create: if isGuest() && (
+    (id == 'sum' && linesSum(request.resource.data.items) == request.resource.data.expect)
+    || (id == 'valid' && linesValid(request.resource.data.items))
+    || (id == 'dup12' && probeDup(request.resource.data.items[0]))
+    || (id == 'two' && get(menuRef(request.resource.data.items[0].id)).data.price == request.resource.data.items[0].price && get(menuRef(request.resource.data.items[1].id)).data.price == request.resource.data.items[1].price)
+    || (id == 'valid1' && linesValid([request.resource.data.items[0]]))
+  );
+}

@@ -516,3 +516,10 @@ button.paylist-row { width: 100%; font: inherit; color: inherit; cursor: pointer
 
 /* Gợi ý nổi khi nhập phiếu chi (nằm trong hộp thoại nên vẫn hiện trên cùng) */
 .suggest-float { position: fixed; z-index: 60; }
+
+.oo-cust { margin: 8px 0; padding: 8px 10px; border-radius: 10px; background: #f3ece0; font-size: 13px; }
+.oo-cust p { margin: 2px 0; }
+.oo-cust-hist { margin: 6px 0; padding-left: 16px; }
+.oo-cust-hist small { display: block; color: #6e5848; }
+.oo-cust-btns { display: flex; gap: 8px; margin-top: 6px !important; }
+.oo-cust-btns button { padding: 4px 10px; font-size: 12px; }

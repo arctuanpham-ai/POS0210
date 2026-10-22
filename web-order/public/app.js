@@ -49,7 +49,7 @@ const store = {
   set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* đầy hoặc bị chặn: bỏ qua */ } },
   del(key) { try { localStorage.removeItem(key); } catch { /* bỏ qua */ } },
 };
-const KEYS = { cart: "pos0210o.cart", codes: "pos0210o.codes", profile: "pos0210o.profile", menu: "pos0210o.menu4", thumbs: "pos0210o.thumbs", hist: "pos0210o.hist" };
+const KEYS = { cart: "pos0210o.cart", codes: "pos0210o.codes", profile: "pos0210o.profile", menu: "pos0210o.menu5", thumbs: "pos0210o.thumbs", hist: "pos0210o.hist" };
 const MENU_TTL = 5 * 60_000;
 const THUMB_TTL = 24 * 3_600_000;
 
@@ -331,9 +331,19 @@ async function readLimit(name, key) {
   try { const snap = await getDoc(ref(name, key)); return snap.exists() ? snap.data() : null; } catch { return null; }
 }
 
-function menuChanged(before, after) {
-  const byId = Object.fromEntries(after.map((m) => [m.id, m]));
-  return before.some((l) => { const m = byId[l.id]; return !m || m.price !== l.price || m.name !== l.name || m.active === false || m.deleted === true; });
+/** Đối chiếu từng dòng giỏ với menu VÀ combo mới nhất trên máy chủ. Trả danh sách dòng khác (rỗng nếu khớp hết). */
+function catalogChanges(lines, menuDocs, comboDocs) {
+  const menu = Object.fromEntries(menuDocs.map((m) => [m.id, m]));
+  const combos = Object.fromEntries(comboDocs.map((m) => [m.id, m]));
+  const out = [];
+  for (const l of lines) {
+    const isCombo = String(l.id).startsWith("c_");
+    const m = (isCombo ? combos : menu)[isCombo ? String(l.id).slice(2) : l.id];
+    if (!m || m.active === false || m.deleted === true) out.push({ name: l.name, why: "không còn bán" });
+    else if (Math.round(Number(m.price)) !== l.price) out.push({ name: l.name, why: `giá đã đổi (${Math.round(Number(m.price)).toLocaleString("vi-VN")}đ)` });
+    else if (m.name !== l.name) out.push({ name: l.name, why: "tên món đã đổi" });
+  }
+  return out;
 }
 
 async function submitOrder(event) {
@@ -417,12 +427,13 @@ async function handleSubmitError(error, lines) {
   if (isDenied(error)) {
     // Có thể quán vừa đổi giá/tắt món: đọc lại menu từ máy chủ để báo đúng nguyên nhân.
     try {
-      const fresh = (await getDocs(col("menu"))).docs.map((d) => ({ ...d.data(), id: d.id }));
-      if (menuChanged(lines, fresh)) {
+      const [menuSnap, comboSnap] = await Promise.all([getDocs(col("menu")), getDocs(col("combos"))]);
+      const changes = catalogChanges(lines, menuSnap.docs.map((d) => ({ ...d.data(), id: d.id })), comboSnap.docs.map((d) => ({ ...d.data(), id: d.id })));
+      if (changes.length) {
         store.del(KEYS.menu);
         await loadMenu(true);
         renderSheet();
-        setFormMessage("Quán vừa cập nhật menu (giá hoặc món). Vui lòng xem lại giỏ hàng rồi gửi lại.", true);
+        setFormMessage(`Quán vừa cập nhật: ${changes.slice(0, 3).map((c) => `${c.name.trim()} (${c.why})`).join("; ")}. Vui lòng xem lại giỏ hàng rồi gửi lại.`, true);
         return;
       }
     } catch { /* rơi xuống thông báo chung */ }

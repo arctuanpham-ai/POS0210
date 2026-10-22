@@ -23,8 +23,11 @@ const combos = await get(`${root}/combos`, admin);
 const plain = (menu.documents || []).find((d) => d.fields.name?.stringValue === "Cafe đen nóng") || (menu.documents || []).find((d) => d.fields.active?.booleanValue !== false && d.fields.price?.integerValue);
 const combo = (combos.documents || []).find((d) => d.fields.active?.booleanValue !== false);
 const cases = [];
-if (plain) cases.push({ label: "món thường", id: plain.name.split("/").pop(), name: plain.fields.name.stringValue, price: Number(plain.fields.price.integerValue) });
-if (combo) cases.push({ label: "combo", id: `c_${combo.name.split("/").pop()}`, name: combo.fields.name.stringValue, price: Number(combo.fields.price.integerValue) });
+const priceOf = (d) => Number(d.fields.price?.integerValue ?? d.fields.price?.doubleValue);
+if (plain) cases.push({ label: "món thường", id: plain.name.split("/").pop(), name: plain.fields.name.stringValue, price: priceOf(plain) });
+// Thử MỌI combo đang bán (tên có khoảng trắng thừa, giá số thực… từng làm đơn bị từ chối) và vài món thường khác, để lỗi bị bắt ngay khi deploy.
+for (const c of (combos.documents || []).filter((d) => d.fields.active?.booleanValue !== false && d.fields.name?.stringValue && priceOf(d) > 0).slice(0, 8)) cases.push({ label: "combo", id: `c_${c.name.split("/").pop()}`, name: c.fields.name.stringValue, price: priceOf(c) });
+for (const m of (menu.documents || []).filter((d) => d !== plain && d.fields.active?.booleanValue !== false && d.fields.name?.stringValue && priceOf(d) > 0).slice(0, 5)) cases.push({ label: "món", id: m.name.split("/").pop(), name: m.fields.name.stringValue, price: priceOf(m) });
 
 let failed = 0;
 for (const [i, c] of cases.entries()) {

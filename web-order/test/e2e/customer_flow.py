@@ -197,8 +197,8 @@ def run():
         print("11. Quán đổi giá giữa chừng -> bị từ chối -> báo menu đã đổi")
         page.evaluate("([r]) => { delete window.__mock.docs[r + '/online_limits/u_guest1']; window.__mockSet(r + '/menu/a', { ...window.__mock.docs[r + '/menu/a'], price: 33000 }); window.__mock.denyNext = 2; }", [ROOT])
         page.click("#submit")
-        page.wait_for_function("document.querySelector('#form-message').innerText.includes('cập nhật menu')")
-        check("cập nhật menu" in page.inner_text("#form-message"), "báo quán vừa cập nhật menu")
+        page.wait_for_function("document.querySelector('#form-message').innerText.includes('giá đã đổi')")
+        check("giá đã đổi" in page.inner_text("#form-message"), "báo rõ món nào đổi giá")
         page.screenshot(path=f"{SHOTS}/7-menu-changed.png")
 
         print("12. Quán tạm ngưng nhận đơn")

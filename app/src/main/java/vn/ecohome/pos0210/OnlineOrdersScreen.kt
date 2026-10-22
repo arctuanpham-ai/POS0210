@@ -68,6 +68,7 @@ fun OnlineOrdersScreen(vm: PosViewModel) {
                     FilterChip(mode == k, { mode = k; OnlineOrderService.setMode(context, k) }, { Text(v, fontSize = 12.sp, maxLines = 1, softWrap = false) })
                 }
             }
+            ZaloSection()
             Text("Chế độ đèn: đèn pin của máy POS và cả màn hình nháy kiểu SOS, kèm rung, không phát tiếng, tới khi đơn được nhận hoặc từ chối. Đặt máy POS nơi nhân viên nhìn thấy.", fontSize = 11.sp)
         }
         if (error.isNotBlank()) Text(error, Modifier.padding(horizontal = 16.dp), color = Color(0xFFB3261E), fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -227,5 +228,21 @@ private fun CustomerPanel(vm: PosViewModel, o: OnlineOrder) {
             },
             dismissButton = { TextButton(onClick = { editing = false }) { Text("ĐÓNG") } },
         )
+    }
+}
+
+@Composable
+private fun ZaloSection() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var token by remember { mutableStateOf("") }
+    var status by remember { mutableStateOf(if (vn.ecohome.pos0210.cloud.ZaloNotifier.ready(context)) "Zalo: đã kết nối, có đơn mới bot sẽ nhắn." else "Zalo: chưa kết nối.") }
+    var busy by remember { mutableStateOf(false) }
+    Text("Báo đơn qua Zalo", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+    Text(status, fontSize = 11.sp)
+    OutlinedTextField(token, { token = it }, label = { Text("Dán token Zalo Bot") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button(onClick = { busy = true; scope.launch { status = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { vn.ecohome.pos0210.cloud.ZaloNotifier.connect(context, token) }; busy = false; token = "" } }, enabled = token.isNotBlank() && !busy) { Text("KẾT NỐI & GỬI THỬ", fontSize = 12.sp) }
+        if (vn.ecohome.pos0210.cloud.ZaloNotifier.ready(context)) TextButton(onClick = { vn.ecohome.pos0210.cloud.ZaloNotifier.clear(context); status = "Zalo: đã ngắt." }) { Text("NGẮT", fontSize = 12.sp) }
     }
 }

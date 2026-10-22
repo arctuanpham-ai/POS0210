@@ -12,8 +12,8 @@ android {
         applicationId = "vn.ecohome.pos0210"
         minSdk = 26
         targetSdk = 35
-        versionCode = 190
-        versionName = "1.0.0-alpha157-customer-profile"
+        versionCode = 191
+        versionName = "1.0.0-alpha158-zalo-notify"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {

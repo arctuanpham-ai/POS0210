@@ -158,6 +158,7 @@ object OnlineOrderService {
         val text = OnlineOrderRules.announceText(fresh)
         DeliveryAnnouncer.announce(app, text, soundOn(app), vibrate = true, beep = soundOn(app))
         notify(app, fresh.size, text)
+        fresh.take(5).forEach { ZaloNotifier.send(app, ZaloNotifier.orderText(it)) }
     }
 
     private fun remindAndSweep(app: Application) {

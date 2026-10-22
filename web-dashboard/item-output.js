@@ -1,6 +1,6 @@
 // Sản lượng thực làm: tách combo thành món lẻ để thống kê số phần và nguyên liệu tiêu hao. Hàm thuần.
 // Doanh thu vẫn tính theo dòng bán (combo là một dòng giá cố định); file này chỉ trả lời "bếp đã làm bao nhiêu phần".
-import { expandComboName } from "./demo-receipts.js?v=20261022-01";
+import { expandComboName } from "./demo-receipts.js?v=20261023-01";
 
 const nameKey = (s) => String(s || "").toLocaleLowerCase("vi").normalize("NFC").replace(/\s+/g, " ").trim();
 const isCombo = (name) => String(name || "").startsWith("COMBO");

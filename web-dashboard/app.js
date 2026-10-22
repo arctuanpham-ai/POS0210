@@ -4151,15 +4151,16 @@ function renderOnline() {
     || '<p class="muted empty-state">Chưa có đơn online nào. Đơn mới sẽ hiện ở đây và phát chuông (cần chạm vào trang một lần để trình duyệt cho phép âm thanh).</p>';
 }
 
-function renderZaloBox() {
+function renderZaloBox(message = "") {
   const st = zaloState();
-  $("#zalo-status").textContent = st.ready ? "Zalo: đã kết nối trên trình duyệt này, có đơn mới bot sẽ nhắn." : "Zalo: chưa kết nối.";
+  $("#zalo-status").textContent = message || (st.ready ? "Zalo: đã kết nối trên trình duyệt này, có đơn mới bot sẽ nhắn." : "Zalo: chưa kết nối.");
   $("#zalo-off").hidden = !st.ready;
 }
 $("#zalo-connect")?.addEventListener("click", async () => {
   $("#zalo-status").textContent = "Đang kết nối…";
-  $("#zalo-status").textContent = await zaloConnect($("#zalo-token").value, $("#zalo-chat").value);
-  $("#zalo-token").value = ""; renderZaloBox();
+  const result = await zaloConnect($("#zalo-token").value, $("#zalo-chat").value);
+  if (zaloState().ready) $("#zalo-token").value = "";
+  renderZaloBox(result);
 });
 $("#zalo-off")?.addEventListener("click", () => { zaloClear(); renderZaloBox(); });
 renderZaloBox();

@@ -1,19 +1,28 @@
-# Chỉ ĐỌC: liệt kê các bản backup Room trên cloud (không đọc nội dung chunk).
-import json, subprocess, urllib.request, datetime
+# Chỉ ĐỌC: mọi tài liệu dưới cửa hàng 0210 bị tạo/sửa từ 13:00 UTC (20:00 giờ VN) ngày 22/10.
+import json, subprocess, urllib.request
 tok = subprocess.check_output(["gcloud", "auth", "print-access-token"]).decode().strip()
-R = "https://firestore.googleapis.com/v1/projects/pos0210-17ce4/databases/(default)/documents/users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/privateBackup/room"
-def get(url):
-    try: return json.load(urllib.request.urlopen(urllib.request.Request(url, headers={"Authorization": "Bearer " + tok})))
+P = "projects/pos0210-17ce4/databases/(default)/documents/users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210"
+API = "https://firestore.googleapis.com/v1/"
+def call(method, url, body=None):
+    req = urllib.request.Request(url, method=method, data=json.dumps(body).encode() if body is not None else None, headers={"Authorization": "Bearer " + tok, "Content-Type": "application/json"})
+    try: return json.load(urllib.request.urlopen(req))
     except Exception as e: return {"error": str(e)}
-def show(d):
-    out = {}
-    for k, f in d.get("fields", {}).items():
-        val = next(iter(f.values()))
-        if k.lower().endswith("at") and str(val).isdigit(): val = datetime.datetime.utcfromtimestamp(int(val) / 1000).strftime("%Y-%m-%d %H:%M UTC")
-        out[k] = val
-    return out
-for sub in ["slots", "meta", "generations"]:
-    d = get(f"{R}/{sub}?pageSize=100&mask.fieldPaths=createdAt&mask.fieldPaths=bytes&mask.fieldPaths=chunks&mask.fieldPaths=format&mask.fieldPaths=businessHash&mask.fieldPaths=device&mask.fieldPaths=slot")
-    print("==", sub, d.get("error", ""))
-    for x in d.get("documents", []):
-        print("  ", x["name"].split("/")[-1], "create", x["createTime"][:19], "update", x["updateTime"][:19], show(x))
+CUT = "2026-10-22T13:00"
+cols = call("POST", f"{API}{P}:listCollectionIds", {"pageSize": 200}).get("collectionIds", [])
+print("collections:", cols)
+def docs(path):
+    out, page = [], ""
+    while True:
+        d = call("GET", f"{API}{path}?pageSize=300&mask.fieldPaths=id" + (f"&pageToken={page}" if page else ""))
+        out += d.get("documents", []); page = d.get("nextPageToken", "")
+        if not page or "error" in d: return out
+for c in cols:
+    if c in ("privateBackup",): continue
+    ds = docs(f"{P}/{c}")
+    new = [d for d in ds if d["createTime"] >= CUT]
+    upd = [d for d in ds if d["updateTime"] >= CUT and d["createTime"] < CUT]
+    if not new and not upd: print(f"{c}: {len(ds)} tài liệu, không đổi từ mốc"); continue
+    print(f"{c}: {len(ds)} tài liệu | TẠO MỚI {len(new)} | SỬA {len(upd)}")
+    for tag, lst in (("mới", new), ("sửa", upd)):
+        for d in lst[:12]: print("    ", tag, d["name"].split("/")[-1][:40], "tạo", d["createTime"][5:19], "sửa", d["updateTime"][5:19])
+        if len(lst) > 12: print("     …", len(lst) - 12, "nữa")

@@ -250,8 +250,4 @@ label.radio input { width: 20px; height: 20px; margin: 0; }
 .sheet-promo[hidden] { display: none; }
 .promo-minus { color: #2f7d32; font-weight: 700; }
 
-.bank-apps { width: 100%; display: grid; gap: 8px; }
-.bank-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin-top: 6px; }
-.bank-btn { display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 10px; border: 1px solid #b89572; border-radius: 12px; background: #fff; color: #3b2a1a; font-weight: 700; font-size: 14px; text-align: center; text-decoration: none; }
-.bank-btn.auto { background: #3b2a1a; color: #fff; border-color: #3b2a1a; }
-.bank-apps details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
+.save-qr { width: 100%; }

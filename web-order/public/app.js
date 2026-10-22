@@ -22,7 +22,6 @@ import {
   setNote, toMillis, validateCheckout,
 } from "./order-core.js";
 import { vietQrPayload } from "./vietqr.js";
-import { BANK_APPS, bankDeeplink } from "./bank-links.js";
 import { STATS_COLLECTION, decide, keysFor, vnDayKey } from "./stats-core.js";
 import { qrSvg } from "./qr.js";
 
@@ -514,19 +513,11 @@ function paymentHtml(order) {
   } catch (error) {
     qr = `<p class="error">Không tạo được mã QR (${esc(error.message)}). Vui lòng chuyển khoản thủ công theo thông tin bên dưới.</p>`;
   }
-  const link = (app) => bankDeeplink(app.id, { account: s.account, bank: s.bank, amount: order.total, content: order.transferContent, holder: s.holder || s.name, returnUrl: `${location.origin}${location.pathname}` });
-  const btn = (app) => { const href = link(app); return href ? `<a class="bank-btn${app.autofill ? " auto" : ""}" href="${esc(href)}" target="_blank" rel="noopener" data-bank-copy="${esc(order.transferContent)}">${esc(app.name)}</a>` : ""; };
-  const apps = BANK_APPS.some((a) => link(a))
-    ? `<div class="bank-apps"><b>Hoặc mở app ngân hàng để chuyển ngay (không cần lưu ảnh QR)</b>
-        <div class="bank-grid">${BANK_APPS.filter((a) => a.autofill).map(btn).join("")}</div>
-        <p class="muted small">Bấm nút: app ngân hàng mở ra và <b>nội dung chuyển khoản được sao chép sẵn</b>. Một số app tự điền luôn số tiền (có thể phải đăng nhập trước). Nếu app không tự điền, vào Chuyển tiền, nhập số tài khoản và số tiền (nút Sao chép bên dưới), rồi dán nội dung.</p>
-        <details><summary>App ngân hàng khác</summary><div class="bank-grid">${BANK_APPS.filter((a) => !a.autofill).map(btn).join("")}</div>
-        <p class="muted small">Các app này chỉ mở ứng dụng và sao chép sẵn nội dung. Số tiền: ${copyButton(String(order.total), "Sao chép số tiền")}, số tài khoản ở nút Sao chép bên dưới.</p></details></div>`
-    : "";
   return `<div class="pay-card">
     <div class="qr">${qr}</div>
     <p class="pay-amount">${money(order.total)}</p>
-    ${apps}
+    <button type="button" class="secondary save-qr" data-save-qr>Lưu ảnh QR vào máy</button>
+    <p class="muted small">Mở app ngân hàng, chọn Quét QR rồi chọn ảnh vừa lưu trong thư viện.</p>
     <dl class="pay-info">
       <div><dt>Ngân hàng</dt><dd>${esc(s.bank)}</dd></div>
       <div><dt>Số tài khoản</dt><dd><b>${esc(s.account)}</b> ${copyButton(s.account, "Sao chép")}</dd></div>
@@ -535,6 +526,33 @@ function paymentHtml(order) {
     </dl>
     <p class="muted small">Vui lòng kiểm tra đúng tên tài khoản của quán trước khi chuyển. Giữ nguyên nội dung chuyển khoản để quán đối chiếu.</p>
   </div>`;
+}
+
+/** Lưu mã QR thanh toán thành ảnh PNG: ưu tiên bảng chia sẻ của điện thoại (có "Lưu ảnh"), không có thì tải về. */
+async function saveQrImage(button) {
+  const svg = document.querySelector("#track-body .qr svg");
+  if (!svg) return;
+  const label = button.textContent;
+  try {
+    const xml = new XMLSerializer().serializeToString(svg);
+    const img = new Image();
+    await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(xml)}`; });
+    const size = 1000, pad = 60;
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, size, size);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, pad, pad, size - pad * 2, size - pad * 2);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+    const file = new File([blob], `QR-${state.code || "thanh-toan"}.png`, { type: "image/png" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file] }); }
+    else { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file.name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
+    button.textContent = "Đã lưu ảnh QR";
+  } catch (error) {
+    if (error?.name !== "AbortError") button.textContent = "Không lưu được, hãy chụp màn hình mã QR";
+  }
+  setTimeout(() => { button.textContent = label; }, 2500);
 }
 
 function summaryHtml(order) {
@@ -658,11 +676,8 @@ $("#order-form").addEventListener("submit", submitOrder);
 $("#menu-retry").addEventListener("click", () => loadMenu(true));
 
 $("#track-body").addEventListener("click", async (event) => {
-  const bank = event.target.closest("[data-bank-copy]");
-  if (bank) { // không chặn việc mở app: chỉ sao chép sẵn nội dung chuyển khoản để khách dán nếu app không tự điền
-    try { await navigator.clipboard.writeText(bank.dataset.bankCopy); } catch { /* bỏ qua: khách vẫn có nút Sao chép */ }
-    return;
-  }
+  const save = event.target.closest("[data-save-qr]");
+  if (save) { await saveQrImage(save); return; }
   const copy = event.target.closest("[data-copy]");
   if (copy) {
     const label = copy.textContent;

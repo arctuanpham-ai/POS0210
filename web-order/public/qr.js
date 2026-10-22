@@ -1285,16 +1285,25 @@ export function qrSvg(text, { level = "M", margin = 4, dark = "#000", light = "#
 }
 
 /** Mã QR dạng ảnh PNG (data URL), tạo ĐỒNG BỘ bằng canvas: dùng làm thẻ <img> để khách nhấn giữ -> Lưu ảnh, và để chia sẻ/tải ngay khi bấm nút. "" nếu không có canvas. */
-export function qrPngDataUrl(text, { level = "M", margin = 4, scale = 12 } = {}) {
+export function qrPngDataUrl(text, { level = "M", margin = 4, scale = 12, caption = [] } = {}) {
   if (typeof document === "undefined") return "";
   const m = qrMatrix(text, level);
   const n = m.length + margin * 2;
+  const side = n * scale;
+  const lines = caption.map((l) => String(l ?? "").trim()).filter(Boolean).slice(0, 3);
+  const lineH = Math.round(side * 0.075), textH = lines.length ? lines.length * lineH + Math.round(lineH * 0.8) : 0;
   const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = n * scale;
+  canvas.width = side; canvas.height = side + textH;
   const ctx = canvas.getContext("2d");
   if (!ctx) return "";
   ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = "#000";
   m.forEach((row, r) => row.forEach((on, c) => { if (on) ctx.fillRect((c + margin) * scale, (r + margin) * scale, scale, scale); }));
+  // Chữ dưới mã (số tiền, nội dung, tên quán) để khách nhận ra đúng ảnh của đơn nào; không ảnh hưởng việc quét.
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  lines.forEach((line, i) => {
+    ctx.font = `${i === 0 ? "700" : "500"} ${Math.round(lineH * (i === 0 ? 0.95 : 0.7))}px -apple-system, "Segoe UI", Roboto, Arial, sans-serif`;
+    ctx.fillText(line, side / 2, side + lineH * (i + 0.55), side - 24);
+  });
   return canvas.toDataURL("image/png");
 }

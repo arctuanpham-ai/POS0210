@@ -29,10 +29,20 @@ if (plain) cases.push({ label: "món thường", id: plain.name.split("/").pop()
 for (const c of (combos.documents || []).filter((d) => d.fields.active?.booleanValue !== false && d.fields.name?.stringValue && priceOf(d) > 0).slice(0, 8)) cases.push({ label: "combo", id: `c_${c.name.split("/").pop()}`, name: c.fields.name.stringValue, price: priceOf(c) });
 for (const m of (menu.documents || []).filter((d) => d !== plain && d.fields.active?.booleanValue !== false && d.fields.name?.stringValue && priceOf(d) > 0).slice(0, 5)) cases.push({ label: "món", id: m.name.split("/").pop(), name: m.fields.name.stringValue, price: priceOf(m) });
 
-// Đơn giống khách thật: giao tận nơi, SĐT dạng +84, ghi chú, nhiều dòng (combo + món) số lượng >1, thử cả có khuyến mãi lẫn không.
+// Đơn giống khách thật, tách từng yếu tố để biết cái nào bị chặn: nhiều dòng, số lượng >1, giao tận nơi, ghi chú, SĐT +84.
 {
   const c0 = cases.find((x) => x.label === "combo"), m0 = cases.find((x) => x.label !== "combo");
-  if (c0 && m0) cases.push({ label: "giao tận nơi nhiều dòng", multi: [{ ...c0, qty: 2 }, { ...m0, qty: 3 }], mode: "delivery", address: "28 Hai Bà Trưng, Thành Phố Hải Phòng, P. Lê Chân", note: "Giao tầm 11h", rawPhone: "+84900000999" });
+  if (c0 && m0) {
+    const addr = "28 Hai Bà Trưng, Thành Phố Hải Phòng, P. Lê Chân";
+    const mk = (label, extra) => cases.push({ ...m0, label, ...extra });
+    mk("nhiều dòng", { multi: [{ ...c0 }, { ...m0 }] });
+    mk("số lượng 3", { multi: [{ ...m0, qty: 3 }] });
+    mk("giao tận nơi", { mode: "delivery", address: addr });
+    mk("có ghi chú", { note: "Giao tầm 11h" });
+    mk("SĐT +84", { rawPhone: "+84900000999" });
+    mk("combo x2 giao nơi", { multi: [{ ...c0, qty: 2 }], mode: "delivery", address: addr, note: "Giao tầm 11h" });
+    mk("tất cả", { multi: [{ ...c0, qty: 2 }, { ...m0, qty: 3 }], mode: "delivery", address: addr, note: "Giao tầm 11h", rawPhone: "+84900000998" });
+  }
 }
 let failed = 0;
 for (const [i, c] of cases.entries()) {

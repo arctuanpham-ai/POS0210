@@ -25,8 +25,8 @@ const cases = [];
 for (const n of [1, 2, 3]) {
   const items = [line("a", "A", 1000), line("b", "B", 2000), line("c_x", "C", 3000)].slice(0, n);
   const expect = items.reduce((s, l) => s + l.price * l.qty, 0);
-  cases.push({ label: `sum n=${n}`, tc: { expectation: "ALLOW", method: "create", request: { auth, path: "/databases/(default)/documents/dbg/sum" }, resource: { data: { items, expect } } } });
-  cases.push({ label: `valid n=${n}`, tc: { expectation: "ALLOW", method: "update", request: { auth, path: "/databases/(default)/documents/dbg/valid" }, resource: { data: { items } }, functionMocks: [mock("menu", "a", "A", 1000), mock("menu", "b", "B", 2000), mock("combos", "x", "C", 3000)] } });
+  cases.push({ label: `sum n=${n}`, tc: { expectation: "ALLOW", expressionReportLevel: "VISITED", request: { method: "create", auth, path: "/databases/(default)/documents/dbg/sum" }, resource: { data: { items, expect } } } });
+  cases.push({ label: `valid n=${n}`, tc: { expectation: "ALLOW", expressionReportLevel: "VISITED", request: { method: "update", auth, path: "/databases/(default)/documents/dbg/valid" }, resource: { data: { items } }, functionMocks: [mock("menu", "a", "A", 1000), mock("menu", "b", "B", 2000), mock("combos", "x", "C", 3000)] } });
 }
 const res = await api(`https://firebaserules.googleapis.com/v1/projects/${project}:test`, { method: "POST", body: JSON.stringify({ source: { files: [{ name: "firestore.rules", content: source }] }, testSuite: { testCases: cases.map((c) => c.tc) } }) });
 console.log("[dbg] test http", res.status, JSON.stringify(res.body).replace(/[{}"\\]/g, "").slice(0, 400));

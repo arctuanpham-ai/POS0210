@@ -40,6 +40,7 @@ for (const m of (menu.documents || []).filter((d) => d !== plain && d.fields.act
     mk("combo rồi món", [combosL[0], plainsL[0]]);
     mk("3 món thường", [plainsL[0], plainsL[1], plainsL[2] || plainsL[1]]);
     mk("combo + 2 món", [combosL[0], plainsL[0], plainsL[1]]);
+    for (const k of [4, 5, 6]) { const part = [...combosL.slice(0, 2), ...plainsL.slice(0, 4)].slice(0, k); if (part.length === k) mk(`${k} dòng`, part); }
     const seven = [...combosL.slice(0, 3), ...plainsL.slice(0, 4)];
     if (seven.length === 7) mk("7 dòng (tối đa)", seven);
   }
@@ -74,7 +75,7 @@ for (const [i, c] of cases.entries()) {
     const expect = items.reduce((a2, x) => a2 + x.price, 0);
     // "core": toàn bộ điều kiện của đơn (trừ 2 getAfter bộ đếm) với 1, 2, 3, 7 dòng
     const pool = cases.filter((x) => !x.multi && x.id).slice(0, 8);
-    for (const [probe, n] of [["core", 2], ["core", 7], ["baseLines", 2], ["baseLines", 7], ["baseSums", 2], ["baseSums", 7], ["baseSumsLet", 2], ["baseSumsLet", 7], ["linesSums", 2], ["linesSums", 7], ["linesSumsLet", 2], ["linesSumsLet", 7]]) {
+    for (const [probe, n] of [["core", 4], ["core", 5], ["core", 6], ["core", 7], ["baseLines", 5], ["baseLines", 6]]) {
       const lines2 = pool.slice(0, n).map((x) => ({ id: x.id, name: x.name, qty: 1, note: "", price: x.price }));
       const code = makeOrderCode();
       const order = buildOrderDoc({ code, uid, value: { name: "KIEM THU", phone: "0900000777", mode: "pickup", address: "", table: "", note: "" }, lines: lines2 });

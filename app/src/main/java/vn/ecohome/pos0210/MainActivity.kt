@@ -2020,6 +2020,10 @@ fun CloudSyncSettings(vm:PosViewModel){
             if(state?.syncedUid!=null&&sessionMissing)Text("Phiên đăng nhập Firebase đã hết. Dữ liệu bill/order trên máy vẫn giữ nguyên. Nhập lại mật khẩu của đúng tài khoản cũ để tiếp tục đồng bộ.",fontSize=12.sp,color=Color(0xFF9A4B3D),fontWeight=FontWeight.Bold)
             if(state?.syncedUid==null||sessionMissing)Button({vm.firebaseSignIn(email,password);password=""},Modifier.fillMaxWidth(),enabled=email.isNotBlank()&&password.length>=6){Text(if(sessionMissing&&state?.syncedUid!=null)"ĐĂNG NHẬP LẠI · GIỮ NGUYÊN UID" else "ĐĂNG NHẬP & BẬT ĐỒNG BỘ")}
             else OutlinedButton({vm.firebaseSignOut()},Modifier.fillMaxWidth()){Text("ĐĂNG XUẤT FIREBASE")}
+            if(BuildConfig.DEV_OFFLINE){
+                Text("BẢN DEV · CHỈ ĐỌC TỪ CLOUD",fontWeight=FontWeight.Black,color=Color(0xFF9A4B3D))
+                Text("Đăng nhập tài khoản chủ quán để máy này tự kéo menu và dữ liệu mới nhất từ cloud mỗi 5 phút. Máy DEV không đẩy được bất cứ thứ gì lên cloud, nên không có nút đồng bộ lên, ghi lại, tạo hay khôi phục backup. Mọi dữ liệu tạo ra ở đây là TEST và tự xoá trong ngày.",fontSize=12.sp)
+            }else{
             run{
                 val guardCtx=androidx.compose.ui.platform.LocalContext.current
                 var blockPull by remember{mutableStateOf(vn.ecohome.pos0210.cloud.CloudPullGuard.blocked(guardCtx))}
@@ -2040,6 +2044,7 @@ fun CloudSyncSettings(vm:PosViewModel){
             Text("Chỉ bấm ĐẨY trên máy còn ảnh gốc. Màn hình sẽ báo số file và lỗi đầu tiên nếu Storage/URI không đọc được.",fontSize=11.sp)
             OutlinedButton({vm.createFirebaseBackup()},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null){Text("TẠO CLOUD BACKUP NGAY")}
             OutlinedButton({confirmRestore=true},Modifier.fillMaxWidth(),enabled=state?.syncedUid!=null){Text("KHÔI PHỤC CLOUD BACKUP")}
+            }
             Text("Backup khi dữ liệu thay đổi, tối thiểu 1 giờ/lần có mạng · giữ 2 bản A/B luân phiên. Restore ưu tiên bản mới nhất hợp lệ và tự fallback sang bản còn lại nếu checksum lỗi.",fontSize=11.sp)
             if(message.isNotBlank())Text(message,fontWeight=FontWeight.Bold)
             val backupOnlyError=state?.lastError?.takeIf{it.startsWith("PRIVATE_BACKUP_ONLY:")}

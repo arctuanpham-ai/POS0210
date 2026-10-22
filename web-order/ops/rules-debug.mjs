@@ -36,3 +36,4 @@ console.log("[dbg] test http", res.status, JSON.stringify(res.body).replace(/[{}
   console.log(`[dbg] ${cases[i].label} -> ${r.state} ${errs} ${msgs}`);
 });
 // run 1792636213
+// 1792636427

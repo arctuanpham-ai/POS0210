@@ -211,7 +211,7 @@ object OnlineOrderService {
 
     // ---- Hồ sơ khách theo số điện thoại: lịch sử mua + ghi chú sở thích (users/{uid}/stores/0210/customerNotes/{sđt}) ----
     private val profileCache = HashMap<String, Pair<Long, CustomerProfile>>()
-    private fun storeRoot(app: Application): DocumentReference? {
+    private suspend fun storeRoot(app: Application): DocumentReference? {
         val uid = attachedUid ?: FirebaseCloudSync.currentUid(app) ?: return null
         val fs = FirebaseFirestore.getInstance(FirebaseCloudSync.firebaseApp(app, FirebaseCloudSync.config(app)))
         return fs.collection("users").document(uid).collection("stores").document("0210")

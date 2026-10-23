@@ -16,3 +16,4 @@ for path in ["dashboardMonthly/2026-10", "dashboardMonthly/2026-09", "dashboardD
             if k.lower().endswith("at") and str(val).isdigit(): val = f"{val} = {datetime.datetime.fromtimestamp(int(val)/1000, datetime.UTC):%m-%d %H:%M}Z"
             out[k] = val
     print(path, "| tạo", d["createTime"][5:19], "| sửa", d["updateTime"][5:19], "| trường:", sorted(f.keys())[:25], "|", out)
+# check 1792714578

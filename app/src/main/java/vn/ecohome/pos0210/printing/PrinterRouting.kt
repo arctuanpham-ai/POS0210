@@ -6,7 +6,7 @@ class PrinterRouting private constructor(
 ) {
     fun addressFor(jobType: PrintJobType): String = when (jobType) {
         PrintJobType.KITCHEN, PrintJobType.CANCEL -> kitchenMac
-        PrintJobType.PAYMENT, PrintJobType.TEST -> receiptMac
+        PrintJobType.PAYMENT, PrintJobType.TEST -> kitchenMac
     }
 
     companion object {
@@ -16,7 +16,8 @@ class PrinterRouting private constructor(
             receiptMac: String = ""
         ) = PrinterRouting(
             kitchenMac.trim().ifBlank { legacyMac.trim() },
-            receiptMac.trim().ifBlank { legacyMac.trim() }
+            // Bill thanh toán dùng chung máy in với phiếu bếp.
+            kitchenMac.trim().ifBlank { legacyMac.trim() }
         )
     }
 }

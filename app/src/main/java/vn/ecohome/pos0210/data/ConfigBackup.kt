@@ -12,7 +12,7 @@ import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
 object ConfigBackup {
-    private const val CONFIG_VERSION = 4
+    private const val CONFIG_VERSION = 5
     private const val MASTER_NAME = "POS0210_MASTER.0210"
 
     fun exportConfig(context: Context, uri: Uri): Result<Unit> = runCatching {
@@ -29,6 +29,7 @@ object ConfigBackup {
                 dao.allEmployeesSnapshot(),
                 dao.allPurchaseCategoriesSnapshot(),
                 dao.allPricingRulesSnapshot(),
+                dao.allBuyGetPromotionsSnapshot(),
                 dao.allSettingsSnapshot()
             )
         }
@@ -109,6 +110,16 @@ object ConfigBackup {
                     put("percent", rule.percent); put("startAt", rule.startAt ?: JSONObject.NULL); put("endAt", rule.endAt ?: JSONObject.NULL)
                     put("startMinute", rule.startMinute ?: JSONObject.NULL); put("endMinute", rule.endMinute ?: JSONObject.NULL)
                     put("autoApply", rule.autoApply); put("active", rule.active)
+                })
+            }
+        })
+
+        root.put("buyGetPromotions", JSONArray().apply {
+            snapshot.buyGetPromotions.forEach { rule ->
+                put(JSONObject().apply {
+                    put("id", rule.id); put("name", rule.name); put("buyMenuItemId", rule.buyMenuItemId); put("buyQuantity", rule.buyQuantity)
+                    put("giftMenuItemId", rule.giftMenuItemId); put("giftQuantity", rule.giftQuantity); put("repeat", rule.repeat); put("active", rule.active)
+                    put("startAt", rule.startAt ?: JSONObject.NULL); put("endAt", rule.endAt ?: JSONObject.NULL); put("createdAt", rule.createdAt); put("updatedAt", rule.updatedAt)
                 })
             }
         })
@@ -207,7 +218,13 @@ object ConfigBackup {
             }
         }
 
-        val root = JSONObject(requireNotNull(jsonText) { "File .0210 không hợp lệ: thiếu config.json" })
+        if(jsonText==null){
+            // Legacy/partial .0210 archives may contain media only. They are not a valid
+            // MASTER config, but must not destroy or deactivate the current embedded/local config.
+            if(extracted.isNotEmpty()) return@runCatching
+            error("File .0210 không chứa dữ liệu cấu hình có thể nhập")
+        }
+        val root = JSONObject(jsonText!!)
         require(root.optString("format") == "POS0210_MASTER_CONFIG") { "Không đúng file cấu hình 0210" }
         require(root.optInt("version", 0) in 1..CONFIG_VERSION) { "Phiên bản cấu hình chưa được hỗ trợ" }
 
@@ -221,6 +238,7 @@ object ConfigBackup {
                 dao.deactivateAllMenuItems()
                 dao.deactivateAllCombos()
                 dao.deactivateAllPricingRules()
+                dao.deactivateAllBuyGetPromotions()
                 dao.deactivateAllEmployees()
                 dao.deactivateAllPurchaseCategories()
                 dao.clearConfigSettings()
@@ -302,6 +320,16 @@ object ConfigBackup {
                         )
                     )
                 }
+                root.optJSONArray("buyGetPromotions")?.forEachObject { o ->
+                    dao.saveBuyGetPromotion(
+                        BuyGetPromotionEntity(
+                            id = o.getString("id"), name = o.getString("name"), buyMenuItemId = o.getString("buyMenuItemId"), buyQuantity = o.optInt("buyQuantity", 1),
+                            giftMenuItemId = o.getString("giftMenuItemId"), giftQuantity = o.optInt("giftQuantity", 1), repeat = o.optBoolean("repeat", true), active = o.optBoolean("active", true),
+                            startAt = if (o.isNull("startAt")) null else o.optLong("startAt"), endAt = if (o.isNull("endAt")) null else o.optLong("endAt"),
+                            createdAt = o.optLong("createdAt", System.currentTimeMillis()), updatedAt = o.optLong("updatedAt", System.currentTimeMillis())
+                        )
+                    )
+                }
                 root.getJSONArray("employees").forEachObject { o ->
                     dao.saveEmployee(
                         EmployeeEntity(
@@ -364,6 +392,7 @@ object ConfigBackup {
         val employees: List<EmployeeEntity>,
         val purchaseCategories: List<PurchaseCategoryEntity>,
         val pricingRules: List<PricingRuleEntity>,
+        val buyGetPromotions: List<BuyGetPromotionEntity>,
         val settings: List<AppSettingEntity>
     )
 

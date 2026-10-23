@@ -22,22 +22,21 @@ import androidx.compose.ui.unit.sp
 
 data class TableCardUi(
     val id:String,val name:String,val areaName:String,val occupied:Boolean,
-    val serviceNo:Int?=null,val priorityRank:Int?=null,val timer:ServiceTimerPresentation?=null
+    val serviceNo:Int?=null,val priorityRank:Int?=null,val timer:ServiceTimerPresentation?=null,val busyLabel:String?=null
 )
 
 data class TableGridSpec(val columns:Int,val minCardHeight:Dp,val gap:Dp,val compact:Boolean)
 
 fun tableGridSpec(tableCount:Int,availableWidthDp:Float):TableGridSpec {
     val columns=when {
-        tableCount<=4 -> if(availableWidthDp<320f) 1 else 2
-        tableCount<=9 -> if(availableWidthDp<340f) 2 else 3
-        tableCount<=16 -> if(availableWidthDp<360f) 3 else 4
-        availableWidthDp>=700f -> 6
-        availableWidthDp>=480f -> 5
-        else -> 4
+        availableWidthDp<300f -> 2
+        availableWidthDp<480f -> 3
+        availableWidthDp<700f -> 4
+        availableWidthDp<900f -> 5
+        else -> 6
     }
-    val compact=tableCount>16||columns>=5
-    return TableGridSpec(columns,when{columns<=2->132.dp;columns==3->122.dp;columns==4->114.dp;else->108.dp},if(compact)6.dp else 8.dp,compact)
+    val compact=columns>=4||tableCount>16
+    return TableGridSpec(columns,when{columns<=2->120.dp;columns==3->104.dp;columns==4->100.dp;else->96.dp},if(compact)6.dp else 8.dp,compact)
 }
 
 @Composable
@@ -66,10 +65,12 @@ fun TableCard(card:TableCardUi,spec:TableGridSpec,onClick:(String)->Unit={}) {
             Text(card.areaName,Modifier.testTag("table-area-${card.id}"),fontSize=if(spec.compact)9.sp else 10.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
             Spacer(Modifier.height(if(spec.compact)2.dp else 4.dp))
             if(!card.occupied) {
-                Text("Trống",Modifier.testTag("table-status-${card.id}"),fontSize=if(spec.compact)11.sp else 13.sp,maxLines=1)
+                // Bàn trống nhưng có giỏ món chọn rồi chưa gửi (nháp): nhắc ngay trên ô bàn.
+                if(card.busyLabel!=null)Text(card.busyLabel,Modifier.testTag("table-status-${card.id}"),color=Color(0xFFA65E2E),fontWeight=FontWeight.Bold,fontSize=if(spec.compact)10.sp else 11.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
+                else Text("Trống",Modifier.testTag("table-status-${card.id}"),fontSize=if(spec.compact)11.sp else 13.sp,maxLines=1)
                 Spacer(Modifier.height(if(spec.compact)4.dp else 8.dp))
             } else {
-                Text("● CÓ KHÁCH",Modifier.testTag("table-status-${card.id}"),fontWeight=FontWeight.Bold,fontSize=if(spec.compact)10.sp else 11.sp,maxLines=1)
+                Text(card.busyLabel?:"● CÓ KHÁCH",Modifier.testTag("table-status-${card.id}"),fontWeight=FontWeight.Bold,fontSize=if(spec.compact)10.sp else 11.sp,maxLines=1)
                 card.serviceNo?.let { no ->
                     val detail=when(card.priorityRank){0->if(spec.columns>=4)"#${no.toString().padStart(3,'0')} · P1" else "#${no.toString().padStart(3,'0')} · ƯU TIÊN 1";1->if(spec.columns>=4)"#${no.toString().padStart(3,'0')} · P2" else "#${no.toString().padStart(3,'0')} · ƯU TIÊN 2";else->"#${no.toString().padStart(3,'0')} · CHỜ"}
                     Text(detail,Modifier.testTag("table-priority-${card.id}"),fontWeight=FontWeight.Black,fontSize=if(spec.compact)9.sp else 10.sp,maxLines=1,overflow=TextOverflow.Ellipsis)

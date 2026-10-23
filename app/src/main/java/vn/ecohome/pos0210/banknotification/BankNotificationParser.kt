@@ -51,11 +51,58 @@ class VietinbankNotificationParser:BankNotificationParser {
  }
 }
 
+class TechcombankNotificationParser:BankNotificationParser {
+ private val structured=Regex("""(?:TCB|Techcombank)\s+TK\s+([0-9xX*]{4,24})\s+lúc\s+(\d{2}/\d{2}/\d{2,4}\s+\d{2}:\d{2})(?:\s*:\s*|\s+)([+-])\s*([\d.,]+)\s*(?:VND|VNĐ|đồng|đ)\b""",RegexOption.IGNORE_CASE)
+ /** Mẫu thông báo app Techcombank (Mobile): "+ VND 180,000 / Tài khoản: 390… / Số dư: VND … / <nội dung>". */
+ private val appMain=Regex("""([+-])\s*VND\s*([\d.,]+)""",RegexOption.IGNORE_CASE)
+ private fun parseAppFormat(title:String,rawBody:String,rawFull:String,receivedAt:Long):BankTransaction? {
+  // Chuẩn hoá dấu tiếng Việt (NFC) và khoảng trắng lạ (NBSP…) vì thông báo có thể dùng ký tự tổ hợp khác.
+  fun clean(v:String)=java.text.Normalizer.normalize(v,java.text.Normalizer.Form.NFC).replace(Regex("[\\u00A0\\u2007\\u202F\\u200B]")," ")
+  val body=clean(rawBody);val full=clean(rawFull)
+  val m=appMain.find(body)?:return null
+  val account=Regex("""(?:Tài khoản|Tai khoan|TK)\s*:?\s*([0-9xX*]{4,24})""",RegexOption.IGNORE_CASE).find(body)?.groupValues?.get(1).orEmpty()
+  val amount=digitsAmount(m.groupValues[2])?.takeIf{it>0L}?:return null
+  val direction=if(m.groupValues[1]=="+")TransactionDirection.CREDIT else TransactionDirection.DEBIT
+  val balance=Regex("""Số dư\s*:\s*VND\s*([\d.,]+)""",RegexOption.IGNORE_CASE).find(body)
+  val content=if(balance!=null)body.substring(balance.range.last+1).trim() else body.substring(m.range.last+1).trim()
+  return BankTransaction("TECHCOMBANK",account,amount,direction,null,receivedAt,content,balance?.groupValues?.get(1),fingerprint("TECHCOMBANK",account,amount,null,balance?.groupValues?.get(1),full))
+ }
+ /** Phương án cuối: thông báo Techcombank có dấu cộng + số tiền (VND/đ) nhưng khác mẫu đã biết. Chỉ nhận tiền VÀO, bỏ qua dòng "Số dư". */
+ private fun parseLoose(rawTitle:String,rawBody:String,receivedAt:Long):BankTransaction? {
+  fun clean(v:String)=java.text.Normalizer.normalize(v,java.text.Normalizer.Form.NFC).replace(Regex("[\\u00A0\\u2007\\u202F\\u200B]")," ")
+  val body=clean(rawBody);val full=clean("$rawTitle\n$rawBody")
+  val withoutBalance=body.replace(Regex("""(?:Số dư|So du|SD)\s*:?\s*(?:VND|VNĐ)?\s*[\d.,]+\s*(?:VND|VNĐ|đ)?""",RegexOption.IGNORE_CASE),"")
+  val m=Regex("""[+＋]\s*(?:VND|VNĐ)?\s*([\d][\d.,]*)""",RegexOption.IGNORE_CASE).find(withoutBalance)?:return null
+  val amount=digitsAmount(m.groupValues[1])?.takeIf{it>0L}?:return null
+  val account=Regex("""(?:Tài khoản|Tai khoan|TK)\s*:?\s*([0-9xX*]{4,24})""",RegexOption.IGNORE_CASE).find(body)?.groupValues?.get(1).orEmpty()
+  val content=withoutBalance.substring(m.range.last+1).replace(Regex("""(?:Tài khoản|Tai khoan)\s*:?\s*[0-9xX*]{4,24}""",RegexOption.IGNORE_CASE),"").trim()
+  return BankTransaction("TECHCOMBANK",account,amount,TransactionDirection.CREDIT,null,receivedAt,content,null,fingerprint("TECHCOMBANK",account,amount,null,null,full))
+ }
+ override fun parse(title:String,rawBodyIn:String,receivedAt:Long):BankTransaction? {
+  // App Techcombank đặt "+ VND 4,500" ở TIÊU ĐỀ thông báo, các dòng còn lại ở thân: ghép tiêu đề vào thân khi tiêu đề có số tiền.
+  val body=if(title.isNotBlank()&&Regex("""[+-]\s*(?:VND|VNĐ)?\s*\d""",RegexOption.IGNORE_CASE).containsMatchIn(title)&&!rawBodyIn.contains(title))"$title\n$rawBodyIn" else rawBodyIn
+  val full="$title\n$rawBodyIn"
+  parseAppFormat(title,body,full,receivedAt)?.let{return it}
+  val match=structured.find(full)?:return parseLoose(title,body,receivedAt)
+  val account=match.groupValues[1]
+  val rawTime=match.groupValues[2]
+  val direction=if(match.groupValues[3]=="+")TransactionDirection.CREDIT else TransactionDirection.DEBIT
+  val amount=digitsAmount(match.groupValues[4])?.takeIf{it>0L}?:return null
+  val time=parseTime(rawTime,if(rawTime.substringBefore(" ").substringAfterLast("/").length==2)"dd/MM/yy HH:mm" else "dd/MM/yyyy HH:mm")
+  val content=Regex("""\bND\s*:\s*(.*)""",setOf(RegexOption.IGNORE_CASE,RegexOption.DOT_MATCHES_ALL)).find(full)?.groupValues?.get(1)?.trim().orEmpty()
+  val reference=Regex("""(?:mã giao dịch|ma giao dich|ref|trace)\s*[:#]?\s*([A-Z0-9]+)""",RegexOption.IGNORE_CASE).find(full)?.groupValues?.get(1)
+  return BankTransaction("TECHCOMBANK",account,amount,direction,time,receivedAt,content,reference,fingerprint("TECHCOMBANK",account,amount,time,reference,full))
+ }
+}
+
 object BankParserRegistry {
  private val parsers=mapOf(
   "com.VCB" to VcbNotificationParser(),
-  "com.vietinbank.ipay" to VietinbankNotificationParser()
+  "com.vietinbank.ipay" to VietinbankNotificationParser(),
+  "vn.com.techcombank.bb.app" to TechcombankNotificationParser()
  )
  val supportedPackages:Set<String> get()=parsers.keys
  fun parser(packageName:String)=parsers[packageName]
+ /** App ngân hàng lạ (đổi package, bản mới…): thử mọi parser trên nội dung thông báo, chỉ nhận khi đọc ra giao dịch. */
+ fun detect(title:String,body:String):BankNotificationParser?=parsers.values.firstOrNull{runCatching{it.parse(title,body)}.getOrNull()!=null}
 }

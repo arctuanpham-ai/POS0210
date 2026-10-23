@@ -10,16 +10,18 @@ import android.speech.tts.UtteranceProgressListener
 import java.util.Locale
 
 object BankPaymentAnnouncer {
+ /** Số tiền đọc tự nhiên: 180.000 → "180 nghìn đồng"; 27.500 → "27.500 đồng". */
+ internal fun spokenAmount(amount:Long)=if(amount>=1000&&amount%1000==0L)"${amount/1000} nghìn đồng" else "${"%,d".format(amount).replace(',','.')} đồng"
  fun announce(context:Context,amount:Long,tableName:String?,vibrate:Boolean,speak:Boolean){
   if(vibrate)runCatching{
    val vibrator=if(Build.VERSION.SDK_INT>=31)context.getSystemService(VibratorManager::class.java).defaultVibrator else @Suppress("DEPRECATION")(context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator)
    if(Build.VERSION.SDK_INT>=26)vibrator.vibrate(VibrationEffect.createOneShot(180,VibrationEffect.DEFAULT_AMPLITUDE)) else @Suppress("DEPRECATION") vibrator.vibrate(180)
   }
   if(!speak)return
-  var tts:TextToSpeech?=null
-  tts=TextToSpeech(context.applicationContext){status->
+  val ttsHolder=arrayOfNulls<TextToSpeech>(1)
+  val engineInstance=TextToSpeech(context.applicationContext){status->
    if(status==TextToSpeech.SUCCESS){
-    val engine=tts?:return@TextToSpeech
+    val engine=ttsHolder[0]?:return@TextToSpeech
     val localeResult=engine.setLanguage(Locale("vi","VN"))
     if(localeResult==TextToSpeech.LANG_MISSING_DATA||localeResult==TextToSpeech.LANG_NOT_SUPPORTED){engine.shutdown();return@TextToSpeech}
     engine.setOnUtteranceProgressListener(object:UtteranceProgressListener(){
@@ -28,8 +30,9 @@ object BankPaymentAnnouncer {
      @Deprecated("Deprecated in Java") override fun onError(utteranceId:String?){engine.shutdown()}
     })
     val subject=tableName?.takeIf{it.isNotBlank()}?.let{"$it đã thanh toán"}?:"Đã nhận"
-    engine.speak("$subject ${"%,d".format(amount).replace(',','.')} đồng",TextToSpeech.QUEUE_FLUSH,null,"bank-payment")
-   } else tts?.shutdown()
+    engine.speak("$subject ${spokenAmount(amount)}",TextToSpeech.QUEUE_FLUSH,null,"bank-payment")
+   } else ttsHolder[0]?.shutdown()
   }
+  ttsHolder[0]=engineInstance
  }
 }

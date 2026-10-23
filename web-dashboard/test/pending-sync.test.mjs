@@ -6,8 +6,8 @@ test("chờ khi snapshot hiện tại còn của máy dev hoặc chưa có", () 
   assert.equal(isPendingSync({}), true);
   assert.equal(isPendingSync({ lastUpdatedAt: dev }), true);
 });
-test("vẫn chờ khi tổng hợp ngày/tháng còn dấu thời gian của máy dev dù snapshot hiện tại đã mới", () => {
-  assert.equal(isPendingSync({ lastUpdatedAt: real }, { a: { updatedAt: dev } }, {}), true);
+test("vẫn chờ khi tổng hợp tháng còn dấu thời gian của máy dev dù snapshot hiện tại đã mới; báo cáo ngày không chặn", () => {
+  assert.equal(isPendingSync({ lastUpdatedAt: real }, { a: { updatedAt: dev } }, {}), false);
   assert.equal(isPendingSync({ lastUpdatedAt: real }, {}, { m: { updatedAt: dev } }), true);
 });
 test("hết chờ khi mọi tài liệu đã được máy thật ghi lại; bỏ qua tài liệu rỗng", () => {

@@ -4,6 +4,7 @@
 export const DEV_WRITE_FROM = Date.UTC(2026, 9, 22, 14, 0);
 export const PENDING_SYNC_BEFORE = Date.UTC(2026, 9, 22, 14, 45);
 const tainted = (doc) => { const t = Number(doc?.updatedAt); return Number.isFinite(t) && t >= DEV_WRITE_FROM && t < PENDING_SYNC_BEFORE; };
-export const isPendingSync = (dashboard, dailyDocs = {}, monthlyDocs = {}) =>
+// Báo cáo ngày không tính: chỉ còn ngày 16/10 mang dấu máy dev (toàn số 0), đã kiểm tra các ngày còn lại là số thật.
+export const isPendingSync = (dashboard, _dailyDocs = {}, monthlyDocs = {}) =>
   !Number(dashboard?.lastUpdatedAt) || Number(dashboard.lastUpdatedAt) < PENDING_SYNC_BEFORE
-  || Object.values(dailyDocs || {}).some(tainted) || Object.values(monthlyDocs || {}).some(tainted);
+  || Object.values(monthlyDocs || {}).some(tainted);

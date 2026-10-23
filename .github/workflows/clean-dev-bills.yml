@@ -1,0 +1,20 @@
+name: Clean dev bills (one-off)
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/clean-dev-bills.yml", "ops/clean-dev-bills.py"]
+permissions:
+  contents: write
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dry run (count only)
+        env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_POS0210_17CE4 }}' > "$RUNNER_TEMP/sa.json"
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/sa.json" >/dev/null 2>&1
+          MODE=dry python3 ops/clean-dev-bills.py > "$RUNNER_TEMP/d.txt" 2>&1 || true
+          { echo '```'; cat "$RUNNER_TEMP/d.txt"; echo '```'; } > "$RUNNER_TEMP/c.md"
+          gh api repos/${{ github.repository }}/commits/${{ github.sha }}/comments -F body=@"$RUNNER_TEMP/c.md" >/dev/null

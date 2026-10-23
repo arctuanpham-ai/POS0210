@@ -603,7 +603,7 @@ object FirebaseCloudSync {
             // Nếu máy khác từng ghi đè document trên cloud thì lần này tự sửa lại, vì dấu vân tay cục bộ không thấy được việc đó.
             val trustAck=dailyAckVerified
             val gateOpen=!trustAck||now-prefs.getLong(gateKey,0L)>=DASHBOARD_DAILY_MIN_INTERVAL_MS
-            val changed=DashboardSalesSnapshot.lastDateKeys(todayKey).mapNotNull{key->
+            val changed=DashboardSalesSnapshot.lastDateKeys(todayKey,14).mapNotNull{key->
                 val snapshot=DashboardSalesSnapshot.composeDaily(key,todayKey,bills,batches,items,zone)
                 val fingerprint=DashboardSalesSnapshot.fingerprint(snapshot)
                 if(trustAck&&prefs.getString("$project/${root.path}/dashboardDaily/$key",null)==fingerprint)null else Triple(key,snapshot,fingerprint)

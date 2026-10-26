@@ -179,6 +179,7 @@ fun App(vm: PosViewModel = viewModel()) {
         "BUY_GET" -> BuyGetManager(vm)
         "DELIVERY" -> DeliveryQueue(vm)
         "ONLINE" -> OnlineOrdersScreen(vm)
+        "FOODAPP" -> FoodAppScreen(vm)
         "PREPAID_ORDERS" -> PrepaidOrders(vm)
         "FROZEN_REFUNDS" -> FrozenRefundsScreen(vm)
         "UNPAID_PREPAID" -> UnpaidPrepaidScreen(vm)
@@ -399,6 +400,7 @@ fun Tables(vm: PosViewModel) {
             FilterChip(byItem, { byItem = true }, { Text("THEO MÓN" + if (waitingTotalQty > 0) " · $waitingTotalQty" else "", maxLines = 1, softWrap = false) })
             run { val online by vm.onlineOrders.collectAsState(); val n = online.count { it.status in listOf("new", "awaiting_payment", "paid", "delivering") }
                 FilterChip(false, { vm.screen.value = "ONLINE" }, { Text("ĐƠN ONLINE" + if (n > 0) " · $n" else "", maxLines = 1, softWrap = false) }) }
+            FilterChip(false, { vm.screen.value = "FOODAPP" }, { Text("APP FOOD", maxLines = 1, softWrap = false) })
             if (prepaidMode)
                 FilterChip(false, { vm.screen.value = "PREPAID_ORDERS" }, { Text("ĐƠN HÔM NAY", maxLines = 1, softWrap = false) })
             if (canReport) {
@@ -4058,6 +4060,8 @@ fun Report(vm: PosViewModel) {
     ).filter { it.third > 0L }
     val cash = filteredPayments.filter { it.method == "CASH" }.sumOf { it.amount }
     val transfer = filteredPayments.filter { it.method == "TRANSFER" }.sumOf { it.amount }
+    val shopeeTotal = filteredPayments.filter { it.method == FoodApp.SHOPEE }.sumOf { it.amount }
+    val grabTotal = filteredPayments.filter { it.method == FoodApp.GRAB }.sumOf { it.amount }
     val avgBill = if (filteredBills.isEmpty()) 0L else revenue / filteredBills.size
     val sessionIds = filteredBills.map { it.sessionId }.toSet()
     val salesInPeriod = itemSales.filter { it.sessionId in sessionIds }
@@ -4087,6 +4091,7 @@ fun Report(vm: PosViewModel) {
         when (paymentFilter) {
             "CASH" -> method == "CASH"
             "TRANSFER" -> method == "TRANSFER"
+            "FOOD" -> FoodApp.isFood(method)
             else -> true
         }
     }
@@ -4195,6 +4200,8 @@ fun Report(vm: PosViewModel) {
                     item { MetricCard("Bill trung bình", money(avgBill)) }
                     item { MetricCard("Tiền mặt", money(cash)) }
                     item { MetricCard("Chuyển khoản", money(transfer)) }
+                    if (shopeeTotal > 0L) item { MetricCard("ShopeeFood (chờ/đã nhận từ app)", money(shopeeTotal)) }
+                    if (grabTotal > 0L) item { MetricCard("GrabFood (chờ/đã nhận từ app)", money(grabTotal)) }
                     item { MetricCard("Tổng tiền chi trong kỳ", money(purchaseTotal)) }
                     item { MetricCard("Chênh lệch thu - tổng tiền chi", money(revenue - purchaseTotal)) }
                     item {
@@ -4294,6 +4301,7 @@ fun Report(vm: PosViewModel) {
                         FilterChip(paymentFilter == "ALL", { paymentFilter = "ALL"; selectedBillIds = emptySet() }, { Text("TẤT CẢ") })
                         FilterChip(paymentFilter == "CASH", { paymentFilter = "CASH"; selectedBillIds = emptySet() }, { Text("TIỀN MẶT") })
                         FilterChip(paymentFilter == "TRANSFER", { paymentFilter = "TRANSFER"; selectedBillIds = emptySet() }, { Text("CHUYỂN KHOẢN") })
+                        FilterChip(paymentFilter == "FOOD", { paymentFilter = "FOOD"; selectedBillIds = emptySet() }, { Text("APP FOOD") })
                     }
                     if (current?.role == "ADMIN" && historyBills.isNotEmpty()) {
                         Row(
@@ -4342,7 +4350,7 @@ fun Report(vm: PosViewModel) {
                                         ) {
                                             Text(bill.billNo, fontWeight = FontWeight.Bold)
                                             Text("${bill.closedAt?.let { time(it) } ?: "--"} · ${money(bill.total)}")
-                                            Text(if (p?.method == "TRANSFER") "Chuyển khoản" else "Tiền mặt", fontSize = 12.sp)
+                                            Text(FoodApp.label(p?.method), fontSize = 12.sp)
                                         }
                                         if (current?.canCheckout == true || current?.role == "ADMIN") {
                                             OutlinedButton(onClick = { vm.reprintPaidBill(bill.id) }) { Text("IN LẠI") }
@@ -4760,7 +4768,7 @@ fun BillDetailDialog(vm: PosViewModel, bill: BillEntity, onDismiss: () -> Unit) 
     val payment = payments.firstOrNull { it.billId == bill.id }
     val tableName = tables.firstOrNull { it.id == session?.tableId }?.name ?: session?.tableId ?: "?"
     val cashier = employees.firstOrNull { it.id == payment?.cashierId }?.name ?: payment?.cashierId ?: "?"
-    val methodText = if (payment?.method == "TRANSFER") "Chuyển khoản" else "Tiền mặt"
+    val methodText = FoodApp.label(payment?.method)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -4777,7 +4785,7 @@ fun BillDetailDialog(vm: PosViewModel, bill: BillEntity, onDismiss: () -> Unit) 
                     Text("Mở: ${time(bill.openedAt)}")
                     Text("Đóng: ${bill.closedAt?.let { time(it) } ?: "--"}")
                     Text("Thanh toán: $methodText")
-                    if (payment != null && bill.status == "PAID" && current?.let { PaymentFixPolicy.canFix(it.role, it.id, payment.cashierId, payment.paidAt, System.currentTimeMillis()) } == true) {
+                    if (payment != null && !FoodApp.isFood(payment.method) && bill.status == "PAID" && current?.let { PaymentFixPolicy.canFix(it.role, it.id, payment.cashierId, payment.paidAt, System.currentTimeMillis()) } == true) {
                         TextButton(onClick = { methodReason = ""; methodMsg = ""; showMethod = true }) {
                             Text(if (payment.method == "TRANSFER") "ĐỔI SANG TIỀN MẶT (ghi nhầm)" else "ĐỔI SANG CHUYỂN KHOẢN (ghi nhầm)")
                         }

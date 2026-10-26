@@ -1494,7 +1494,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    }
   }
  }
- fun printOnlineTicket(o:vn.ecohome.pos0210.cloud.OnlineOrder){
+ fun printOnlineTicket(o:vn.ecohome.pos0210.cloud.OnlineOrder,title:String?=null){
   viewModelScope.launch{
    val profile=printerProfile()
    val comboParts=withContext(Dispatchers.IO){dao.allComboItemsSnapshot().groupBy{it.comboId}}
@@ -1506,13 +1506,52 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    }
    val where=when(o.mode){"delivery"->"GIAO: ${o.address}";"dinein"->"TẠI QUÁN · BÀN ${o.table}";else->"MANG ĐI"}
    val footer=listOf("${o.name} · ${o.phone}",where,if(o.note.isNotBlank())"GHI CHÚ ĐƠN: ${o.note}" else "").filter{it.isNotBlank()}.joinToString("\n")
-   val flow=if(o.status==vn.ecohome.pos0210.cloud.OnlineOrderRules.PAID||o.status==vn.ecohome.pos0210.cloud.OnlineOrderRules.DELIVERING)"ĐƠN ONLINE · ĐÃ THU TIỀN" else "ĐƠN ONLINE · LÀM NGAY"
-   val bmp=withContext(Dispatchers.Default){vn.ecohome.pos0210.printing.ReceiptRenderer.kitchen("ONLINE ${o.code}",0,0,o.name,lines,profile,flow,System.currentTimeMillis(),"#${o.code}",footer)}
-   if(printerMode()!="BLUETOOTH"){kitchenPreview.value="ONLINE ${o.code}" to listOf(bmp);return@launch}
+   val flow=if(title!=null)"ĐƠN APP FOOD · LÀM NGAY" else if(o.status==vn.ecohome.pos0210.cloud.OnlineOrderRules.PAID||o.status==vn.ecohome.pos0210.cloud.OnlineOrderRules.DELIVERING)"ĐƠN ONLINE · ĐÃ THU TIỀN" else "ĐƠN ONLINE · LÀM NGAY"
+   val bmp=withContext(Dispatchers.Default){vn.ecohome.pos0210.printing.ReceiptRenderer.kitchen(title?:"ONLINE ${o.code}",0,0,o.name,lines,profile,flow,System.currentTimeMillis(),"#${o.code}",footer)}
+   if(printerMode()!="BLUETOOTH"){kitchenPreview.value=(title?:"ONLINE ${o.code}") to listOf(bmp);return@launch}
    val mac=kitchenPrinterMac()
    if(mac.isBlank()){onlineMessage.value="Chưa chọn máy in bếp";return@launch}
    val r=withContext(Dispatchers.IO){vn.ecohome.pos0210.printing.BluetoothPrinter.printBitmap(getApplication(),mac,bmp,profile,vn.ecohome.pos0210.printing.PrintJobType.KITCHEN)}
    onlineMessage.value=if(r.isSuccess)"Đã in phiếu bếp đơn ${o.code}" else "Chưa in được phiếu đơn ${o.code}: ${r.exceptionOrNull()?.message}"
+  }
+ }
+ /** ===== Đơn ShopeeFood / GrabFood: bill ghi ngay (doanh thu ngày bán), tiền chờ app trả sau ===== */
+ val foodAppMessage=MutableStateFlow("")
+ val foodSettlements=dao.foodAppSettlements().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
+ fun foodPrices():Map<String,Long> = FoodApp.parsePrices(settings.value.firstOrNull{it.key==FoodApp.PRICE_KEY}?.value)
+ fun saveFoodPrices(prices:Map<String,Long>){saveSetting(FoodApp.PRICE_KEY,FoodApp.encodePrices(prices))}
+ fun addFoodOrder(app:String,code:String,lines:Map<String,Int>,onDone:(Boolean)->Unit){
+  val me=currentEmployee.value
+  if(me==null){foodAppMessage.value="Chưa đăng nhập";onDone(false);return}
+  viewModelScope.launch{
+   val prices=foodPrices()
+   val r=withContext(Dispatchers.IO){runCatching{repo.recordFoodAppSale(app,code,lines,prices,me.id)}}
+   if(r.isFailure){
+    val m=r.exceptionOrNull()?.message.orEmpty()
+    foodAppMessage.value=when{
+     m.contains("FOOD_ORDER_DUPLICATE")->"Mã đơn ${FoodApp.cleanCode(code)} của ${FoodApp.label(app)} đã nhập rồi"
+     m.contains("MISSING_ORDER_CODE")->"Cần nhập mã đơn của app"
+     m.contains("EMPTY_ORDER")->"Chưa chọn món"
+     m.contains("MENU_CHANGED")->"Có món vừa đổi hoặc bị tắt trong menu, hãy chọn lại"
+     else->"Chưa ghi được đơn: $m"
+    }
+    onDone(false);return@launch
+   }
+   foodAppMessage.value="Đã ghi đơn ${FoodApp.label(app)} ${FoodApp.cleanCode(code)} (bill ${r.getOrNull()}) · chờ app trả tiền"
+   val names=menu.value.associate{it.id to it.name}
+   val items=lines.map{(id,q)->vn.ecohome.pos0210.cloud.OnlineLine(names[id]?:combos.value.firstOrNull{"combo:"+it.id==id}?.name?.let{n->"COMBO · $n"}?:"món",q,"",0L,id)}
+   val o=vn.ecohome.pos0210.cloud.OnlineOrder("foodapp:$app:${FoodApp.cleanCode(code)}",FoodApp.cleanCode(code),"",FoodApp.label(app),"","takeaway","","","",items,0L,"paid","",System.currentTimeMillis(),null,null)
+   printOnlineTicket(o,"${FoodApp.label(app).uppercase()} ${FoodApp.cleanCode(code)}")
+   onDone(true)
+  }
+ }
+ fun settleFoodOrder(billId:String,received:Long,onDone:(Boolean)->Unit){
+  val me=currentEmployee.value
+  if(me==null){foodAppMessage.value="Chưa đăng nhập";onDone(false);return}
+  viewModelScope.launch{
+   val r=withContext(Dispatchers.IO){runCatching{repo.settleFoodAppBill(billId,received,me.id)}}
+   foodAppMessage.value=if(r.isFailure)"Chưa ghi được: ${r.exceptionOrNull()?.message}" else if(r.getOrNull()==true)"Đã ghi nhận tiền app trả" else "Đơn này đã chốt tiền trước đó"
+   onDone(r.getOrNull()==true)
   }
  }
  val kitchenPrint=MutableStateFlow<KitchenPrintUi?>(null)
@@ -1796,6 +1835,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    val pay=dao.paymentByBillId(billId)
    if(pay==null){done("Không tìm thấy thanh toán của bill");return@launch}
    if(!PaymentFixPolicy.canFix(e.role,e.id,pay.cashierId,pay.paidAt,System.currentTimeMillis())){done("Chỉ quản lý được sửa, hoặc người thu tiền trong ${PaymentFixPolicy.WINDOW_MINUTES} phút đầu");return@launch}
+   if(FoodApp.isFood(pay.method)){done("Đơn app food không đổi hình thức được, hãy xoá bill rồi nhập lại");return@launch}
    val old=pay.method
    val n=db.withTransaction{
     val changed=dao.changePaymentMethod(billId,newMethod)

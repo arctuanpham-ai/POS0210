@@ -92,7 +92,7 @@ object SalesReport {
             val discount=a.filter{it.kind=="DISCOUNT"}.sumOf{it.amount}
             val surcharge=a.filter{it.kind=="SURCHARGE"}.sumOf{it.amount}
             val ps=paymentsByBill[b.id].orEmpty()
-            val valid=ps.filter{it.dataScope=="LIVE"&&it.method in listOf("CASH","TRANSFER")&&it.amount>=0}
+            val valid=ps.filter{it.dataScope=="LIVE"&&(it.method in listOf("CASH","TRANSFER")||vn.ecohome.pos0210.FoodApp.isFood(it.method))&&it.amount>=0}
             val paid=valid.sumOf{it.amount}
             val d=detail-b.subtotal
             val aDelta=(b.subtotal-discount+surcharge).coerceAtLeast(0)-b.total

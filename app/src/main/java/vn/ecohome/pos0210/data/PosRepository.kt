@@ -1,6 +1,7 @@
 package vn.ecohome.pos0210.data
 
 import androidx.room.withTransaction
+import vn.ecohome.pos0210.FoodApp
 import vn.ecohome.pos0210.LoyaltyAwardPolicy
 import vn.ecohome.pos0210.report.OrderSnapshots
 import java.util.UUID
@@ -222,7 +223,7 @@ class PosRepository(private val db:PosDatabase){
         cashReceived:Long?=null,
         change:Long?=null
     ):PaymentCommitResult {
-        require(method=="CASH" || method=="TRANSFER") { "INVALID_PAYMENT_METHOD" }
+        require(method=="CASH" || method=="TRANSFER" || FoodApp.isFood(method)) { "INVALID_PAYMENT_METHOD" }
         require(preview.subtotal>=0L && preview.total>=0L && preview.surcharge>=0L && preview.discount>=0L) { "INVALID_PAYMENT_AMOUNT" }
         require(preview.total == (preview.subtotal + preview.surcharge - preview.discount).coerceAtLeast(0L)) { "PRICING_TOTAL_MISMATCH" }
         val now=System.currentTimeMillis()
@@ -353,6 +354,45 @@ class PosRepository(private val db:PosDatabase){
         val result=completePayment(fresh,PricingPreview(total,sur,dis,payable,emptyList(),null),"TRANSFER",cashierId,"ON-$code")
         dao.audit(AuditEventEntity(UUID.randomUUID().toString(),"ONLINE_ORDER",code,"BILL_RECORDED",cashierId,null,System.currentTimeMillis(),"bill=${result.bill.billNo},subtotal=$total,surcharge=$sur,discount=$dis,total=$payable"))
         return result.bill.billNo
+    }
+
+    /**
+     * Đơn ShopeeFood/GrabFood: bill thật ghi ngay lúc bán (doanh thu ngày bán), giá theo bảng giá app, phương thức SHOPEE/GRAB
+     * (chưa có tiền về két hay ngân hàng). Bàn ảo "FOODAPP", lô món ghi sẵn là đã giao (phiếu bếp in riêng). Trả về mã bill.
+     */
+    suspend fun recordFoodAppSale(app:String,code:String,lines:Map<String,Int>,prices:Map<String,Long>,cashierId:String):String {
+        require(FoodApp.isFood(app)) { "INVALID_FOOD_APP" }
+        val clean=FoodApp.cleanCode(code)
+        require(clean.isNotEmpty()) { "MISSING_ORDER_CODE" }
+        require(lines.isNotEmpty()) { "EMPTY_ORDER" }
+        val key=FoodApp.key(app,clean)
+        check(dao.foodAppRecorded(key)==0) { "FOOD_ORDER_DUPLICATE" }
+        val session=openSession(FoodApp.TABLE_ID,cashierId,"LIVE","prepaid")
+        // Tạo lô theo giá menu (qua kiểm tra snapshot), rồi đổi sang giá app trước khi thanh toán.
+        val items=prepareCart(lines,emptyMap()).map{it.copy(deliveredQty=it.qty)}
+        val batch=createBatch(session.id,1,cashierId,items)
+        for(i in dao.batchItemsOnce(batch.id)){
+            val id=i.menuItemId ?: continue
+            if(id.startsWith("combo:")) continue
+            val p=FoodApp.priceFor(id,i.unitPriceSnapshot,prices)
+            if(p!=i.unitPriceSnapshot) dao.setItemPrice(i.id,p)
+        }
+        dao.deliverDraftNow(batch.id,System.currentTimeMillis(),cashierId)
+        val total=dao.sessionTotalSnapshot(session.id)
+        val fresh=dao.sessionSnapshotById(session.id) ?: error("SESSION_MISSING")
+        val result=completePayment(fresh,PricingPreview(total,0L,0L,total,emptyList(),null),app,cashierId,FoodApp.reference(app,clean))
+        dao.audit(AuditEventEntity(UUID.randomUUID().toString(),"FOOD_APP",key,"BILL_RECORDED",cashierId,null,System.currentTimeMillis(),"bill=${result.bill.billNo},billId=${result.bill.id},total=$total"))
+        return result.bill.billNo
+    }
+
+    /** App đã trả tiền: ghi số thực nhận (đã trừ hoa hồng). Mỗi bill chỉ chốt một lần. */
+    suspend fun settleFoodAppBill(billId:String,received:Long,actorId:String):Boolean = db.withTransaction {
+        require(received>=0L) { "INVALID_AMOUNT" }
+        val pay=dao.paymentByBillId(billId) ?: error("PAYMENT_MISSING")
+        require(FoodApp.isFood(pay.method)) { "NOT_FOOD_APP_BILL" }
+        if(dao.foodAppSettled(billId)>0) return@withTransaction false
+        dao.audit(AuditEventEntity(UUID.randomUUID().toString(),"FOOD_APP",billId,"SETTLED",actorId,null,System.currentTimeMillis(),"received=$received,billAmount=${pay.amount},app=${pay.method}"))
+        true
     }
 
     suspend fun deleteBillsAtomic(

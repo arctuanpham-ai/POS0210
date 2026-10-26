@@ -546,3 +546,7 @@ button.paylist-row { width: 100%; font: inherit; color: inherit; cursor: pointer
 .fa-form label { display: grid; gap: 3px; font-size: 12px; color: #796758; font-weight: 700; }
 .fa-form button { grid-column: 1 / -1; }
 .fa-form .fa-calc { grid-column: 1 / -1; color: #6e432d; font-weight: 700; }
+.fa-import-bar { display: flex; gap: 8px; margin: 6px 0; }
+.fa-import-bar button { padding: 9px 14px; border-radius: 10px; border: 1px solid #6e432d; background: #6e432d; color: #fff; font-weight: 800; }
+.fa-import-bar button.secondary { background: #fff9f0; color: #6e432d; }
+#grab-import-result h4 { margin: 10px 0 2px; font-size: 14px; }

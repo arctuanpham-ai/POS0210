@@ -22,45 +22,46 @@ import {
   deleteDoc as rawDeleteDoc,
   writeBatch as rawWriteBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { orderText as zaloOrderText, zaloClear, zaloConnect, zaloSend, zaloState } from "./zalo-web.js?v=20261026-04";
-import { isPendingSync } from "./pending-sync.js?v=20261026-04";
-import { appLabel, buildEntry, entryProblem, foodAppTotals, normalizeFoodApp, otherDeduction, parseMoneyInput } from "./food-app.js?v=20261026-04";
-import { buildProfile, profileHeadline } from "./customer-profile.js?v=20261026-04";
-import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261026-04";
-import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, freshenDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261026-04";
-import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261026-04";
-import { FUNNEL, buildStats, dayKeyVN, dayLabel, funnelSteps, pct } from "./stats-view.js?v=20261026-04";
-import { approvedKeys, vagueKey, vagueMaterials } from "./vague-materials.js?v=20261026-04";
-import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions, searchMaterials } from "./material-search.js?v=20261026-04";
-import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261026-04";
-import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261026-04";
-import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261026-04";
-import { buildSimulation } from "./sim-data.js?v=20261026-04";
-import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261026-04";
-import { menuCsv } from "./menu-export.js?v=20261026-04";
-import { KIND_LABELS, MATERIALS, buildDynamicMaterials, catalogRules, registerDynamicMaterials, similarMaterials, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261026-04";
-import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261026-04";
-import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261026-04";
-import { buildFlag, flagAfterEdit, flagAfterReview, flagApprovalProblem, isFlagOpen, needsOwnerReview, receiptFlag, BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261026-04";
-import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261026-04";
-import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261026-04";
-import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261026-04";
-import { otherCostRows } from "./other-costs.js?v=20261026-04";
-import { paybackStatus } from "./payback.js?v=20261026-04";
-import { topSellers } from "./top-banner.js?v=20261026-04";
-import { reconcileDays, reconcileRevenue } from "./revenue-check.js?v=20261026-04";
-import { prepList, profitRanking, tomorrowSales } from "./plan-profit.js?v=20261026-04";
-import { OO_LABELS, OO_MODE_LABELS, OO_REJECT_REASONS, attentionCount, buildTransition, groupOrders, isPending, limitKeys, minutesAgoText, newOrderCodes, nextActions, ooToMillis, overdueOrders, releasedCount, validateShopConfig } from "./online-orders.js?v=20261026-04";
-import { menuEditProblem, menuGroups, mergePlan, nameIssues, nextProductCode, normName, soldCombos, soldNotInMenu } from "./menu-view.js?v=20261026-04";
-import { POS_CEILING, SPARK, dayUsage, lastPacificDays, nextReset, pacificDay, usageTrend } from "./usage.js?v=20261026-04";
-import { AI_SCOPES, buildAiPack, scopeRange } from "./ai-export.js?v=20261026-04";
-import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261026-04";
-import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261026-04";
-import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261026-04";
-import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261026-04";
-import { compareKeys, compareRows, weekTotals } from "./day-compare.js?v=20261026-04";
-import { comboCount, formatBaseQty, materialConsumption, outputRows } from "./item-output.js?v=20261026-04";
-import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261026-04";
+import { orderText as zaloOrderText, zaloClear, zaloConnect, zaloSend, zaloState } from "./zalo-web.js?v=20261026-05";
+import { isPendingSync } from "./pending-sync.js?v=20261026-05";
+import { GRAB_SHEET, matchGrab, parseGrabRows } from "./grab-report.js?v=20261026-05";
+import { appLabel, buildEntry, entryProblem, foodAppTotals, normalizeFoodApp, otherDeduction, parseMoneyInput } from "./food-app.js?v=20261026-05";
+import { buildProfile, profileHeadline } from "./customer-profile.js?v=20261026-05";
+import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261026-05";
+import { buildCancelledReceipt, buildEditedReceipt, calculateReceiptTotal, createStableDraft, freshenDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261026-05";
+import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261026-05";
+import { FUNNEL, buildStats, dayKeyVN, dayLabel, funnelSteps, pct } from "./stats-view.js?v=20261026-05";
+import { approvedKeys, vagueKey, vagueMaterials } from "./vague-materials.js?v=20261026-05";
+import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions, searchMaterials } from "./material-search.js?v=20261026-05";
+import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261026-05";
+import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261026-05";
+import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261026-05";
+import { buildSimulation } from "./sim-data.js?v=20261026-05";
+import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261026-05";
+import { menuCsv } from "./menu-export.js?v=20261026-05";
+import { KIND_LABELS, MATERIALS, buildDynamicMaterials, catalogRules, registerDynamicMaterials, similarMaterials, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261026-05";
+import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261026-05";
+import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261026-05";
+import { buildFlag, flagAfterEdit, flagAfterReview, flagApprovalProblem, isFlagOpen, needsOwnerReview, receiptFlag, BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261026-05";
+import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261026-05";
+import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261026-05";
+import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261026-05";
+import { otherCostRows } from "./other-costs.js?v=20261026-05";
+import { paybackStatus } from "./payback.js?v=20261026-05";
+import { topSellers } from "./top-banner.js?v=20261026-05";
+import { reconcileDays, reconcileRevenue } from "./revenue-check.js?v=20261026-05";
+import { prepList, profitRanking, tomorrowSales } from "./plan-profit.js?v=20261026-05";
+import { OO_LABELS, OO_MODE_LABELS, OO_REJECT_REASONS, attentionCount, buildTransition, groupOrders, isPending, limitKeys, minutesAgoText, newOrderCodes, nextActions, ooToMillis, overdueOrders, releasedCount, validateShopConfig } from "./online-orders.js?v=20261026-05";
+import { menuEditProblem, menuGroups, mergePlan, nameIssues, nextProductCode, normName, soldCombos, soldNotInMenu } from "./menu-view.js?v=20261026-05";
+import { POS_CEILING, SPARK, dayUsage, lastPacificDays, nextReset, pacificDay, usageTrend } from "./usage.js?v=20261026-05";
+import { AI_SCOPES, buildAiPack, scopeRange } from "./ai-export.js?v=20261026-05";
+import { COUNT_ITEMS, buildDemoCounts, countToBase, varianceBetween } from "./stock-count.js?v=20261026-05";
+import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261026-05";
+import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261026-05";
+import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261026-05";
+import { compareKeys, compareRows, weekTotals } from "./day-compare.js?v=20261026-05";
+import { comboCount, formatBaseQty, materialConsumption, outputRows } from "./item-output.js?v=20261026-05";
+import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261026-05";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",
@@ -4286,6 +4287,69 @@ $("#appfood-pending")?.addEventListener("input", (event) => {
   if (!recv.dataset.touched && e.orderValue != null) { recv.value = String(Math.max(0, e.orderValue - e.commission - e.vat - e.pit)); e.received = Number(recv.value); }
   const other = e.received == null ? 0 : otherDeduction(e);
   form.querySelector(".fa-calc").textContent = other > 0 ? `Khoản trừ khác (khuyến mãi, phụ phí…): ${money(other)}` : "";
+});
+
+/* ---------- Nhập file đối soát GrabMerchant ---------- */
+let xlsxLib = null;
+function loadXlsxLib() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  const urls = ["https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js", "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"];
+  const tryLoad = (i) => new Promise((resolve, reject) => { const el = document.createElement("script"); el.src = urls[i]; el.onload = () => (window.XLSX ? resolve(window.XLSX) : reject(new Error("no xlsx"))); el.onerror = () => reject(new Error("load")); document.head.appendChild(el); })
+    .catch((e) => (i + 1 < urls.length ? tryLoad(i + 1) : Promise.reject(e)));
+  if (!xlsxLib) xlsxLib = tryLoad(0).catch((e) => { xlsxLib = null; throw e; });
+  return xlsxLib;
+}
+const grabState = { match: null };
+$("#grab-import-btn")?.addEventListener("click", () => $("#grab-import-file").click());
+$("#grab-import-file")?.addEventListener("change", async (event) => {
+  const file = event.target.files?.[0]; event.target.value = "";
+  const host = $("#grab-import-result");
+  if (!file) return;
+  host.innerHTML = '<p class="muted">Đang đọc file…</p>';
+  try {
+    const XLSX = await loadXlsxLib();
+    const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
+    const name = wb.SheetNames.find((n) => n.trim() === GRAB_SHEET);
+    if (!name) throw new Error(`Không thấy sheet "${GRAB_SHEET}". Hãy dùng báo cáo giao dịch tải từ GrabMerchant.`);
+    const parsed = parseGrabRows(XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: null, raw: true }));
+    if (!parsed.length) throw new Error("File không có dòng đơn hàng nào (hoặc thiếu cột Mã đơn hàng ngắn / Số tiền / Tổng cộng).");
+    const v = normalizeFoodApp(foodState.data);
+    grabState.match = matchGrab(parsed, v.pendingOrders, v.settledOrders.filter((o) => o.app === "GRAB").map((o) => o.code));
+    renderGrabImport();
+  } catch (error) { grabState.match = null; host.innerHTML = `<p class="warn-text">${escapeHtml(error.message || String(error))}</p>`; }
+});
+function renderGrabImport() {
+  const host = $("#grab-import-result"), m = grabState.match;
+  if (!m) { host.innerHTML = ""; return; }
+  const line = (row, extra = "") => `<div class="row-line"><span>${escapeHtml(row.code)}<small> giá trị ${money(row.orderValue)} · chiết khấu ${money(row.commission)} · GTGT ${money(row.vat)} · TNCN ${money(row.pit)}${row.other ? ` · trừ khác ${money(row.other)}` : ""}${row.paidAt ? ` · chuyển ${escapeHtml(row.paidAt)}` : ""}${extra}</small></span><strong>${money(row.received)}</strong></div>`;
+  const section = (title, body) => (body ? `<h4>${title}</h4>${body}` : "");
+  host.innerHTML =
+    section(`Sẵn sàng chốt (${m.ready.length})`, m.ready.map((x) => line(x.row, x.diffNote ? ` · ⚠ ${escapeHtml(x.diffNote)}` : "")).join("")) +
+    (m.ready.length ? `<div class="fa-import-bar"><button type="button" id="grab-import-apply">Xác nhận ${m.ready.length} đơn</button></div>` : "") +
+    section(`Cần xem lại, không tự chốt (${m.review.length})`, m.review.map((x) => line(x.row, ` · ⚠ ${escapeHtml(x.row.problems.join("; "))}`)).join("")) +
+    section(`Có trên Grab nhưng POS chưa nhập (${m.notInPos.length})`, m.notInPos.map((r) => line(r)).join("")) +
+    section(`POS đang chờ nhưng chưa có trong file (${m.notInFile.length})`, m.notInFile.map((o) => `<div class="row-line"><span>${escapeHtml(o.code)}<small> ${escapeHtml(foodTime(o.at))}</small></span><strong>${money(o.amount)}</strong></div>`).join("")) +
+    (m.alreadyDone.length ? `<p class="muted">${m.alreadyDone.length} đơn trong file đã chốt trước đó, bỏ qua.</p>` : "") +
+    (!m.ready.length && !m.review.length && !m.notInPos.length ? '<p class="muted">Không có đơn nào khớp với đơn đang chờ.</p>' : "") +
+    '<p class="fa-err" id="grab-import-msg" role="alert"></p>';
+}
+$("#grab-import-result")?.addEventListener("click", async (event) => {
+  const button = event.target.closest("#grab-import-apply");
+  if (!button || !grabState.match || !canEnterFood()) return;
+  const msg = $("#grab-import-msg"); button.disabled = true;
+  const todo = grabState.match.ready; let done = 0;
+  try {
+    for (const { order, row } of todo) {
+      const e = { orderValue: row.orderValue, commission: row.commission, vat: row.vat, pit: row.pit, received: row.received };
+      if (entryProblem(e)) continue;
+      const entry = buildEntry(order, e, myName(), Date.now());
+      await setDoc(doc(db, ...root, "foodAppSettle", order.billId), entry);
+      foodState.entries[order.billId] = entry; done += 1;
+    }
+    grabState.match = null;
+    $("#grab-import-result").innerHTML = `<p class="muted">Đã gửi ${done} đơn cho máy POS. Máy POS ở quán cần đang mở và có mạng để ghi vào bill.</p>`;
+    renderFoodApp(foodState.data);
+  } catch (error) { button.disabled = false; msg.textContent = `Không gửi được (đã gửi ${done}/${todo.length}): ${error.message || error}`; }
 });
 
 /* ---------- App food: đọc dashboard/foodApp (một lượt đọc, POS tự đẩy lên) ---------- */

@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20261023-02" />
+    <link rel="stylesheet" href="styles.css?v=20261026-01" />
     <title>0210 · Manager</title>
   </head>
   <body>
@@ -52,6 +52,7 @@
         <nav class="tabbar" id="tabbar" aria-label="Các trang">
           <a href="#ban" data-tab="ban">Bàn</a>
           <a href="#donline" data-tab="donline">Đơn online<span id="donline-badge" class="tab-badge" hidden></span></a>
+          <a href="#appfood" data-tab="appfood">App food</a>
           <a href="#doanhthu" data-tab="doanhthu">Doanh thu</a>
           <a href="#bill" data-tab="bill">Lịch sử bill</a>
           <a href="#taichinh" data-tab="taichinh">Tài chính</a>
@@ -270,6 +271,18 @@
         </details>
         </div>
         <datalist id="payee-names"></datalist><datalist id="bank-choices"></datalist>
+        </div>
+
+        <div class="page" data-page="appfood" hidden>
+        <section class="section-heading first-section">
+          <div><p class="eyebrow">SHOPEEFOOD · GRABFOOD</p><h2>Tiền chờ app trả</h2></div>
+          <button type="button" id="appfood-refresh" class="secondary">Tải lại</button>
+        </section>
+        <p class="muted" id="appfood-status" role="status">Đang tải…</p>
+        <section class="summary-grid" id="appfood-metrics" aria-label="Tổng hợp app food"></section>
+        <section class="panel"><h3>Đơn đang chờ app trả tiền</h3><div id="appfood-pending"></div></section>
+        <section class="panel"><h3>Doanh thu theo ngày (14 ngày gần nhất)</h3><div id="appfood-days"></div></section>
+        <section class="panel"><h3>Đã nhận tiền gần đây</h3><div id="appfood-settled"></div></section>
         </div>
 
         <div class="page" data-page="donline" hidden>
@@ -709,7 +722,7 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261023-02"></script>
+    <script type="module" src="app.js?v=20261026-01"></script>
     <script>
       // Trang không chạy được (thường do trình duyệt còn giữ file cũ): báo rõ thay vì để nút đăng nhập "chết".
       setTimeout(function () {

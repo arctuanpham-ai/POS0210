@@ -529,3 +529,9 @@ button.paylist-row { width: 100%; font: inherit; color: inherit; cursor: pointer
 .pending-sync .pending-banner { display: block; }
 .pending-sync [data-needs-sync] { display: none !important; }
 .pending-sync .page[data-page="doanhthu"] > :not(.pending-banner) { display: none !important; }
+
+/* App food */
+.row-line { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 2px; border-bottom: 1px solid #eadcc6; }
+.row-line:last-child { border-bottom: 0; }
+.row-line small { display: block; color: #7a6a5a; font-size: 12px; font-weight: 500; }
+.row-line strong { white-space: nowrap; }

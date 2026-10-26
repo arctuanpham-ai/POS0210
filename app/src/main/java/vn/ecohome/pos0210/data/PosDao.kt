@@ -284,6 +284,10 @@ WHERE s.dataScope='LIVE' AND ob.status!='CANCELLED' AND EXISTS(SELECT 1 FROM Bil
 @Query("SELECT * FROM AuditEventEntity WHERE entityType='FOOD_APP' AND action='SETTLED'") suspend fun foodAppSettlementsSnapshot():List<AuditEventEntity>
 @Query("SELECT COUNT(*) FROM AuditEventEntity WHERE entityType='FOOD_APP' AND entityId=:billId AND action='SETTLED'") suspend fun foodAppSettled(billId:String):Int
 @Query("UPDATE OrderItemEntity SET unitPriceSnapshot=:price WHERE id=:id") suspend fun setItemPrice(id:String,price:Long):Int
+@Query("SELECT * FROM OrderItemEntity WHERE batchId IN (SELECT id FROM OrderBatchEntity WHERE sessionId=:sessionId AND status!='CANCELLED')") suspend fun foodSessionItems(sessionId:String):List<OrderItemEntity>
+@Query("SELECT * FROM BillEntity WHERE id=:billId LIMIT 1") suspend fun foodBillById(billId:String):BillEntity?
+@Query("UPDATE BillEntity SET subtotal=:total,total=:total WHERE id=:billId AND status='PAID'") suspend fun setBillTotals(billId:String,total:Long):Int
+@Query("UPDATE PaymentEntity SET amount=:amount WHERE billId=:billId") suspend fun setPaymentAmount(billId:String,amount:Long):Int
 @Query("UPDATE OrderBatchEntity SET status='DELIVERED',sentAt=:at,deliveredAt=:at,deliveredBy=:by WHERE id=:id AND status='DRAFT'") suspend fun deliverDraftNow(id:String,at:Long,by:String):Int
 @Query("UPDATE OrderBatchEntity SET status='DELIVERED',deliveredAt=:at,deliveredBy=:employeeId WHERE id=:id AND status='WAITING'") suspend fun markDelivered(id:String,at:Long,employeeId:String):Int
 @Query("UPDATE OrderBatchEntity SET status='RECONCILED',deliveredAt=COALESCE((SELECT b.closedAt FROM BillEntity b WHERE b.sessionId=OrderBatchEntity.sessionId ORDER BY b.closedAt DESC LIMIT 1),deliveredAt,sentAt,createdAt) WHERE status='WAITING' AND sessionId IN (SELECT id FROM TableSessionEntity WHERE status='CLOSED')") suspend fun reconcileClosedSessionWaiting():Int

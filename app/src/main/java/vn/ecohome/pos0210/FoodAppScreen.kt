@@ -73,7 +73,10 @@ fun FoodAppScreen(vm: PosViewModel) {
                             Text("${whenText(p.paidAt)} · bill ${bill?.billNo ?: "?"}", fontSize = 12.sp, color = Color.Gray)
                             Text(vnd(p.amount), fontWeight = FontWeight.Black, fontSize = 18.sp)
                         }
-                        Button({ settleBillId = p.billId }, colors = ButtonDefaults.buttonColors(containerColor = Brown)) { Text("ĐÃ NHẬN TIỀN") }
+                        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Button({ settleBillId = p.billId }, colors = ButtonDefaults.buttonColors(containerColor = Brown)) { Text("ĐÃ NHẬN TIỀN") }
+                            OutlinedButton({ vm.repriceFoodOrder(p.billId) {} }) { Text("TÍNH LẠI GIÁ", fontSize = 12.sp) }
+                        }
                     }
                 }
             }

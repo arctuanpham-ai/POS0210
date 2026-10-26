@@ -385,6 +385,33 @@ class PosRepository(private val db:PosDatabase){
         return result.bill.billNo
     }
 
+    /**
+     * Tính lại giá một đơn app food CHƯA chốt tiền theo bảng giá app hiện tại (khi lúc nhập chưa cập nhật giá).
+     * Món không có trong bảng giá app giữ nguyên giá đã bán. Trả về (tổng cũ, tổng mới); ném lỗi nếu đã chốt tiền.
+     */
+    suspend fun repriceFoodAppBill(billId:String,prices:Map<String,Long>,actorId:String):Pair<Long,Long> = db.withTransaction {
+        val pay=dao.paymentByBillId(billId) ?: error("PAYMENT_MISSING")
+        require(FoodApp.isFood(pay.method)) { "NOT_FOOD_APP_BILL" }
+        check(dao.foodAppSettled(billId)==0) { "ALREADY_SETTLED" }
+        val bill=dao.foodBillById(billId) ?: error("BILL_MISSING")
+        check(bill.status=="PAID") { "BILL_NOT_PAID" }
+        val items=dao.foodSessionItems(bill.sessionId)
+        var total=0L
+        for(i in items){
+            val id=i.menuItemId
+            val p=if(id==null||id.startsWith("combo:")||i.qty<0) i.unitPriceSnapshot else (prices[id]?.takeIf{it>0L} ?: i.unitPriceSnapshot)
+            if(p!=i.unitPriceSnapshot) dao.setItemPrice(i.id,p)
+            total+=p*i.qty
+        }
+        val old=bill.total
+        if(total!=old){
+            check(dao.setBillTotals(billId,total)==1) { "BILL_UPDATE_FAILED" }
+            dao.setPaymentAmount(billId,total)
+            dao.audit(AuditEventEntity(UUID.randomUUID().toString(),"FOOD_APP",billId,"REPRICED",actorId,null,System.currentTimeMillis(),"from=$old,to=$total,bill=${bill.billNo}"))
+        }
+        old to total
+    }
+
     /** App đã trả tiền: ghi số thực nhận (đã trừ hoa hồng). Mỗi bill chỉ chốt một lần. */
     suspend fun settleFoodAppBill(billId:String,received:Long,actorId:String):Boolean = db.withTransaction {
         require(received>=0L) { "INVALID_AMOUNT" }

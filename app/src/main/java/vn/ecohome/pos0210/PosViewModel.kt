@@ -1545,6 +1545,21 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    onDone(true)
   }
  }
+ fun repriceFoodOrder(billId:String,onDone:(Boolean)->Unit){
+  val me=currentEmployee.value
+  if(me==null){foodAppMessage.value="Chưa đăng nhập";onDone(false);return}
+  viewModelScope.launch{
+   val prices=foodPrices()
+   val r=withContext(Dispatchers.IO){runCatching{repo.repriceFoodAppBill(billId,prices,me.id).also{dao.markCloudDirty()}}}
+   val v=r.getOrNull()
+   foodAppMessage.value=when{
+    r.isFailure->if(r.exceptionOrNull()?.message?.contains("ALREADY_SETTLED")==true)"Đơn đã chốt tiền, không tính lại được" else "Chưa tính lại được: ${r.exceptionOrNull()?.message}"
+    v!!.first==v.second->"Giá không đổi (${v.first}đ). Hãy nhập giá app vào BẢNG GIÁ APP trước rồi bấm lại"
+    else->"Đã tính lại: ${v.first}đ → ${v.second}đ"
+   }
+   onDone(r.isSuccess)
+  }
+ }
  fun settleFoodOrder(billId:String,received:Long,onDone:(Boolean)->Unit){
   val me=currentEmployee.value
   if(me==null){foodAppMessage.value="Chưa đăng nhập";onDone(false);return}

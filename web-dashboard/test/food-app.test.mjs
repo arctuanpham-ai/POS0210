@@ -1,11 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeFoodApp, foodAppTotals, appLabel, parseMoneyInput, entryProblem, buildEntry } from "../food-app.js";
+import { normalizeFoodApp, foodAppTotals, appLabel, parseMoneyInput, entryProblem, buildEntry, otherDeduction } from "../food-app.js";
 
 test("tài liệu rỗng không làm hỏng", () => {
   const v = normalizeFoodApp(undefined);
   assert.equal(v.empty, true);
-  assert.deepEqual(foodAppTotals(v), { pendingAmount: 0, pendingCount: 0, settledAmount: 0, feeAmount: 0, salesDays: 0 });
+  assert.deepEqual(foodAppTotals(v), { pendingAmount: 0, pendingCount: 0, settledAmount: 0, feeAmount: 0, salesDays: 0, commission: 0, vat: 0, pit: 0, other: 0 });
 });
 test("tổng chờ, phí app và doanh thu ngày", () => {
   const v = normalizeFoodApp({
@@ -29,14 +29,20 @@ test("ô nhập tiền và kiểm tra", () => {
   assert.equal(parseMoneyInput("37.933 đ"), 37933);
   assert.equal(parseMoneyInput(""), null);
   assert.equal(parseMoneyInput("1234567890123"), null);
-  assert.match(entryProblem(null, 5), /giá trị đơn/);
-  assert.match(entryProblem(50000, null), /thực nhận/);
-  assert.match(entryProblem(50000, 60000), /không được lớn hơn/);
-  assert.equal(entryProblem(50000, 37933), "");
-  assert.equal(entryProblem(50000, 0), "");
+  assert.match(entryProblem({ orderValue: null, received: 5 }), /giá trị đơn/);
+  assert.match(entryProblem({ orderValue: 50000, received: null }), /thực nhận/);
+  assert.match(entryProblem({ orderValue: 50000, received: 60000 }), /lớn hơn giá trị đơn/);
+  assert.match(entryProblem({ orderValue: 50000, commission: 9817, vat: 1500, pit: 750, received: 40000 }), /lớn hơn giá trị đơn/);
+  assert.equal(entryProblem({ orderValue: 50000, commission: 9817, vat: 1500, pit: 750, received: 37933 }), "");
+  assert.equal(entryProblem({ orderValue: 50000, received: 0 }), "");
 });
-test("tạo tài liệu gửi máy POS", () => {
-  const e = buildEntry({ billId: "b1", app: "GRAB", code: "GF-824" }, 50000, 37933, "Lan", 9);
-  assert.deepEqual(e, { billId: "b1", app: "GRAB", code: "GF-824", orderValue: 50000, received: 37933, by: "Lan", at: 9, applied: false });
+test("khoản trừ khác và tài liệu gửi máy POS", () => {
+  const e = { orderValue: 50000, commission: 9817, vat: 1500, pit: 750, received: 37000 };
+  assert.equal(otherDeduction(e), 933);
+  const doc = buildEntry({ billId: "b1", app: "GRAB", code: "GF-824" }, { orderValue: 50000, commission: 9817, vat: 1500, pit: 750, received: 37933 }, "Lan", 9);
+  assert.deepEqual(doc, { billId: "b1", app: "GRAB", code: "GF-824", orderValue: 50000, commission: 9817, vat: 1500, pit: 750, received: 37933, by: "Lan", at: 9, applied: false });
   assert.equal(normalizeFoodApp({ pendingOrders: [{ billId: "b1", app: "GRAB", code: "X", amount: 1, at: 1 }] }).pendingOrders[0].billId, "b1");
+  const v = normalizeFoodApp({ settledOrders: [{ app: "GRAB", code: "G", amount: 50000, received: 37933, commission: 9817, vat: 1500, pit: 750, other: 0, at: 1 }] });
+  const t = foodAppTotals(v);
+  assert.equal(t.commission, 9817); assert.equal(t.vat, 1500); assert.equal(t.pit, 750); assert.equal(t.feeAmount, 12067);
 });

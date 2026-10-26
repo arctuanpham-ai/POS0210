@@ -174,6 +174,7 @@ object FirebaseCloudSync {
         stage("DASHBOARD",60_000L){writeDashboard(root.collection("dashboard").document("current"),financialDashboard(dao,bills,payments,now)+mapOf("openTables" to open.size,"openTableNames" to tables.filter{openByTable.containsKey(it.id)}.map{it.name},"revenueToday" to paidToday.sumOf{it.total},"paidBillsToday" to paidToday.size,"provisionalOpenTotal" to liveSnapshot.provisionalOpenTotal,"liveTables" to liveSnapshot.liveTables.map{it.toMap()},"lastUpdatedAt" to now),dashboardOperation)}
         publishDailySnapshots(fs,root,bills,batches,orderItems,now,dashboardOperation)
         publishMonthlySnapshots(fs,root,bills,now,dashboardOperation)
+        publishFoodApp(fs,root,dao,bills,payments,now,dashboardOperation)
         writeMaps(fs,root.collection("tableStatus"),tables.map{t->
             val session=openByTable[t.id]
             val activeBatches=if(session==null) emptyList() else batches.filter{it.sessionId==session.id&&it.status!="CANCELLED"}
@@ -278,6 +279,7 @@ object FirebaseCloudSync {
         stage("DASHBOARD_WRITE",60_000L){writeDashboard(root.collection("dashboard").document("current"),financialDashboard(dao,bills,dao.cloudPaymentsSnapshot(),now)+mapOf("openTables" to open.size,"openTableNames" to tables.filter{openByTable.containsKey(it.id)}.map{it.name},"revenueToday" to paidToday.sumOf{it.total},"paidBillsToday" to paidToday.size,"provisionalOpenTotal" to liveSnapshot.provisionalOpenTotal,"liveTables" to liveSnapshot.liveTables.map{it.toMap()},"lastUpdatedAt" to now),dashboardOperation)}
         publishDailySnapshots(fs,root,bills,batches,items,now,dashboardOperation)
         publishMonthlySnapshots(fs,root,bills,now,dashboardOperation)
+        publishFoodApp(fs,root,dao,bills,dao.cloudPaymentsSnapshot(),now,dashboardOperation)
         // Cùng nội dung với syncNow (có currentTotal, serviceStatus) để hai đường ghi không đè lẫn nhau.
         writeMaps(fs,root.collection("tableStatus"),tables.map{t->
             val session=openByTable[t.id]
@@ -621,6 +623,23 @@ object FirebaseCloudSync {
         }catch(e:CancellationException){throw e
         }catch(e:CloudQuotaDeferred){CloudExecution.trace("DASHBOARD_DAILY DEFERRED ${e.message}")
         }catch(e:Exception){CloudExecution.trace("DASHBOARD_DAILY FAILED ${e.message}")}
+    }
+
+    /** Đơn ShopeeFood/GrabFood cho tab "App food" trên web: một tài liệu dashboard/foodApp, chỉ ghi khi nội dung đổi. Lỗi không chặn các bước khác. */
+    private suspend fun publishFoodApp(fs:FirebaseFirestore,root:com.google.firebase.firestore.DocumentReference,dao:vn.ecohome.pos0210.data.PosDao,bills:List<vn.ecohome.pos0210.data.BillEntity>,payments:List<vn.ecohome.pos0210.data.PaymentEntity>,now:Long,operation:String){
+        try{
+            val zone=java.time.ZoneId.systemDefault()
+            val data=vn.ecohome.pos0210.cloud.FoodAppSnapshot.compose(bills,payments,dao.foodAppSettlementsSnapshot(),DashboardSalesSnapshot.dateKey(now,zone),zone)?:return
+            val prefs=fs.app.applicationContext.getSharedPreferences("pos0210_cloud_ack_v1",Context.MODE_PRIVATE)
+            val ackKey=fs.app.options.projectId.orEmpty()+"/"+root.path+"/dashboard/foodApp"
+            val fingerprint=vn.ecohome.pos0210.cloud.FoodAppSnapshot.fingerprint(data)
+            if(prefs.getString(ackKey,null)==fingerprint)return
+            stage("DASHBOARD_FOODAPP",60_000L){FirestoreServerWriter.commit(fs,listOf(root.collection("dashboard").document("foodApp").path to (data+mapOf("updatedAt" to now))),operation)}
+            prefs.edit().putString(ackKey,fingerprint).commit()
+            CloudExecution.trace("DASHBOARD_FOODAPP written")
+        }catch(e:CancellationException){throw e
+        }catch(e:CloudQuotaDeferred){CloudExecution.trace("DASHBOARD_FOODAPP DEFERRED ${e.message}")
+        }catch(e:Exception){CloudExecution.trace("DASHBOARD_FOODAPP FAILED ${e.message}")}
     }
 
     /** Doanh thu theo tháng (13 tháng) cho so sánh nhập hàng/doanh thu trên web. Chỉ ghi khi nội dung đổi; tháng hiện tại giới hạn 10 phút một lần. */

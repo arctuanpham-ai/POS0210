@@ -12,8 +12,8 @@ android {
         applicationId = "vn.ecohome.pos0210"
         minSdk = 26
         targetSdk = 35
-        versionCode = 195
-        versionName = "1.0.0-alpha163-foodapp-move"
+        versionCode = 196
+        versionName = "1.0.0-alpha164-foodapp-web"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {

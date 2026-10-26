@@ -62,9 +62,12 @@ object FoodAppWebInbox {
         val orderValue = d.getLong("orderValue") ?: return
         val received = d.getLong("received") ?: return
         val by = d.getString("by").orEmpty()
+        val commission = d.getLong("commission") ?: 0L
+        val vat = d.getLong("vat") ?: 0L
+        val pit = d.getLong("pit") ?: 0L
         val db = PosDatabase.get(app)
         val repo = PosRepository(db)
-        val result = runCatching { repo.applyFoodAppWebEntry(billId, orderValue, received, by) }
+        val result = runCatching { repo.applyFoodAppWebEntry(billId, orderValue, received, by, commission, vat, pit) }
         if (result.isFailure) return // lỗi tạm thời: giữ applied=false để thử lại lần sau
         val note = if (result.getOrNull() == true) "ok" else "skipped"
         runCatching { d.reference.set(mapOf("applied" to true, "appliedAt" to System.currentTimeMillis(), "result" to note), SetOptions.merge()) }

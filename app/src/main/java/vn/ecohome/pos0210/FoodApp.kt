@@ -47,6 +47,13 @@ object FoodApp {
 
     fun priceFor(menuItemId: String, menuPrice: Long, prices: Map<String, Long>): Long = prices[menuItemId]?.takeIf { it > 0L } ?: menuPrice
 
+    /** Đọc các cặp khoá=số trong payload của sự kiện SETTLED (received, commission, vat, pit...). */
+    fun payloadNumbers(payload: String): Map<String, Long> =
+        payload.split(',').mapNotNull { part ->
+            val i = part.indexOf('='); if (i <= 0) return@mapNotNull null
+            part.substring(0, i).trim() to (part.substring(i + 1).trim().toLongOrNull() ?: return@mapNotNull null)
+        }.toMap()
+
     /** Số tiền thực nhận hợp lệ: 0 đến mức rất lớn, không âm. */
     fun parseAmount(text: String): Long? = text.filter { it.isDigit() }.takeIf { it.isNotEmpty() && it.length <= 12 }?.toLongOrNull()
 }

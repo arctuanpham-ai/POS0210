@@ -26,3 +26,11 @@ class FoodAppTest {
         assertNull(FoodApp.parseAmount("1234567890123"))
     }
 }
+
+class FoodAppPayloadTest {
+    @Test fun payloadNumbers() {
+        val n = FoodApp.payloadNumbers("received=37933,commission=9817,vat=1500,pit=750,billAmount=50000,app=GRAB,by=Lan,source=web")
+        assertEquals(37933L, n["received"]); assertEquals(9817L, n["commission"]); assertEquals(1500L, n["vat"]); assertEquals(750L, n["pit"])
+        assertNull(n["by"])
+    }
+}

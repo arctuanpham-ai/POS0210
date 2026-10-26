@@ -25,7 +25,6 @@ import java.util.Locale
 private val Brown = Color(0xFF6E432D)
 private fun vnd(v: Long) = "%,dđ".format(v).replace(',', '.')
 private fun whenText(v: Long) = SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).format(Date(v))
-private fun receivedOf(payload: String): Long = payload.substringAfter("received=", "").substringBefore(',').toLongOrNull() ?: 0L
 
 /** Đơn ShopeeFood / GrabFood: nhập đơn, theo dõi tiền chờ app trả, chốt khi app trả tiền. */
 @Composable
@@ -84,11 +83,12 @@ fun FoodAppScreen(vm: PosViewModel) {
             if (settled.isEmpty()) item { Text("Chưa có đơn nào được chốt.", color = Color.Gray) }
             items(settled, key = { "s" + it.id }) { p ->
                 val ev = settledMap[p.billId]
-                val got = receivedOf(ev?.payload.orEmpty())
+                val n = FoodApp.payloadNumbers(ev?.payload.orEmpty()); val got = n["received"] ?: 0L
                 Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFF4EFEA)), shape = RoundedCornerShape(12.dp)) {
                     Column(Modifier.fillMaxWidth().padding(10.dp)) {
                         Text("${FoodApp.label(p.method)} · ${FoodApp.codeOf(p.reference, p.method)}", fontWeight = FontWeight.Bold)
-                        Text("Giá trị đơn ${vnd(p.amount)} · thực nhận ${vnd(got)} · phí app ${vnd((p.amount - got).coerceAtLeast(0L))}", fontSize = 12.sp)
+                        Text("Giá trị đơn ${vnd(p.amount)} · thực nhận ${vnd(got)} · trừ ${vnd((p.amount - got).coerceAtLeast(0L))}", fontSize = 12.sp)
+                        if (n.containsKey("commission")) Text("Chiết khấu ${vnd(n["commission"] ?: 0L)} · GTGT ${vnd(n["vat"] ?: 0L)} · TNCN ${vnd(n["pit"] ?: 0L)}", fontSize = 11.sp, color = Color.Gray)
                         Text("Nhận lúc ${ev?.occurredAt?.let { whenText(it) } ?: "--"}", fontSize = 11.sp, color = Color.Gray)
                     }
                 }

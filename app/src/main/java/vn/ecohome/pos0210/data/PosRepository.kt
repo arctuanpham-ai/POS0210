@@ -417,8 +417,8 @@ class PosRepository(private val db:PosDatabase){
      * ghi bằng một dòng điều chỉnh "Chênh lệch giá app" (giảm giá/phụ thu) nên đối soát bill vẫn khớp. Mỗi bill chỉ chốt một lần.
      * Trả về true nếu vừa ghi, false nếu bill đã chốt hoặc không còn hợp lệ (không ném lỗi để web không bị lặp lại).
      */
-    suspend fun applyFoodAppWebEntry(billId:String,orderValue:Long,received:Long,by:String):Boolean = db.withTransaction {
-        if(orderValue<=0L||received<0L||received>orderValue) return@withTransaction false
+    suspend fun applyFoodAppWebEntry(billId:String,orderValue:Long,received:Long,by:String,commission:Long=0L,vat:Long=0L,pit:Long=0L):Boolean = db.withTransaction {
+        if(orderValue<=0L||received<0L||commission<0L||vat<0L||pit<0L||received+commission+vat+pit>orderValue) return@withTransaction false
         val pay=dao.paymentByBillId(billId) ?: return@withTransaction false
         if(!FoodApp.isFood(pay.method)||dao.foodAppSettled(billId)>0) return@withTransaction false
         val bill=dao.foodBillById(billId) ?: return@withTransaction false
@@ -430,7 +430,7 @@ class PosRepository(private val db:PosDatabase){
         }
         dao.setBillTotalOnly(billId,orderValue)
         dao.setPaymentAmount(billId,orderValue)
-        dao.audit(AuditEventEntity(UUID.randomUUID().toString(),"FOOD_APP",billId,"SETTLED",null,"WEB",now,"received=$received,billAmount=$orderValue,app=${pay.method},by=${by.take(60).replace(',',' ')},source=web,posTotal=${bill.total}"))
+        dao.audit(AuditEventEntity(UUID.randomUUID().toString(),"FOOD_APP",billId,"SETTLED",null,"WEB",now,"received=$received,commission=$commission,vat=$vat,pit=$pit,billAmount=$orderValue,app=${pay.method},by=${by.take(60).replace(',',' ')},source=web,posTotal=${bill.total}"))
         true
     }
 

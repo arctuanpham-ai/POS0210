@@ -17,7 +17,6 @@ object FoodAppSnapshot {
     private const val MAX_PENDING = 100
     private const val MAX_SETTLED = 60
 
-    private fun receivedOf(payload: String): Long = payload.substringAfter("received=", "").substringBefore(',').toLongOrNull() ?: 0L
 
     /** Chưa có đơn app food nào thì trả null (không tạo tài liệu rỗng). */
     fun compose(bills: List<BillEntity>, payments: List<PaymentEntity>, settlements: List<AuditEventEntity>, todayKey: String, zone: ZoneId): Map<String, Any?>? {
@@ -35,7 +34,10 @@ object FoodAppSnapshot {
         }
         val settledOrders = settled.sortedByDescending { settledBy[it.billId]?.occurredAt ?: 0L }.take(MAX_SETTLED).map {
             val ev = settledBy.getValue(it.billId)
-            mapOf("app" to it.method, "code" to FoodApp.codeOf(it.reference, it.method), "amount" to it.amount, "received" to receivedOf(ev.payload), "at" to ev.occurredAt)
+            val n = FoodApp.payloadNumbers(ev.payload)
+            val received = n["received"] ?: 0L; val commission = n["commission"] ?: 0L; val vat = n["vat"] ?: 0L; val pit = n["pit"] ?: 0L
+            mapOf("app" to it.method, "code" to FoodApp.codeOf(it.reference, it.method), "amount" to it.amount, "received" to received,
+                "commission" to commission, "vat" to vat, "pit" to pit, "other" to (it.amount - received - commission - vat - pit).coerceAtLeast(0L), "at" to ev.occurredAt)
         }
         val today = LocalDate.parse(todayKey)
         val days = (0 until DAYS).map { today.minusDays(it.toLong()) }.mapNotNull { day ->

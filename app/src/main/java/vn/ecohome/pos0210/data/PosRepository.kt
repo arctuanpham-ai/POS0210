@@ -412,6 +412,28 @@ class PosRepository(private val db:PosDatabase){
         old to total
     }
 
+    /**
+     * Người dùng web nhập giá trị đơn thực trên app và số tiền thực nhận. Bill giữ nguyên món, chênh lệch so với tổng món
+     * ghi bằng một dòng điều chỉnh "Chênh lệch giá app" (giảm giá/phụ thu) nên đối soát bill vẫn khớp. Mỗi bill chỉ chốt một lần.
+     * Trả về true nếu vừa ghi, false nếu bill đã chốt hoặc không còn hợp lệ (không ném lỗi để web không bị lặp lại).
+     */
+    suspend fun applyFoodAppWebEntry(billId:String,orderValue:Long,received:Long,by:String):Boolean = db.withTransaction {
+        if(orderValue<=0L||received<0L||received>orderValue) return@withTransaction false
+        val pay=dao.paymentByBillId(billId) ?: return@withTransaction false
+        if(!FoodApp.isFood(pay.method)||dao.foodAppSettled(billId)>0) return@withTransaction false
+        val bill=dao.foodBillById(billId) ?: return@withTransaction false
+        if(bill.status!="PAID"||bill.dataScope!="LIVE") return@withTransaction false
+        val now=System.currentTimeMillis()
+        val diff=orderValue-bill.subtotal
+        if(diff!=0L){
+            dao.insertBillAdjustments(listOf(BillAdjustmentEntity(UUID.randomUUID().toString(),billId,null,"Chênh lệch giá app",if(diff<0L)"DISCOUNT" else "SURCHARGE",0,kotlin.math.abs(diff),"",now,null)))
+        }
+        dao.setBillTotalOnly(billId,orderValue)
+        dao.setPaymentAmount(billId,orderValue)
+        dao.audit(AuditEventEntity(UUID.randomUUID().toString(),"FOOD_APP",billId,"SETTLED",null,"WEB",now,"received=$received,billAmount=$orderValue,app=${pay.method},by=${by.take(60).replace(',',' ')},source=web,posTotal=${bill.total}"))
+        true
+    }
+
     /** App đã trả tiền: ghi số thực nhận (đã trừ hoa hồng). Mỗi bill chỉ chốt một lần. */
     suspend fun settleFoodAppBill(billId:String,received:Long,actorId:String):Boolean = db.withTransaction {
         require(received>=0L) { "INVALID_AMOUNT" }

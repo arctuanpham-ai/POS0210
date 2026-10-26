@@ -288,6 +288,7 @@ WHERE s.dataScope='LIVE' AND ob.status!='CANCELLED' AND EXISTS(SELECT 1 FROM Bil
 @Query("SELECT * FROM BillEntity WHERE id=:billId LIMIT 1") suspend fun foodBillById(billId:String):BillEntity?
 @Query("UPDATE BillEntity SET subtotal=:total,total=:total WHERE id=:billId AND status='PAID'") suspend fun setBillTotals(billId:String,total:Long):Int
 @Query("UPDATE PaymentEntity SET amount=:amount WHERE billId=:billId") suspend fun setPaymentAmount(billId:String,amount:Long):Int
+@Query("UPDATE BillEntity SET total=:total WHERE id=:billId AND status='PAID'") suspend fun setBillTotalOnly(billId:String,total:Long):Int
 @Query("UPDATE OrderBatchEntity SET status='DELIVERED',sentAt=:at,deliveredAt=:at,deliveredBy=:by WHERE id=:id AND status='DRAFT'") suspend fun deliverDraftNow(id:String,at:Long,by:String):Int
 @Query("UPDATE OrderBatchEntity SET status='DELIVERED',deliveredAt=:at,deliveredBy=:employeeId WHERE id=:id AND status='WAITING'") suspend fun markDelivered(id:String,at:Long,employeeId:String):Int
 @Query("UPDATE OrderBatchEntity SET status='RECONCILED',deliveredAt=COALESCE((SELECT b.closedAt FROM BillEntity b WHERE b.sessionId=OrderBatchEntity.sessionId ORDER BY b.closedAt DESC LIMIT 1),deliveredAt,sentAt,createdAt) WHERE status='WAITING' AND sessionId IN (SELECT id FROM TableSessionEntity WHERE status='CLOSED')") suspend fun reconcileClosedSessionWaiting():Int

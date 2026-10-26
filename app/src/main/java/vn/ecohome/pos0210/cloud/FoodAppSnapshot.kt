@@ -31,7 +31,7 @@ object FoodAppSnapshot {
         fun pendingOf(app: String) = pending.filter { it.method == app }
         val pendingMap = FoodApp.APPS.associateWith { app -> mapOf("count" to pendingOf(app).size.toLong(), "amount" to pendingOf(app).sumOf { it.amount }) }
         val pendingOrders = pending.sortedByDescending { it.paidAt }.take(MAX_PENDING).map {
-            mapOf("app" to it.method, "code" to FoodApp.codeOf(it.reference, it.method), "amount" to it.amount, "at" to it.paidAt, "billNo" to (paidById[it.billId]?.billNo ?: ""))
+            mapOf("billId" to it.billId, "app" to it.method, "code" to FoodApp.codeOf(it.reference, it.method), "amount" to it.amount, "at" to it.paidAt, "billNo" to (paidById[it.billId]?.billNo ?: ""))
         }
         val settledOrders = settled.sortedByDescending { settledBy[it.billId]?.occurredAt ?: 0L }.take(MAX_SETTLED).map {
             val ev = settledBy.getValue(it.billId)

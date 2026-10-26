@@ -21,6 +21,7 @@ class PosApplication : Application(), ImageLoaderFactory {
         FirebaseCloudSync.schedule(this)
         vn.ecohome.pos0210.cloud.RemoteSyncCommand.start(this,appScope)
         vn.ecohome.pos0210.cloud.OnlineOrderService.start(this,appScope)
+        vn.ecohome.pos0210.cloud.FoodAppWebInbox.start(this,appScope)
         val db=PosDatabase.get(this)
         val settingMutex=Mutex()
         var lastBusinessSettings:Map<String,String>?=null

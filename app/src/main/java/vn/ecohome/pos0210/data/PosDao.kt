@@ -278,6 +278,7 @@ WHERE s.dataScope='LIVE' AND ob.status!='CANCELLED' AND EXISTS(SELECT 1 FROM Bil
 @Query("UPDATE EmployeeEntity SET active=:active WHERE id=:id") suspend fun setEmployeeActive(id:String,active:Boolean)
 @Query("UPDATE OrderBatchEntity SET status=:newStatus,sentAt=:sentAt WHERE id=:id AND status=:expected") suspend fun transitionBatch(id:String,expected:String,newStatus:String,sentAt:Long?):Int
 @Query("SELECT COUNT(*) FROM AuditEventEntity WHERE entityType='ONLINE_ORDER' AND entityId=:code AND action='BILL_RECORDED'") suspend fun onlineBillRecorded(code:String):Int
+@Query("UPDATE PaymentEntity SET method=:method,reference=:reference,cashReceived=NULL,change=NULL WHERE billId=:billId AND method IN ('CASH','TRANSFER') AND EXISTS(SELECT 1 FROM BillEntity b WHERE b.id=:billId AND b.status='PAID')") suspend fun moveToFoodApp(billId:String,method:String,reference:String):Int
 @Query("SELECT COUNT(*) FROM AuditEventEntity WHERE entityType='FOOD_APP' AND entityId=:key AND action='BILL_RECORDED'") suspend fun foodAppRecorded(key:String):Int
 @Query("SELECT * FROM AuditEventEntity WHERE entityType='FOOD_APP' AND action='SETTLED'") fun foodAppSettlements():Flow<List<AuditEventEntity>>
 @Query("SELECT COUNT(*) FROM AuditEventEntity WHERE entityType='FOOD_APP' AND entityId=:billId AND action='SETTLED'") suspend fun foodAppSettled(billId:String):Int

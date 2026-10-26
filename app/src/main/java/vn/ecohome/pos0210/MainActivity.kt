@@ -4762,6 +4762,9 @@ fun BillDetailDialog(vm: PosViewModel, bill: BillEntity, onDismiss: () -> Unit) 
     var showDelete by remember { mutableStateOf(false) }
     var deleteReason by remember { mutableStateOf("") }
     var showMethod by remember { mutableStateOf(false) }
+    var showFood by remember { mutableStateOf(false) }
+    var foodApp by remember { mutableStateOf(FoodApp.SHOPEE) }
+    var foodCode by remember { mutableStateOf("") }
     var methodReason by remember { mutableStateOf("") }
     var methodMsg by remember { mutableStateOf("") }
 
@@ -4790,6 +4793,9 @@ fun BillDetailDialog(vm: PosViewModel, bill: BillEntity, onDismiss: () -> Unit) 
                             Text(if (payment.method == "TRANSFER") "ĐỔI SANG TIỀN MẶT (ghi nhầm)" else "ĐỔI SANG CHUYỂN KHOẢN (ghi nhầm)")
                         }
                     }
+                    if (payment != null && !FoodApp.isFood(payment.method) && bill.status == "PAID" && current?.let { PaymentFixPolicy.canFix(it.role, it.id, payment.cashierId, payment.paidAt, System.currentTimeMillis()) } == true) {
+                        TextButton(onClick = { methodReason = ""; methodMsg = ""; foodCode = ""; showFood = true }) { Text("CHUYỂN SANG SHOPEE / GRAB FOOD") }
+                    }
                     Text("Thu tiền: $cashier")
                     Text("Tổng bill: ${money(bill.total)}", fontWeight = FontWeight.Black)
                     Spacer(Modifier.height(8.dp))
@@ -4800,6 +4806,28 @@ fun BillDetailDialog(vm: PosViewModel, bill: BillEntity, onDismiss: () -> Unit) 
             }
         }
     )
+
+    if (showFood && payment != null) {
+        AlertDialog(
+            onDismissRequest = { showFood = false },
+            title = { Text("Chuyển ${bill.billNo} sang app food?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Bill, món và tổng ${money(bill.total)} giữ nguyên, vẫn tính doanh thu ngày bán. Tiền không còn nằm trong tiền mặt / chuyển khoản mà chờ app trả (theo dõi ở mục APP FOOD).", fontSize = 12.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { FoodApp.APPS.forEach { a -> FilterChip(foodApp == a, { foodApp = a }, { Text(FoodApp.label(a)) }) } }
+                    OutlinedTextField(foodCode, { foodCode = it }, singleLine = true, label = { Text("Mã đơn của app") })
+                    OutlinedTextField(methodReason, { methodReason = it.take(120) }, label = { Text("Lý do bắt buộc (VD: ghi tạm CK, thực ra đơn Grab)") })
+                    if (methodMsg.isNotBlank()) Text(methodMsg, color = Color(0xFFB3261E), fontWeight = FontWeight.Bold)
+                }
+            },
+            confirmButton = {
+                Button(enabled = methodReason.isNotBlank() && foodCode.isNotBlank(), onClick = {
+                    vm.moveBillToFoodApp(bill, foodApp, foodCode, methodReason) { err -> if (err == null) showFood = false else methodMsg = err }
+                }) { Text("XÁC NHẬN CHUYỂN") }
+            },
+            dismissButton = { TextButton(onClick = { showFood = false }) { Text("KHÔNG ĐỔI") } }
+        )
+    }
 
     if (showMethod && payment != null) {
         val target = if (payment.method == "TRANSFER") "CASH" else "TRANSFER"

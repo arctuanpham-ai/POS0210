@@ -1825,6 +1825,32 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
   val target=if(lp.method=="CASH")"TRANSFER" else "CASH"
   changeMethodCore(lp.billId,lp.billNo,lp.total,target,"Khách đổi ý hình thức thanh toán, sửa ngay sau khi xác nhận",onDone)
  }
+ /** Bill đã ghi tiền mặt/CK nhưng thực ra là đơn app food: chuyển sang Shopee/Grab (chờ app trả tiền). Giữ nguyên bill, món, số tiền. */
+ fun moveBillToFoodApp(bill:BillEntity,app:String,code:String,reason:String,onDone:(String?)->Unit){
+  val e=currentEmployee.value
+  viewModelScope.launch(Dispatchers.IO){
+   fun done(m:String?){viewModelScope.launch(Dispatchers.Main){onDone(m)}}
+   if(e==null){done("Chưa đăng nhập");return@launch}
+   val clean=FoodApp.cleanCode(code)
+   if(!FoodApp.isFood(app)){done("Chưa chọn app");return@launch}
+   if(clean.isEmpty()){done("Cần nhập mã đơn của app");return@launch}
+   if(reason.isBlank()){done("Bắt buộc ghi lý do");return@launch}
+   val pay=dao.paymentByBillId(bill.id)
+   if(pay==null){done("Không tìm thấy thanh toán của bill");return@launch}
+   if(!PaymentFixPolicy.canFix(e.role,e.id,pay.cashierId,pay.paidAt,System.currentTimeMillis())){done("Chỉ quản lý được sửa, hoặc người thu tiền trong ${PaymentFixPolicy.WINDOW_MINUTES} phút đầu");return@launch}
+   val key=FoodApp.key(app,clean)
+   if(dao.foodAppRecorded(key)>0){done("Mã đơn $clean của ${FoodApp.label(app)} đã có bill khác");return@launch}
+   val n=db.withTransaction{
+    val changed=dao.moveToFoodApp(bill.id,app,FoodApp.reference(app,clean))
+    if(changed==1){
+     audit("FOOD_APP",key,"BILL_RECORDED","bill=${bill.billNo},billId=${bill.id},total=${bill.total},moved=true")
+     audit("PAYMENT",bill.id,"PAYMENT_METHOD_CHANGED","billNo=${bill.billNo},from=${pay.method},to=$app,amount=${bill.total},reason=${reason.trim()},operator=${e.name}")
+    }
+    changed
+   }
+   if(n==1){dao.markCloudDirty();autoBackup();done(null)} else done("Không chuyển được: bill chưa thanh toán, đã hoàn tiền hoặc đã là đơn app")
+  }
+ }
  private fun changeMethodCore(billId:String,billNo:String,total:Long,newMethod:String,reason:String,onDone:(String?)->Unit){
   val e=currentEmployee.value
   viewModelScope.launch(Dispatchers.IO){

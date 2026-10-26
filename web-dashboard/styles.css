@@ -535,3 +535,10 @@ button.paylist-row { width: 100%; font: inherit; color: inherit; cursor: pointer
 .row-line:last-child { border-bottom: 0; }
 .row-line small { display: block; color: #7a6a5a; font-size: 12px; font-weight: 500; }
 .row-line strong { white-space: nowrap; }
+.fa-order { border-bottom: 1px solid #eadcc6; padding-bottom: 6px; }
+.fa-order .row-line { border-bottom: 0; }
+.fa-form { display: grid; grid-template-columns: 1fr 1fr auto; gap: 6px; align-items: center; padding: 0 2px 6px; }
+.fa-form input { min-width: 0; padding: 9px; border: 1px solid #dfcfb8; border-radius: 10px; font-size: 15px; }
+.fa-form button { padding: 9px 12px; border-radius: 10px; border: 0; background: #6e432d; color: #fff; font-weight: 800; }
+.fa-form .fa-err { grid-column: 1 / -1; color: #b3261e; }
+.fa-wait { margin: 0 2px 6px; font-size: 13px; color: #6e432d; font-weight: 700; }

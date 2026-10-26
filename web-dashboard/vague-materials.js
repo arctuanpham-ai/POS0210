@@ -1,7 +1,7 @@
 // Tìm vật tư tính theo đơn vị đóng gói (túi, gói, hộp…) mà không có định lượng rõ ràng (g, kg, ml, lít) trong đơn vị hoặc tên.
 // Hàm thuần: không Firebase, không DOM.
-import { normalizeText, normalizeQuantity } from "./expense-rules.js?v=20261026-01";
-import { NON_MATERIAL } from "./expense-kind.js?v=20261026-01";
+import { normalizeText, normalizeQuantity } from "./expense-rules.js?v=20261026-02";
+import { NON_MATERIAL } from "./expense-kind.js?v=20261026-02";
 
 /** Đơn vị đo được (đã quy đổi được ra kg / lít). */
 const MEASURED = new Set(["lang", "g", "gr", "gam", "kg", "ml", "l", "lit", "cl"]);

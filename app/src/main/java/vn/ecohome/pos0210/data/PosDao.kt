@@ -1,6 +1,7 @@
 package vn.ecohome.pos0210.data
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
+data class OpenTablesTotal(val tables:Int,val amount:Long)
 data class TableServiceTimingRow(val sessionId:String,val firstOrderAt:Long?,val lastOrderSentAt:Long?,val sentBatchCount:Int,val waitingBatchCount:Int)
 @Dao interface PosDao{
 @Insert(onConflict=OnConflictStrategy.ABORT) suspend fun insertAttendanceSession(v:AttendanceSessionEntity)
@@ -31,6 +32,7 @@ data class TableServiceTimingRow(val sessionId:String,val firstOrderAt:Long?,val
 @Query("SELECT * FROM EmployeeEntity ORDER BY name") fun employees():Flow<List<EmployeeEntity>>
 @Query("SELECT * FROM SupplierEntity ORDER BY name") fun suppliers():Flow<List<SupplierEntity>>
 @Query("SELECT * FROM SupplierEntity ORDER BY name") suspend fun allSuppliersSnapshot():List<SupplierEntity>
+@Query("SELECT COUNT(*) AS tables, COALESCE(SUM((SELECT COALESCE(SUM(oi.qty*oi.unitPriceSnapshot),0) FROM OrderItemEntity oi JOIN OrderBatchEntity ob ON ob.id=oi.batchId WHERE ob.sessionId=s.id AND ob.status!='CANCELLED')),0) AS amount FROM TableSessionEntity s WHERE s.status='OPEN' AND s.dataScope='LIVE' AND NOT EXISTS(SELECT 1 FROM BillEntity b WHERE b.sessionId=s.id AND b.status='PAID') AND EXISTS(SELECT 1 FROM OrderBatchEntity ob2 WHERE ob2.sessionId=s.id AND ob2.status!='CANCELLED')") fun openTablesTotal():Flow<OpenTablesTotal>
 @Query("SELECT * FROM TableSessionEntity WHERE status='OPEN'") fun openSessions():Flow<List<TableSessionEntity>>
 @Query("""SELECT s.id AS sessionId,
 MIN(CASE WHEN ob.status NOT IN ('DRAFT','CANCELLED') THEN COALESCE(ob.sentAt,ob.createdAt) END) AS firstOrderAt,

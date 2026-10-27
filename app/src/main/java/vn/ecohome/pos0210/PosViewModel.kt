@@ -1688,6 +1688,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
  /** Rời màn thanh toán mà chưa thu tiền: huỷ đơn nháp, không để lại đơn chưa thu. */
  private var prepaidCartBackup:Pair<Map<String,Int>,Map<String,String>>?=null
  /** Đơn trả trước chưa xác nhận thu tiền (đã hiện bill/QR rồi rời màn hình). */
+ val openTablesTotal=dao.openTablesTotal().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),vn.ecohome.pos0210.data.OpenTablesTotal(0,0L))
  val unpaidPrepaid=dao.unpaidPrepaidSessions().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
  /** Đang thu tiền một đơn mở lại từ danh sách chưa thu: cho phép bỏ in phiếu bếp vì bếp có thể đã làm theo lời. */
  val resumedPrepaid=MutableStateFlow(false)

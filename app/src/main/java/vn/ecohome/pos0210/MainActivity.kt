@@ -4179,6 +4179,13 @@ fun Report(vm: PosViewModel) {
                     }
                     item { MetricCard("Doanh thu", money(revenue)) }
                     item {
+                        val open by vm.openTablesTotal.collectAsState()
+                        if (singleDayOffset == 0) Column {
+                            MetricCard("Đang mở · chưa thanh toán (${open.tables} bàn/đơn)", money(open.amount))
+                            MetricCard("Doanh thu tạm tính (đã thu + đang mở)", money(revenue + open.amount))
+                        }
+                    }
+                    item {
                         val allRefunds by vm.refunds.collectAsState()
                         val periodRefunds = allRefunds.filter { it.dataScope == "LIVE" && it.createdAt >= (from ?: 0L) && (until == null || it.createdAt < until) }
                         val cashBack = periodRefunds.filter { it.method == "CASH" }.sumOf { it.amount }

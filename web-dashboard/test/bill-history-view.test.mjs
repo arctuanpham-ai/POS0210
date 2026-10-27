@@ -130,3 +130,19 @@ test("bill đã hoàn vẫn hiện (đánh dấu hoàn), lọc theo hình thức
   assert.deepEqual(filterBillRows(rows, { refund: "REFUNDED" }).map((r) => r.id), ["b"]);
   assert.equal(filterBillRows(rows, {}).length, 3);
 });
+
+test("đơn app food: tính vào số bill và doanh thu, tách riêng khỏi tiền mặt/CK", () => {
+  const rows = [
+    { total: 100000, method: "CASH", refund: null, paymentMissing: false },
+    { total: 50000, method: "GRAB", refund: null, paymentMissing: false },
+    { total: 30000, method: "SHOPEE", refund: null, paymentMissing: false },
+  ];
+  const s = summarizeBillRows(rows);
+  assert.equal(s.count, 3);
+  assert.equal(s.total, 180000);
+  assert.equal(s.cash, 100000);
+  assert.equal(s.grab, 50000);
+  assert.equal(s.shopee, 30000);
+  assert.equal(s.unknown, 0);
+  assert.equal(methodLabel("GRAB"), "GrabFood (app trả sau)");
+});

@@ -18,7 +18,7 @@ export const dayRange = (dateKey) => {
   return Number.isFinite(from) ? { from, to } : null;
 };
 
-export const methodLabel = (method) => (method === "CASH" ? "Tiền mặt" : method === "TRANSFER" ? "Chuyển khoản" : method ? String(method) : "Chưa rõ");
+export const methodLabel = (method) => (method === "CASH" ? "Tiền mặt" : method === "TRANSFER" ? "Chuyển khoản" : method === "SHOPEE" ? "ShopeeFood (app trả sau)" : method === "GRAB" ? "GrabFood (app trả sau)" : method ? String(method) : "Chưa rõ");
 
 export const timeLabel = (ms) => {
   if (!Number.isFinite(Number(ms)) || !Number(ms)) return "—";
@@ -82,13 +82,19 @@ export const summarizeBillRows = (rows) => {
   const total = sum((r) => r.total);
   const cash = sum((r) => (r.method === "CASH" ? r.total : 0));
   const transfer = sum((r) => (r.method === "TRANSFER" ? r.total : 0));
+  const shopee = sum((r) => (r.method === "SHOPEE" ? r.total : 0));
+  const grab = sum((r) => (r.method === "GRAB" ? r.total : 0));
   const refunded = sum((r) => (r.refund ? r.refund.amount : 0));
   return {
     count: list.length,
     total,
     cash,
     transfer,
-    unknown: total - cash - transfer,
+    shopee,
+    grab,
+    shopeeCount: list.filter((r) => r.method === "SHOPEE").length,
+    grabCount: list.filter((r) => r.method === "GRAB").length,
+    unknown: total - cash - transfer - shopee - grab,
     refunded,
     refundedCount: list.filter((r) => r.refund).length,
     net: total - refunded,
@@ -139,5 +145,5 @@ export const chunk = (list, size = 30) => {
 /** Bộ lọc danh sách bill: hình thức (trả trước / trả sau), cách thanh toán (tiền mặt / CK), đã hoàn. "ALL" = không lọc. */
 export const filterBillRows = (rows, { flow = "ALL", method = "ALL", refund = "ALL" } = {}) => (Array.isArray(rows) ? rows : []).filter((r) =>
   (flow === "ALL" || (flow === "postpaid" ? r.flow !== "prepaid" : r.flow === flow))
-  && (method === "ALL" || (method === "UNKNOWN" ? r.paymentMissing || !["CASH", "TRANSFER"].includes(r.method) : r.method === method))
+  && (method === "ALL" || (method === "UNKNOWN" ? r.paymentMissing || !["CASH", "TRANSFER", "SHOPEE", "GRAB"].includes(r.method) : r.method === method))
   && (refund === "ALL" || (refund === "REFUNDED" ? Boolean(r.refund) : !r.refund)));

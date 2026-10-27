@@ -42,3 +42,12 @@ export function entryProblem(e) {
 
 /** Tài liệu foodAppSettle/<billId> web ghi cho máy POS; applied=false để POS biết cần xử lý. */
 export const buildEntry = (order, e, by, now) => ({ billId: order.billId, app: order.app, code: order.code, orderValue: e.orderValue, commission: e.commission ?? 0, vat: e.vat ?? 0, pit: e.pit ?? 0, received: e.received, by, at: now, applied: false });
+
+/** Đơn app food bán trong khoảng ngày [fromKey, toKey) (yyyy-MM-dd). POS chỉ gửi 14 ngày gần nhất. */
+export function foodInPeriod(days, fromKey, toKey) {
+  const r = { shopee: 0, grab: 0, shopeeBills: 0, grabBills: 0 };
+  (Array.isArray(days) ? days : []).forEach((d) => {
+    if (d.date >= fromKey && d.date < toKey) { r.shopee += d.shopee; r.grab += d.grab; r.shopeeBills += d.shopeeBills; r.grabBills += d.grabBills; }
+  });
+  return r;
+}

@@ -46,3 +46,13 @@ test("khoản trừ khác và tài liệu gửi máy POS", () => {
   const t = foodAppTotals(v);
   assert.equal(t.commission, 9817); assert.equal(t.vat, 1500); assert.equal(t.pit, 750); assert.equal(t.feeAmount, 12067);
 });
+
+test("foodInPeriod cộng đơn app food theo khoảng ngày", async () => {
+  const { foodInPeriod } = await import("../food-app.js");
+  const days = [
+    { date: "2026-10-27", shopee: 0, grab: 50000, shopeeBills: 0, grabBills: 1 },
+    { date: "2026-10-26", shopee: 30000, grab: 20000, shopeeBills: 1, grabBills: 2 },
+  ];
+  assert.deepEqual(foodInPeriod(days, "2026-10-27", "2026-10-28"), { shopee: 0, grab: 50000, shopeeBills: 0, grabBills: 1 });
+  assert.equal(foodInPeriod(days, "2026-10-20", "2026-10-28").grabBills, 3);
+});

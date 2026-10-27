@@ -4805,6 +4805,21 @@ fun BillDetailDialog(vm: PosViewModel, bill: BillEntity, onDismiss: () -> Unit) 
                     }
                     Text("Thu tiền: $cashier")
                     Text("Tổng bill: ${money(bill.total)}", fontWeight = FontWeight.Black)
+                    if (payment != null && FoodApp.isFood(payment.method)) {
+                        val foodSettled by vm.foodSettlements.collectAsState()
+                        val ev = foodSettled.firstOrNull { it.action == "SETTLED" && it.entityId == bill.id }
+                        if (ev != null) {
+                            val n = FoodApp.payloadNumbers(ev.payload)
+                            Text("ĐÃ NHẬN TIỀN TỪ ${FoodApp.label(payment.method).uppercase()}", fontWeight = FontWeight.Black, color = Color(0xFF2E7D32))
+                            Text("Giá trị đơn: ${money(bill.total)}")
+                            Text("Chiết khấu: -${money(n["commission"] ?: 0L)}")
+                            Text("Thuế GTGT: -${money(n["vat"] ?: 0L)} · Thuế TNCN: -${money(n["pit"] ?: 0L)}")
+                            Text("THỰC NHẬN: ${money(n["received"] ?: 0L)}", fontWeight = FontWeight.Black)
+                        } else {
+                            Text("CHƯA NHẬN TIỀN TỪ ${FoodApp.label(payment.method).uppercase()}", fontWeight = FontWeight.Black, color = Color(0xFFB3261E))
+                            Button(onClick = { onDismiss(); vm.screen.value = "FOODAPP" }) { Text("XÁC NHẬN ĐÃ NHẬN TIỀN") }
+                        }
+                    }
                     Spacer(Modifier.height(8.dp))
                 }
                 items(batches) { batch ->

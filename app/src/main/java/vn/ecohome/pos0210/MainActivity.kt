@@ -400,7 +400,7 @@ fun Tables(vm: PosViewModel) {
             FilterChip(byItem, { byItem = true }, { Text("THEO MÓN" + if (waitingTotalQty > 0) " · $waitingTotalQty" else "", maxLines = 1, softWrap = false) })
             run { val online by vm.onlineOrders.collectAsState(); val n = online.count { it.status in listOf("new", "awaiting_payment", "paid", "delivering") }
                 FilterChip(false, { vm.screen.value = "ONLINE" }, { Text("ĐƠN ONLINE" + if (n > 0) " · $n" else "", maxLines = 1, softWrap = false) }) }
-            FilterChip(false, { vm.screen.value = "FOODAPP" }, { Text("APP FOOD", maxLines = 1, softWrap = false) })
+            if (FoodApp.POS_ENTRY) FilterChip(false, { vm.screen.value = "FOODAPP" }, { Text("APP FOOD", maxLines = 1, softWrap = false) })
             if (prepaidMode)
                 FilterChip(false, { vm.screen.value = "PREPAID_ORDERS" }, { Text("ĐƠN HÔM NAY", maxLines = 1, softWrap = false) })
             if (canReport) {
@@ -4800,7 +4800,7 @@ fun BillDetailDialog(vm: PosViewModel, bill: BillEntity, onDismiss: () -> Unit) 
                             Text(if (payment.method == "TRANSFER") "ĐỔI SANG TIỀN MẶT (ghi nhầm)" else "ĐỔI SANG CHUYỂN KHOẢN (ghi nhầm)")
                         }
                     }
-                    if (payment != null && !FoodApp.isFood(payment.method) && bill.status == "PAID" && current?.let { PaymentFixPolicy.canFix(it.role, it.id, payment.cashierId, payment.paidAt, System.currentTimeMillis()) } == true) {
+                    if (FoodApp.POS_ENTRY && payment != null && !FoodApp.isFood(payment.method) && bill.status == "PAID" && current?.let { PaymentFixPolicy.canFix(it.role, it.id, payment.cashierId, payment.paidAt, System.currentTimeMillis()) } == true) {
                         TextButton(onClick = { methodReason = ""; methodMsg = ""; foodCode = ""; showFood = true }) { Text("CHUYỂN SANG SHOPEE / GRAB FOOD") }
                     }
                     Text("Thu tiền: $cashier")
@@ -4817,7 +4817,8 @@ fun BillDetailDialog(vm: PosViewModel, bill: BillEntity, onDismiss: () -> Unit) 
                             Text("THỰC NHẬN: ${money(n["received"] ?: 0L)}", fontWeight = FontWeight.Black)
                         } else {
                             Text("CHƯA NHẬN TIỀN TỪ ${FoodApp.label(payment.method).uppercase()}", fontWeight = FontWeight.Black, color = Color(0xFFB3261E))
-                            Button(onClick = { onDismiss(); vm.screen.value = "FOODAPP" }) { Text("XÁC NHẬN ĐÃ NHẬN TIỀN") }
+                            if (FoodApp.POS_ENTRY) Button(onClick = { onDismiss(); vm.screen.value = "FOODAPP" }) { Text("XÁC NHẬN ĐÃ NHẬN TIỀN") }
+                            else Text("Đối soát trên web: tab App food.", fontSize = 12.sp)
                         }
                     }
                     Spacer(Modifier.height(8.dp))

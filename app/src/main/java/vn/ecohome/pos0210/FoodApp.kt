@@ -13,6 +13,8 @@ object FoodApp {
     const val TABLE_ID = "FOODAPP"
     /** Khoá lưu bảng giá app trong cài đặt. */
     const val PRICE_KEY = "foodapp_prices"
+    /** Đơn app food nay ghi sổ trên web từ file đối soát của app (độc lập máy order); false = ẩn mọi lối nhập/chốt đơn app trên máy POS. */
+    const val POS_ENTRY = false
 
     fun isFood(method: String?) = method == SHOPEE || method == GRAB
 

@@ -106,11 +106,12 @@ export const validateShopConfig = (input) => {
   const errors = {};
   const value = {
     name: text(input.name, 60), tagline: text(input.tagline, 80), address: text(input.address, 200), phone: text(input.phone, 20), hours: text(input.hours, 120),
-    notice: text(input.notice, 160), siteUrl: text(input.siteUrl, 200), bank: text(input.bank, 40), account: text(input.account, 25).replace(/\s+/g, ""), holder: text(input.holder, 60),
+    notice: text(input.notice, 160), legalName: text(input.legalName, 100), regNo: text(input.regNo, 30), owner: text(input.owner, 60), email: text(input.email, 80), siteUrl: text(input.siteUrl, 200), bank: text(input.bank, 40), account: text(input.account, 25).replace(/\s+/g, ""), holder: text(input.holder, 60),
     orderingEnabled: input.orderingEnabled !== false,
   };
   if (!value.name) errors.name = "Nhập tên quán";
   if (value.phone && !/^[\d+\s.()-]{8,20}$/.test(value.phone)) errors.phone = "Số điện thoại chưa đúng";
+  if (value.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.email)) errors.email = "Email chưa đúng";
   if (value.siteUrl && !/^https:\/\/[^\s]+$/.test(value.siteUrl)) errors.siteUrl = "Đường dẫn phải bắt đầu bằng https://";
   if ((value.bank || value.account) && !(value.bank && value.account && value.holder)) errors.bank = "Nhập đủ ngân hàng, số tài khoản và tên tài khoản (hoặc để trống cả 3).";
   return { ok: Object.keys(errors).length === 0, errors, value };

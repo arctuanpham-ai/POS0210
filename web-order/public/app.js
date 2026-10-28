@@ -137,11 +137,24 @@ function renderShop() {
   if (s.hours) rows.push(["Giờ mở cửa", esc(s.hours)]);
   $("#shop-info").innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("");
   $("#shop-info").hidden = !rows.length;
+  renderLegalFooter(s, name);
   const closed = s.orderingEnabled === false;
   $("#closed-banner").hidden = !closed && !s.notice;
   $("#closed-banner").textContent = closed ? (s.notice || "Quán tạm ngưng nhận đơn online. Vui lòng quay lại sau.") : s.notice || "";
   $("#closed-banner").classList.toggle("warn", closed);
   renderCartBar();
+}
+
+/** Chân trang pháp lý: thông tin chủ quản (Luật TMĐT 2025 Điều 11 khoản 1). Chỉ hiện dòng nào đã có dữ liệu. */
+function renderLegalFooter(s, name) {
+  $("#legal-name").textContent = String(s.legalName || name);
+  const rows = [];
+  if (s.owner) rows.push(["Chủ hộ / đại diện", esc(s.owner)]);
+  if (s.regNo) rows.push(["Mã số", esc(s.regNo)]);
+  if (s.address) rows.push(["Địa chỉ", esc(s.address)]);
+  if (s.phone) rows.push(["Điện thoại", `<a href="tel:${esc(String(s.phone).replace(/[^\d+]/g, ""))}">${esc(s.phone)}</a>`]);
+  if (s.email) rows.push(["Email", `<a href="mailto:${esc(s.email)}">${esc(s.email)}</a>`]);
+  $("#legal-info").innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("");
 }
 
 /* ---------- Menu ---------- */
@@ -358,6 +371,7 @@ async function submitOrder(event) {
     address: form.address.value, table: form.table.value, note: form.note.value, lines,
   });
   if (!checked.ok) { showErrors(checked.errors); return; }
+  if (!form.consent.checked) { showErrors({ consent: "Vui lòng đồng ý để quán xử lý thông tin đặt món." }); return; }
   state.submitting = true;
   const button = $("#submit");
   button.disabled = true;
@@ -375,6 +389,7 @@ async function submitOrder(event) {
     persistCart();
     form.note.value = "";
     form.table.value = "";
+    form.consent.checked = false;
     closeSheet();
     renderMenu();
     watchOrder(result.code);
@@ -573,11 +588,11 @@ function renderTrack() {
   const text = STATUS_TEXT[view.status] || STATUS_TEXT.new;
   let extra = "";
   if (view.status === STATUS.AWAITING_PAYMENT) {
-    extra = `<p class="countdown-line">Thời gian còn lại <b id="countdown">${countdownText(view.remainingMs ?? 0)}</b></p>${paymentHtml(order)}<p class="pay-warning">⚠️ Lưu ý: sau khi thanh toán, bạn <b>không thể sửa đơn</b> và <b>không được hoàn tiền nếu huỷ đơn</b>. Mong bạn thông cảm.</p>`;
+    extra = `<p class="countdown-line">Thời gian còn lại <b id="countdown">${countdownText(view.remainingMs ?? 0)}</b></p>${paymentHtml(order)}<p class="pay-warning">⚠️ Lưu ý: sau khi quán nhận tiền, đơn được chuyển cho bếp nên <b>không sửa hoặc huỷ vì đổi ý</b> được. Nếu quán không thực hiện được đơn, giao thiếu/sai món hoặc món có lỗi, quán sẽ <b>hoàn tiền</b> (xem <a href="chinh-sach#hoan-tien" target="_blank" rel="noopener">chính sách đổi trả, hoàn tiền</a>).</p>`;
   }
   if (view.status === STATUS.REJECTED) extra = `<p class="reject-reason"><b>Lý do:</b> ${esc(order.rejectReason || "Quán chưa nhận được đơn lúc này.")}</p>`;
   const spinner = view.status === STATUS.NEW ? '<div class="spinner" aria-hidden="true"></div>' : "";
-  const phone = state.shop.phone && ["new", "rejected", "expired"].includes(view.status) ? `<p class="muted small">Cần hỗ trợ? Gọi quán <a href="tel:${esc(String(state.shop.phone).replace(/[^\d+]/g, ""))}">${esc(state.shop.phone)}</a></p>` : "";
+  const phone = state.shop.phone ? `<p class="muted small">Cần hỗ trợ? Gọi quán <a href="tel:${esc(String(state.shop.phone).replace(/[^\d+]/g, ""))}">${esc(state.shop.phone)}</a></p>` : "";
   const canEdit = view.status === STATUS.NEW || view.status === STATUS.AWAITING_PAYMENT;
   const editRow = canEdit ? `<div class="cancel-row"><button type="button" class="secondary" data-act2="edit">✏️ Sửa đơn</button><button type="button" class="danger-link" data-act2="cancel">Huỷ đơn</button></div><p class="muted small">Bạn chỉ sửa hoặc huỷ đơn được khi chưa thanh toán.</p>` : "";
   const actions = editRow + (view.status === STATUS.EXPIRED
@@ -706,8 +721,8 @@ async function cancelCurrentOrder(thenEdit) {
   const order = state.order;
   if (!order || ![STATUS.NEW, STATUS.AWAITING_PAYMENT].includes(order.status) || state.cancelling) return;
   const ask = thenEdit
-    ? "Huỷ đơn này để chọn lại món?\n\nNếu bạn ĐÃ chuyển khoản thì không được hoàn tiền."
-    : "Huỷ đơn này?\n\nNếu bạn ĐÃ chuyển khoản thì không được hoàn tiền.";
+    ? "Huỷ đơn này để chọn lại món?\n\nNếu bạn ĐÃ chuyển khoản, hãy liên hệ quán để được hoàn lại tiền theo chính sách."
+    : "Huỷ đơn này?\n\nNếu bạn ĐÃ chuyển khoản, hãy liên hệ quán để được hoàn lại tiền theo chính sách.";
   if (!window.confirm(ask)) return;
   state.cancelling = true;
   try {

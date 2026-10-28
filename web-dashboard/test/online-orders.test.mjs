@@ -94,6 +94,9 @@ test("form thông tin quán", () => {
   r = validateShopConfig({ name: "", phone: "abc", bank: "MB", account: "", holder: "", siteUrl: "http://x" });
   assert.deepEqual(Object.keys(r.errors).sort(), ["bank", "name", "phone", "siteUrl"]);
   assert.ok(validateShopConfig({ name: "A" }).ok, "để trống ngân hàng vẫn lưu được");
+  r = validateShopConfig({ name: "A", legalName: " Hộ kinh doanh  0210 ", regNo: "8001234567", owner: "Nguyễn Văn A", email: "quan@0210.vn" });
+  assert.ok(r.ok); assert.equal(r.value.legalName, "Hộ kinh doanh 0210"); assert.equal(r.value.email, "quan@0210.vn");
+  assert.deepEqual(Object.keys(validateShopConfig({ name: "A", email: "abc" }).errors), ["email"]);
 });
 
 test("rules cho phép nhân viên (uid chủ quán) sửa đơn và bộ đếm", () => {

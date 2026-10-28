@@ -48,6 +48,7 @@
         </div>
         <dl class="shop-info" id="shop-info" hidden></dl>
         <p class="hero-note">Đơn gửi trực tiếp đến quán. Không cần đăng nhập hay cài app.</p>
+        <p class="hero-note allergen">Món có thể chứa hoặc tiếp xúc với thành phần gây dị ứng (sữa, trứng, đậu phộng, gluten…). Nếu bạn bị dị ứng, hãy ghi vào ghi chú hoặc gọi quán trước khi đặt.</p>
         <p class="banner" id="closed-banner" hidden></p>
       </header>
 
@@ -81,6 +82,12 @@
       </header>
       <main id="history-body" aria-live="polite"></main>
     </div>
+
+    <footer class="legal-foot" id="legal-foot">
+      <p class="legal-name" id="legal-name"></p>
+      <dl class="legal-info" id="legal-info"></dl>
+      <nav class="legal-links" aria-label="Chính sách"><a href="chinh-sach">Chính sách &amp; điều khoản</a><a href="chinh-sach#hoan-tien">Đổi trả, hoàn tiền</a><a href="chinh-sach#khieu-nai">Khiếu nại</a><a href="chinh-sach#du-lieu">Bảo mật dữ liệu</a></nav>
+    </footer>
   </div>
 
   <!-- ===== Giỏ hàng cố định ở đáy màn hình ===== -->
@@ -97,6 +104,7 @@
       <ul class="sheet-lines" id="sheet-lines"></ul>
       <div class="sheet-promo" id="sheet-promo" hidden></div>
       <p class="sheet-total">Tổng cộng <b id="sheet-total">0đ</b></p>
+      <p class="muted small" id="tax-note">Giá đã bao gồm thuế (nếu có). Phụ thu, khuyến mãi (nếu có) được hiển thị riêng ở trên.</p>
 
       <form id="order-form" novalidate autocomplete="on">
         <label>Tên của bạn
@@ -126,9 +134,13 @@
           <textarea name="note" rows="2" maxlength="200" placeholder="Ví dụ: gọi trước khi giao"></textarea>
         </label>
 
+        <label class="consent"><input type="checkbox" name="consent" />
+          <span>Tôi đồng ý để quán thu thập và sử dụng tên, số điện thoại, địa chỉ và ghi chú của tôi để xử lý đơn, liên hệ và hỗ trợ sau bán, theo <a href="chinh-sach#du-lieu" target="_blank" rel="noopener">Chính sách bảo mật</a>. Tôi đã đọc <a href="chinh-sach#hoan-tien" target="_blank" rel="noopener">chính sách đổi trả, hoàn tiền</a>.</span>
+          <small class="field-error" data-error="consent"></small>
+        </label>
         <p class="form-message" id="form-message" role="alert"></p>
         <button type="submit" class="primary big" id="submit"><span>Gửi đơn</span> · <b id="submit-total">0đ</b></button>
-        <p class="muted small center">Quán sẽ xác nhận đơn, sau đó bạn thanh toán bằng mã QR. Đơn chưa thanh toán sau 10 phút sẽ tự hết hạn. <b>Sau khi thanh toán, bạn không thể sửa đơn và không được hoàn tiền nếu huỷ đơn.</b> Mong bạn thông cảm.</p>
+        <p class="muted small center">Quán sẽ xác nhận đơn, sau đó bạn thanh toán bằng mã QR. Đơn chưa thanh toán sau 10 phút sẽ tự hết hạn. Sau khi thanh toán, đơn được chuyển cho bếp nên không sửa hoặc huỷ vì đổi ý được; nếu quán không thực hiện được đơn hoặc có lỗi, quán sẽ hoàn tiền (xem <a href="chinh-sach#hoan-tien" target="_blank" rel="noopener">chính sách đổi trả, hoàn tiền</a>).</p>
       </form>
     </div>
   </section>

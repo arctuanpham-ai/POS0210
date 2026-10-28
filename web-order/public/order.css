@@ -252,3 +252,20 @@ label.radio input { width: 20px; height: 20px; margin: 0; }
 
 .save-qr { width: 100%; }
 .qr-img { width: min(260px, 70vw); height: auto; image-rendering: pixelated; border-radius: 8px; -webkit-touch-callout: default; user-select: auto; }
+
+/* ---------- Pháp lý: chân trang, ô đồng ý, trang chính sách ---------- */
+.hero-note.allergen { margin-top: 4px; font-size: 12px; color: var(--muted); }
+.consent { display: grid; grid-template-columns: 22px 1fr; gap: 8px; align-items: start; margin: 12px 0 4px; font-size: 13px; line-height: 1.45; }
+.consent input { width: 20px; height: 20px; margin-top: 2px; padding: 0; }
+.consent .field-error { grid-column: 2; }
+.legal-foot { margin: 28px 0 24px; padding: 14px 0 0; border-top: 1px solid var(--line); color: var(--muted); font-size: 12.5px; }
+body.has-cart .legal-foot { margin-bottom: 96px; }
+.legal-name { margin: 0 0 6px; font-weight: 800; color: var(--ink); }
+.legal-info { display: grid; gap: 2px; margin: 0 0 8px; }
+.legal-info div { display: flex; gap: 8px; } .legal-info dt { min-width: 118px; } .legal-info dd { margin: 0; }
+.legal-links { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.policy { max-width: 720px; margin: 0 auto; padding: 16px 16px 48px; }
+.policy h1 { font-size: 22px; margin: 8px 0 4px; } .policy h2 { font-size: 16px; margin: 22px 0 6px; scroll-margin-top: 12px; }
+.policy p, .policy li { font-size: 14.5px; } .policy ul { padding-left: 20px; margin: 6px 0; }
+.policy .box { padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); }
+.policy .back { display: inline-block; margin-bottom: 6px; font-weight: 700; }

@@ -1,6 +1,6 @@
 // Thống kê lượt truy cập trang đặt món theo từng cấp (phễu). Hàm thuần: không Firebase, không DOM.
 // Khớp với web-order/public/stats-core.js (cùng tên bộ đếm) và online_orders.
-import { ooToMillis } from "./online-orders.js?v=20261029-01";
+import { ooToMillis } from "./online-orders.js?v=20261029-02";
 
 export const FUNNEL = Object.freeze([
   ["visit", "Lượt vào trang"], ["menu", "Xem được menu"], ["add", "Thêm món vào giỏ"], ["cart", "Mở giỏ hàng"],

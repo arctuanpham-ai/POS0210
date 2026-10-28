@@ -1,8 +1,8 @@
 // Bộ phiếu chi DEMO để chạy thử quy trình tài chính trước khi nhập thật.
 // Mọi phiếu mang demo:true + demoBatch, nằm trong collection riêng demoExpenseReceipts (máy POS không đọc),
 // nên xoá hết sau khi thử mà không đụng dữ liệu thật. Hàm thuần: không Firebase, không DOM.
-import { normalizeText, groupLabelOf, materialCodeFor, buildSummaryLines } from "./expense-rules.js?v=20261029-01";
-import { materialById, draftRecipeFor } from "./cost-recipe.js?v=20261029-01";
+import { normalizeText, groupLabelOf, materialCodeFor, buildSummaryLines } from "./expense-rules.js?v=20261029-02";
+import { materialById, draftRecipeFor } from "./cost-recipe.js?v=20261029-02";
 
 export const DEMO_COLLECTION = "demoExpenseReceipts";
 

@@ -109,3 +109,40 @@ export function periodDays(kind, today) {
   const n = kind === "today" ? 1 : Number(kind) || 14;
   return { from: add(1 - n), to };
 }
+
+/** Khoảng thời gian của báo cáo: dòng "Khoảng thời gian | 25/10/2026 - 25/10/2026" trong sheet Tóm tắt. Trả { from, to } yyyy-MM-dd hoặc null. */
+export function parseCoverage(summaryRows) {
+  for (const r of Array.isArray(summaryRows) ? summaryRows : []) {
+    if (!Array.isArray(r) || String(r[0] ?? "").trim().toLowerCase() !== "khoảng thời gian") continue;
+    const m = /(\d{1,2})\/(\d{1,2})\/(\d{4})\s*[-–]\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(String(r.slice(1).find((c) => c != null && c !== "") ?? ""));
+    if (m) return { from: `${m[3]}-${pad(m[2])}-${pad(m[1])}`, to: `${m[6]}-${pad(m[5])}-${pad(m[4])}` };
+  }
+  return null;
+}
+
+/**
+ * Dữ liệu app food đã cập nhật đến hết ngày nào. metas: [{ app, coveredTo }] (mỗi app một mốc, lấy từ file đối soát đã nhập).
+ * Nhiều app: lấy mốc CŨ NHẤT (tổng chỉ đủ đến ngày mà mọi app đều có dữ liệu). Chưa có mốc: dùng ngày bán mới nhất trong sổ (rows) và đánh dấu approximate.
+ * ok = đã tới hôm nay; behind = số ngày còn thiếu tính đến hôm nay (0 nếu ok).
+ */
+export function freshness(metas, rows, today) {
+  const list = (Array.isArray(metas) ? metas : []).filter((m) => m && m.coveredTo);
+  let through = list.length ? list.reduce((min, m) => (m.coveredTo < min ? m.coveredTo : min), list[0].coveredTo) : "";
+  let approximate = false;
+  if (!through) {
+    through = (Array.isArray(rows) ? rows : []).reduce((max, r) => (r.saleDay && r.saleDay > max ? r.saleDay : max), "");
+    approximate = Boolean(through);
+  }
+  if (!through) return null;
+  const toMs = (d) => Date.UTC(...d.split("-").map((v, i) => (i === 1 ? Number(v) - 1 : Number(v))));
+  const behind = Math.max(0, Math.round((toMs(today) - toMs(through)) / 86_400_000));
+  const dm = through.split("-").reverse().slice(0, 2).join("/");
+  return { through, behind, ok: behind === 0, approximate, label: `${dm}` };
+}
+
+/** Dòng chữ cảnh báo ngắn cho thẻ/nhãn: ✔ hoặc ⚠. */
+export function freshnessText(f) {
+  if (!f) return "";
+  if (f.ok) return `✔ app food cập nhật đến hết hôm nay (${f.label})`;
+  return `⚠ app food chỉ cập nhật đến hết ${f.label}${f.approximate ? " (ước theo đơn mới nhất)" : ""}, thiếu ${f.behind} ngày tới hôm nay`;
+}

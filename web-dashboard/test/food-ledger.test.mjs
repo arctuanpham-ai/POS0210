@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ledgerBuild, ledgerDocs, ledgerId, parseVnDateTime, payoutGroups, periodDays, receivable, summarizeSales, vnDay } from "../food-ledger.js";
+import { freshness, freshnessText, parseCoverage, ledgerBuild, ledgerDocs, ledgerId, parseVnDateTime, payoutGroups, periodDays, receivable, summarizeSales, vnDay } from "../food-ledger.js";
 import { parseGrabRows } from "../grab-report.js";
 
 test("đọc ngày giờ file Grab theo giờ Việt Nam", () => {
@@ -71,4 +71,18 @@ test("dòng điều chỉnh cùng mã đơn không ghi đè dòng thanh toán g�
 test("hai dòng thanh toán cùng mã khác số liệu thì gắn cờ, không cộng đôi", () => {
   const b = ledgerBuild("GRAB", parseGrabRows([header, row("A1", "25 Oct 2026 11:20 AM", "26 Oct 2026 7:33 AM", "P1", 50000, 9000, 1500, 750, 38750), row("A1", "25 Oct 2026 11:20 AM", "26 Oct 2026 7:33 AM", "P9", 52000, 9000, 1500, 750, 40750)]));
   assert.equal(b.docs.length, 1); assert.equal(b.docs[0].status, "REVIEW"); assert.match(b.docs[0].problems.join(" "), /2 dòng thanh toán/);
+});
+
+test("mốc cập nhật: đọc khoảng thời gian của file, lấy app cũ nhất, cảnh báo khi không phải hôm nay", () => {
+  assert.deepEqual(parseCoverage([["Báo cáo GrabMerchant"], ["Khoảng thời gian", "25/10/2026 - 27/10/2026"]]), { from: "2026-10-25", to: "2026-10-27" });
+  assert.equal(parseCoverage([["x"]]), null);
+  let f = freshness([{ app: "GRAB", coveredTo: "2026-10-27" }], [], "2026-10-29");
+  assert.deepEqual([f.ok, f.behind, f.label], [false, 2, "27/10"]);
+  assert.match(freshnessText(f), /^⚠ .*27\/10.*thiếu 2 ngày/);
+  f = freshness([{ app: "GRAB", coveredTo: "2026-10-29" }, { app: "SHOPEE", coveredTo: "2026-10-26" }], [], "2026-10-29");
+  assert.equal(f.through, "2026-10-26"); assert.equal(f.behind, 3);
+  f = freshness([{ app: "GRAB", coveredTo: "2026-10-29" }], [], "2026-10-29");
+  assert.ok(f.ok); assert.match(freshnessText(f), /^✔/);
+  f = freshness([], [{ saleDay: "2026-10-25" }, { saleDay: "2026-10-28" }], "2026-10-29");
+  assert.ok(f.approximate); assert.equal(f.through, "2026-10-28"); assert.equal(freshness([], [], "2026-10-29"), null);
 });

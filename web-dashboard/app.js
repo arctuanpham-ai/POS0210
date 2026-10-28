@@ -4415,14 +4415,33 @@ const foodStaleNote = (monthKey) => {
   const need = lastDay < todayVn() ? lastDay : todayVn();
   return f.through < need ? `⚠ app food chỉ cập nhật đến hết ${f.label}, thiếu số liệu tới ${need.split("-").reverse().slice(0, 2).join("/")}.` : "";
 };
+/** Sổ để HIỂN THỊ: dòng từ file đối soát + đơn đã nhập từ máy POS (cách cũ) chưa có trong sổ, để không sót bill đã tải bên POS. */
+const ledgerViewRows = () => {
+  if (!ledgerState.rows) return null;
+  const have = new Set(ledgerState.rows.map((r) => r.id));
+  const extra = [];
+  for (const o of foodSummary.view?.settledOrders || []) {
+    const id = `${o.app}_${String(o.code).toUpperCase()}`;
+    if (have.has(id)) continue;
+    const day = vnDay(o.at || Date.now());
+    extra.push({ id, app: o.app, code: o.code, saleDay: day, payoutDay: day, payoutRef: "(nhập từ POS)", orderValue: o.amount, commission: o.commission, vat: o.vat, pit: o.pit, other: o.other + Math.max(0, o.fee - o.commission - o.vat - o.pit - o.other), received: o.received, status: "OK", source: "POS" });
+  }
+  for (const o of foodSummary.view?.pendingOrders || []) {
+    const id = `${o.app}_${String(o.code).toUpperCase()}`;
+    if (have.has(id)) continue;
+    extra.push({ id, app: o.app, code: o.code, saleDay: vnDay(o.at || Date.now()), payoutDay: "", payoutRef: "", orderValue: o.amount, commission: 0, vat: 0, pit: 0, other: 0, received: 0, status: "OK", source: "POS" });
+  }
+  return [...ledgerState.rows, ...extra];
+};
 const ledgerFresh = () => (ledgerState.rows ? freshness(ledgerState.metas, ledgerState.rows, todayVn()) : null);
 function renderLedger() {
   const host = $("#fl-report"); if (!host) return;
   if (!ledgerState.rows) { host.innerHTML = `<p class="muted">${escapeHtml(ledgerState.error || "Đang tải sổ app food…")}</p>`; return; }
+  const all = ledgerViewRows();
   const kind = $("#fl-period")?.value || "14";
   const { from, to } = periodDays(kind, todayVn());
-  const sales = summarizeSales(ledgerState.rows, from, to);
-  const pays = payoutGroups(ledgerState.rows, from, to);
+  const sales = summarizeSales(all, from, to);
+  const pays = payoutGroups(all, from, to);
   const metric = (label, value, sub = "") => `<article class="metric"><p>${escapeHtml(label)}</p><strong>${escapeHtml(value)}</strong>${sub ? `<small>${escapeHtml(sub)}</small>` : ""}</article>`;
   const fees = sales.commission + sales.other;
   const fr = ledgerFresh();
@@ -4432,7 +4451,7 @@ function renderLedger() {
     metric("Thuế GTGT khấu trừ", money(sales.vat), "không phải chi phí"),
     metric("Thuế TNCN khấu trừ", money(sales.pit), "không phải chi phí"),
     metric("Thực nhận", money(sales.received), "tiền app trả"),
-    metric("Phải thu (chưa về)", money(receivable(ledgerState.rows)), "tất cả đơn đã bán"),
+    metric("Phải thu (chưa về)", money(receivable(all)), "tất cả đơn đã bán"),
   ].join("")}</section>` +
     (sales.review ? `<p class="warn-text">${sales.review} đơn (${money(sales.reviewAmount)}) bị huỷ/hoàn/chưa chuyển tiền: không tính vào doanh thu, cần xem lại trong file app.</p>` : "") +
     `<h4>Theo ngày bán</h4>` + (sales.days.length ? sales.days.map((d) => `<div class="row-line"><span>${escapeHtml(d.day.split("-").reverse().join("/"))}<small>${d.orders} đơn · chiết khấu ${money(d.commission + d.other)} · thuế ${money(d.vat + d.pit)} · thực nhận ${money(d.received)}</small></span><strong>${money(d.gross)}</strong></div>`).join("") : '<p class="muted">Chưa có đơn trong kỳ.</p>') +
@@ -4518,6 +4537,8 @@ async function loadFoodApp() {
 function renderFoodApp(data) {
   foodState.data = data;
   const v = normalizeFoodApp(data), t = foodAppTotals(v);
+  foodSummary.view = v; foodSummary.days = v.days;
+  queueMicrotask(() => renderLedger());
   $("#appfood-status").textContent = v.empty ? "Chưa có dữ liệu: máy POS cần cài bản mới và có đơn app food đầu tiên." : `Cập nhật từ máy POS lúc ${foodTime(v.updatedAt)}`;
   const metric = (label, value, sub = "") => `<article class="metric"><p>${escapeHtml(label)}</p><strong>${escapeHtml(value)}</strong>${sub ? `<small>${escapeHtml(sub)}</small>` : ""}</article>`;
   $("#appfood-metrics").innerHTML = [

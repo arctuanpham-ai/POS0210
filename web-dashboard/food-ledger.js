@@ -24,20 +24,49 @@ export function vnDay(ms) {
 
 export const ledgerId = (app, code) => `${app}_${String(code).trim().toUpperCase().replace(/[\s/]+/g, "")}`;
 
-/** Đơn đã đọc từ file (parseGrabRows) -> các dòng sổ. Đơn huỷ/hoàn tiền/chưa chuyển tiền được gắn cờ, không tính doanh thu. */
-export function ledgerDocs(app, parsed, { source = "", now = Date.now(), by = "" } = {}) {
-  return (Array.isArray(parsed) ? parsed : []).map((p) => {
-    const saleAt = parseVnDateTime(p.createdAt);
-    const payoutAt = parseVnDateTime(p.paidAt);
-    const flagged = p.problems.length > 0;
-    return {
-      id: ledgerId(app, p.code), app, code: p.code,
-      saleAt, saleDay: vnDay(saleAt) || vnDay(payoutAt), payoutAt, payoutDay: vnDay(payoutAt), payoutRef: p.payoutRef || "",
-      orderValue: p.orderValue, commission: p.commission, vat: p.vat, pit: p.pit, shopPromo: p.shopPromo || 0, other: p.other, received: p.received,
-      status: flagged ? "REVIEW" : "OK", problems: p.problems, source, importedAt: now, importedBy: by,
-    };
-  });
+const rowKey = (p) => [p.txnId, p.category, p.orderValue, p.received, p.commission, p.vat, p.pit, p.paidAt, p.createdAt].join("|");
+const isCancelOrRefund = (p) => p.problems.some((x) => /^(Đơn huỷ|Hoàn tiền)/.test(x));
+
+/**
+ * Chống trùng khi một mã đơn xuất hiện nhiều dòng trong file:
+ *  - dòng giống hệt nhau (file chồng ngày, xuất lặp): giữ một, bỏ phần còn lại;
+ *  - dòng khác loại (điều chỉnh, phụ phí...) cùng mã: cộng vào tiền thực nhận của đơn gốc, KHÔNG ghi đè dòng thanh toán;
+ *  - nhiều dòng thanh toán khác số liệu: giữ dòng đầu, gắn cờ cần xem.
+ * Trả { docs, duplicates, merged }.
+ */
+export function ledgerBuild(app, parsed, { source = "", now = Date.now(), by = "" } = {}) {
+  const groups = new Map();
+  for (const p of Array.isArray(parsed) ? parsed : []) { const id = ledgerId(app, p.code); (groups.get(id) || groups.set(id, []).get(id)).push(p); }
+  let duplicates = 0, merged = 0;
+  const docs = [];
+  for (const [id, list] of groups) {
+    const uniq = [], seen = new Set();
+    for (const p of list) { const k = rowKey(p); if (seen.has(k)) { duplicates += 1; continue; } seen.add(k); uniq.push(p); }
+    const isMain = (p) => (p.category === "" || p.category === "payment") && p.orderValue > 0;
+    const mains = uniq.filter(isMain);
+    const extras = uniq.filter((p) => !isMain(p));
+    const base = { ...(mains[0] || uniq[0]) };
+    const problems = [...base.problems];
+    if (mains.length > 1) problems.push(`Mã đơn có ${mains.length} dòng thanh toán khác số liệu, chỉ lấy dòng đầu`);
+    let adjustment = 0;
+    for (const x of extras) {
+      if (x === base) continue;
+      if (isCancelOrRefund(x)) { problems.push(...x.problems); } else { adjustment += x.received; merged += 1; }
+    }
+    if (!mains.length) problems.push("Không có dòng thanh toán cho mã đơn này");
+    base.received += adjustment;
+    const saleAt = parseVnDateTime(base.createdAt), payoutAt = parseVnDateTime(base.paidAt);
+    docs.push({
+      id, app, code: base.code,
+      saleAt, saleDay: vnDay(saleAt) || vnDay(payoutAt), payoutAt, payoutDay: vnDay(payoutAt), payoutRef: base.payoutRef || "",
+      orderValue: base.orderValue, commission: base.commission, vat: base.vat, pit: base.pit, shopPromo: base.shopPromo || 0, other: base.other, received: base.received, adjustment,
+      status: problems.length ? "REVIEW" : "OK", problems: [...new Set(problems)], source, importedAt: now, importedBy: by,
+    });
+  }
+  return { docs, duplicates, merged };
 }
+
+export const ledgerDocs = (app, parsed, opts) => ledgerBuild(app, parsed, opts).docs;
 
 /** Tổng hợp theo ngày bán trong [fromDay, toDay). Dòng cờ REVIEW chỉ đếm riêng, không vào doanh thu. */
 export function summarizeSales(rows, fromDay, toDay) {

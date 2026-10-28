@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ledgerDocs, ledgerId, parseVnDateTime, payoutGroups, periodDays, receivable, summarizeSales, vnDay } from "../food-ledger.js";
+import { ledgerBuild, ledgerDocs, ledgerId, parseVnDateTime, payoutGroups, periodDays, receivable, summarizeSales, vnDay } from "../food-ledger.js";
 import { parseGrabRows } from "../grab-report.js";
 
 test("đọc ngày giờ file Grab theo giờ Việt Nam", () => {
@@ -48,4 +48,27 @@ test("kỳ báo cáo theo ngày Việt Nam", () => {
   assert.deepEqual(periodDays("7", "2026-10-28"), { from: "2026-10-22", to: "2026-10-29" });
   assert.deepEqual(periodDays("month", "2026-10-28"), { from: "2026-10-01", to: "2026-10-29" });
   assert.deepEqual(periodDays("1", "2026-12-31"), { from: "2026-12-31", to: "2027-01-01" });
+});
+
+test("chống trùng: dòng giống hệt chỉ tính một lần", () => {
+  const dup = row("A1", "25 Oct 2026 11:20 AM", "26 Oct 2026 7:33 AM", "P1", 50000, 9000, 1500, 750, 38750);
+  const b = ledgerBuild("GRAB", parseGrabRows([header, dup, dup, [...dup], row("A2", "25 Oct 2026 12:00 PM", "26 Oct 2026 7:33 AM", "P1", 30000, 5000, 900, 450, 23650)]));
+  assert.equal(b.docs.length, 2); assert.equal(b.duplicates, 2);
+  const s = summarizeSales(b.docs, "2026-10-25", "2026-10-26");
+  assert.equal(s.orders, 2); assert.equal(s.gross, 80000); assert.equal(s.received, 62400);
+});
+
+test("dòng điều chỉnh cùng mã đơn không ghi đè dòng thanh toán gốc", () => {
+  const header2 = [...header, "Lý do hoàn tiền"];
+  const pay = [...row("A1", "25 Oct 2026 11:20 AM", "26 Oct 2026 7:33 AM", "P1", 50000, 9000, 1500, 750, 38750), null];
+  const adj = [...row("A1", "25 Oct 2026 11:20 AM", "27 Oct 2026 7:00 AM", "P2", 0, 0, 0, 0, -5000), null]; adj[4] = "Adjustment";
+  const b = ledgerBuild("GRAB", parseGrabRows([header2, pay, adj]));
+  assert.equal(b.docs.length, 1);
+  const d = b.docs[0];
+  assert.equal(d.orderValue, 50000); assert.equal(d.received, 33750); assert.equal(d.adjustment, -5000); assert.equal(d.status, "OK"); assert.equal(b.merged, 1);
+});
+
+test("hai dòng thanh toán cùng mã khác số liệu thì gắn cờ, không cộng đôi", () => {
+  const b = ledgerBuild("GRAB", parseGrabRows([header, row("A1", "25 Oct 2026 11:20 AM", "26 Oct 2026 7:33 AM", "P1", 50000, 9000, 1500, 750, 38750), row("A1", "25 Oct 2026 11:20 AM", "26 Oct 2026 7:33 AM", "P9", 52000, 9000, 1500, 750, 40750)]));
+  assert.equal(b.docs.length, 1); assert.equal(b.docs[0].status, "REVIEW"); assert.match(b.docs[0].problems.join(" "), /2 dòng thanh toán/);
 });

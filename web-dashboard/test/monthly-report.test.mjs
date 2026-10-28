@@ -68,3 +68,16 @@ test("JSON mô tả có schema, nhóm vật tư và quy tắc đã học", () =>
   assert.equal(json.learnedRules[0].group, "MUT");
   assert.ok(json.materialGroups.length >= 14);
 });
+
+test("CSV có cột app food khi tháng có sổ app food", async () => {
+  const { monthlyCsv, buildMonthlyReport } = await import("../monthly-report.js");
+  const rep = buildMonthlyReport({ receipts: [], monthlyDocs: {}, monthKeys: ["2026-10"], currentMonthKey: "2026-10", revenueFallback: 1000 }).map((r) => ({ ...r, food: { gross: 500, commission: 100, other: 20, vat: 5, pit: 2, accrual: 380, cashIn: 300 } }));
+  const [header, row] = monthlyCsv(rep).replace("﻿", "").trim().split("\r\n");
+  const h = header.split(","), v = row.split(",");
+  assert.equal(h.length, v.length);
+  assert.equal(v[h.indexOf("app_food_doanh_thu")], "500");
+  assert.equal(v[h.indexOf("app_food_hoa_hong_phi")], "120");
+  assert.equal(v[h.indexOf("app_food_thue_giu_ho")], "7");
+  assert.equal(v[h.indexOf("app_food_rong")], "380");
+  assert.equal(v[h.indexOf("app_food_tien_ve")], "300");
+});

@@ -1,6 +1,6 @@
 // Hàm thuần: nhập hàng theo tháng so với doanh thu tháng, và xuất CSV/JSON cho phân tích AI.
 // Không đọc Firebase, không có DOM. Doanh thu thiếu thì tỷ lệ là null, không bao giờ là 0.
-import { MATERIAL_GROUPS, groupCodeOrNull, groupLabelOf, isSummaryReceipt } from "./expense-rules.js?v=20261029-05";
+import { MATERIAL_GROUPS, groupCodeOrNull, groupLabelOf, isSummaryReceipt } from "./expense-rules.js?v=20261029-06";
 
 const pad = (n) => String(n).padStart(2, "0");
 
@@ -79,10 +79,10 @@ const csvCell = (value) => {
 
 /** CSV một dòng mỗi tháng; cột nhóm theo thứ tự MATERIAL_GROUPS. Ô thiếu dữ liệu để trống. */
 export const monthlyCsv = (report) => {
-  const header = ["thang", "doanh_thu", "nguon_doanh_thu", "doanh_thu_da_chot", "so_bill", "nhap_hang", "ti_le_nhap_tren_doanh_thu", "so_phieu", "phieu_tong", "phieu_chi_tiet", "chi_phi_khac", ...MATERIAL_GROUPS.map(([code]) => `nhom_${code}`)];
+  const header = ["thang", "doanh_thu", "nguon_doanh_thu", "doanh_thu_da_chot", "so_bill", "nhap_hang", "ti_le_nhap_tren_doanh_thu", "so_phieu", "phieu_tong", "phieu_chi_tiet", "chi_phi_khac", ...MATERIAL_GROUPS.map(([code]) => `nhom_${code}`), "app_food_doanh_thu", "app_food_hoa_hong_phi", "app_food_thue_giu_ho", "app_food_rong", "app_food_tien_ve"];
   const lines = [header.join(",")];
   for (const r of report) {
-    lines.push([r.monthKey, r.revenue, r.revenueSource, r.revenueFinal, r.paidBills, r.purchases, r.ratio === null ? "" : r.ratio.toFixed(4), r.receiptCount, r.summaryAmount, r.itemizedAmount, r.otherExpenses, ...MATERIAL_GROUPS.map(([code]) => r.byGroup[code] || 0)].map(csvCell).join(","));
+    lines.push([r.monthKey, r.revenue, r.revenueSource, r.revenueFinal, r.paidBills, r.purchases, r.ratio === null ? "" : r.ratio.toFixed(4), r.receiptCount, r.summaryAmount, r.itemizedAmount, r.otherExpenses, ...MATERIAL_GROUPS.map(([code]) => r.byGroup[code] || 0), r.food ? r.food.gross : "", r.food ? r.food.commission + r.food.other : "", r.food ? r.food.vat + r.food.pit : "", r.food ? r.food.accrual : "", r.food ? r.food.cashIn : ""].map(csvCell).join(","));
   }
   return `﻿${lines.join("\r\n")}\r\n`;
 };
@@ -98,6 +98,11 @@ export const monthlyJson = (report, { generatedAt = Date.now(), rules = [] } = {
     ti_le_nhap_tren_doanh_thu: "nhap_hang / doanh_thu. Trống khi không có doanh thu.",
     phieu_tong: "Hóa đơn nhập chung chung chỉ có nhóm và số tiền (không có tên vật tư), nên không dùng được cho thống kê giá/khối lượng.",
     phieu_chi_tiet: "Hóa đơn có từng dòng vật tư.",
+    app_food_doanh_thu: "Doanh thu Grab/Shopee từ sổ đối soát (file app), theo ngày bán, độc lập doanh_thu của POS. Trống = chưa tải sổ.",
+    app_food_hoa_hong_phi: "Chiết khấu + phí/khuyến mãi quán chịu của app food, tính chi phí tháng bán.",
+    app_food_thue_giu_ho: "VAT + TNCN app khấu trừ hộ, không tính chi phí.",
+    app_food_rong: "doanh thu app − hoa hồng − phí (đã trừ ở dòng tiền ròng).",
+    app_food_tien_ve: "Tiền app đã chuyển về tài khoản trong tháng theo ngày giải ngân.",
     chi_phi_khac: "Chi phí không phải nhập hàng (lương, điện, nước, mặt bằng, bảo trì…) nhập ở Giao dịch khác hoặc trên máy POS. Không tính vào nhap_hang.",
     doanh_thu_da_chot: "true khi tháng đã kết thúc; false cho tháng đang chạy (số còn thay đổi).",
     nhom_: "Chia theo nhóm vật tư từ dòng phiếu. Nhóm 'KHAC' gồm dòng chưa phân nhóm được.",

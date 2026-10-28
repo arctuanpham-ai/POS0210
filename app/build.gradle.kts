@@ -12,8 +12,8 @@ android {
         applicationId = "vn.ecohome.pos0210"
         minSdk = 26
         targetSdk = 35
-        versionCode = 202
-        versionName = "1.0.0-alpha170-food-bill-status"
+        versionCode = 203
+        versionName = "1.0.0-alpha171-privacy-note"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {

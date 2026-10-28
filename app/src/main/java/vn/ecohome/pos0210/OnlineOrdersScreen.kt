@@ -212,7 +212,7 @@ private fun CustomerPanel(vm: PosViewModel, o: OnlineOrder) {
             title = { Text("Ghi chú sở thích · ${o.name}") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Hiện ngay trên mọi đơn sau của số ${o.phone}. Ví dụ: ít đá, không đường, dị ứng đậu phộng, thích bàn cạnh cửa sổ.", fontSize = 12.sp)
+                    Text("Hiện ngay trên mọi đơn sau của số ${o.phone}. Ví dụ: ít đá, không đường, thích bàn cạnh cửa sổ. Không ghi thông tin sức khoẻ hay dữ liệu nhạy cảm của khách (khách tự ghi dị ứng trong đơn của họ).", fontSize = 12.sp)
                     OutlinedTextField(text, { text = it.take(500) }, label = { Text("Ghi chú") }, minLines = 2, maxLines = 5)
                 }
             },

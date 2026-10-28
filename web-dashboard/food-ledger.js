@@ -146,3 +146,21 @@ export function freshnessText(f) {
   if (f.ok) return `✔ app food cập nhật đến hết hôm nay (${f.label})`;
   return `⚠ app food chỉ cập nhật đến hết ${f.label}${f.approximate ? " (ước theo đơn mới nhất)" : ""}, thiếu ${f.behind} ngày tới hôm nay`;
 }
+
+/** Ngày đầu của tháng kế tiếp: "2026-10" -> "2026-11-01". */
+const nextMonthStart = (monthKey) => { const [y, m] = monthKey.split("-").map(Number); return m === 12 ? `${y + 1}-01-01` : `${y}-${pad(m + 1)}-01`; };
+
+/**
+ * App food trong một tháng (monthKey = yyyy-MM, giờ Việt Nam).
+ * - gross / commission / other / vat / pit: theo NGÀY BÁN (doanh thu và chi phí thuộc tháng bán).
+ * - accrual = gross − commission − other (VAT/PIT app giữ hộ là thuế, không tính vào chi phí).
+ * - cashIn: tiền app đã chuyển về TK theo NGÀY GIẢI NGÂN trong tháng (dòng tiền), không phụ thuộc tháng bán.
+ * - review: số đơn bị cờ, không nằm trong doanh thu.
+ */
+export function foodMonth(rows, monthKey) {
+  const from = `${monthKey}-01`;
+  const to = nextMonthStart(monthKey);
+  const s = summarizeSales(rows, from, to);
+  const cashIn = (Array.isArray(rows) ? rows : []).filter((r) => r.status !== "REVIEW" && r.payoutDay && r.payoutDay >= from && r.payoutDay < to).reduce((t, r) => t + r.received, 0);
+  return { monthKey, orders: s.orders, gross: s.gross, commission: s.commission, other: s.other, vat: s.vat, pit: s.pit, accrual: s.gross - s.commission - s.other, cashIn, review: s.review, reviewAmount: s.reviewAmount };
+}

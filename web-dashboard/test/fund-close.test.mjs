@@ -41,3 +41,13 @@ test("đối soát quỹ tháng: ví dụ đầu kỳ 0, chia đôi", () => {
   assert.equal(counted.diff, -500_000);
   assert.equal(counted.distributable, 28_500_000);
 });
+
+test("app food: lãi theo ngày bán, quỹ theo tiền về", async () => {
+  const { fundMonth } = await import("../fund-close.js");
+  const base = fundMonth({ monthKey: "2026-10", revenue: 1000000 });
+  const withFood = fundMonth({ monthKey: "2026-10", revenue: 1000000, foodAccrual: 200000, foodCash: 150000 });
+  assert.equal(withFood.net - base.net, 200000);
+  assert.equal(withFood.expected - base.expected, 150000);
+  assert.equal(withFood.foodAccrual, 200000);
+  assert.equal(base.foodAccrual, 0);
+});

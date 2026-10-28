@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { freshness, freshnessText, parseCoverage, ledgerBuild, ledgerDocs, ledgerId, parseVnDateTime, payoutGroups, periodDays, receivable, summarizeSales, vnDay } from "../food-ledger.js";
+import { foodMonth, freshness, freshnessText, parseCoverage, ledgerBuild, ledgerDocs, ledgerId, parseVnDateTime, payoutGroups, periodDays, receivable, summarizeSales, vnDay } from "../food-ledger.js";
 import { parseGrabRows } from "../grab-report.js";
 
 test("đọc ngày giờ file Grab theo giờ Việt Nam", () => {
@@ -85,4 +85,26 @@ test("mốc cập nhật: đọc khoảng thời gian của file, lấy app cũ 
   assert.ok(f.ok); assert.match(freshnessText(f), /^✔/);
   f = freshness([], [{ saleDay: "2026-10-25" }, { saleDay: "2026-10-28" }], "2026-10-29");
   assert.ok(f.approximate); assert.equal(f.through, "2026-10-28"); assert.equal(freshness([], [], "2026-10-29"), null);
+});
+
+test("app food theo tháng: doanh thu và phí theo ngày bán, tiền về theo ngày giải ngân", () => {
+  const r = (id, saleDay, payoutDay, v, c, extra = {}) => ({ id, app: "GRAB", saleDay, payoutDay, orderValue: v, commission: c, other: 0, vat: 1000, pit: 500, received: v - c - 1500, status: "OK", ...extra });
+  const rows = [
+    r("a", "2026-09-30", "2026-10-02", 100000, 20000),
+    r("b", "2026-10-05", "2026-10-07", 200000, 40000),
+    r("c", "2026-10-31", "", 50000, 10000),
+    r("d", "2026-10-10", "", 70000, 0, { status: "REVIEW" }),
+  ];
+  const oct = foodMonth(rows, "2026-10");
+  assert.equal(oct.gross, 250000);
+  assert.equal(oct.commission, 50000);
+  assert.equal(oct.accrual, 200000);
+  assert.equal(oct.orders, 2);
+  assert.equal(oct.vat + oct.pit, 3000);
+  assert.equal(oct.cashIn, 78500 + 158500);
+  assert.equal(oct.review, 1);
+  const sep = foodMonth(rows, "2026-09");
+  assert.equal(sep.gross, 100000);
+  assert.equal(sep.cashIn, 0);
+  assert.equal(foodMonth(rows, "2026-12").gross, 0);
 });

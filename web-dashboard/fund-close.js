@@ -1,6 +1,6 @@
 // Đối soát quỹ & chia tiền theo tháng. Quỹ quán = toàn bộ tiền của quán (tiền mặt + tài khoản) do thủ quỹ giữ.
 // Hàm thuần: không Firebase, không DOM.
-import { countsAsCost, reviewStatus } from "./reimburse.js?v=20261029-02";
+import { countsAsCost, reviewStatus } from "./reimburse.js?v=20261029-03";
 
 /** Đầu tư ban đầu (trước khai trương, đã góp và chia ngoài): không trừ vào lợi nhuận tháng, không chi từ quỹ. */
 export const INITIAL_CATEGORIES = new Set(["INITIAL_INVESTMENT_SUNK", "CAPITAL_ASSET", "SETUP_COST", "INITIAL_INVESTMENT"]);
@@ -20,7 +20,8 @@ const isShop = (r) => r.fundSource === "SHOP_CASH" || r.fundSource === "SHOP_BAN
  * - Quỹ phải có cuối kỳ = đầu kỳ + doanh thu − chi bằng quỹ − hoàn ứng đã trả ± góp / rút vốn, rút lợi nhuận.
  * - Có thể chia = quỹ (thực đếm nếu đã nhập, không thì quỹ phải có) − còn nợ hoàn − vốn giữ lại.
  */
-export const fundMonth = ({ monthKey, revenue = 0, receipts = [], otherPurchases = [], movements = [], opening = 0, cashCounted = null, bankBalance = null, reserve = 0, partners = [] }) => {
+// foodAccrual: app food ròng theo ngày bán (bán − hoa hồng − phí), tính vào lợi nhuận tháng bán. foodCash: tiền app chuyển về TK trong tháng, tính vào quỹ.
+export const fundMonth = ({ monthKey, revenue = 0, receipts = [], otherPurchases = [], movements = [], opening = 0, cashCounted = null, bankBalance = null, reserve = 0, partners = [], foodAccrual = 0, foodCash = 0 }) => {
   const { from, to } = monthRange(monthKey);
   const inMonth = (t) => Number(t) >= from && Number(t) < to;
   const mine = receipts.filter((r) => inMonth(r.purchaseDate) && reviewStatus(r) !== "NONE");
@@ -31,12 +32,12 @@ export const fundMonth = ({ monthKey, revenue = 0, receipts = [], otherPurchases
   const operating = sum(counted.filter((r) => categoryOf(r) !== "ADDITIONAL_INVESTMENT")) + sum(others.filter((p) => p.category !== "ADDITIONAL_INVESTMENT"), (p) => Number(p.amount || 0));
   const fromFund = sum(counted.filter(isShop)) + sum(others.filter((p) => !p.payer), (p) => Number(p.amount || 0));
   const fromPersonal = sum(counted.filter((r) => !isShop(r))) + sum(others.filter((p) => p.payer), (p) => Number(p.amount || 0));
-  const net = Number(revenue || 0) - operating - investment;
+  const net = Number(revenue || 0) + Number(foodAccrual || 0) - operating - investment;
   const moves = movements.filter((m) => inMonth(m.occurredAt));
   const moveIn = sum(moves.filter((m) => MOVE_IN.has(m.type)), (m) => Number(m.amount || 0));
   const reimbursed = sum(moves.filter((m) => m.type === "PAYER_REIMBURSEMENT"), (m) => Number(m.amount || 0));
   const withdrawn = sum(moves.filter((m) => MOVE_OUT.has(m.type) && m.type !== "PAYER_REIMBURSEMENT"), (m) => Number(m.amount || 0));
-  const expected = Number(opening || 0) + Number(revenue || 0) - fromFund - reimbursed + moveIn - withdrawn;
+  const expected = Number(opening || 0) + Number(revenue || 0) + Number(foodCash || 0) - fromFund - reimbursed + moveIn - withdrawn;
   const hasActual = cashCounted !== null && cashCounted !== "" && bankBalance !== null && bankBalance !== "";
   const actual = hasActual ? Number(cashCounted || 0) + Number(bankBalance || 0) : null;
   const pending = mine.filter((r) => reviewStatus(r) === "PENDING");
@@ -51,7 +52,7 @@ export const fundMonth = ({ monthKey, revenue = 0, receipts = [], otherPurchases
   const people = totalBp === 10000 ? active : [{ name: "Cổ đông 1", shareBasisPoints: 5000 }, { name: "Cổ đông 2", shareBasisPoints: 5000 }];
   const shares = people.map((p) => ({ name: p.name, percent: Number(p.shareBasisPoints) / 100, amount: Math.max(0, Math.round(Math.max(0, distributable) * Number(p.shareBasisPoints) / 10000)) }));
   return {
-    monthKey, revenue: Number(revenue || 0), operating, investment, net, fromFund, fromPersonal,
+    monthKey, revenue: Number(revenue || 0), foodAccrual: Number(foodAccrual || 0), foodCash: Number(foodCash || 0), operating, investment, net, fromFund, fromPersonal,
     opening: Number(opening || 0), moveIn, reimbursed, withdrawn, expected, actual, diff: hasActual ? actual - expected : null,
     owedTotal, owedCount: owed.length, reserve: Number(reserve || 0), distributable, shares, partnersConfigured: totalBp === 10000,
     pending: { count: pending.length, total: sum(pending) }, rejected: { count: rejected.length, total: sum(rejected) },

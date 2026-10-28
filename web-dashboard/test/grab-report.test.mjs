@@ -8,7 +8,7 @@ const row = (code, over = {}) => { const base = { "Danh mục": "Payment ", "Tr�
 
 test("đọc dòng thật GF-824", () => {
   const [r] = parseGrabRows([header, row("GF-824")]);
-  assert.deepEqual({ ...r, problems: r.problems.length }, { code: "GF-824", orderValue: 50000, commission: 9817, vat: 1500, pit: 750, received: 37933, other: 0, paidAt: "26 Oct 2026 7:33 AM", problems: 0 });
+  assert.deepEqual({ ...r, problems: r.problems.length }, { code: "GF-824", orderValue: 50000, commission: 9817, vat: 1500, pit: 750, received: 37933, other: 0, paidAt: "26 Oct 2026 7:33 AM", createdAt: "", payoutRef: "", shopPromo: 0, status: "Transferred", problems: 0 });
 });
 test("khoản trừ khác tự tính, đơn huỷ/chưa chuyển bị gắn cờ", () => {
   const rows = parseGrabRows([header, row("A1", { "Tổng cộng": 37000 }), row("A2", { "Trạng thái": "Pending" }), row("A3", { "Lý do hủy": "Khách huỷ" }), row("A4", { "Tổng cộng": 49000 })]);

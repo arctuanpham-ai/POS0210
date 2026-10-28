@@ -14,6 +14,7 @@ export function parseGrabRows(rows) {
   const at = (name) => header.indexOf(name);
   const col = {
     code: at("Mã đơn hàng ngắn"), amount: at("Số tiền"), status: at("Trạng thái"), category: at("Danh mục"), paidAt: at("Ngày chuyển khoản"),
+    createdAt: at("Ngày tạo"), payoutRef: header.lastIndexOf("Mã giao dịch"), shopPromo: [at("Giảm giá (Quán tài trợ)"), at("Giảm phí giao hàng (Quán tài trợ)")],
     commission: ["Chiết khấu giao hàng", "Chiết khấu từ các kênh bán hàng", "Chiết khấu đơn hàng", "Chiết khấu cho GrabFood / GrabMart"].map(at),
     vat: at("VAT Amount"), pit: at("PIT Amount"), total: at("Tổng cộng"), cancel: at("Lý do hủy"), refund: at("Lý do hoàn tiền"),
   };
@@ -31,7 +32,7 @@ export function parseGrabRows(rows) {
     if (norm(cell(r, col.category)) && norm(cell(r, col.category)).toLowerCase() !== "payment") problems.push(`Loại giao dịch "${norm(cell(r, col.category))}"`);
     if (amount <= 0) problems.push("Giá trị đơn bằng 0");
     if (received < 0 || received + commission + vat + pit > amount) problems.push("Các khoản trừ lớn hơn giá trị đơn");
-    return { code: cleanCode(cell(r, col.code)), orderValue: amount, commission, vat, pit, received, other: Math.max(0, amount - commission - vat - pit - received), paidAt: norm(cell(r, col.paidAt)), problems };
+    return { code: cleanCode(cell(r, col.code)), orderValue: amount, commission, vat, pit, received, other: Math.max(0, amount - commission - vat - pit - received), paidAt: norm(cell(r, col.paidAt)), createdAt: norm(cell(r, col.createdAt)), payoutRef: col.payoutRef > at("Mã đơn hàng ngắn") ? norm(cell(r, col.payoutRef)) : "", shopPromo: col.shopPromo.reduce((s2, i) => s2 + abs(cell(r, i)), 0), status: norm(cell(r, col.status)), problems };
   });
 }
 

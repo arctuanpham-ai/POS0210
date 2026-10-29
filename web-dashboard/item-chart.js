@@ -29,26 +29,26 @@ export const itemComboChart = (series, { name = "" } = {}) => {
   const parts = [];
   for (let g = 0; g <= 4; g++) {
     const v = (qtyMax / 4) * g, y = yq(v);
-    parts.push(`<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="#eadbc7" stroke-width="1"/><text x="${L - 6}" y="${y + 4}" text-anchor="end" font-size="11" fill="#796758">${Math.round(v)}</text>`);
+    parts.push(`<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="#ece3d3" stroke-width="1"/><text x="${L - 6}" y="${y + 4}" text-anchor="end" font-size="11" fill="#6b6f63">${Math.round(v)}</text>`);
     const pv = pLo + ((pHi - pLo) / 4) * g;
-    parts.push(`<text x="${W - R + 6}" y="${yq(v) + 4}" font-size="11" fill="#6e432d">${compact(pv)}</text>`);
+    parts.push(`<text x="${W - R + 6}" y="${yq(v) + 4}" font-size="11" fill="#6b4f3a">${compact(pv)}</text>`);
   }
   series.forEach((d, i) => {
     const cx = x(i);
     if (!d.available) { parts.push(`<text x="${cx}" y="${T + ih - 4}" text-anchor="middle" font-size="10" fill="#b8a690">–</text>`); }
     else {
       const hr = (d.retail / qtyMax) * ih, hc = (d.inCombo / qtyMax) * ih;
-      if (d.retail > 0) parts.push(`<rect x="${cx - bw / 2}" y="${T + ih - hr}" width="${bw}" height="${hr}" rx="2" fill="#c9a98c"><title>${d.dateKey.slice(8)}/${d.dateKey.slice(5, 7)}: ${d.retail} phần bán lẻ</title></rect>`);
+      if (d.retail > 0) parts.push(`<rect x="${cx - bw / 2}" y="${T + ih - hr}" width="${bw}" height="${hr}" rx="2" fill="#cdb592"><title>${d.dateKey.slice(8)}/${d.dateKey.slice(5, 7)}: ${d.retail} phần bán lẻ</title></rect>`);
       if (d.inCombo > 0) parts.push(`<rect x="${cx - bw / 2}" y="${T + ih - hr - hc}" width="${bw}" height="${hc}" rx="2" fill="#e8d8c5"><title>${d.dateKey.slice(8)}/${d.dateKey.slice(5, 7)}: ${d.inCombo} phần trong combo</title></rect>`);
     }
-    if (i % step === 0 || i === n - 1) parts.push(`<text x="${cx}" y="${H - 12}" text-anchor="middle" font-size="11" fill="#796758">${d.dateKey.slice(8)}/${d.dateKey.slice(5, 7)}</text>`);
+    if (i % step === 0 || i === n - 1) parts.push(`<text x="${cx}" y="${H - 12}" text-anchor="middle" font-size="11" fill="#6b6f63">${d.dateKey.slice(8)}/${d.dateKey.slice(5, 7)}</text>`);
   });
   // Đường giá nối các ngày có bán; ngày không bán thì đứt đoạn nối bằng nét mảnh.
   const pts = series.map((d, i) => (d.avgPrice > 0 ? [x(i), yp(d.avgPrice), d] : null)).filter(Boolean);
-  if (pts.length > 1) parts.push(`<polyline points="${pts.map((p) => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ")}" fill="none" stroke="#6e432d" stroke-width="2" stroke-linejoin="round"/>`);
-  for (const p of pts) parts.push(`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.2" fill="#fffcf7" stroke="#6e432d" stroke-width="2"><title>${p[2].dateKey.slice(8)}/${p[2].dateKey.slice(5, 7)}: giá bình quân ${new Intl.NumberFormat("vi-VN").format(p[2].avgPrice)}đ</title></circle>`);
+  if (pts.length > 1) parts.push(`<polyline points="${pts.map((p) => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ")}" fill="none" stroke="#6b4f3a" stroke-width="2" stroke-linejoin="round"/>`);
+  for (const p of pts) parts.push(`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.2" fill="#fcfbf8" stroke="#6b4f3a" stroke-width="2"><title>${p[2].dateKey.slice(8)}/${p[2].dateKey.slice(5, 7)}: giá bình quân ${new Intl.NumberFormat("vi-VN").format(p[2].avgPrice)}đ</title></circle>`);
   return `<svg class="item-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Số phần bán và giá bán bình quân theo ngày của ${String(name).replace(/[<>&"]/g, "")}" preserveAspectRatio="xMidYMid meet">${parts.join("")}</svg>
-<div class="item-legend"><span><i style="background:#c9a98c"></i>Bán lẻ (trục trái: phần)</span><span><i style="background:#e8d8c5"></i>Trong combo</span><span><i class="line"></i>Giá bình quân (trục phải: đồng)</span></div>`;
+<div class="item-legend"><span><i style="background:#cdb592"></i>Bán lẻ (trục trái: phần)</span><span><i style="background:#e8d8c5"></i>Trong combo</span><span><i class="line"></i>Giá bình quân (trục phải: đồng)</span></div>`;
 };
 
 /** Đường đơn giản theo thời gian (giá vốn theo tuần). points: [{label, value|null}]; null = chưa đủ dữ liệu, đường đứt đoạn. fmt: định dạng số trên trục. */
@@ -64,15 +64,15 @@ export const lineChart = (points, { fmt = (v) => String(Math.round(v)), name = "
   const parts = [];
   for (let g = 0; g <= 3; g++) {
     const v = lo + ((hi - lo) / 3) * g;
-    parts.push(`<line x1="${l}" x2="${w - r}" y1="${y(v)}" y2="${y(v)}" stroke="#eadbc7"/><text x="${l - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="#796758">${fmt(v)}</text>`);
+    parts.push(`<line x1="${l}" x2="${w - r}" y1="${y(v)}" y2="${y(v)}" stroke="#ece3d3"/><text x="${l - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="#6b6f63">${fmt(v)}</text>`);
   }
   let seg = [];
-  const flush = () => { if (seg.length > 1) parts.push(`<polyline points="${seg.join(" ")}" fill="none" stroke="#6e432d" stroke-width="2" stroke-linejoin="round"/>`); seg = []; };
+  const flush = () => { if (seg.length > 1) parts.push(`<polyline points="${seg.join(" ")}" fill="none" stroke="#6b4f3a" stroke-width="2" stroke-linejoin="round"/>`); seg = []; };
   points.forEach((p, i) => {
     if (p.value == null) { flush(); } else seg.push(`${x(i).toFixed(1)},${y(p.value).toFixed(1)}`);
-    parts.push(`<text x="${x(i)}" y="${h - 10}" text-anchor="middle" font-size="11" fill="#796758">${p.label}</text>`);
+    parts.push(`<text x="${x(i)}" y="${h - 10}" text-anchor="middle" font-size="11" fill="#6b6f63">${p.label}</text>`);
   });
   flush();
-  points.forEach((p, i) => { if (p.value != null) parts.push(`<circle cx="${x(i).toFixed(1)}" cy="${y(p.value).toFixed(1)}" r="3.4" fill="#fffcf7" stroke="#6e432d" stroke-width="2"><title>${p.label}: ${fmt(p.value)}</title></circle>`); });
+  points.forEach((p, i) => { if (p.value != null) parts.push(`<circle cx="${x(i).toFixed(1)}" cy="${y(p.value).toFixed(1)}" r="3.4" fill="#fcfbf8" stroke="#6b4f3a" stroke-width="2"><title>${p.label}: ${fmt(p.value)}</title></circle>`); });
   return `<svg class="item-chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="${String(name).replace(/[<>&"]/g, "")}" preserveAspectRatio="xMidYMid meet">${parts.join("")}</svg>`;
 };

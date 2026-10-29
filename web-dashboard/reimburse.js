@@ -194,6 +194,8 @@ export const myAlerts = ({ myId, role, me = null, receipts = [], batches = [], m
   if (myId && (!me?.bank || !me?.account) && (waitingMine.length || role === ROLE_BUYER)) out.push({ key: "bank", level: "warn", count: waitingMine.length ? 1 : 0, text: "Bạn chưa nhập tài khoản ngân hàng: vào Tài khoản để thủ quỹ tạo được QR hoàn tiền." });
   if (!canTreasure(role)) return { items: out, badge: out.reduce((s, x) => s + x.count, 0) };
   if (role === ROLE_OWNER) {
+    const cancelReq = receipts.filter((r) => r && r.status !== "DELETED" && r.status !== "CANCELLED" && r.cancelRequest?.status === "PENDING");
+    if (cancelReq.length) out.push({ key: "cancelreq", level: "warn", count: cancelReq.length, text: `${cancelReq.length} phiếu có yêu cầu huỷ chờ chủ quán xác nhận (${vnd(sum(cancelReq, "total"))}).` });
     const fixed = receipts.filter(needsOwnerReview);
     if (fixed.length) out.push({ key: "flagfixed", level: "warn", count: fixed.length, text: `${fixed.length} phiếu đã sửa theo yêu cầu đánh dấu sai, chờ chủ quán duyệt lại (${vnd(sum(fixed, "total"))}).` });
   }

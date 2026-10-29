@@ -220,3 +220,12 @@ test2("flag: nhắc người tạo và chủ quán", () => {
   const owner = _myAlerts({ myId: "o", role: _OWNER, me: { id: "o" }, receipts: [fixed], batches: [], members: [], payees: [] });
   assert2.ok(owner.items.some((x) => x.key === "flagfixed"));
 });
+
+test("chủ quán được nhắc phiếu có yêu cầu huỷ", async () => {
+  const { myAlerts, ROLE_OWNER } = await import("../reimburse.js");
+  const r = { id: "a", total: 310000, status: "ACTIVE", cancelRequest: { status: "PENDING" } };
+  const a = myAlerts({ myId: "o", role: ROLE_OWNER, receipts: [r] });
+  assert.ok(a.items.some((x) => x.key === "cancelreq" && x.count === 1));
+  const b = myAlerts({ myId: "o", role: ROLE_OWNER, receipts: [{ ...r, status: "DELETED" }] });
+  assert.ok(!b.items.some((x) => x.key === "cancelreq"));
+});

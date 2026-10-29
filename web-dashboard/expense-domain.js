@@ -107,6 +107,25 @@ export function buildEditedReceipt(original, draft, { now, uid }) {
   };
 }
 
+/** Yêu cầu huỷ phiếu đang chờ chủ quán (phiếu vẫn tính chi phí cho tới khi chủ quán xác nhận). */
+export const pendingCancelRequest = (r) => (r && r.status !== "DELETED" && r.status !== "CANCELLED" && r.cancelRequest?.status === "PENDING" ? r.cancelRequest : null);
+
+/** Người mua gửi yêu cầu huỷ: bắt buộc có lý do. Không đổi trạng thái phiếu. */
+export function buildCancelRequest(original, { now, uid, by = "", byId = "", reason }) {
+  const text = String(reason || "").trim().slice(0, 300);
+  if (!text) throw new Error("Cần ghi lý do yêu cầu huỷ.");
+  return { ...original, cancelRequest: { status: "PENDING", reason: text, byName: by, byId, at: now }, updatedAt: nextUpdatedAt(original, now), updatedByUid: uid, ...androidMarker(original) };
+}
+
+/** Chủ quán quyết định: approve=true thì huỷ phiếu (ghi người yêu cầu và lý do); false thì giữ phiếu, ghi lý do từ chối. Rút yêu cầu: withdraw=true. */
+export function resolveCancelRequest(original, { now, uid, by = "", approve = false, withdraw = false, note = "" }) {
+  const req = original.cancelRequest;
+  if (!req || req.status !== "PENDING") throw new Error("Phiếu không có yêu cầu huỷ đang chờ.");
+  if (approve) return { ...buildCancelledReceipt(original, { now, uid, by: req.byName || by, reason: req.reason }), cancelRequest: { ...req, status: "APPROVED", decidedBy: by, decidedAt: now } };
+  const status = withdraw ? "WITHDRAWN" : "REJECTED";
+  return { ...original, cancelRequest: { ...req, status, decidedBy: by, decidedAt: now, ...(note ? { decisionNote: String(note).trim().slice(0, 300) } : {}) }, updatedAt: nextUpdatedAt(original, now), updatedByUid: uid, ...androidMarker(original) };
+}
+
 export function buildCancelledReceipt(original, { now, uid, by = "", reason = "" }) {
   return { ...original, status: "DELETED", updatedAt: nextUpdatedAt(original, now), updatedByUid: uid, cancelledAt: now, ...(by ? { cancelledByName: by } : {}), ...(reason ? { cancelReason: reason } : {}), ...androidMarker(original) };
 }

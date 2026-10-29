@@ -59,3 +59,20 @@ test("huỷ phiếu ghi người huỷ và lý do khi có", async () => {
   const r2 = buildCancelledReceipt({ id: "a", status: "ACTIVE", updatedAt: 1 }, { now: 1000, uid: "u" });
   assert.equal("cancelledByName" in r2, false);
 });
+
+test("yêu cầu huỷ phiếu: người mua gửi, chủ quán xác nhận hoặc từ chối", async () => {
+  const { buildCancelRequest, resolveCancelRequest, pendingCancelRequest } = await import("../expense-domain.js");
+  const base = { id: "a", status: "ACTIVE", updatedAt: 1, total: 310000 };
+  assert.throws(() => buildCancelRequest(base, { now: 10, uid: "u", reason: "  " }));
+  const req = buildCancelRequest(base, { now: 10, uid: "u", by: "Trang", byId: "t", reason: "trùng phiếu" });
+  assert.equal(req.status, "ACTIVE");
+  assert.equal(pendingCancelRequest(req).reason, "trùng phiếu");
+  const done = resolveCancelRequest(req, { now: 20, uid: "o", by: "Tuấn", approve: true });
+  assert.equal(done.status, "DELETED"); assert.equal(done.cancelledByName, "Trang"); assert.equal(done.cancelReason, "trùng phiếu"); assert.equal(done.cancelRequest.status, "APPROVED");
+  assert.equal(pendingCancelRequest(done), null);
+  const no = resolveCancelRequest(req, { now: 20, uid: "o", by: "Tuấn", note: "vẫn mua 2 lần" });
+  assert.equal(no.status, "ACTIVE"); assert.equal(no.cancelRequest.status, "REJECTED"); assert.equal(pendingCancelRequest(no), null);
+  const wd = resolveCancelRequest(req, { now: 20, uid: "t", by: "Trang", withdraw: true });
+  assert.equal(wd.cancelRequest.status, "WITHDRAWN");
+  assert.throws(() => resolveCancelRequest(no, { now: 30, uid: "o", approve: true }));
+});

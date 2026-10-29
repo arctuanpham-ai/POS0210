@@ -107,6 +107,6 @@ export function buildEditedReceipt(original, draft, { now, uid }) {
   };
 }
 
-export function buildCancelledReceipt(original, { now, uid }) {
-  return { ...original, status: "DELETED", updatedAt: nextUpdatedAt(original, now), updatedByUid: uid, cancelledAt: now, ...androidMarker(original) };
+export function buildCancelledReceipt(original, { now, uid, by = "", reason = "" }) {
+  return { ...original, status: "DELETED", updatedAt: nextUpdatedAt(original, now), updatedByUid: uid, cancelledAt: now, ...(by ? { cancelledByName: by } : {}), ...(reason ? { cancelReason: reason } : {}), ...androidMarker(original) };
 }

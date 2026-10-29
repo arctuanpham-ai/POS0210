@@ -51,3 +51,11 @@ test("nháp trống lấy lại giờ hiện tại, nháp có nội dung giữ n
   assert.equal(f.draft.purchaseDate, old); assert.equal(f.stale, true);
   assert.equal(freshenDraft({ ...filled, purchaseDate: now - 3600_000 }, now).stale, false);
 });
+
+test("huỷ phiếu ghi người huỷ và lý do khi có", async () => {
+  const { buildCancelledReceipt } = await import("../expense-domain.js");
+  const r = buildCancelledReceipt({ id: "a", status: "ACTIVE", updatedAt: 1 }, { now: 1000, uid: "u", by: "Tuấn", reason: "trùng phiếu" });
+  assert.equal(r.status, "DELETED"); assert.equal(r.cancelledByName, "Tuấn"); assert.equal(r.cancelReason, "trùng phiếu");
+  const r2 = buildCancelledReceipt({ id: "a", status: "ACTIVE", updatedAt: 1 }, { now: 1000, uid: "u" });
+  assert.equal("cancelledByName" in r2, false);
+});

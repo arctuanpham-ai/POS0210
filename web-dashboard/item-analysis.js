@@ -1,6 +1,6 @@
 // Phân tích riêng một món từ snapshot ngày (dashboardDaily). Hàm thuần, không đọc Firebase, không có DOM.
 // Snapshot chỉ có {name, qty, revenue} theo món theo ngày: giá bán thực tế = doanh thu / số phần bán lẻ.
-import { expandComboName } from "./demo-receipts.js?v=20261029-14";
+import { expandComboName } from "./demo-receipts.js?v=20261029-15";
 
 const nameKey = (s) => String(s || "").toLocaleLowerCase("vi").normalize("NFC").replace(/\s+/g, " ").trim();
 const isCombo = (name) => String(name || "").startsWith("COMBO");

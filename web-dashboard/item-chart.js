@@ -12,7 +12,9 @@ const compact = (v) => (v >= 1000 ? `${Math.round(v / 100) / 10}k`.replace(".", 
 export const itemComboChart = (series, { name = "" } = {}) => {
   const n = series.length;
   if (!n) return "";
-  const qtyMax = niceMax(Math.max(1, ...series.map((d) => d.retail + d.inCombo)));
+  const rawMax = Math.max(1, ...series.map((d) => d.retail + d.inCombo));
+  // Trục số phần: bội của 4 (4 khoảng chia đều) để mọi vạch là số nguyên; lớn hơn thì làm tròn đẹp.
+  const qtyMax = rawMax <= 40 ? Math.ceil(rawMax / 4) * 4 : niceMax(rawMax);
   const prices = series.filter((d) => d.avgPrice > 0).map((d) => d.avgPrice);
   const pMin0 = prices.length ? Math.min(...prices) : 0, pMax0 = prices.length ? Math.max(...prices) : 1;
   // Đường giá có khoảng đệm để giá không đổi vẫn nằm giữa biểu đồ, không dính mép.

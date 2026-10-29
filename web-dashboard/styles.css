@@ -550,3 +550,20 @@ button.paylist-row { width: 100%; font: inherit; color: inherit; cursor: pointer
 .fa-import-bar button { padding: 9px 14px; border-radius: 10px; border: 1px solid #6e432d; background: #6e432d; color: #fff; font-weight: 800; }
 .fa-import-bar button.secondary { background: #fff9f0; color: #6e432d; }
 #grab-import-result h4 { margin: 10px 0 2px; font-size: 14px; }
+
+/* Phân tích từng món */
+.item-kpis { margin: 0 0 12px; }
+.item-kpis .metric { min-height: 92px; }
+.item-kpis .metric small { display: block; margin-top: 6px; font-size: 11.5px; line-height: 1.35; }
+.item-chart-wrap { padding: 12px; border: 1px solid #dfcfb8; border-radius: 16px; background: #fffcf7; }
+.item-chart { display: block; width: 100%; height: auto; }
+.item-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px; font-size: 12px; color: #796758; }
+.item-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.item-legend i.line { height: 3px; width: 16px; border-radius: 2px; background: #6e432d; vertical-align: 3px; }
+.item-notes { margin: 0 0 12px; padding-left: 18px; display: grid; gap: 6px; font-size: 13.5px; line-height: 1.45; }
+.item-verdict { display: grid; gap: 3px; margin: 0 0 12px; padding: 12px 14px; border-radius: 14px; border: 1px solid #dfcfb8; background: #fff9f0; font-size: 13.5px; }
+.item-verdict.star { background: #e5f2e1; border-color: #b9d8b2; }
+.item-verdict.horse { background: #fbf0d6; border-color: #ecd49b; }
+.item-verdict.puzzle { background: #e6eef8; border-color: #b9cde6; }
+.item-verdict.dog { background: #f9e1dd; border-color: #e5b7b0; }
+#item-pick { max-width: 62vw; }

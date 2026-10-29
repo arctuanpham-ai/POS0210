@@ -1,6 +1,6 @@
 // Phân tích riêng một món từ snapshot ngày (dashboardDaily). Hàm thuần, không đọc Firebase, không có DOM.
 // Snapshot chỉ có {name, qty, revenue} theo món theo ngày: giá bán thực tế = doanh thu / số phần bán lẻ.
-import { expandComboName } from "./demo-receipts.js?v=20261029-11";
+import { expandComboName } from "./demo-receipts.js?v=20261029-12";
 
 const nameKey = (s) => String(s || "").toLocaleLowerCase("vi").normalize("NFC").replace(/\s+/g, " ").trim();
 const isCombo = (name) => String(name || "").startsWith("COMBO");
@@ -129,9 +129,9 @@ export const analyzeItem = ({ series, listPrice = 0, unitCost = null, allRows = 
     const popular = retail >= 0.7 * avgQty;
     const rich = profit.unitMargin >= wMargin;
     quadrant = popular && rich ? { key: "star", label: "Món ngôi sao", tip: "Bán chạy và lời cao: giữ chất lượng, đặt vị trí nổi bật, đừng giảm giá." }
-      : popular ? { key: "horse", label: "Món kéo khách", tip: "Bán chạy nhưng lời mỏng: thử tăng giá nhẹ, giảm định lượng hoặc bán kèm món lời cao." }
-        : rich ? { key: "puzzle", label: "Món lời cao ít người gọi", tip: "Lời tốt nhưng ít bán: đưa lên đầu menu, nhân viên gợi ý, ghép combo." }
-          : { key: "dog", label: "Món yếu", tip: "Bán ít và lời thấp: xem lại giá, công thức, hoặc cân nhắc bỏ khỏi menu." };
+      : popular ? { key: "horse", label: "Món kéo khách", tip: "Bán chạy nhưng lãi mỗi phần dưới bình quân: thử tăng giá nhẹ, giảm định lượng hoặc bán kèm món lời cao." }
+        : rich ? { key: "puzzle", label: "Món lời cao ít người gọi", tip: "Lãi mỗi phần cao nhưng ít bán: đưa lên đầu menu, nhân viên gợi ý, ghép combo." }
+          : { key: "dog", label: "Món yếu", tip: "Bán ít và lãi mỗi phần dưới mức bình quân các món (so cả món ăn lẫn đồ uống): xem lại giá, công thức, hoặc cân nhắc bỏ khỏi menu." };
     quadrant.avgQty = avgQty; quadrant.avgMargin = Math.round(wMargin);
   }
 

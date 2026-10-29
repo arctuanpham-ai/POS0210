@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20261029-08" />
+    <link rel="stylesheet" href="styles.css?v=20261029-09" />
     <title>0210 · Manager</title>
   </head>
   <body>
@@ -654,6 +654,7 @@
           <p id="expense-gap" class="rule-hint warn" hidden></p>
           <p id="expense-error" class="error"></p>
           <button id="expense-submit" type="submit" class="primary">LƯU VÀ ĐỒNG BỘ</button>
+          <button id="expense-cancel-receipt" type="button" class="text-button danger" hidden></button>
         </form>
       </article>
     </dialog>
@@ -750,7 +751,7 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261029-08"></script>
+    <script type="module" src="app.js?v=20261029-09"></script>
     <script>
       // Trang không chạy được (thường do trình duyệt còn giữ file cũ): báo rõ thay vì để nút đăng nhập "chết".
       setTimeout(function () {

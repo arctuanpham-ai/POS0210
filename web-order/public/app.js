@@ -15,11 +15,11 @@ import {
   where,
   writeBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { APP_CHECK_SITE_KEY, DEFAULT_SHOP, STORE_ID, STORE_OWNER_UID, firebaseConfig } from "./config.js";
+import { APP_CHECK_SITE_KEY, DEFAULT_SHOP, NOTIFY_CLICK, NOTIFY_TOPIC, STORE_ID, STORE_OWNER_UID, firebaseConfig } from "./config.js";
 import {
   FINAL_STATUSES, LIMITS, comboTools, pricingFor, MODE_LABELS, STATUS, STATUS_TEXT, buildOrderDoc, cartFromOrder, cartLines, changeQty, countdownText, isOrderable,
   limitKeyForPhone, limitKeyForUid, linesCount, linesTotal, makeOrderCode, menuSections, money, orderView, pendingBase, progressSteps, rememberCode,
-  setNote, toMillis, validateCheckout,
+  notifyPayload, setNote, toMillis, validateCheckout,
 } from "./order-core.js";
 import { vietQrPayload } from "./vietqr.js";
 import { STATS_COLLECTION, decide, keysFor, vnDayKey } from "./stats-core.js";
@@ -409,6 +409,15 @@ function setFormMessage(text, isError) {
   node.className = `form-message${isError ? " error" : ""}`;
 }
 
+/** Báo đơn mới về điện thoại qua ntfy. Chạy sau khi đơn đã ghi xong; lỗi mạng ở đây không được làm hỏng việc đặt món. */
+function notifyShop(code, order) {
+  if (!NOTIFY_TOPIC) return;
+  try {
+    // text/plain: yêu cầu "đơn giản", trình duyệt không cần hỏi trước (preflight).
+    fetch("https://ntfy.sh/", { method: "POST", keepalive: true, body: JSON.stringify(notifyPayload({ topic: NOTIFY_TOPIC, code, order, click: NOTIFY_CLICK })) }).catch(() => {});
+  } catch { /* bỏ qua */ }
+}
+
 /** Ghi đơn + 2 bộ đếm giới hạn trong MỘT batch (rules bắt buộc đi cùng nhau). Thử lại 1 lần với mã mới nếu bị từ chối. */
 async function sendOrder(uid, value, lines) {
   let lastError;
@@ -420,11 +429,13 @@ async function sendOrder(uid, value, lines) {
     if (uBase >= LIMITS.maxPendingOrders || pBase >= LIMITS.maxPendingOrders) throw Object.assign(new Error("limit"), { code: "limit" });
     const code = makeOrderCode();
     const batch = writeBatch(db);
-    batch.set(ref("online_orders", code), { ...buildOrderDoc({ code, uid, value, lines, pricing: pricingFor(lines, state.promo) }), createdAt: serverTimestamp() });
+    const orderDoc = buildOrderDoc({ code, uid, value, lines, pricing: pricingFor(lines, state.promo) });
+    batch.set(ref("online_orders", code), { ...orderDoc, createdAt: serverTimestamp() });
     batch.set(ref("online_limits", limitKeyForUid(uid)), { pending: uBase + 1, lastAt: serverTimestamp(), lastOrder: code });
     batch.set(ref("online_limits", limitKeyForPhone(value.phone)), { pending: pBase + 1, lastAt: serverTimestamp(), lastOrder: code });
     try {
       await batch.commit();
+      notifyShop(code, orderDoc);
       return { code };
     } catch (error) {
       lastError = error;

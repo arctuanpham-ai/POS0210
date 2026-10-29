@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  CODE_ALPHABET, CODE_PATTERN, LIMITS, STATUS, buildOrderDoc, cartFromOrder, cartLines, changeQty, countdownText, linesTotal, makeOrderCode, menuSections,
+  notifyPayload, CODE_ALPHABET, CODE_PATTERN, LIMITS, STATUS, buildOrderDoc, cartFromOrder, cartLines, changeQty, countdownText, linesTotal, makeOrderCode, menuSections,
   normalizePhone, orderView, pendingBase, progressSteps, rememberCode, setNote, toMillis, transferContentFor, validateCheckout,
 } from "../public/order-core.js";
 
@@ -181,4 +181,17 @@ import { comboItemsFrom as _cif } from "../public/order-core.js";
 test("combo giữ nguyên tên gốc (kể cả khoảng trắng) để khớp luật máy chủ", () => {
   const items = _cif([{ id: "x1", name: "Combo A ", price: 50000, active: true }]);
   assert.equal(items[0].name, "Combo A ");
+});
+
+test("thông báo ntfy: có mã đơn, số phần, tổng, hình thức; KHÔNG có tên, SĐT, địa chỉ", () => {
+  const order = { name: "Nguyễn Văn A", phone: "0912345678", address: "12 Phố X", mode: "dinein", table: "5", items: [{ name: "Bạc xỉu", qty: 2 }, { name: "Americano", qty: 1 }], total: 95000 };
+  const p = notifyPayload({ topic: "t-123", code: "AB12", order, click: "https://x.y/#donline" });
+  assert.equal(p.topic, "t-123");
+  assert.equal(p.priority, 5);
+  assert.match(p.title, /AB12/);
+  assert.equal(p.message, "3 phần · 95.000đ · Tại quán · bàn 5");
+  const all = JSON.stringify(p);
+  for (const secret of ["Nguyễn", "0912345678", "Phố X"]) assert.ok(!all.includes(secret), secret);
+  assert.equal(p.click, "https://x.y/#donline");
+  assert.equal(notifyPayload({ topic: "t", code: "Z", order: { mode: "delivery", items: [{ qty: 1 }], total: 1000 } }).message, "1 phần · 1.000đ · Giao tận nơi");
 });

@@ -594,3 +594,6 @@ button.paylist-row { width: 100%; font: inherit; color: inherit; cursor: pointer
 .item-vs select { max-width: 55vw; }
 @media (max-width: 520px) { .item-tbl td, .item-tbl th { padding: 8px 6px; font-size: 12.5px; } }
 .asm{display:block;font-size:10px;font-weight:500;color:#a36a00;letter-spacing:0}
+
+.ntfy-steps { margin: 0 0 10px; padding-left: 20px; display: grid; gap: 4px; font-size: 13.5px; line-height: 1.45; }
+.ntfy-topic { padding: 8px 10px; border: 1px dashed #c9a98c; border-radius: 10px; background: #fff9f0; font-size: 13px; word-break: break-all; user-select: all; }

@@ -278,3 +278,22 @@ export const pricingFor = (lines, promo, now = new Date()) => {
   }
   return { subtotal, surcharge, discount, total: Math.max(0, subtotal + surcharge - discount), discountName: best?.name || "", surchargeNames: surchargeRules.map((r) => r.name).filter(Boolean) };
 };
+
+/**
+ * Nội dung thông báo ntfy khi có đơn mới. CỐ TÌNH không có tên, số điện thoại, địa chỉ khách:
+ * ntfy.sh là máy chủ công cộng bên thứ ba, chỉ gửi mã đơn, số món, tổng tiền và hình thức nhận.
+ */
+export const notifyPayload = ({ topic, code, order, click = "" }) => {
+  const items = Array.isArray(order?.items) ? order.items : [];
+  const count = items.reduce((t, l) => t + (Number(l.qty) || 0), 0);
+  const how = MODE_LABELS[order?.mode] || "";
+  const where = order?.mode === "dinein" && order?.table ? ` · bàn ${String(order.table).slice(0, 12)}` : "";
+  return {
+    topic,
+    title: `Đơn online mới ${code}`,
+    message: `${count} phần · ${money(order?.total)}${how ? ` · ${how}` : ""}${where}`,
+    priority: 5,
+    tags: ["bell"],
+    ...(click ? { click } : {}),
+  };
+};

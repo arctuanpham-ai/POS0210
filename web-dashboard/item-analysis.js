@@ -1,6 +1,6 @@
 // Phân tích riêng một món từ snapshot ngày (dashboardDaily). Hàm thuần, không đọc Firebase, không có DOM.
 // Snapshot chỉ có {name, qty, revenue} theo món theo ngày: giá bán thực tế = doanh thu / số phần bán lẻ.
-import { expandComboName } from "./demo-receipts.js?v=20261029-15";
+import { expandComboName } from "./demo-receipts.js?v=20261029-16";
 
 const nameKey = (s) => String(s || "").toLocaleLowerCase("vi").normalize("NFC").replace(/\s+/g, " ").trim();
 const isCombo = (name) => String(name || "").startsWith("COMBO");
@@ -90,7 +90,9 @@ export const analyzeItem = ({ series, listPrice = 0, unitCost = null, allRows = 
     const first = avail.slice(0, half), last = avail.slice(avail.length - half);
     const a = first.reduce((t, d) => t + d.retail + d.inCombo, 0) / half;
     const b = last.reduce((t, d) => t + d.retail + d.inCombo, 0) / half;
-    trend = a > 0 ? { from: a, to: b, pct: (b - a) / a } : null;
+    // Món bán quá ít (dưới 1 phần/ngày ở nửa đầu hoặc dưới 10 phần cả kỳ) thì % tăng giảm không đáng tin: bỏ.
+    const made = avail.reduce((t, d) => t + d.retail + d.inCombo, 0);
+    trend = a >= 1 && made >= 10 ? { from: a, to: b, pct: (b - a) / a } : null;
   }
 
   const k = nameKey(name);

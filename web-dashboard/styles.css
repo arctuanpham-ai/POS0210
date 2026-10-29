@@ -128,7 +128,7 @@ dialog article { padding: 6px; }
 .bill-pay div { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; }
 
 /* Tab chuyển trang */
-.tabbar { position: sticky; top: 0; z-index: 5; display: flex; gap: 6px; margin: 0 -16px 6px; padding: 10px 16px; overflow-x: auto; background: #f6f0e5ee; backdrop-filter: blur(6px); border-bottom: 1px solid #e2d6c2; scrollbar-width: none; }
+.tabbar { position: sticky; top: 0; z-index: 5; display: flex; gap: 6px; margin: 0 -16px 6px; padding: 10px 16px; overflow-x: auto; background: #f5f3edee; backdrop-filter: blur(6px); border-bottom: 1px solid #e2d6c2; scrollbar-width: none; }
 .tabbar::-webkit-scrollbar { display: none; }
 .tabbar a { flex: 0 0 auto; padding: 9px 16px; border: 1px solid #d7c3a7; border-radius: 999px; background: #fcfbf8; color: #4b3d31; font-weight: 750; font-size: 14px; text-decoration: none; white-space: nowrap; }
 .tabbar a.active { background: #1e1e1e; border-color: #1e1e1e; color: #faf8f3; }

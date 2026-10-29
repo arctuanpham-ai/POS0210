@@ -57,8 +57,8 @@ test("thống kê một món: gọi kèm, giờ bán, kênh, bill trung bình", 
 });
 
 test("tỷ lệ app giữ lại: phí + khuyến mãi tính chi phí, thuế giữ hộ tách riêng, bỏ đơn cờ REVIEW", () => {
-  const row = (app, v, fee, tax, status = "OK") => ({ app, status, orderValue: v, commission: fee, other: 0, vat: tax, pit: 0, received: v - fee - tax, saleDay: "2026-10-20" });
-  const rows = [...Array.from({ length: 10 }, () => row("GRAB", 100000, 20000, 4000)), row("GRAB", 100000, 99999, 0, "REVIEW"), row("SHOPEE", 100000, 25000, 0)];
+  const row = (app, v, fee, tax, status = "OK") => ({ app, status, orderValue: v, commission: fee, other: 0, vat: tax, pit: 0, received: v - fee - tax, saleDay: "2026-10-20", payoutDay: "2026-10-22" });
+  const rows = [...Array.from({ length: 10 }, () => row("GRAB", 100000, 20000, 4000)), { ...row("GRAB", 100000, 0, 0), payoutDay: "", received: 0 }, row("GRAB", 100000, 99999, 0, "REVIEW"), row("SHOPEE", 100000, 25000, 0)];
   const r = appDeductionRates(rows);
   assert.equal(r.GRAB.orders, 10);
   assert.ok(Math.abs(r.GRAB.feeRate - 0.2) < 1e-9);

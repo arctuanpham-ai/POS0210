@@ -1,6 +1,6 @@
 // Phân tích món từ DÒNG MÓN của từng bill (orderItems) + sổ app food + phiếu mua. Hàm thuần, không đọc Firebase, không có DOM.
-import { expandComboName } from "./demo-receipts.js?v=20261029-13";
-import { materialById, materialCosts, recipeCost } from "./cost-recipe.js?v=20261029-13";
+import { expandComboName } from "./demo-receipts.js?v=20261029-14";
+import { materialById, materialCosts, recipeCost } from "./cost-recipe.js?v=20261029-14";
 
 const nameKey = (s) => String(s || "").toLocaleLowerCase("vi").normalize("NFC").replace(/\s+/g, " ").trim();
 const isCombo = (name) => String(name || "").startsWith("COMBO");
@@ -109,7 +109,7 @@ export const itemBillStats = (lineBills, name, { minPairs = 3 } = {}) => {
 export const appDeductionRates = (rows, { minOrders = 10 } = {}) => {
   const acc = {};
   for (const r of Array.isArray(rows) ? rows : []) {
-    if (r.status === "REVIEW" || !(r.orderValue > 0)) continue;
+    if (r.status === "REVIEW" || !(r.orderValue > 0) || !r.payoutDay) continue; // đơn chưa có tiền về thì app chưa trừ phí, không dùng để tính tỷ lệ
     const a = (acc[r.app] ||= { app: r.app, orders: 0, gross: 0, fee: 0, tax: 0, received: 0, first: r.saleDay, last: r.saleDay });
     a.orders += 1; a.gross += r.orderValue; a.fee += Number(r.commission || 0) + Number(r.other || 0); a.tax += Number(r.vat || 0) + Number(r.pit || 0); a.received += Number(r.received || 0);
     if (r.saleDay && (!a.first || r.saleDay < a.first)) a.first = r.saleDay;
@@ -129,7 +129,7 @@ export const channelEconomics = ({ price, cost, rates }) => {
     if (!r) { rows.push({ key, label, ok: false, reason: "chưa có đơn nào trong sổ" }); continue; }
     const fee = price * r.feeRate;
     const net = price - fee;
-    rows.push({ key, label, price, feeRate: r.feeRate, taxRate: r.taxRate, fee, net, margin: net - cost, ok: r.ok, orders: r.orders, first: r.first, last: r.last, reason: r.ok ? "" : `mới có ${r.orders} đơn, chưa đủ để tin`, appPriceToMatch: r.feeRate < 0.95 ? Math.ceil(price / (1 - r.feeRate) / 1000) * 1000 : null });
+    rows.push({ key, label, price, feeRate: r.feeRate, taxRate: r.taxRate, fee, net, margin: net - cost, ok: r.ok, assumed: Boolean(r.assumed), orders: r.orders, first: r.first, last: r.last, reason: r.ok ? "" : `mới có ${r.orders} đơn, chưa đủ để tin`, appPriceToMatch: r.feeRate < 0.95 ? Math.ceil(price / (1 - r.feeRate) / 1000) * 1000 : null });
   }
   return rows.map((x) => (x.ok === false && x.price == null ? x : { ...x, marginPct: x.price > 0 ? x.margin / x.price : null, vsStore: x.margin - (price - cost) }));
 };

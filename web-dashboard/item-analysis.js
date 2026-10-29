@@ -1,6 +1,6 @@
 // Phân tích riêng một món từ snapshot ngày (dashboardDaily). Hàm thuần, không đọc Firebase, không có DOM.
 // Snapshot chỉ có {name, qty, revenue} theo món theo ngày: giá bán thực tế = doanh thu / số phần bán lẻ.
-import { expandComboName } from "./demo-receipts.js?v=20261029-13";
+import { expandComboName } from "./demo-receipts.js?v=20261029-14";
 
 const nameKey = (s) => String(s || "").toLocaleLowerCase("vi").normalize("NFC").replace(/\s+/g, " ").trim();
 const isCombo = (name) => String(name || "").startsWith("COMBO");
@@ -54,7 +54,7 @@ const roundUp1000 = (v) => Math.ceil(v / 1000) * 1000;
  * allRows: [{name, retail, revenue, unitCost|null}] của mọi món trong kỳ (để xếp hạng và phân loại).
  * target: ngưỡng % giá vốn an toàn của món (đồ ăn 0,40, đồ uống 0,30) để gợi ý giá.
  */
-export const analyzeItem = ({ series, listPrice = 0, unitCost = null, allRows = [], name = "", target = 0.35 }) => {
+export const analyzeItem = ({ series, listPrice = 0, unitCost = null, allRows = [], name = "", target = 0.35, food = null }) => {
   const avail = series.filter((d) => d.available);
   const sold = avail.filter((d) => d.retail > 0);
   const retail = avail.reduce((t, d) => t + d.retail, 0);
@@ -121,7 +121,11 @@ export const analyzeItem = ({ series, listPrice = 0, unitCost = null, allRows = 
 
   // Phân loại menu (menu engineering): phổ biến = bán lẻ ≥ 70% mức trung bình của các món; sinh lời = biên lợi nhuận/phần ≥ bình quân gia quyền.
   let quadrant = null;
-  const priced = allRows.filter((r) => r.unitCost > 0 && r.retail > 0);
+  const pricedAll = allRows.filter((r) => r.unitCost > 0 && r.retail > 0);
+  // So sánh trong cùng nhóm (đồ ăn với đồ ăn, đồ uống với đồ uống) khi nhóm có từ 4 món; không thì so chung.
+  const sameGroup = food === null ? [] : pricedAll.filter((r) => r.food === food);
+  const priced = sameGroup.length >= 4 ? sameGroup : pricedAll;
+  const scope = sameGroup.length >= 4 ? (food ? "các món ăn" : "các đồ uống") : "tất cả các món";
   if (profit && priced.length >= 4) {
     const totalQty = priced.reduce((t, r) => t + r.retail, 0);
     const avgQty = totalQty / priced.length;
@@ -131,8 +135,8 @@ export const analyzeItem = ({ series, listPrice = 0, unitCost = null, allRows = 
     quadrant = popular && rich ? { key: "star", label: "Món ngôi sao", tip: "Bán chạy và lời cao: giữ chất lượng, đặt vị trí nổi bật, đừng giảm giá." }
       : popular ? { key: "horse", label: "Món kéo khách", tip: "Bán chạy nhưng lãi mỗi phần dưới bình quân: thử tăng giá nhẹ, giảm định lượng hoặc bán kèm món lời cao." }
         : rich ? { key: "puzzle", label: "Món lời cao ít người gọi", tip: "Lãi mỗi phần cao nhưng ít bán: đưa lên đầu menu, nhân viên gợi ý, ghép combo." }
-          : { key: "dog", label: "Món yếu", tip: "Bán ít và lãi mỗi phần dưới mức bình quân các món (so cả món ăn lẫn đồ uống): xem lại giá, công thức, hoặc cân nhắc bỏ khỏi menu." };
-    quadrant.avgQty = avgQty; quadrant.avgMargin = Math.round(wMargin);
+          : { key: "dog", label: "Món yếu", tip: "Bán ít và lãi mỗi phần dưới mức bình quân các món xem lại giá, công thức, hoặc cân nhắc bỏ khỏi menu." };
+    quadrant.scope = scope; quadrant.n = priced.length; quadrant.avgQty = avgQty; quadrant.avgMargin = Math.round(wMargin);
   }
 
   return {

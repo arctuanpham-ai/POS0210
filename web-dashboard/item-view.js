@@ -1,5 +1,5 @@
 // Khối giao diện phụ của trang phân tích món: chuỗi HTML thuần, nhận hàm định dạng từ app.js (h). Không đọc Firebase.
-import { lineChart } from "./item-chart.js?v=20261029-13";
+import { lineChart } from "./item-chart.js?v=20261029-14";
 
 const empty = (text) => `<p class="muted empty-state">${text}</p>`;
 const card = (title, body, sub = "") => `<section class="item-card"><h4>${title}</h4>${sub ? `<p class="item-sub">${sub}</p>` : ""}${body}</section>`;
@@ -40,7 +40,7 @@ export const hoursView = (stats, h) => {
 export const channelView = ({ rows, stats, price, cost, note }, h) => {
   if (cost == null) return empty("Chưa tính được lãi theo kênh vì món chưa có công thức hoặc còn thiếu giá vật tư. Bổ sung ở tab Giá vốn.");
   const cell = (r, f) => (r.ok === false && r.margin === undefined ? "—" : f(r));
-  const head = rows.map((r) => `<th>${r.label}</th>`).join("");
+  const head = rows.map((r) => `<th>${r.label}${r.assumed ? "<small class=\"asm\">giả định</small>" : ""}</th>`).join("");
   const line = (label, f) => `<tr><td>${label}</td>${rows.map((r) => `<td>${cell(r, f)}</td>`).join("")}</tr>`;
   const table = `<table class="sales-table item-tbl"><thead><tr><th></th>${head}</tr></thead><tbody>
     ${line("Giá bán", (r) => h.money(Math.round(r.price)))}
@@ -67,7 +67,7 @@ export const costTrendView = ({ trend, price, info, current }, h) => {
   let sum = "";
   if (trend.change) {
     const c = trend.change;
-    sum = `<p class="item-tip">Giá vốn một phần ${c.pct == null ? "" : c.pct > 0.005 ? "<b>tăng</b>" : c.pct < -0.005 ? "<b>giảm</b>" : "gần như <b>không đổi</b>"}: ${h.money(Math.round(c.from))} (${h.shortDay(h.dateKeyOf(c.fromAt))}) → ${h.money(Math.round(c.to))} (${h.shortDay(h.dateKeyOf(c.toAt))})${c.pct == null ? "" : `, ${c.pct >= 0 ? "+" : ""}${h.pct(c.pct)}`}.${price > 0 ? ` Chiếm ${h.pct(c.to / price)} giá niêm yết.` : ""}</p>`;
+    sum = `<p class="item-tip">Giá vốn một phần ${c.pct == null ? "" : c.pct > 0.005 ? "<b>tăng</b>" : c.pct < -0.005 ? "<b>giảm</b>" : "gần như <b>không đổi</b>"}: ${h.money(Math.round(c.from))} (${h.shortDay(h.dateKeyOf(c.fromAt))}) → ${h.money(Math.round(c.to))} (${h.shortDay(h.dateKeyOf(c.toAt))})${c.pct == null || Math.abs(c.pct) < 0.005 ? "" : `, ${c.pct >= 0 ? "+" : ""}${h.pct(c.pct)}`}.${price > 0 ? ` Chiếm ${h.pct(c.to / price)} giá niêm yết.` : ""}</p>`;
   }
   const drivers = trend.drivers.length ? card("Vật tư làm giá vốn đổi nhiều nhất", `<table class="sales-table item-tbl"><thead><tr><th>Vật tư</th><th>Trước</th><th>Nay</th><th>Chênh</th></tr></thead><tbody>${trend.drivers.map((d) => `<tr><td>${h.esc(d.name)}</td><td>${h.money(Math.round(d.from))}</td><td>${h.money(Math.round(d.to))}</td><td class="${d.delta > 0 ? "neg" : "pos"}">${d.delta > 0 ? "+" : "−"}${h.money(Math.abs(Math.round(d.delta)))}</td></tr>`).join("")}</tbody></table>`, "Tiền vật tư trong một phần theo công thức, tại mốc đầu và mốc cuối.") : "";
   const parts = current && current.rows?.length ? card("Cơ cấu giá vốn hiện tại", `<div class="hbar-chart">${h.hbar(current.rows.filter((r) => r.cost != null).sort((a, b) => b.cost - a.cost).map((r, i) => ({ label: r.name, value: r.cost, valueText: `${h.money(Math.round(r.cost))} · ${h.pct(r.cost / current.total)}`, strong: i === 0, tip: r.name })))}</div>`) : "";

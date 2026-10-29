@@ -64,3 +64,15 @@ test("biểu đồ vẽ được kể cả khi giá không đổi và có ngày 
   assert.match(svg, /polyline/);
   assert.equal(itemComboChart([], {}), "");
 });
+
+test("phân loại menu so trong cùng nhóm đồ ăn / đồ uống khi đủ 4 món", () => {
+  const series = itemSeries(docs, keys, "Cafe sữa");
+  const drinks = [18, 12, 9, 6].map((q, i) => ({ name: `Nước ${i}`, retail: q, revenue: q * 30000, unitCost: 6000, food: false }));
+  const foods = [10, 8, 6, 5].map((q, i) => ({ name: `Món ${i}`, retail: q, revenue: q * 60000, unitCost: 25000, food: true }));
+  const me = { name: "Cafe sữa", retail: 18, revenue: 540000, unitCost: 6000, food: false };
+  const a = analyzeItem({ series, listPrice: 30000, unitCost: 6000, allRows: [me, ...drinks, ...foods], name: "Cafe sữa", food: false });
+  assert.equal(a.quadrant.scope, "các đồ uống");
+  assert.equal(a.quadrant.n, 5);
+  const b = analyzeItem({ series, listPrice: 30000, unitCost: 6000, allRows: [me, ...drinks.slice(0, 2), ...foods], name: "Cafe sữa", food: false });
+  assert.equal(b.quadrant.scope, "tất cả các món"); // nhóm đồ uống chỉ có 3 món
+});

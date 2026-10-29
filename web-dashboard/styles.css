@@ -593,3 +593,4 @@ button.paylist-row { width: 100%; font: inherit; color: inherit; cursor: pointer
 .cmp-wrap .sales-table { border: 0; }
 .item-vs select { max-width: 55vw; }
 @media (max-width: 520px) { .item-tbl td, .item-tbl th { padding: 8px 6px; font-size: 12.5px; } }
+.asm{display:block;font-size:10px;font-weight:500;color:#a36a00;letter-spacing:0}

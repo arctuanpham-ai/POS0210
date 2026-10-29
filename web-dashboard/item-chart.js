@@ -48,3 +48,29 @@ export const itemComboChart = (series, { name = "" } = {}) => {
   return `<svg class="item-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Số phần bán và giá bán bình quân theo ngày của ${String(name).replace(/[<>&"]/g, "")}" preserveAspectRatio="xMidYMid meet">${parts.join("")}</svg>
 <div class="item-legend"><span><i style="background:#c9a98c"></i>Bán lẻ (trục trái: phần)</span><span><i style="background:#e8d8c5"></i>Trong combo</span><span><i class="line"></i>Giá bình quân (trục phải: đồng)</span></div>`;
 };
+
+/** Đường đơn giản theo thời gian (giá vốn theo tuần). points: [{label, value|null}]; null = chưa đủ dữ liệu, đường đứt đoạn. fmt: định dạng số trên trục. */
+export const lineChart = (points, { fmt = (v) => String(Math.round(v)), name = "" } = {}) => {
+  const vals = points.filter((p) => p.value != null).map((p) => p.value);
+  if (vals.length < 2) return "";
+  const w = 640, h = 190, l = 52, r = 14, t = 16, b = 30;
+  const lo0 = Math.min(...vals), hi0 = Math.max(...vals);
+  const pad = Math.max((hi0 - lo0) * 0.3, hi0 * 0.05, 1);
+  const lo = Math.max(0, lo0 - pad), hi = hi0 + pad;
+  const x = (i) => l + ((w - l - r) * i) / Math.max(1, points.length - 1);
+  const y = (v) => t + (h - t - b) * (1 - (v - lo) / Math.max(1e-9, hi - lo));
+  const parts = [];
+  for (let g = 0; g <= 3; g++) {
+    const v = lo + ((hi - lo) / 3) * g;
+    parts.push(`<line x1="${l}" x2="${w - r}" y1="${y(v)}" y2="${y(v)}" stroke="#eadbc7"/><text x="${l - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="#796758">${fmt(v)}</text>`);
+  }
+  let seg = [];
+  const flush = () => { if (seg.length > 1) parts.push(`<polyline points="${seg.join(" ")}" fill="none" stroke="#6e432d" stroke-width="2" stroke-linejoin="round"/>`); seg = []; };
+  points.forEach((p, i) => {
+    if (p.value == null) { flush(); } else seg.push(`${x(i).toFixed(1)},${y(p.value).toFixed(1)}`);
+    parts.push(`<text x="${x(i)}" y="${h - 10}" text-anchor="middle" font-size="11" fill="#796758">${p.label}</text>`);
+  });
+  flush();
+  points.forEach((p, i) => { if (p.value != null) parts.push(`<circle cx="${x(i).toFixed(1)}" cy="${y(p.value).toFixed(1)}" r="3.4" fill="#fffcf7" stroke="#6e432d" stroke-width="2"><title>${p.label}: ${fmt(p.value)}</title></circle>`); });
+  return `<svg class="item-chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="${String(name).replace(/[<>&"]/g, "")}" preserveAspectRatio="xMidYMid meet">${parts.join("")}</svg>`;
+};

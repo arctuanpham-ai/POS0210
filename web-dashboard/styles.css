@@ -567,3 +567,29 @@ button.paylist-row { width: 100%; font: inherit; color: inherit; cursor: pointer
 .item-verdict.puzzle { background: #e6eef8; border-color: #b9cde6; }
 .item-verdict.dog { background: #f9e1dd; border-color: #e5b7b0; }
 #item-pick { max-width: 62vw; }
+
+/* Trang phân tích món: tab, thẻ, bảng */
+.item-title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font-size: 18px; margin-top: 4px; }
+.item-title small { font-size: 13px; font-weight: 500; color: #796758; }
+.item-tabs { margin: 0 0 12px; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+.item-tabs::-webkit-scrollbar { display: none; }
+.item-tabs .filter { flex: 0 0 auto; }
+.item-card { margin: 0 0 14px; padding: 14px; border: 1px solid #dfcfb8; border-radius: 16px; background: #fffcf7; }
+.item-card h4 { margin: 0 0 4px; font-size: 14px; }
+.item-card .sales-table { border: 0; border-radius: 0; background: transparent; }
+.item-card .hbar-chart { border: 0; padding: 4px 0 0; background: transparent; }
+.item-sub { margin: 0 0 10px; font-size: 12px; line-height: 1.4; color: #796758; }
+.item-tip { margin: 0 0 12px; padding: 10px 12px; border-left: 3px solid #6e432d; border-radius: 0 10px 10px 0; background: #fff4e4; font-size: 13.5px; line-height: 1.45; }
+.item-cover, .item-loading { font-size: 12.5px; }
+.item-tbl td, .item-tbl th { white-space: nowrap; }
+.item-tbl td:first-child { white-space: normal; }
+.item-tbl .neg, .neg { color: #a3281a; }
+.item-tbl .pos { color: #24572a; }
+.item-tbl .win { font-weight: 700; background: #f3ead9; }
+.lift { padding: 2px 8px; border-radius: 999px; background: #eee5da; font-weight: 700; font-size: 12px; }
+.lift.up { background: #dcefd9; color: #24572a; }
+.lift.down { background: #f7d4cf; color: #8b1d12; }
+.cmp-wrap { padding: 4px 8px; overflow-x: auto; }
+.cmp-wrap .sales-table { border: 0; }
+.item-vs select { max-width: 55vw; }
+@media (max-width: 520px) { .item-tbl td, .item-tbl th { padding: 8px 6px; font-size: 12.5px; } }

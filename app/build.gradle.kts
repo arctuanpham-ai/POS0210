@@ -12,8 +12,8 @@ android {
         applicationId = "vn.ecohome.pos0210"
         minSdk = 26
         targetSdk = 35
-        versionCode = 205
-        versionName = "1.0.0-alpha173-cloud-retry"
+        versionCode = 206
+        versionName = "1.0.0-alpha174-cloud-diag"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {

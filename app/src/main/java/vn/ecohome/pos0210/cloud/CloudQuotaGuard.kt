@@ -15,7 +15,7 @@ internal object CloudQuotaGuard {
         return prefs.getString("device",null)?:UUID.randomUUID().toString().also{prefs.edit().putString("device",it).commit()}
     }
     fun check(fs:FirebaseFirestore) {
-        val p=prefs(fs);val scope=scope(fs);val now=System.currentTimeMillis();val until=p.getLong("$scope/pause",0L)
+        val p=prefs(fs);val scope=scope(fs);val now=System.currentTimeMillis();val until=p.getLong("$scope/pause2",0L)
         if(now<until){
             val time=java.text.SimpleDateFormat("dd/MM HH:mm",java.util.Locale.getDefault()).format(java.util.Date(until))
             status.value="Cloud tạm dừng đến $time · giữ dữ liệu và hàng đợi trên máy"
@@ -35,9 +35,11 @@ internal object CloudQuotaGuard {
         val quota=(e is com.google.firebase.firestore.FirebaseFirestoreException&&e.code==com.google.firebase.firestore.FirebaseFirestoreException.Code.RESOURCE_EXHAUSTED)||e.message.orEmpty().contains("RESOURCE_EXHAUSTED")||e.message.orEmpty().contains("HTTP_429")
         val cap=e is CloudQuotaDeferred&&e.message.orEmpty().contains("Đã đạt trần")
         if(quota||cap){
-            val until=CloudQuotaPolicy.reset(now)
-            prefs(fs).edit().putLong("${scope(fs)}/pause",until).commit()
-            status.value="Cloud tạm dừng vì quota · tự kiểm tra lại sau mốc reset Pacific · giữ dữ liệu local"
+            // Chỉ khi chính bộ đếm của app báo đã chạm trần ngày mới nghỉ đến mốc reset Pacific.
+            // Lỗi 429/RESOURCE_EXHAUSTED từ máy chủ có thể chỉ là nghẽn tạm thời: nghỉ 20 phút rồi thử lại, không nghỉ cả ngày.
+            val until=if(cap)CloudQuotaPolicy.reset(now) else now+20*60_000L
+            prefs(fs).edit().putLong("${scope(fs)}/pause2",until).commit()
+            status.value=if(cap)"Cloud tạm dừng vì quota · tự kiểm tra lại sau mốc reset Pacific · giữ dữ liệu local" else "Cloud bị máy chủ báo bận · tự thử lại sau 20 phút · giữ dữ liệu local"
         }
     }
     fun recordFailure(context:Context,error:Exception){

@@ -10,10 +10,10 @@ class PrinterRoutingTest {
         assertEquals("KITCHEN", routing.addressFor(PrintJobType.CANCEL))
     }
 
-    @Test fun paymentAndTestUseReceiptPrinter() {
+    @Test fun paymentAndTestShareTheKitchenPrinter() {
         val routing = PrinterRouting.fromSettings("LEGACY", "KITCHEN", "RECEIPT")
-        assertEquals("RECEIPT", routing.addressFor(PrintJobType.PAYMENT))
-        assertEquals("RECEIPT", routing.addressFor(PrintJobType.TEST))
+        assertEquals("KITCHEN", routing.addressFor(PrintJobType.PAYMENT))
+        assertEquals("KITCHEN", routing.addressFor(PrintJobType.TEST))
     }
 
     @Test fun legacyPrinterRemainsFallbackUntilRolesAreAssigned() {

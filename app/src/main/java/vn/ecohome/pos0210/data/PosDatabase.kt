@@ -5,7 +5,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
-@Database(entities=[EmployeeEntity::class,AreaEntity::class,DiningTableEntity::class,MenuCategoryEntity::class,ComboEntity::class,ComboItemEntity::class,MenuItemEntity::class,TableSessionEntity::class,OrderBatchEntity::class,OrderItemEntity::class,BillEntity::class,PaymentEntity::class,CustomerEntity::class,CustomerPointTransactionEntity::class,PricingRuleEntity::class,BillAdjustmentEntity::class,SupplierEntity::class,PurchaseEntity::class,PurchaseCategoryEntity::class,PurchaseItemEntity::class,MonthlyAccountingEntity::class,ProfitPartnerEntity::class,PrintJobEntity::class,AuditEventEntity::class,AppSettingEntity::class,PaymentSessionEntity::class,BankNotificationEventEntity::class,AssetCategoryEntity::class,AssetEntity::class,AssetValuationEntity::class,FinancialMovementEntity::class,OpeningCashAdjustmentEntity::class,CloudSyncStateEntity::class,CostCodeEntity::class],version=19,exportSchema=false)
+@Database(entities=[EmployeeEntity::class,AreaEntity::class,DiningTableEntity::class,MenuCategoryEntity::class,ComboEntity::class,ComboItemEntity::class,MenuItemEntity::class,TableSessionEntity::class,OrderBatchEntity::class,OrderItemEntity::class,BillEntity::class,PaymentEntity::class,CustomerEntity::class,CustomerPointTransactionEntity::class,PricingRuleEntity::class,BillAdjustmentEntity::class,SupplierEntity::class,PurchaseEntity::class,PurchaseCategoryEntity::class,PurchaseItemEntity::class,MonthlyAccountingEntity::class,ProfitPartnerEntity::class,PrintJobEntity::class,AuditEventEntity::class,AppSettingEntity::class,PaymentSessionEntity::class,BankNotificationEventEntity::class,AssetCategoryEntity::class,AssetEntity::class,AssetValuationEntity::class,FinancialMovementEntity::class,OpeningCashAdjustmentEntity::class,CloudSyncStateEntity::class,CostCodeEntity::class,SyncQueueEntity::class,AttendanceSessionEntity::class,LoyaltyCampaignEntity::class,CustomerRewardEntity::class,BuyGetPromotionEntity::class,ShiftEntity::class,RefundEntity::class],version=33,exportSchema=false)
 abstract class PosDatabase:RoomDatabase(){
  abstract fun dao():PosDao
  companion object{
@@ -181,9 +181,122 @@ abstract class PosDatabase:RoomDatabase(){
     db.execSQL("CREATE INDEX IF NOT EXISTS index_CostCodeEntity_active ON CostCodeEntity(active)")
    }
   }
+  private val MIGRATION_19_20=object:Migration(19,20){
+   override fun migrate(db:SupportSQLiteDatabase){
+    db.execSQL("ALTER TABLE CloudSyncStateEntity ADD COLUMN bootstrapState TEXT NOT NULL DEFAULT 'LEGACY_LOCAL'")
+    db.execSQL("ALTER TABLE CloudSyncStateEntity ADD COLUMN bootstrapCompletedAt INTEGER")
+    db.execSQL("ALTER TABLE CloudSyncStateEntity ADD COLUMN lastPullAt INTEGER")
+    db.execSQL("CREATE TABLE IF NOT EXISTS SyncQueueEntity (id TEXT NOT NULL, entityType TEXT NOT NULL, entityId TEXT NOT NULL, operation TEXT NOT NULL, payload TEXT NOT NULL, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL, attempts INTEGER NOT NULL, nextAttemptAt INTEGER NOT NULL, status TEXT NOT NULL, lastError TEXT, PRIMARY KEY(id))")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_SyncQueueEntity_status ON SyncQueueEntity(status)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_SyncQueueEntity_nextAttemptAt ON SyncQueueEntity(nextAttemptAt)")
+    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_SyncQueueEntity_entityType_entityId ON SyncQueueEntity(entityType,entityId)")
+   }
+  }
+  private val MIGRATION_20_21=object:Migration(20,21){
+   override fun migrate(db:SupportSQLiteDatabase){
+    db.execSQL("ALTER TABLE TableSessionEntity ADD COLUMN dataScope TEXT NOT NULL DEFAULT 'LIVE'")
+    db.execSQL("ALTER TABLE BillEntity ADD COLUMN dataScope TEXT NOT NULL DEFAULT 'LIVE'")
+    db.execSQL("ALTER TABLE PaymentEntity ADD COLUMN dataScope TEXT NOT NULL DEFAULT 'LIVE'")
+       }
+  }
+  private val MIGRATION_21_22=object:Migration(21,22){
+   override fun migrate(db:SupportSQLiteDatabase){
+    db.execSQL("CREATE TABLE IF NOT EXISTS AttendanceSessionEntity (id TEXT NOT NULL, employeeId TEXT NOT NULL, checkInAt INTEGER NOT NULL, checkOutAt INTEGER, status TEXT NOT NULL, hourlyRate INTEGER NOT NULL, multiplierBasisPoints INTEGER NOT NULL, note TEXT NOT NULL, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL, PRIMARY KEY(id))")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_AttendanceSessionEntity_employeeId ON AttendanceSessionEntity(employeeId)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_AttendanceSessionEntity_checkInAt ON AttendanceSessionEntity(checkInAt)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_AttendanceSessionEntity_status ON AttendanceSessionEntity(status)")
+   }
+  }
+  private val MIGRATION_22_23=object:Migration(22,23){
+   override fun migrate(db:SupportSQLiteDatabase){
+    db.execSQL("CREATE TABLE IF NOT EXISTS LoyaltyCampaignEntity (id TEXT NOT NULL, name TEXT NOT NULL, triggerType TEXT NOT NULL, threshold INTEGER NOT NULL, rewardType TEXT NOT NULL, rewardValue INTEGER NOT NULL, rewardMenuItemId TEXT, rewardCategoryId TEXT, cycleMode TEXT NOT NULL, expiresDays INTEGER, active INTEGER NOT NULL, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL, PRIMARY KEY(id))")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_LoyaltyCampaignEntity_active ON LoyaltyCampaignEntity(active)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_LoyaltyCampaignEntity_triggerType ON LoyaltyCampaignEntity(triggerType)")
+    db.execSQL("CREATE TABLE IF NOT EXISTS CustomerRewardEntity (id TEXT NOT NULL, customerId TEXT NOT NULL, campaignId TEXT NOT NULL, sourceBillId TEXT, status TEXT NOT NULL, earnedAt INTEGER NOT NULL, expiresAt INTEGER, redeemedAt INTEGER, redeemedBillId TEXT, rewardSnapshot TEXT NOT NULL, PRIMARY KEY(id))")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_CustomerRewardEntity_customerId ON CustomerRewardEntity(customerId)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_CustomerRewardEntity_campaignId ON CustomerRewardEntity(campaignId)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_CustomerRewardEntity_status ON CustomerRewardEntity(status)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_CustomerRewardEntity_earnedAt ON CustomerRewardEntity(earnedAt)")
+   }
+  }
+  private val MIGRATION_23_24=object:Migration(23,24){
+   override fun migrate(db:SupportSQLiteDatabase){
+    db.execSQL("ALTER TABLE OrderItemEntity ADD COLUMN loyaltyRewardId TEXT")
+    db.execSQL("ALTER TABLE OrderItemEntity ADD COLUMN loyaltyLabel TEXT")
+   }
+  }
+  private val MIGRATION_24_25=object:Migration(24,25){
+   override fun migrate(db:SupportSQLiteDatabase){
+    db.execSQL("CREATE TABLE IF NOT EXISTS BuyGetPromotionEntity (id TEXT NOT NULL, name TEXT NOT NULL, buyMenuItemId TEXT NOT NULL, buyQuantity INTEGER NOT NULL, giftMenuItemId TEXT NOT NULL, giftQuantity INTEGER NOT NULL, repeat INTEGER NOT NULL, active INTEGER NOT NULL, startAt INTEGER, endAt INTEGER, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL, PRIMARY KEY(id))")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_BuyGetPromotionEntity_active ON BuyGetPromotionEntity(active)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_BuyGetPromotionEntity_buyMenuItemId ON BuyGetPromotionEntity(buyMenuItemId)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_BuyGetPromotionEntity_giftMenuItemId ON BuyGetPromotionEntity(giftMenuItemId)")
+   }
+  }
+  private val MIGRATION_25_26=object:Migration(25,26){
+   override fun migrate(db:SupportSQLiteDatabase){
+    db.execSQL("ALTER TABLE OrderItemEntity ADD COLUMN buyGetPromotionId TEXT")
+    db.execSQL("ALTER TABLE OrderItemEntity ADD COLUMN buyGetLabel TEXT")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_OrderItemEntity_buyGetPromotionId ON OrderItemEntity(buyGetPromotionId)")
+   }
+  }
+  private val MIGRATION_26_27=object:Migration(26,27){
+   override fun migrate(db:SupportSQLiteDatabase){
+    db.execSQL("ALTER TABLE AttendanceSessionEntity ADD COLUMN dataScope TEXT NOT NULL DEFAULT \'LIVE\'")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_AttendanceSessionEntity_dataScope ON AttendanceSessionEntity(dataScope)")
+   }
+  }
+  val MIGRATION_27_28=object:Migration(27,28){
+   override fun migrate(db:SupportSQLiteDatabase){
+    db.execSQL("ALTER TABLE OrderItemEntity ADD COLUMN categoryIdSnapshot TEXT")
+    db.execSQL("ALTER TABLE OrderItemEntity ADD COLUMN categoryNameSnapshot TEXT")
+    db.execSQL("ALTER TABLE OrderItemEntity ADD COLUMN comboPartsSnapshot TEXT")
+   }
+  }
+  val MIGRATION_28_29=object:Migration(28,29){
+   override fun migrate(db:SupportSQLiteDatabase){
+    db.execSQL("CREATE TABLE IF NOT EXISTS `ShiftEntity` (`id` TEXT NOT NULL, `date` TEXT NOT NULL, `staffId` TEXT NOT NULL, `staffName` TEXT NOT NULL, `role` TEXT NOT NULL, `checkInClient` INTEGER NOT NULL, `checkOutClient` INTEGER, `checkOutSource` TEXT, `lastActivityAt` INTEGER NOT NULL, `cashExpected` INTEGER, `cashCounted` INTEGER, `diff` INTEGER, `diffNote` TEXT NOT NULL, `transferTotal` INTEGER NOT NULL, `orderCount` INTEGER NOT NULL, `status` TEXT NOT NULL, `receivedBy` TEXT, `receivedAt` INTEGER, `attendanceId` TEXT, `dataScope` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_ShiftEntity_status ON ShiftEntity(status)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_ShiftEntity_date ON ShiftEntity(date)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_ShiftEntity_staffId ON ShiftEntity(staffId)")
+    db.execSQL("ALTER TABLE TableSessionEntity ADD COLUMN shiftId TEXT")
+   }
+  }
+  val MIGRATION_29_30=object:Migration(29,30){
+   override fun migrate(db:SupportSQLiteDatabase){
+    db.execSQL("ALTER TABLE ShiftEntity ADD COLUMN editLog TEXT NOT NULL DEFAULT ''")
+   }
+  }
+  val MIGRATION_30_31=object:Migration(30,31){
+   override fun migrate(db:SupportSQLiteDatabase){
+    db.execSQL("ALTER TABLE TableSessionEntity ADD COLUMN flow TEXT NOT NULL DEFAULT 'postpaid'")
+    db.execSQL("ALTER TABLE PaymentEntity ADD COLUMN cashReceived INTEGER")
+    db.execSQL("ALTER TABLE PaymentEntity ADD COLUMN `change` INTEGER")
+    db.execSQL("CREATE TABLE IF NOT EXISTS `RefundEntity` (`id` TEXT NOT NULL, `billId` TEXT NOT NULL, `sessionId` TEXT NOT NULL, `batchId` TEXT, `amount` INTEGER NOT NULL, `method` TEXT NOT NULL, `reason` TEXT NOT NULL, `actorId` TEXT NOT NULL, `shiftId` TEXT, `createdAt` INTEGER NOT NULL, `dataScope` TEXT NOT NULL, PRIMARY KEY(`id`))")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_RefundEntity_billId ON RefundEntity(billId)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_RefundEntity_shiftId ON RefundEntity(shiftId)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_RefundEntity_createdAt ON RefundEntity(createdAt)")
+   }
+  }
+  val MIGRATION_31_32=object:Migration(31,32){
+   override fun migrate(db:SupportSQLiteDatabase){
+    db.execSQL("ALTER TABLE RefundEntity ADD COLUMN status TEXT NOT NULL DEFAULT 'DONE'")
+    db.execSQL("ALTER TABLE RefundEntity ADD COLUMN approvedBy TEXT")
+    db.execSQL("ALTER TABLE RefundEntity ADD COLUMN settledAt INTEGER")
+    db.execSQL("ALTER TABLE RefundEntity ADD COLUMN settleNote TEXT NOT NULL DEFAULT ''")
+    db.execSQL("UPDATE RefundEntity SET status='FROZEN' WHERE method='TRANSFER'")
+   }
+  }
+  val MIGRATION_32_33=object:Migration(32,33){
+   override fun migrate(db:SupportSQLiteDatabase){
+    // Giao đồ từng món: chỉ THÊM cột, dữ liệu cũ giữ nguyên (đơn đã giao từ trước tính như đã giao đủ).
+    db.execSQL("ALTER TABLE OrderItemEntity ADD COLUMN deliveredQty INTEGER NOT NULL DEFAULT 0")
+    db.execSQL("UPDATE OrderItemEntity SET deliveredQty=qty WHERE qty>0 AND batchId IN (SELECT id FROM OrderBatchEntity WHERE status='DELIVERED')")
+   }
+  }
   fun get(context:Context):PosDatabase=instance?:synchronized(this){
    instance?:Room.databaseBuilder(context.applicationContext,PosDatabase::class.java,"pos0210.db")
-    .addMigrations(MIGRATION_3_4,MIGRATION_4_5,MIGRATION_5_6,MIGRATION_6_7,MIGRATION_7_8,MIGRATION_8_9,MIGRATION_9_10,MIGRATION_10_11,MIGRATION_11_12,MIGRATION_12_13,MIGRATION_13_14,MIGRATION_14_15,MIGRATION_15_16,MIGRATION_16_17,MIGRATION_17_18,MIGRATION_18_19)
+    .addMigrations(MIGRATION_3_4,MIGRATION_4_5,MIGRATION_5_6,MIGRATION_6_7,MIGRATION_7_8,MIGRATION_8_9,MIGRATION_9_10,MIGRATION_10_11,MIGRATION_11_12,MIGRATION_12_13,MIGRATION_13_14,MIGRATION_14_15,MIGRATION_15_16,MIGRATION_16_17,MIGRATION_17_18,MIGRATION_18_19,MIGRATION_19_20,MIGRATION_20_21,MIGRATION_21_22,MIGRATION_22_23,MIGRATION_23_24,MIGRATION_24_25,MIGRATION_25_26,MIGRATION_26_27,MIGRATION_27_28,MIGRATION_28_29,MIGRATION_29_30,MIGRATION_30_31,MIGRATION_31_32,MIGRATION_32_33)
     .build().also{instance=it}
   }
   fun closeForRestore(){synchronized(this){instance?.close();instance=null}}

@@ -5,20 +5,23 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import kotlinx.coroutines.*
 import vn.ecohome.pos0210.data.*
+import vn.ecohome.pos0210.payment.PaymentQrMode
 
 class BankNotificationListenerService:NotificationListenerService(){
  private val scope=CoroutineScope(SupervisorJob()+Dispatchers.IO)
  override fun onDestroy(){scope.cancel();super.onDestroy()}
  override fun onNotificationPosted(sbn:StatusBarNotification){
-  val parser=BankParserRegistry.parser(sbn.packageName)?:return
+  if(sbn.packageName==applicationContext.packageName)return
   val extras=sbn.notification.extras
   val title=extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
   val body=(extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?:extras.getCharSequence(Notification.EXTRA_TEXT))?.toString().orEmpty()
   if(body.isBlank())return
+  val parser=BankParserRegistry.parser(sbn.packageName)?:BankParserRegistry.detect(title,body)?:return
   scope.launch{process(sbn.packageName,title,body,sbn.postTime,parser)}
  }
  private suspend fun process(packageName:String,title:String,body:String,receivedAt:Long,parser:BankNotificationParser){
   val dao=PosDatabase.get(applicationContext).dao()
+  if(!PaymentQrMode.allowsPhoneBankAnnouncements(dao.settingValue("payment_qr_mode").orEmpty()))return
   if(dao.settingValue("bank_notification_enabled")!="true")return
   val tx=runCatching{parser.parse(title,body,receivedAt)}.getOrNull()
   val fallbackHash=sha256("$packageName|$title|$body|$receivedAt")
@@ -32,7 +35,12 @@ class BankNotificationListenerService:NotificationListenerService(){
   if(tx==null||tx.direction!=TransactionDirection.CREDIT)return
   val result=PaymentMatcher.match(tx,dao.waitingPaymentSessions(tx.amount,receivedAt),receivedAt)
   val target=result.session
-  if(target==null){dao.updateBankNotificationMatch(tx.rawHash,result.confidence.name,null);return}
+  if(target==null){
+   dao.updateBankNotificationMatch(tx.rawHash,result.confidence.name,null)
+   // Tiền về nhưng chưa khớp bill nào: vẫn đọc số tiền để nhân viên biết có tiền vào.
+   BankPaymentAnnouncer.announce(applicationContext,tx.amount,null,dao.settingValue("bank_notification_vibrate")!="false",dao.settingValue("bank_notification_tts")!="false")
+   return
+  }
   if(dao.markPaymentDetected(target.id,tx.rawHash,tx.bank,tx.amount,receivedAt,result.confidence.name)!=1)return
   dao.updateBankNotificationMatch(tx.rawHash,"MATCHED_${result.confidence.name}",target.id)
   val tableName=dao.allTablesSnapshot().firstOrNull{it.id==target.tableId}?.name

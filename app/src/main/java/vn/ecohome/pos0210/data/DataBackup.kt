@@ -148,7 +148,14 @@ object DataBackup {
         }
     }
 
-    private fun restoreMediaFromUri(context: Context, uri: Uri) {
+    /** Chỉ thêm file ảnh còn thiếu từ MEDIA_LATEST, không ghi đè ảnh đang có. Trả về số file đã khôi phục. */
+    fun restoreMediaMissingOnly(context: Context, rootTreeUriString: String): Result<Int> = runCatching {
+        val uri = findMediaLatest(context, rootTreeUriString) ?: return@runCatching 0
+        restoreMediaFromUri(context, uri, onlyMissing = true)
+    }
+
+    private fun restoreMediaFromUri(context: Context, uri: Uri, onlyMissing: Boolean = false): Int {
+        var restored = 0
         val dir = File(context.filesDir, "managed_media").apply { mkdirs() }
         context.contentResolver.openInputStream(uri).use { raw ->
             requireNotNull(raw)
@@ -156,13 +163,16 @@ object DataBackup {
                 while (true) {
                     val entry = zip.nextEntry ?: break
                     val safeName = entry.name.substringAfterLast('/').replace(Regex("[^A-Za-z0-9._-]"), "_")
-                    if (safeName.isNotBlank()) {
-                        File(dir, safeName).outputStream().use { output -> zip.copyTo(output) }
+                    val target = File(dir, safeName)
+                    if (safeName.isNotBlank() && !(onlyMissing && target.exists())) {
+                        target.outputStream().use { output -> zip.copyTo(output) }
+                        restored++
                     }
                     zip.closeEntry()
                 }
             }
         }
+        return restored
     }
 
     private fun displayName(context: Context, uri: Uri): String? = runCatching {
@@ -174,6 +184,7 @@ object DataBackup {
     fun restoreMediaLatest(context: Context, rootTreeUriString: String): Result<Unit> = runCatching {
         val uri = findMediaLatest(context, rootTreeUriString) ?: return@runCatching
         restoreMediaFromUri(context, uri)
+        Unit
     }
 
     fun archiveSnapshot(context: Context, rootTreeUriString: String): Result<Uri> = runCatching {

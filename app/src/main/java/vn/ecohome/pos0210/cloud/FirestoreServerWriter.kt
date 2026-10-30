@@ -26,6 +26,19 @@ internal object FirestoreServerWriter {
         commit(doc.firestore,listOf(doc.path to data),operation)
         if(cached)ack.edit().putString(key,hash).commit()
     }
+
+    /** Đọc bộ đếm quota. REST documents.get đang bị máy chủ trả 429 (Quota exceeded) dù đọc/ghi qua SDK vẫn chạy: khi đó đọc bằng SDK, ghi không kèm điều kiện updateTime. */
+    private fun readCounter(fs:FirebaseFirestore,base:String,path:String,token:String):QuotaSnapshot {
+        try {return FirestoreHttpCommit.readQuota(URL("$base/$path"),token)}
+        catch(e:java.io.IOException){
+            if(!e.message.orEmpty().contains("HTTP_429"))throw e
+            CloudExecution.trace("QUOTA_COUNTER dùng SDK vì REST get trả 429")
+            val doc=com.google.android.gms.tasks.Tasks.await(fs.document(path).get(com.google.firebase.firestore.Source.SERVER),10,java.util.concurrent.TimeUnit.SECONDS)
+            if(!doc.exists())return QuotaSnapshot(null,emptyMap())
+            val data=doc.data.orEmpty().mapNotNull{(k,v)->when(v){is Long->k to (v as Any?);is Int->k to (v.toLong() as Any?);is String->k to (v as Any?);else->null}}.toMap()
+            return QuotaSnapshot("UNCONDITIONAL",data)
+        }
+    }
     suspend fun commit(fs:FirebaseFirestore,rows:List<Pair<String,Map<String,Any?>>>,operation:String=UUID.randomUUID().toString()) {
         execute(fs,rows.map{it.first},operation,false) { project->rows.map{FirestoreWire.set(project,it.first,it.second)} }
     }
@@ -62,7 +75,7 @@ internal object FirestoreServerWriter {
             }.eachCount().mapValues{it.value.toLong()}
             try {
                 val data=withContext(Dispatchers.IO){CloudQuotaCommit.execute(project,"users/${user.uid}/stores/0210",CloudQuotaGuard.device(fs),operation,chunk,charges,System.currentTimeMillis(),
-                    {path->FirestoreHttpCommit.readQuota(URL("$base/$path"),token).also{CloudQuotaGuard.observed(fs,it.data)}},
+                    {path->readCounter(fs,base,path,token).also{CloudQuotaGuard.observed(fs,it.data)}},
                     {writes->FirestoreHttpCommit.send(URL("$base:commit"),token,writes)})}
                 CloudQuotaGuard.observed(fs,data)
             }catch(e:Exception){CloudQuotaGuard.failed(fs,e);throw e}

@@ -12,8 +12,8 @@ internal object CloudQuotaCommit {
         repeat(3){attempt->
             val snapshot=read(path)
             val next=CloudQuotaPolicy.next(snapshot.data,charges,device,operation,now)
-            val condition=if(snapshot.updateTime==null)mapOf("exists" to false)else mapOf("updateTime" to snapshot.updateTime)
-            val counter=FirestoreWire.set(project,path,next)+mapOf("currentDocument" to condition)
+            val condition:Map<String,Any?>?=when(snapshot.updateTime){null->mapOf("exists" to false);"UNCONDITIONAL"->null;else->mapOf("updateTime" to snapshot.updateTime)}
+            val counter=FirestoreWire.set(project,path,next)+(condition?.let{mapOf("currentDocument" to it)}?:emptyMap())
             try {
                 send(writes+counter)
                 return next

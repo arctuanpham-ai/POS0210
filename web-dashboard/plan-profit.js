@@ -1,6 +1,6 @@
 // Dự báo nguyên liệu ngày mai và xếp hạng món theo lãi gộp. Hàm thuần.
-import { averageDailySales, dailyMaterialUsage } from "./demo-receipts.js?v=20261029-25";
-import { MATERIALS, materialById, recipeCost } from "./cost-recipe.js?v=20261029-25";
+import { averageDailySales, dailyMaterialUsage } from "./demo-receipts.js?v=20261029-26";
+import { MATERIALS, materialById, recipeCost } from "./cost-recipe.js?v=20261029-26";
 
 const pad = (n) => String(n).padStart(2, "0");
 const keyOf = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;

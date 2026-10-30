@@ -1,7 +1,7 @@
 // Cảnh báo mua vật tư bất thường: mua trùng, mua quá định mức, nhịp mua lệch. Hàm thuần, không Firebase, không DOM.
 // Chỉ là gợi ý để kiểm tra: hao hụt, nhân viên dùng, tặng khách, công thức chưa đủ đều làm lệch định mức.
-import { lineTargets, materialById, usageVsPurchase } from "./cost-recipe.js?v=20261029-25";
-import { isSummaryReceipt } from "./expense-rules.js?v=20261029-25";
+import { lineTargets, materialById, usageVsPurchase } from "./cost-recipe.js?v=20261029-26";
+import { isSummaryReceipt } from "./expense-rules.js?v=20261029-26";
 
 export const MIN_DATA_DAYS = 30;
 const DAY = 86400000;

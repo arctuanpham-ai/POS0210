@@ -68,3 +68,10 @@ test("không có giá thì không gợi ý, thêm tay chỉ hiện vật tư ch�
   assert.ok(add.every((m) => m.id !== "cf_phin"));
   assert.ok(add.some((m) => m.id === "thit_bo"));
 });
+
+test("đồ mua gần mỗi ngày không được gợi ý", () => {
+  const cfg = normalizeCountConfig({ items: [], dismissed: [] });
+  const r = suggestCountItems({ usagePerDay: { banh_mi: 8, thit_bo: 2000 }, costs: { banh_mi: { unitCost: 3000 }, thit_bo: { unitCost: 260 } }, firstBuy: { banh_mi: 1, thit_bo: 1 }, buyDays: { banh_mi: 25, thit_bo: 6 }, countAt: 5, cfg });
+  assert.deepEqual(r.suggestions.map((s) => s.id), ["thit_bo"]);
+  assert.deepEqual(r.skipped.daily, ["Bánh mì"]);
+});

@@ -1,7 +1,7 @@
 // Danh sách vật tư cần kiểm đếm hằng tuần: cấu hình (thêm/bớt) và gợi ý theo menu hiện tại. Hàm thuần, không Firebase, không DOM.
-import { materialById, matchMaterial, unitFactor } from "./cost-recipe.js?v=20261029-28";
-import { COUNT_ITEMS } from "./stock-count.js?v=20261029-28";
-import { isSummaryReceipt, normalizeText } from "./expense-rules.js?v=20261029-28";
+import { materialById, matchMaterial, unitFactor } from "./cost-recipe.js?v=20261029-29";
+import { COUNT_ITEMS } from "./stock-count.js?v=20261029-29";
+import { isSummaryReceipt, normalizeText } from "./expense-rules.js?v=20261029-29";
 
 /** Nhóm tươi sống, mua dùng trong ngày: không đáng đếm tồn hằng tuần (khoai tây đông lạnh là ngoại lệ, để được lâu). */
 const FRESH_GROUPS = new Set(["RAU"]);
@@ -56,20 +56,34 @@ export const firstPurchaseTimes = (receipts) => {
   return out;
 };
 
+/** Số ngày có mua từng vật tư trong 30 ngày trước `now`. Mua gần mỗi ngày (từ 12 ngày trở lên) là đồ tươi dùng trong ngày, không đáng đếm tồn. */
+export const buyDaysLast30 = (receipts, now = Date.now()) => {
+  const days = {};
+  for (const r of Array.isArray(receipts) ? receipts : []) {
+    if (!r || r.status === "DELETED" || r.status === "CANCELLED" || isSummaryReceipt(r)) continue;
+    const at = Number(r.purchaseDate || 0);
+    if (!(at > now - 30 * 86400000 && at <= now)) continue;
+    const key = new Date(at).toDateString();
+    for (const l of r.items || []) { const m = matchMaterial(l); if (m) (days[m.id] ||= new Set()).add(key); }
+  }
+  return Object.fromEntries(Object.entries(days).map(([id, set]) => [id, set.size]));
+};
+export const DAILY_BUY_DAYS = 12;
+
 const isStorable = (m) => m && m.kind === "NL" && !m.stub && (!FRESH_GROUPS.has(m.group) || KEEPS_LONG.has(m.id));
 
 /**
  * Gợi ý vật tư lớn nên đếm, theo MENU HIỆN TẠI và thời điểm đếm.
  * usagePerDay: { materialId: lượng dùng mỗi ngày (đơn vị định lượng) } tính từ món đang bán × công thức.
- * costs: { materialId: { unitCost } }. firstBuy: { materialId: lần nhập mua đầu tiên }. countAt: thời điểm đếm.
+ * costs: { materialId: { unitCost } }. buyDays: số ngày có mua trong 30 ngày (đồ mua gần mỗi ngày bị loại). firstBuy: { materialId: lần nhập mua đầu tiên }. countAt: thời điểm đếm.
  * Chỉ gợi ý vật tư đã từng nhập mua TRƯỚC thời điểm đếm (chưa mua thì không thể có tồn để đếm); ngược lại đếm vào skipped.
  */
-export const suggestCountItems = ({ usagePerDay = {}, costs = {}, firstBuy = {}, countAt = Date.now(), cfg, limit = 6, minShare = 0.03 }) => {
+export const suggestCountItems = ({ usagePerDay = {}, costs = {}, firstBuy = {}, buyDays = {}, countAt = Date.now(), cfg, limit = 6, minShare = 0.03 }) => {
   const listed = new Set(cfg.items.map((x) => x.id));
   const dismissed = new Set(cfg.dismissed);
   const rows = [];
   let total = 0;
-  const skipped = { notBoughtYet: [], noPrice: [] };
+  const skipped = { notBoughtYet: [], noPrice: [], daily: [] };
   for (const [id, perDay] of Object.entries(usagePerDay)) {
     const m = materialById.get(id);
     if (!isStorable(m) || !(perDay > 0)) continue;
@@ -79,6 +93,7 @@ export const suggestCountItems = ({ usagePerDay = {}, costs = {}, firstBuy = {},
     if (listed.has(id) || dismissed.has(id)) continue;
     const first = firstBuy[id];
     if (!first || first > countAt) { skipped.notBoughtYet.push(m.name); continue; }
+    if ((buyDays[id] || 0) >= DAILY_BUY_DAYS) { skipped.daily.push(m.name); continue; }
     if (value === null) { skipped.noPrice.push(m.name); continue; }
     rows.push({ id, name: m.name, base: m.base, unit: countUnitFor(m), perDay, valuePerDay: value, firstAt: first });
   }

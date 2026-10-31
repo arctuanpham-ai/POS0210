@@ -24,6 +24,7 @@ jobs:
           echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_POS0210_17CE4 }}' > "$RUNNER_TEMP/sa.json"
           gcloud auth activate-service-account --key-file="$RUNNER_TEMP/sa.json" >/dev/null 2>&1
       - name: Backup
+        if: github.event_name != 'schedule' || secrets.GDRIVE_REFRESH_TOKEN != ''
         env:
           DRY_RUN: ${{ github.event.inputs.dry_run || (secrets.GDRIVE_REFRESH_TOKEN == '' && '1') || '0' }}
           GDRIVE_CLIENT_ID: ${{ secrets.GDRIVE_CLIENT_ID }}

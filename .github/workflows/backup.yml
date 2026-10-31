@@ -1,0 +1,32 @@
+name: Backup Firestore to Drive
+on:
+  schedule:
+    - cron: "30 16 * * *"   # 23:30 giờ Việt Nam mỗi ngày
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "1 = chỉ thử đọc Firestore, không ghi Drive"
+        default: "0"
+permissions:
+  contents: read
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Test script
+        run: node --test ops/backup/backup.test.mjs
+      - name: Auth gcloud
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_POS0210_17CE4 }}' > "$RUNNER_TEMP/sa.json"
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/sa.json" >/dev/null 2>&1
+      - name: Backup
+        env:
+          DRY_RUN: ${{ github.event.inputs.dry_run || (secrets.GDRIVE_REFRESH_TOKEN == '' && '1') || '0' }}
+          GDRIVE_CLIENT_ID: ${{ secrets.GDRIVE_CLIENT_ID }}
+          GDRIVE_CLIENT_SECRET: ${{ secrets.GDRIVE_CLIENT_SECRET }}
+          GDRIVE_REFRESH_TOKEN: ${{ secrets.GDRIVE_REFRESH_TOKEN }}
+        run: node ops/backup/backup.mjs

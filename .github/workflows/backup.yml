@@ -29,10 +29,12 @@ jobs:
           GDRIVE_CLIENT_ID: ${{ secrets.GDRIVE_CLIENT_ID }}
           GDRIVE_CLIENT_SECRET: ${{ secrets.GDRIVE_CLIENT_SECRET }}
           GDRIVE_REFRESH_TOKEN: ${{ secrets.GDRIVE_REFRESH_TOKEN }}
-        run: node ops/backup/backup.mjs
+        run: |
+          set -o pipefail
+          node ops/backup/backup.mjs 2>&1 | tee "$RUNNER_TEMP/backup.log"
       - name: Post dry-run summary
         if: always() && github.event.inputs.dry_run == '1'
         env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
         run: |
-          { echo '```'; cat "$GITHUB_STEP_SUMMARY"; echo '```'; } > "$RUNNER_TEMP/c.md"
+          { echo '```'; cat "$RUNNER_TEMP/backup.log"; echo '```'; } > "$RUNNER_TEMP/c.md"
           gh api repos/${{ github.repository }}/commits/${{ github.sha }}/comments -F body=@"$RUNNER_TEMP/c.md" >/dev/null

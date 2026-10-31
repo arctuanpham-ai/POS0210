@@ -8,7 +8,7 @@ on:
         description: "1 = chỉ thử đọc Firestore, không ghi Drive"
         default: "0"
 permissions:
-  contents: read
+  contents: write
 jobs:
   backup:
     runs-on: ubuntu-latest
@@ -30,3 +30,9 @@ jobs:
           GDRIVE_CLIENT_SECRET: ${{ secrets.GDRIVE_CLIENT_SECRET }}
           GDRIVE_REFRESH_TOKEN: ${{ secrets.GDRIVE_REFRESH_TOKEN }}
         run: node ops/backup/backup.mjs
+      - name: Post dry-run summary
+        if: always() && github.event.inputs.dry_run == '1'
+        env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+        run: |
+          { echo '```'; cat "$GITHUB_STEP_SUMMARY"; echo '```'; } > "$RUNNER_TEMP/c.md"
+          gh api repos/${{ github.repository }}/commits/${{ github.sha }}/comments -F body=@"$RUNNER_TEMP/c.md" >/dev/null

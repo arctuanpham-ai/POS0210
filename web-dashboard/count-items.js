@@ -1,7 +1,7 @@
 // Danh sách vật tư cần kiểm đếm hằng tuần: cấu hình (thêm/bớt) và gợi ý theo menu hiện tại. Hàm thuần, không Firebase, không DOM.
-import { materialById, matchMaterial, unitFactor } from "./cost-recipe.js?v=20261029-32";
-import { COUNT_ITEMS } from "./stock-count.js?v=20261029-32";
-import { isSummaryReceipt, normalizeText } from "./expense-rules.js?v=20261029-32";
+import { materialById, matchMaterial, unitFactor } from "./cost-recipe.js?v=20261029-33";
+import { COUNT_ITEMS } from "./stock-count.js?v=20261029-33";
+import { isSummaryReceipt, normalizeText } from "./expense-rules.js?v=20261029-33";
 
 /** Nhóm tươi sống, mua dùng trong ngày: không đáng đếm tồn hằng tuần (khoai tây đông lạnh là ngoại lệ, để được lâu). */
 const FRESH_GROUPS = new Set(["RAU"]);
@@ -113,4 +113,19 @@ export const addableMaterials = (cfg, materials) => {
   const listed = new Set(cfg.items.map((x) => x.id));
   return materials.filter((m) => m.kind === "NL" && !m.stub && !listed.has(m.id) && unitFactor(m, countUnitFor(m)) !== null)
     .sort((a, b) => normalizeText(a.name).localeCompare(normalizeText(b.name)));
+};
+
+/** Tìm vật tư theo tên (không phân biệt hoa thường và dấu, gồm cả tên gọi khác). Mọi từ gõ vào phải xuất hiện; tên bắt đầu bằng từ khoá xếp trước. */
+export const searchCountMaterials = (query, materials, limit = 8) => {
+  const tokens = normalizeText(query).split(" ").filter(Boolean);
+  if (!tokens.length) return [];
+  const scored = [];
+  for (const m of materials) {
+    const name = normalizeText(m.name);
+    const words = [name, ...(m.aliases || []).map(normalizeText)].join(" ").split(" ");
+    if (!tokens.every((t) => words.some((w) => w.startsWith(t)))) continue; // mỗi từ gõ vào khớp đầu một từ trong tên
+    const rank = name.startsWith(tokens[0]) ? 0 : tokens.every((t) => name.split(" ").some((w) => w.startsWith(t))) ? 1 : 2;
+    scored.push({ m, rank });
+  }
+  return scored.sort((a, b) => a.rank - b.rank || a.m.name.localeCompare(b.m.name, "vi")).slice(0, limit).map((x) => x.m);
 };

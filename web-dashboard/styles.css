@@ -668,3 +668,14 @@ body:has(#login-view:not([hidden])), body:has(#pin-view:not([hidden])) { backgro
 .count-cost { display: grid; gap: 4px; font-size: 12px; color: #6b6f63; font-weight: 600; }
 .count-cost span { display: flex; align-items: center; gap: 6px; }
 .count-cost input { width: 9em; padding: 8px 10px; }
+
+.count-price { margin: 0; font-size: 13px; color: #4b3d31; font-weight: 600; }
+.count-price small { color: #6b6f63; font-weight: 500; }
+.count-price strong { color: #6b4f3a; }
+.count-live-total { margin: 0; font-weight: 800; color: #6b4f3a; }
+.count-search { display: grid; gap: 6px; }
+.count-results { display: grid; gap: 4px; }
+.count-result { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 9px 12px; border: 1px solid #e2d6c2; border-radius: 10px; background: #fcfbf8; color: #1e1e1e; text-align: left; }
+.count-result:hover { background: #f0e6d6; }
+.count-result small { display: block; color: #6b6f63; font-size: 12px; font-weight: 500; }
+.count-result-add { color: #6b4f3a; font-weight: 800; white-space: nowrap; }

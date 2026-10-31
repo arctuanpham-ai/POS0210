@@ -87,3 +87,15 @@ test("đồ sữa đếm bằng g / ml kể cả cấu hình cũ ghi hộp", () 
   assert.deepEqual(cfg.items, [{ id: "sua_dac", unit: "g" }, { id: "cf_phin", unit: "kg" }]);
   assert.equal(addCountItem({ items: [], dismissed: [] }, "sua_tuoi", "hộp").items[0].unit, "ml");
 });
+
+import { searchCountMaterials as searchMaterials } from "../count-items.js";
+test("tìm vật tư theo tên không phân biệt dấu, hoa thường, có cả tên gọi khác", () => {
+  const names = (q) => searchMaterials(q, MATERIALS).map((m) => m.name);
+  assert.ok(names("sua dac").includes("Sữa đặc"));
+  assert.ok(names("SỮA").length >= 2);
+  assert.ok(!names("ong tho").includes("Rau thơm, hành lá, giá"), "khớp đầu từ, không khớp giữa từ");
+  assert.ok(names("ong tho").includes("Sữa đặc"), "tên gọi khác");
+  assert.equal(names("sua")[0].toLowerCase().startsWith("sữa"), true, "tên bắt đầu bằng từ khoá xếp trước");
+  assert.deepEqual(names("   "), []);
+  assert.deepEqual(names("zzzzqq"), []);
+});

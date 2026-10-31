@@ -22,54 +22,54 @@ import {
   deleteDoc as rawDeleteDoc,
   writeBatch as rawWriteBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { isPendingSync } from "./pending-sync.js?v=20261029-32";
-import { foodMonth, freshness, freshnessText, ledgerBuild, parseCoverage, payoutGroups, periodDays, receivable, summarizeSales, vnDay } from "./food-ledger.js?v=20261029-32";
-import { GRAB_SHEET, parseGrabRows } from "./grab-report.js?v=20261029-32";
-import { appLabel, buildEntry, entryProblem, foodAppTotals, foodInPeriod, normalizeFoodApp, otherDeduction, parseMoneyInput } from "./food-app.js?v=20261029-32";
-import { buildProfile, profileHeadline } from "./customer-profile.js?v=20261029-32";
-import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261029-32";
-import { buildCancelRequest, buildCancelledReceipt, buildEditedReceipt, pendingCancelRequest, resolveCancelRequest, calculateReceiptTotal, createStableDraft, freshenDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261029-32";
-import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261029-32";
-import { FUNNEL, buildStats, dayKeyVN, dayLabel, funnelSteps, pct } from "./stats-view.js?v=20261029-32";
-import { approvedKeys, vagueKey, vagueMaterials } from "./vague-materials.js?v=20261029-32";
-import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions, searchMaterials } from "./material-search.js?v=20261029-32";
-import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261029-32";
-import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261029-32";
-import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261029-32";
-import { buildSimulation } from "./sim-data.js?v=20261029-32";
-import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261029-32";
-import { menuCsv } from "./menu-export.js?v=20261029-32";
-import { KIND_LABELS, MATERIALS, buildDynamicMaterials, catalogRules, registerDynamicMaterials, similarMaterials, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261029-32";
-import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261029-32";
-import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261029-32";
-import { buildFlag, flagAfterEdit, flagAfterReview, flagApprovalProblem, isFlagOpen, needsOwnerReview, receiptFlag, BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261029-32";
-import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261029-32";
-import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261029-32";
-import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261029-32";
-import { otherCostRows } from "./other-costs.js?v=20261029-32";
-import { paybackStatus } from "./payback.js?v=20261029-32";
-import { topSellers } from "./top-banner.js?v=20261029-32";
-import { reconcileDays, reconcileRevenue } from "./revenue-check.js?v=20261029-32";
-import { prepList, profitRanking, tomorrowSales } from "./plan-profit.js?v=20261029-32";
-import { OO_LABELS, OO_MODE_LABELS, OO_REJECT_REASONS, attentionCount, buildTransition, groupOrders, isPending, limitKeys, minutesAgoText, newOrderCodes, nextActions, ooToMillis, overdueOrders, releasedCount, validateShopConfig } from "./online-orders.js?v=20261029-32";
-import { menuEditProblem, menuGroups, mergePlan, nameIssues, nextProductCode, normName, soldCombos, soldNotInMenu } from "./menu-view.js?v=20261029-32";
-import { POS_CEILING, SPARK, dayUsage, lastPacificDays, nextReset, pacificDay, usageTrend } from "./usage.js?v=20261029-32";
-import { AI_SCOPES, buildAiPack, scopeRange } from "./ai-export.js?v=20261029-32";
-import { COUNT_ITEMS, buildDemoCounts, countToBase, stockValue, varianceBetween } from "./stock-count.js?v=20261029-32";
-import { addCountItem, addableMaterials, buyDaysLast30, countUnitFor, dismissCountItem, isMilkRaw, firstPurchaseTimes, normalizeCountConfig, removeCountItem, suggestCountItems } from "./count-items.js?v=20261029-32";
-import { normalizeText as normText } from "./expense-rules.js?v=20261029-32";
-import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261029-32";
-import { dataSpanDays, materialAlerts, purchaseEvents, readiness } from "./material-alerts.js?v=20261029-32";
-import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261029-32";
-import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261029-32";
-import { compareKeys, compareRows, weekTotals } from "./day-compare.js?v=20261029-32";
-import { comboCount, formatBaseQty, materialConsumption, outputRows } from "./item-output.js?v=20261029-32";
-import { NTFY_TOPIC, sendTest as ntfySendTest } from "./ntfy.js?v=20261029-32";
-import { analyzeItem, itemChoices, itemSeries } from "./item-analysis.js?v=20261029-32";
-import { itemComboChart } from "./item-chart.js?v=20261029-32";
-import { appDeductionRates, buildLineBills, channelEconomics, costTrend, itemBillStats } from "./item-lines.js?v=20261029-32";
-import { channelView, compareView, costTrendView, coverageNote, hoursView, pairsView } from "./item-view.js?v=20261029-32";
-import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261029-32";
+import { isPendingSync } from "./pending-sync.js?v=20261029-33";
+import { foodMonth, freshness, freshnessText, ledgerBuild, parseCoverage, payoutGroups, periodDays, receivable, summarizeSales, vnDay } from "./food-ledger.js?v=20261029-33";
+import { GRAB_SHEET, parseGrabRows } from "./grab-report.js?v=20261029-33";
+import { appLabel, buildEntry, entryProblem, foodAppTotals, foodInPeriod, normalizeFoodApp, otherDeduction, parseMoneyInput } from "./food-app.js?v=20261029-33";
+import { buildProfile, profileHeadline } from "./customer-profile.js?v=20261029-33";
+import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261029-33";
+import { buildCancelRequest, buildCancelledReceipt, buildEditedReceipt, pendingCancelRequest, resolveCancelRequest, calculateReceiptTotal, createStableDraft, freshenDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261029-33";
+import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261029-33";
+import { FUNNEL, buildStats, dayKeyVN, dayLabel, funnelSteps, pct } from "./stats-view.js?v=20261029-33";
+import { approvedKeys, vagueKey, vagueMaterials } from "./vague-materials.js?v=20261029-33";
+import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions, searchMaterials } from "./material-search.js?v=20261029-33";
+import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261029-33";
+import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261029-33";
+import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261029-33";
+import { buildSimulation } from "./sim-data.js?v=20261029-33";
+import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261029-33";
+import { menuCsv } from "./menu-export.js?v=20261029-33";
+import { KIND_LABELS, MATERIALS, buildDynamicMaterials, catalogRules, registerDynamicMaterials, similarMaterials, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261029-33";
+import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261029-33";
+import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261029-33";
+import { buildFlag, flagAfterEdit, flagAfterReview, flagApprovalProblem, isFlagOpen, needsOwnerReview, receiptFlag, BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261029-33";
+import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261029-33";
+import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261029-33";
+import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261029-33";
+import { otherCostRows } from "./other-costs.js?v=20261029-33";
+import { paybackStatus } from "./payback.js?v=20261029-33";
+import { topSellers } from "./top-banner.js?v=20261029-33";
+import { reconcileDays, reconcileRevenue } from "./revenue-check.js?v=20261029-33";
+import { prepList, profitRanking, tomorrowSales } from "./plan-profit.js?v=20261029-33";
+import { OO_LABELS, OO_MODE_LABELS, OO_REJECT_REASONS, attentionCount, buildTransition, groupOrders, isPending, limitKeys, minutesAgoText, newOrderCodes, nextActions, ooToMillis, overdueOrders, releasedCount, validateShopConfig } from "./online-orders.js?v=20261029-33";
+import { menuEditProblem, menuGroups, mergePlan, nameIssues, nextProductCode, normName, soldCombos, soldNotInMenu } from "./menu-view.js?v=20261029-33";
+import { POS_CEILING, SPARK, dayUsage, lastPacificDays, nextReset, pacificDay, usageTrend } from "./usage.js?v=20261029-33";
+import { AI_SCOPES, buildAiPack, scopeRange } from "./ai-export.js?v=20261029-33";
+import { COUNT_ITEMS, buildDemoCounts, countToBase, stockValue, varianceBetween } from "./stock-count.js?v=20261029-33";
+import { addCountItem, addableMaterials, buyDaysLast30, countUnitFor, dismissCountItem, isMilkRaw, firstPurchaseTimes, normalizeCountConfig, removeCountItem, searchCountMaterials, suggestCountItems } from "./count-items.js?v=20261029-33";
+import { normalizeText as normText } from "./expense-rules.js?v=20261029-33";
+import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261029-33";
+import { dataSpanDays, materialAlerts, purchaseEvents, readiness } from "./material-alerts.js?v=20261029-33";
+import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261029-33";
+import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261029-33";
+import { compareKeys, compareRows, weekTotals } from "./day-compare.js?v=20261029-33";
+import { comboCount, formatBaseQty, materialConsumption, outputRows } from "./item-output.js?v=20261029-33";
+import { NTFY_TOPIC, sendTest as ntfySendTest } from "./ntfy.js?v=20261029-33";
+import { analyzeItem, itemChoices, itemSeries } from "./item-analysis.js?v=20261029-33";
+import { itemComboChart } from "./item-chart.js?v=20261029-33";
+import { appDeductionRates, buildLineBills, channelEconomics, costTrend, itemBillStats } from "./item-lines.js?v=20261029-33";
+import { channelView, compareView, costTrendView, coverageNote, hoursView, pairsView } from "./item-view.js?v=20261029-33";
+import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261029-33";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",
@@ -2929,7 +2929,7 @@ function renderCounts() {
   const manage = Boolean(state.role) && !state.simulation;
   const items = (state.countCfg || normalizeCountConfig(null)).items.filter((e) => materialById.has(e.id));
   const priceMap = currentCosts().costs;
-  const flags = (id) => `${state.firstBuy ? (id in state.firstBuy ? "b" : "n") : "?"}${priceMap[id]?.unitCost > 0 ? "p" : "u"}`;
+  const flags = (id) => `${state.firstBuy ? (id in state.firstBuy ? "b" : "n") : "?"}${priceMap[id]?.unitCost > 0 ? `p${Math.round(priceMap[id].unitCost * 1000)}` : "u"}`;
   const sig = items.map((x) => `${x.id}:${x.unit}:${flags(x.id)}`).join("|") + (manage ? "|m" : "");
   if (form.dataset.sig !== sig) {
     const keep = {}, keepCost = {};
@@ -2939,14 +2939,17 @@ function renderCounts() {
       const name = escapeHtml(materialById.get(id).name);
       const noBuy = state.firstBuy && !(id in state.firstBuy);
       const unpriced = !(priceMap[id]?.unitCost > 0);
-      const extra = (noBuy ? `<p class="count-warn">⚠ ${name} chưa có trong phiếu chi chi tiết (có thể nằm trong hoá đơn tổng nhập ban đầu). Số bạn nhập làm mốc tồn đầu kỳ, hao hụt chỉ đáng tin từ lần đếm sau.</p>` : "")
+      const perUnit = unpriced ? 0 : priceMap[id].unitCost * (unitFactor(materialById.get(id), unit) || 0);
+      const priceLine = !unpriced && perUnit > 0 ? `<p class="count-price">Đơn giá bình quân ${money(Math.round(perUnit))} / ${escapeHtml(unit)} <small>(${escapeHtml(priceMap[id].source)}${priceMap[id].buys ? `, ${priceMap[id].buys} lần mua` : ""})</small> <strong data-value-for="${id}"></strong></p>` : "";
+      const extra = priceLine + (noBuy ? `<p class="count-warn">⚠ ${name} chưa có trong phiếu chi chi tiết (có thể nằm trong hoá đơn tổng nhập ban đầu). Số bạn nhập làm mốc tồn đầu kỳ, hao hụt chỉ đáng tin từ lần đếm sau.</p>` : "")
         + (unpriced ? `<label class="count-cost">Chưa có giá vốn: nhập giá mua ước tính để tính tiền tồn kho (tuỳ chọn)<span><input data-cost-for="${id}" type="number" min="0" step="any" inputmode="decimal" placeholder="giá" /> đ / ${escapeHtml(unit)}</span></label>` : "");
-      return `<div class="count-row${manage ? " manage" : ""}${extra ? " has-extra" : ""}"><label class="count-label" for="count-${id}">${name}</label><input id="count-${id}" data-material="${id}" data-unit="${unit}" type="number" min="0" step="0.01" inputmode="decimal" placeholder="—" /><span class="unit">${escapeHtml(unit)}</span>${manage ? `<button type="button" class="count-del" data-count-remove="${id}" aria-label="Bỏ ${name} khỏi danh sách đếm" title="Bỏ khỏi danh sách đếm">×</button>` : ""}${extra ? `<div class="count-extra">${extra}</div>` : ""}</div>`;
+      return `<div class="count-row${manage ? " manage" : ""}${extra ? " has-extra" : ""}"><label class="count-label" for="count-${id}">${name}</label><input id="count-${id}" data-material="${id}" data-unit="${unit}" data-price="${perUnit || ""}" type="number" min="0" step="0.01" inputmode="decimal" placeholder="—" /><span class="unit">${escapeHtml(unit)}</span>${manage ? `<button type="button" class="count-del" data-count-remove="${id}" aria-label="Bỏ ${name} khỏi danh sách đếm" title="Bỏ khỏi danh sách đếm">×</button>` : ""}${extra ? `<div class="count-extra">${extra}</div>` : ""}</div>`;
     }).join("") || '<p class="muted">Danh sách đếm đang trống. Thêm vật tư ở mục bên dưới.</p>';
     form.querySelectorAll("input[data-material]").forEach((i) => { if (keep[i.dataset.material] !== undefined) i.value = keep[i.dataset.material]; });
     form.querySelectorAll("input[data-cost-for]").forEach((i) => { if (keepCost[i.dataset.costFor] !== undefined) i.value = keepCost[i.dataset.costFor]; });
     form.dataset.sig = sig;
   }
+  updateCountLive();
   renderCountManage();
   const list = state.stockCounts;
   $("#count-note").textContent = state.countsError || (list.length ? `Đã có ${list.length} lần đếm${state.demo ? " (demo)" : ""}. Lần gần nhất: ${dateTime(list[0].countedAt)}.` : `Chưa có lần đếm nào${state.demo ? " (demo)" : ""}. Lần đầu làm mốc tồn đầu kỳ, cần ít nhất 2 lần đếm để tính hao hụt. Vật tư đã mua trong hoá đơn tổng nhập ban đầu (không có trong phiếu chi chi tiết) vẫn nhập tồn được: thêm ở mục dưới.`);
@@ -2980,6 +2983,43 @@ async function loadFirstBuys() {
 }
 const fmtDm = (t) => { const d = new Date(t); return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`; };
 
+/** Thành tiền từng dòng và tổng tiền tồn kho đang nhập, tính ngay khi gõ (đơn giá lấy từ phiếu chi, hoặc giá ước tính nhập tay). */
+function updateCountLive() {
+  let total = 0, counted = 0;
+  document.querySelectorAll("#count-form-items input[data-material]").forEach((input) => {
+    const id = input.dataset.material, qty = Number(input.value);
+    const target = document.querySelector(`[data-value-for="${id}"]`);
+    const manual = Number(document.querySelector(`input[data-cost-for="${id}"]`)?.value);
+    const price = Number(input.dataset.price) > 0 ? Number(input.dataset.price) : manual > 0 ? manual : 0;
+    const has = input.value !== "" && qty >= 0;
+    if (has) counted += 1;
+    const value = has && price > 0 ? Math.round(qty * price) : null;
+    if (value !== null) total += value;
+    if (target) target.textContent = value !== null ? `= ${money(value)}` : "";
+  });
+  const el = $("#count-live-total");
+  if (el) el.textContent = counted ? `Đang nhập ${counted} vật tư · giá trị tồn kho ước tính ${money(total)}` : "";
+}
+$("#count-form").addEventListener("input", (event) => {
+  const t = event.target;
+  if (t.matches?.("input[data-material], input[data-cost-for]")) updateCountLive();
+  else if (t.id === "count-add-search") renderCountSearch();
+});
+/** Ô tìm vật tư theo tên: gợi ý ngay khi gõ, bấm vào kết quả để thêm vào danh sách đếm. */
+function renderCountSearch() {
+  const box = $("#count-add-results"), input = $("#count-add-search");
+  if (!box || !input) return;
+  const cfg = state.countCfg || normalizeCountConfig(null);
+  const found = searchCountMaterials(input.value, addableMaterials(cfg, MATERIALS), 8);
+  const { costs } = currentCosts();
+  if (!input.value.trim()) { box.innerHTML = ""; return; }
+  box.innerHTML = found.length ? found.map((m) => {
+    const known = state.firstBuy && m.id in state.firstBuy;
+    const c = costs[m.id]?.unitCost;
+    const price = c > 0 ? `đơn giá TB ${money(Math.round(c * (unitFactor(m, countUnitFor(m)) || 0)))}/${escapeHtml(countUnitFor(m))}` : "chưa có giá";
+    return `<button type="button" class="count-result" data-count-add="${escapeHtml(m.id)}"><span><strong>${escapeHtml(m.name)}</strong><small>${known ? price : "⚠ chưa có trong phiếu chi (nhập ban đầu)"}</small></span><span class="count-result-add">+ Thêm</span></button>`;
+  }).join("") : '<p class="muted">Không thấy vật tư nào khớp. Thử gõ tên ngắn hơn hoặc không dấu.</p>';
+}
 function renderCountManage() {
   const host = $("#count-manage");
   if (!host) return;
@@ -2998,10 +3038,12 @@ function renderCountManage() {
     : `<p class="muted">${Object.keys(sales).length ? "Không còn vật tư lớn nào cần gợi ý thêm cho thời điểm này." : "Chưa có số liệu bán trong 7 ngày trước thời điểm đếm để gợi ý."}</p>`;
   const skippedNote = skipped.notBoughtYet.length ? `<p class="muted">Chưa gợi ý (chưa nhập mua trước thời điểm đếm): ${escapeHtml(skipped.notBoughtYet.slice(0, 6).join(", "))}${skipped.notBoughtYet.length > 6 ? "…" : ""}.</p>` : "";
   const dailyNote = skipped.daily.length ? `<p class="muted">Không gợi ý (mua gần mỗi ngày, dùng hết trong ngày): ${escapeHtml(skipped.daily.slice(0, 6).join(", "))}.</p>` : "";
-  const addable = addableMaterials(cfg, MATERIALS);
+  const prevQuery = $("#count-add-search")?.value || "", hadFocus = document.activeElement?.id === "count-add-search";
   host.innerHTML = `<div class="count-manage"><p class="count-sub">Gợi ý thêm vào danh sách đếm</p>${sugHtml}${skippedNote}${dailyNote}
-    <div class="count-add"><select id="count-add-select" aria-label="Chọn vật tư để thêm"><option value="">Thêm vật tư khác…</option><optgroup label="Đã có trong phiếu chi">${addable.filter((m) => m.id in state.firstBuy).map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)} (${escapeHtml(countUnitFor(m))})</option>`).join("")}</optgroup><optgroup label="⚠ Chưa có trong phiếu chi (nhập ban đầu)">${addable.filter((m) => !(m.id in state.firstBuy)).map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)} (${escapeHtml(countUnitFor(m))})</option>`).join("")}</optgroup></select><button type="button" class="secondary" id="count-add-btn">Thêm</button></div>
+    <div class="count-search"><input id="count-add-search" type="search" placeholder="Tìm vật tư theo tên để thêm (vd: sữa, cà phê, pate…)" autocomplete="off" /><div id="count-add-results" class="count-results"></div></div>
     <p class="muted">Bấm × cạnh vật tư để bỏ khỏi danh sách đếm (số đếm đã lưu vẫn giữ). ${cfg.custom ? '<button type="button" class="text-button" id="count-reset-btn">Khôi phục danh sách mặc định</button>' : ""}</p></div>`;
+  const searchBox = $("#count-add-search");
+  if (searchBox && prevQuery) { searchBox.value = prevQuery; renderCountSearch(); if (hadFocus) { searchBox.focus(); searchBox.setSelectionRange(prevQuery.length, prevQuery.length); } }
 }
 async function saveCountCfg(next) {
   const prev = state.countCfg;
@@ -3018,14 +3060,14 @@ $("#count-form").addEventListener("click", (event) => {
   if (t.dataset.countRemove) {
     const m = materialById.get(t.dataset.countRemove);
     if (window.confirm(`Bỏ "${m?.name || t.dataset.countRemove}" khỏi danh sách đếm? Số đếm đã lưu trước đó vẫn giữ.`)) saveCountCfg(removeCountItem(cfg, t.dataset.countRemove));
-  } else if (t.dataset.countAdd) { const next = addCountItem(cfg, t.dataset.countAdd); if (next) saveCountCfg(next); }
+  } else if (t.dataset.countAdd) {
+    const mid = t.dataset.countAdd;
+    $("#count-error").textContent = state.firstBuy && !(mid in state.firstBuy) && t.classList.contains("count-result") ? `⚠ ${materialById.get(mid)?.name} chưa có trong phiếu chi chi tiết: số đếm làm mốc tồn đầu kỳ và chưa có giá vốn (nhập giá ước tính ở dòng của nó nếu muốn tính tiền).` : "";
+    const next = addCountItem(cfg, mid);
+    if (next) { const box = $("#count-add-search"); if (box) box.value = ""; saveCountCfg(next); }
+  }
   else if (t.dataset.countSkip) saveCountCfg(dismissCountItem(cfg, t.dataset.countSkip));
-  else if (t.id === "count-add-btn") {
-    const id = $("#count-add-select").value;
-    if (!id) { $("#count-error").textContent = "Chọn vật tư cần thêm."; return; }
-    $("#count-error").textContent = state.firstBuy && !(id in state.firstBuy) ? `⚠ ${materialById.get(id)?.name} chưa có trong phiếu chi chi tiết: số đếm làm mốc tồn đầu kỳ và chưa có giá vốn (có thể nhập giá ước tính ngay ở dòng của nó).` : "";
-    const next = addCountItem(cfg, id); if (next) saveCountCfg(next);
-  } else if (t.id === "count-reset-btn") { if (window.confirm("Khôi phục danh sách đếm mặc định?")) saveCountCfg({ ...normalizeCountConfig(null), custom: false }); }
+ else if (t.id === "count-reset-btn") { if (window.confirm("Khôi phục danh sách đếm mặc định?")) saveCountCfg({ ...normalizeCountConfig(null), custom: false }); }
 });
 $("#count-datetime").addEventListener("change", renderCountManage);
 async function saveCount(event) {

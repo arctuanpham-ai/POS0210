@@ -1,6 +1,6 @@
 // Đối soát quỹ & chia tiền theo tháng. Quỹ quán = toàn bộ tiền của quán (tiền mặt + tài khoản) do thủ quỹ giữ.
 // Hàm thuần: không Firebase, không DOM.
-import { countsAsCost, reviewStatus } from "./reimburse.js?v=20261029-32";
+import { countsAsCost, reviewStatus } from "./reimburse.js?v=20261029-33";
 
 /** Đầu tư ban đầu (trước khai trương, đã góp và chia ngoài): không trừ vào lợi nhuận tháng, không chi từ quỹ. */
 export const INITIAL_CATEGORIES = new Set(["INITIAL_INVESTMENT_SUNK", "CAPITAL_ASSET", "SETUP_COST", "INITIAL_INVESTMENT"]);

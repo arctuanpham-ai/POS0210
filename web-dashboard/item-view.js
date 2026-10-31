@@ -1,5 +1,5 @@
 // Khối giao diện phụ của trang phân tích món: chuỗi HTML thuần, nhận hàm định dạng từ app.js (h). Không đọc Firebase.
-import { lineChart } from "./item-chart.js?v=20261029-35";
+import { lineChart } from "./item-chart.js?v=20261029-36";
 
 const empty = (text) => `<p class="muted empty-state">${text}</p>`;
 const card = (title, body, sub = "") => `<section class="item-card"><h4>${title}</h4>${sub ? `<p class="item-sub">${sub}</p>` : ""}${body}</section>`;

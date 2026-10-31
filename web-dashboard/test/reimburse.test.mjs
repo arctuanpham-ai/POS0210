@@ -229,3 +229,20 @@ test("chủ quán được nhắc phiếu có yêu cầu huỷ", async () => {
   const b = myAlerts({ myId: "o", role: ROLE_OWNER, receipts: [{ ...r, status: "DELETED" }] });
   assert.ok(!b.items.some((x) => x.key === "cancelreq"));
 });
+
+import { duplicateReimbursements, myAlerts as myAlertsDup, ROLE_TREASURER as TRE } from "../reimburse.js";
+test("phiếu hoàn hai lần bị cảnh báo, hoàn một lần thì không", () => {
+  const receipts = [{ id: "r1", code: "PC1", total: 383000 }, { id: "r2", code: "PC2", total: 100000 }];
+  const batches = [
+    { code: "HU1", amount: 383000, status: "PAID", receiptIds: ["r1"], receiptCodes: ["PC1"], paidAt: 1 },
+    { code: "HU1-2", amount: 383000, status: "PAID", receiptIds: ["r1"], receiptCodes: ["PC1"], paidAt: 2 },
+    { code: "HU2", amount: 100000, status: "PAID", receiptIds: ["r2"], receiptCodes: ["PC2"], paidAt: 3 },
+  ];
+  const d = duplicateReimbursements(batches, receipts);
+  assert.equal(d.length, 1);
+  assert.deepEqual(d[0].batches, ["HU1", "HU1-2"]);
+  assert.equal(d[0].extra, 383000);
+  assert.equal(duplicateReimbursements(batches.slice(1), receipts).length, 0);
+  const a = myAlertsDup({ myId: "t", role: TRE, receipts, batches });
+  assert.ok(a.items.some((x) => x.key === "dupreimb"));
+});

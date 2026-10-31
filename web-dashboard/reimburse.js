@@ -175,6 +175,24 @@ const sum = (list, key) => list.reduce((s, x) => s + Number(x[key] || 0), 0);
  * Việc cần làm của người đang dùng web. Mỗi mục: { key, level: "warn" | "info", count, text }.
  * `badge` = số việc phải tự tay xử lý (hiện chấm đỏ ở tab).
  */
+/** Phiếu bị hoàn tiền từ hai đợt trở lên (cùng một phiếu nằm trong nhiều đợt hoàn): quỹ bị trừ nhiều lần. Trả mỗi phiếu: mã, các đợt, số tiền dư. */
+export const duplicateReimbursements = (batches = [], receipts = []) => {
+  const byReceipt = new Map();
+  for (const b of batches) {
+    if (!b || b.status === "CANCELLED" || b.status === "VOID" || !(Number(b.amount) > 0)) continue;
+    const ids = Array.isArray(b.receiptIds) ? b.receiptIds : [];
+    ids.forEach((id, i) => { const list = byReceipt.get(id) || []; list.push({ code: b.code, amount: Number(b.amount), at: Number(b.paidAt || b.createdAt || 0), single: ids.length === 1, receiptCode: (b.receiptCodes || [])[i] }); byReceipt.set(id, list); });
+  }
+  const out = [];
+  for (const [id, list] of byReceipt) {
+    if (list.length < 2) continue;
+    const r = receipts.find((x) => x.id === id);
+    const total = Number(r?.total) || (list.find((x) => x.single)?.amount ?? 0);
+    out.push({ receiptId: id, receiptCode: r ? receiptCode(r) : list[0].receiptCode || id, batches: list.sort((a, b) => a.at - b.at).map((x) => x.code), extra: total * (list.length - 1) });
+  }
+  return out;
+};
+
 export const myAlerts = ({ myId, role, me = null, receipts = [], batches = [], members = [], payees = [], now = Date.now() }) => {
   const out = [];
   const vnd = (n) => `${Number(n || 0).toLocaleString("vi-VN")}đ`;
@@ -213,6 +231,8 @@ export const myAlerts = ({ myId, role, me = null, receipts = [], batches = [], m
   if (unknown.length) out.push({ key: "unknown", level: "warn", count: unknown.length, text: `${unknown.length} phiếu chưa rõ nguồn tiền (tiền cá nhân hay tiền quán).` });
   const noBank = [...new Set(approved.filter((r) => !bankOf(r, members, payees)).map((r) => r.enteredByName || "Chưa rõ"))];
   if (noBank.length) out.push({ key: "nobank", level: "info", count: 0, text: `Chưa có tài khoản ngân hàng của: ${noBank.join(", ")} (chưa tạo được QR).` });
+  const dups = duplicateReimbursements(batches, receipts);
+  if (dups.length) out.push({ key: "dupreimb", level: "warn", count: dups.length, text: `${dups.map((d) => `${d.receiptCode} hoàn ${d.batches.length} lần (${d.batches.join(", ")})`).join("; ")}: quỹ bị trừ dư ${vnd(dups.reduce((t, d) => t + d.extra, 0))}. Kiểm tra và xoá đợt hoàn thừa.` });
   const issues = batches.filter((b) => b.status === "PAID" && b.issue && !isMine(b, myId));
   if (issues.length) out.push({ key: "issue", level: "warn", count: issues.length, text: `${issues.map((b) => `${b.payer} (${b.code})`).join(", ")} báo CHƯA NHẬN ĐƯỢC tiền hoàn: kiểm tra lại giao dịch.` });
   const late = batches.filter((b) => needsReminder(b, now) && !isMine(b, myId) && !b.issue);

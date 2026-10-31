@@ -1,7 +1,7 @@
 // Danh sách vật tư cần kiểm đếm hằng tuần: cấu hình (thêm/bớt) và gợi ý theo menu hiện tại. Hàm thuần, không Firebase, không DOM.
-import { materialById, matchMaterial, unitFactor } from "./cost-recipe.js?v=20261029-36";
-import { COUNT_ITEMS } from "./stock-count.js?v=20261029-36";
-import { isSummaryReceipt, normalizeText } from "./expense-rules.js?v=20261029-36";
+import { materialById, matchMaterial, unitFactor } from "./cost-recipe.js?v=20261029-37";
+import { COUNT_ITEMS } from "./stock-count.js?v=20261029-37";
+import { isSummaryReceipt, normalizeText } from "./expense-rules.js?v=20261029-37";
 
 /** Nhóm tươi sống, mua dùng trong ngày: không đáng đếm tồn hằng tuần (khoai tây đông lạnh là ngoại lệ, để được lâu). */
 const FRESH_GROUPS = new Set(["RAU"]);

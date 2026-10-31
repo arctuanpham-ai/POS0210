@@ -1,7 +1,7 @@
 // Danh sách vật tư cần kiểm đếm hằng tuần: cấu hình (thêm/bớt) và gợi ý theo menu hiện tại. Hàm thuần, không Firebase, không DOM.
-import { materialById, matchMaterial, unitFactor } from "./cost-recipe.js?v=20261029-30";
-import { COUNT_ITEMS } from "./stock-count.js?v=20261029-30";
-import { isSummaryReceipt, normalizeText } from "./expense-rules.js?v=20261029-30";
+import { materialById, matchMaterial, unitFactor } from "./cost-recipe.js?v=20261029-31";
+import { COUNT_ITEMS } from "./stock-count.js?v=20261029-31";
+import { isSummaryReceipt, normalizeText } from "./expense-rules.js?v=20261029-31";
 
 /** Nhóm tươi sống, mua dùng trong ngày: không đáng đếm tồn hằng tuần (khoai tây đông lạnh là ngoại lệ, để được lâu). */
 const FRESH_GROUPS = new Set(["RAU"]);
@@ -26,7 +26,7 @@ const validEntry = (e) => e && typeof e.id === "string" && typeof e.unit === "st
 
 /** Cấu hình từ Firestore (hoặc undefined) → { items:[{id,unit}], dismissed:[id] }. Chưa có cấu hình thì dùng danh sách mặc định. */
 export const normalizeCountConfig = (data) => {
-  if (!data || !Array.isArray(data.items)) return { items: COUNT_ITEMS.map((x) => ({ ...x })), dismissed: [], custom: false };
+  if (!data || !Array.isArray(data.items)) return { items: COUNT_ITEMS.map((x) => ({ id: x.id, unit: fixUnit(x.id, x.unit) })), dismissed: [], custom: false };
   const seen = new Set();
   const items = data.items.filter(validEntry).filter((e) => (seen.has(e.id) ? false : (seen.add(e.id), true))).map((e) => ({ id: e.id, unit: fixUnit(e.id, e.unit) }));
   return { items, dismissed: Array.isArray(data.dismissed) ? [...new Set(data.dismissed.filter((x) => typeof x === "string"))] : [], custom: true };

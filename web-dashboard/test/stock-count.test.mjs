@@ -56,3 +56,14 @@ test("đồ sữa mặc định đếm bằng g / ml", () => {
   const by = Object.fromEntries(COUNT_ITEMS.map((x) => [x.id, x.unit]));
   assert.deepEqual([by.sua_dac, by.kem_beo, by.sua_tuoi], ["g", "ml", "ml"]);
 });
+
+test("giá ước tính nhập tay dùng khi chưa có giá phiếu chi, giá phiếu chi vẫn ưu tiên", () => {
+  const r = stockValue({ items: { pate: 500, thit_bo: 1000 }, manualCosts: { pate: 200, thit_bo: 1 } }, { thit_bo: { unitCost: 260 } });
+  const by = Object.fromEntries(r.rows.map((x) => [x.materialId, x]));
+  assert.equal(by.pate.value, 100000);
+  assert.equal(by.pate.estimated, true);
+  assert.equal(by.thit_bo.value, 260000);
+  assert.equal(by.thit_bo.estimated, false);
+  assert.equal(r.estimated, 1);
+  assert.deepEqual(r.unpriced, []);
+});

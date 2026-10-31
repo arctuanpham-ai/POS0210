@@ -662,3 +662,9 @@ body:has(#login-view:not([hidden])), body:has(#pin-view:not([hidden])) { backgro
 .count-value-head small.down { color: #2e7d32; }
 .count-value-head small { display: block; }
 .count-value-history summary { cursor: pointer; font-weight: 700; color: #6b4f3a; }
+
+.count-row.has-extra .count-extra { grid-column: 1 / -1; display: grid; gap: 6px; }
+.count-warn { margin: 0; padding: 8px 10px; border-radius: 10px; background: #fbf1dd; color: #7a4b12; font-size: 13px; font-weight: 600; }
+.count-cost { display: grid; gap: 4px; font-size: 12px; color: #6b6f63; font-weight: 600; }
+.count-cost span { display: flex; align-items: center; gap: 6px; }
+.count-cost input { width: 9em; padding: 8px 10px; }

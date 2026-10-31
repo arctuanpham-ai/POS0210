@@ -1,20 +1,26 @@
 // Danh sách vật tư cần kiểm đếm hằng tuần: cấu hình (thêm/bớt) và gợi ý theo menu hiện tại. Hàm thuần, không Firebase, không DOM.
-import { materialById, matchMaterial, unitFactor } from "./cost-recipe.js?v=20261029-29";
-import { COUNT_ITEMS } from "./stock-count.js?v=20261029-29";
-import { isSummaryReceipt, normalizeText } from "./expense-rules.js?v=20261029-29";
+import { materialById, matchMaterial, unitFactor } from "./cost-recipe.js?v=20261029-30";
+import { COUNT_ITEMS } from "./stock-count.js?v=20261029-30";
+import { isSummaryReceipt, normalizeText } from "./expense-rules.js?v=20261029-30";
 
 /** Nhóm tươi sống, mua dùng trong ngày: không đáng đếm tồn hằng tuần (khoai tây đông lạnh là ngoại lệ, để được lâu). */
 const FRESH_GROUPS = new Set(["RAU"]);
 const KEEPS_LONG = new Set(["khoai_tay"]);
 
-/** Đơn vị đếm thuận tay cho một vật tư: kg / lít cho vật tư cân đong, hộp cho sữa, còn lại theo đơn vị định lượng. */
+/** Đồ liên quan đến sữa (nhóm SUA, tính theo g hoặc ml) luôn đếm bằng g / ml, không đếm theo hộp. */
+export const isMilkRaw = (material) => Boolean(material && material.group === "SUA" && (material.base === "g" || material.base === "ml"));
+
+/** Đơn vị đếm thuận tay cho một vật tư: kg / lít cho vật tư cân đong, riêng đồ sữa đếm thẳng g / ml. */
 export const countUnitFor = (material) => {
   if (!material) return "";
-  const units = (material.units || []).map((u) => u.unit);
-  if (material.base === "g") return units.includes("hộp") ? "hộp" : "kg";
-  if (material.base === "ml") return units.includes("hộp") ? "hộp" : "lít";
+  if (isMilkRaw(material)) return material.base;
+  if (material.base === "g") return "kg";
+  if (material.base === "ml") return "lít";
   return material.base;
 };
+
+/** Đơn vị đếm hợp lệ: đồ sữa bị ép về g / ml dù cấu hình cũ ghi hộp. */
+const fixUnit = (id, unit) => (isMilkRaw(materialById.get(id)) ? materialById.get(id).base : unit);
 
 const validEntry = (e) => e && typeof e.id === "string" && typeof e.unit === "string" && e.id && e.unit;
 
@@ -22,14 +28,14 @@ const validEntry = (e) => e && typeof e.id === "string" && typeof e.unit === "st
 export const normalizeCountConfig = (data) => {
   if (!data || !Array.isArray(data.items)) return { items: COUNT_ITEMS.map((x) => ({ ...x })), dismissed: [], custom: false };
   const seen = new Set();
-  const items = data.items.filter(validEntry).filter((e) => (seen.has(e.id) ? false : (seen.add(e.id), true))).map((e) => ({ id: e.id, unit: e.unit }));
+  const items = data.items.filter(validEntry).filter((e) => (seen.has(e.id) ? false : (seen.add(e.id), true))).map((e) => ({ id: e.id, unit: fixUnit(e.id, e.unit) }));
   return { items, dismissed: Array.isArray(data.dismissed) ? [...new Set(data.dismissed.filter((x) => typeof x === "string"))] : [], custom: true };
 };
 
 /** Thêm một vật tư vào danh sách (bỏ khỏi danh sách đã bỏ qua). Trả cấu hình mới, hoặc null nếu không đếm được (thiếu vật tư / đơn vị không quy đổi). */
 export const addCountItem = (cfg, id, unit) => {
   const m = materialById.get(id);
-  const u = unit || countUnitFor(m);
+  const u = fixUnit(id, unit || countUnitFor(m));
   if (!m || !u || unitFactor(m, u) === null) return null;
   if (cfg.items.some((x) => x.id === id)) return { ...cfg, dismissed: cfg.dismissed.filter((x) => x !== id) };
   return { ...cfg, items: [...cfg.items, { id, unit: u }], dismissed: cfg.dismissed.filter((x) => x !== id), custom: true };

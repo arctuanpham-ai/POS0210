@@ -44,3 +44,15 @@ test("lần đếm demo khớp phiếu demo: hao hụt thịt bò hiện ra, s�
   assert.ok(by.thit_bo.diffPct > 0.08 && by.thit_bo.diffPct < 0.25, String(by.thit_bo.diffPct));
   assert.ok(Math.abs(by.sua_dac.diffPct) < 0.1, String(by.sua_dac.diffPct));
 });
+
+import { stockValue } from "../stock-count.js";
+test("giá trị tồn kho = lượng × giá vốn, vật tư chưa có giá được báo riêng", () => {
+  const r = stockValue({ items: { thit_bo: 2000, sua_dac: 1900, pate: 500, cf_phin: 0 } }, { thit_bo: { unitCost: 260 }, sua_dac: { unitCost: 74 } });
+  assert.equal(r.total, 2000 * 260 + 1900 * 74);
+  assert.deepEqual(r.unpriced, ["Pate"]);
+  assert.equal(r.rows[0].materialId, "thit_bo");
+});
+test("đồ sữa mặc định đếm bằng g / ml", () => {
+  const by = Object.fromEntries(COUNT_ITEMS.map((x) => [x.id, x.unit]));
+  assert.deepEqual([by.sua_dac, by.kem_beo, by.sua_tuoi], ["g", "ml", "ml"]);
+});

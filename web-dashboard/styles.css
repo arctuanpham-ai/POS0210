@@ -653,3 +653,12 @@ body:has(#login-view:not([hidden])), body:has(#pin-view:not([hidden])) { backgro
 .count-suggest-actions { display: flex; gap: 6px; }
 .count-add { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .count-add select { flex: 1 1 12em; width: auto; min-width: 0; }
+
+.count-value { gap: 8px; }
+.count-value-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px; }
+.count-value-head .eyebrow { margin: 0; }
+.count-value-total { display: block; font-size: 26px; color: #1e1e1e; }
+.count-value-head small.up { color: #b3261e; }
+.count-value-head small.down { color: #2e7d32; }
+.count-value-head small { display: block; }
+.count-value-history summary { cursor: pointer; font-weight: 700; color: #6b4f3a; }

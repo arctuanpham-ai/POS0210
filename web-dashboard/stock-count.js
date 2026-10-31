@@ -1,12 +1,12 @@
 // Kiểm đếm tồn kho hằng tuần cho vật tư đắt / để lâu, và hao hụt giữa hai lần đếm.
 // Thực dùng = tồn lần trước + nhập trong kỳ − tồn lần này. Hao hụt = thực dùng − định mức (món bán × công thức).
-import { materialById, matchMaterial, unitFactor } from "./cost-recipe.js?v=20261029-29";
-import { isSummaryReceipt } from "./expense-rules.js?v=20261029-29";
+import { materialById, matchMaterial, unitFactor } from "./cost-recipe.js?v=20261029-30";
+import { isSummaryReceipt } from "./expense-rules.js?v=20261029-30";
 
 /** Vật tư cần đếm và đơn vị đếm thuận tay (quy đổi về đơn vị định lượng khi lưu). */
 export const COUNT_ITEMS = [
-  ["cf_phin", "kg"], ["cf_espresso", "kg"], ["cf_coldbrew", "kg"], ["sua_dac", "hộp"], ["kem_beo", "hộp"],
-  ["sua_tuoi", "hộp"], ["bo_lat", "kg"], ["pate", "kg"], ["dau_an", "lít"], ["thit_bo", "kg"],
+  ["cf_phin", "kg"], ["cf_espresso", "kg"], ["cf_coldbrew", "kg"], ["sua_dac", "g"], ["kem_beo", "ml"],
+  ["sua_tuoi", "ml"], ["bo_lat", "kg"], ["pate", "kg"], ["dau_an", "lít"], ["thit_bo", "kg"],
 ].map(([id, unit]) => ({ id, unit }));
 
 /** Đổi số đếm (theo đơn vị đếm) ra đơn vị định lượng. null nếu không đổi được. */
@@ -77,4 +77,24 @@ export const buildDemoCounts = ({ receipts, usagePerDay, waste = {}, now = Date.
     }
   }
   return counts;
+};
+
+/**
+ * Giá trị tiền của một lần đếm: lượng tồn × giá vốn mỗi đơn vị định lượng (bình quân từ phiếu chi).
+ * count: { items: { materialId: lượng đơn vị định lượng } }. costs: materialCosts().costs.
+ * Vật tư chưa có giá thì không cộng vào tổng và được liệt kê riêng để người dùng biết con số còn thiếu.
+ */
+export const stockValue = (count, costs = {}) => {
+  const rows = [];
+  const unpriced = [];
+  for (const [id, qty] of Object.entries(count?.items || {})) {
+    const m = materialById.get(id);
+    const q = Number(qty);
+    if (!m || !(q >= 0)) continue;
+    const unitCost = costs[id]?.unitCost;
+    if (!(unitCost > 0)) { if (q > 0) unpriced.push(m.name); continue; }
+    rows.push({ materialId: id, name: m.name, base: m.base, qty: q, unitCost, value: Math.round(q * unitCost) });
+  }
+  rows.sort((a, b) => b.value - a.value || a.name.localeCompare(b.name, "vi"));
+  return { rows, total: rows.reduce((t, r) => t + r.value, 0), unpriced };
 };

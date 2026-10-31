@@ -14,7 +14,7 @@ test("chưa có cấu hình thì dùng danh sách mặc định", () => {
 
 test("đơn vị đếm mặc định luôn quy đổi được", () => {
   for (const m of MATERIALS.filter((x) => x.kind === "NL" && !x.stub)) assert.notEqual(countToBase(m.id, countUnitFor(m), 1), null, m.id);
-  assert.equal(countUnitFor(materialById.get("sua_dac")), "hộp");
+  assert.equal(countUnitFor(materialById.get("sua_dac")), "g");
   assert.equal(countUnitFor(materialById.get("cf_phin")), "kg");
 });
 
@@ -74,4 +74,16 @@ test("đồ mua gần mỗi ngày không được gợi ý", () => {
   const r = suggestCountItems({ usagePerDay: { banh_mi: 8, thit_bo: 2000 }, costs: { banh_mi: { unitCost: 3000 }, thit_bo: { unitCost: 260 } }, firstBuy: { banh_mi: 1, thit_bo: 1 }, buyDays: { banh_mi: 25, thit_bo: 6 }, countAt: 5, cfg });
   assert.deepEqual(r.suggestions.map((s) => s.id), ["thit_bo"]);
   assert.deepEqual(r.skipped.daily, ["Bánh mì"]);
+});
+
+import { isMilkRaw } from "../count-items.js";
+test("đồ sữa đếm bằng g / ml kể cả cấu hình cũ ghi hộp", () => {
+  assert.equal(countUnitFor(materialById.get("sua_dac")), "g");
+  assert.equal(countUnitFor(materialById.get("sua_tuoi")), "ml");
+  assert.equal(countUnitFor(materialById.get("kem_beo")), "ml");
+  assert.equal(countUnitFor(materialById.get("cf_phin")), "kg");
+  assert.equal(isMilkRaw(materialById.get("trung")), false);
+  const cfg = normalizeCountConfig({ items: [{ id: "sua_dac", unit: "hộp" }, { id: "cf_phin", unit: "kg" }], dismissed: [] });
+  assert.deepEqual(cfg.items, [{ id: "sua_dac", unit: "g" }, { id: "cf_phin", unit: "kg" }]);
+  assert.equal(addCountItem({ items: [], dismissed: [] }, "sua_tuoi", "hộp").items[0].unit, "ml");
 });

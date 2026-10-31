@@ -1,7 +1,7 @@
 // Kiểm đếm tồn kho hằng tuần cho vật tư đắt / để lâu, và hao hụt giữa hai lần đếm.
 // Thực dùng = tồn lần trước + nhập trong kỳ − tồn lần này. Hao hụt = thực dùng − định mức (món bán × công thức).
-import { materialById, matchMaterial, unitFactor } from "./cost-recipe.js?v=20261029-33";
-import { isSummaryReceipt } from "./expense-rules.js?v=20261029-33";
+import { materialById, matchMaterial, unitFactor } from "./cost-recipe.js?v=20261029-34";
+import { isSummaryReceipt } from "./expense-rules.js?v=20261029-34";
 
 /** Vật tư cần đếm và đơn vị đếm thuận tay (quy đổi về đơn vị định lượng khi lưu). */
 export const COUNT_ITEMS = [
@@ -99,4 +99,35 @@ export const stockValue = (count, costs = {}) => {
   }
   rows.sort((a, b) => b.value - a.value || a.name.localeCompare(b.name, "vi"));
   return { rows, total: rows.reduce((t, r) => t + r.value, 0), unpriced, estimated: rows.filter((r) => r.estimated).length };
+};
+
+/** Bản ghi giá trị lưu cùng lần đếm: giữ đơn giá tại thời điểm đếm để phân tích về sau không bị đổi theo giá hiện tại. */
+export const makeValuation = (count, costs = {}) => {
+  const v = stockValue(count, costs);
+  return { total: v.total, unpriced: v.unpriced, estimated: v.estimated, rows: v.rows.map((r) => ({ materialId: r.materialId, qty: r.qty, unitCost: r.unitCost, value: r.value, estimated: r.estimated })) };
+};
+
+/** Giá trị của một lần đếm: dùng bản đã lưu lúc đếm nếu có, không thì tính theo giá hiện tại. Cùng dạng với stockValue. */
+export const countValuation = (count, costs = {}) => {
+  const saved = count?.valuation;
+  if (!saved || !Array.isArray(saved.rows)) return stockValue(count, costs);
+  const rows = saved.rows.map((r) => { const m = materialById.get(r.materialId); return m ? { materialId: r.materialId, name: m.name, base: m.base, qty: Number(r.qty), unitCost: Number(r.unitCost), value: Number(r.value), estimated: Boolean(r.estimated) } : null; }).filter(Boolean)
+    .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name, "vi"));
+  return { rows, total: Number(saved.total) || rows.reduce((t, r) => t + r.value, 0), unpriced: Array.isArray(saved.unpriced) ? saved.unpriced : [], estimated: Number(saved.estimated) || 0 };
+};
+
+/** So sánh hai lần đếm (a: kỳ trước, b: kỳ sau) theo từng vật tư: lượng và giá trị, kèm tổng. */
+export const compareStock = (a, b, costs = {}) => {
+  const va = countValuation(a, costs), vb = countValuation(b, costs);
+  const ma = new Map(va.rows.map((r) => [r.materialId, r])), mb = new Map(vb.rows.map((r) => [r.materialId, r]));
+  const ids = [...new Set([...Object.keys(a?.items || {}), ...Object.keys(b?.items || {})])].filter((id) => materialById.has(id));
+  const pct = (from, to) => (from > 0 ? (to - from) / from : null);
+  const rows = ids.map((id) => {
+    const m = materialById.get(id), qa = a?.items?.[id], qb = b?.items?.[id];
+    const qtyA = qa === undefined ? null : Number(qa), qtyB = qb === undefined ? null : Number(qb);
+    const valA = ma.get(id)?.value ?? null, valB = mb.get(id)?.value ?? null;
+    const dVal = (valA ?? 0) !== 0 || (valB ?? 0) !== 0 ? (valB ?? 0) - (valA ?? 0) : 0;
+    return { materialId: id, name: m.name, base: m.base, qtyA, qtyB, dQty: (qtyB ?? 0) - (qtyA ?? 0), valA, valB, dVal, dPct: pct(valA ?? 0, valB ?? 0) };
+  }).sort((x, y) => Math.abs(y.dVal) - Math.abs(x.dVal) || x.name.localeCompare(y.name, "vi"));
+  return { rows, totalA: va.total, totalB: vb.total, dTotal: vb.total - va.total, dPct: pct(va.total, vb.total) };
 };

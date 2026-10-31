@@ -12,7 +12,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500&family=Montserrat:wght@400..800&display=swap" />
-    <link rel="stylesheet" href="styles.css?v=20261029-33" />
+    <link rel="stylesheet" href="styles.css?v=20261029-34" />
     <title>0210 · Manager</title>
   </head>
   <body>
@@ -61,6 +61,7 @@
           <a href="#bill" data-tab="bill">Lịch sử bill</a>
           <a href="#taichinh" data-tab="taichinh">Tài chính</a>
           <a href="#giavon" data-tab="giavon">Giá vốn</a>
+          <a href="#tonkho" data-tab="tonkho">Tồn kho</a>
           <a href="#hoanung" data-tab="hoanung">Phiếu chi<span id="hoanung-badge" class="tab-badge" hidden></span></a>
           <a href="#taikhoan" data-tab="taikhoan">Tài khoản<span id="taikhoan-badge" class="tab-badge" hidden></span></a>
         </nav>
@@ -221,24 +222,27 @@
         <p id="usage-note" class="muted"></p>
         <section id="usage-check"></section>
         <section class="section-heading compact">
-          <div><p class="eyebrow">KIỂM ĐẾM TUẦN</p><h2>Tồn kho vật tư đắt và hao hụt</h2></div>
-        </section>
-        <p class="muted">Mỗi tuần đếm số còn lại của các vật tư dưới đây (ô nào không đếm thì để trống). Hao hụt = tồn lần trước + nhập trong kỳ − tồn lần này − định mức theo món bán.</p>
-        <form id="count-form" class="entry-form count-form">
-          <label>Thời điểm đếm<input id="count-datetime" type="datetime-local" required /></label>
-          <div id="count-form-items" class="count-items"></div>
-          <div id="count-manage"></div>
-          <p id="count-live-total" class="count-live-total" role="status"></p>
-          <p id="count-error" class="error" role="alert"></p>
-          <button type="submit" class="primary">LƯU LẦN ĐẾM</button>
-        </form>
-        <p id="count-note" class="muted" role="status"></p>
-        <section id="count-value"></section>
-        <section id="count-variance"></section>
-        <section class="section-heading compact">
           <div><p class="eyebrow">GIÁ VẬT TƯ</p><h2>Từ phiếu chi đã nhập</h2></div>
         </section>
         <section id="material-costs" class="material-costs"></section>
+        </div>
+        <div class="page" data-page="tonkho" hidden>
+        <section class="section-heading compact">
+          <div><p class="eyebrow">TỒN KHO ĐẦU KÌ</p><h2>Đếm tồn và so sánh các kỳ</h2></div>
+        </section>
+        <ol class="count-steps" aria-label="Các bước"><li id="count-step-1" class="on"><b>1</b> Nhập tồn kho</li><li id="count-step-2"><b>2</b> Tổng &amp; lưu</li></ol>
+        <form id="count-form" class="entry-form count-form">
+          <label>Thời điểm đếm<input id="count-datetime" type="datetime-local" required /></label>
+          <div id="count-form-items" class="count-items"></div>
+          <details class="count-manage-box"><summary>Thêm / bớt vật tư cần đếm</summary><div id="count-manage"></div></details>
+          <p id="count-live-total" class="count-live-total" role="status"></p>
+          <p id="count-error" class="error" role="alert"></p>
+          <button type="submit" class="primary" id="count-next">TIẾP: XEM TỔNG →</button>
+        </form>
+        <section id="count-review" class="panel count-review" hidden></section>
+        <p id="count-note" class="muted" role="status"></p>
+        <section id="count-value"></section>
+        <details class="count-variance-box"><summary>Hao hụt giữa hai lần đếm gần nhất</summary><section id="count-variance"></section></details>
         </div>
 
         <div class="page" data-page="hoanung" hidden>
@@ -767,7 +771,7 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261029-33"></script>
+    <script type="module" src="app.js?v=20261029-34"></script>
     <script>
       // Trang không chạy được (thường do trình duyệt còn giữ file cũ): báo rõ thay vì để nút đăng nhập "chết".
       setTimeout(function () {

@@ -679,3 +679,22 @@ body:has(#login-view:not([hidden])), body:has(#pin-view:not([hidden])) { backgro
 .count-result:hover { background: #f0e6d6; }
 .count-result small { display: block; color: #6b6f63; font-size: 12px; font-weight: 500; }
 .count-result-add { color: #6b4f3a; font-weight: 800; white-space: nowrap; }
+
+/* Tab Tồn kho đầu kì: 2 bước, gọn trên điện thoại */
+.count-steps { display: flex; gap: 8px; list-style: none; margin: 0 0 10px; padding: 0; font-size: 13px; }
+.count-steps li { flex: 1; padding: 8px 10px; border: 1px solid var(--line, #e4dccb); border-radius: 10px; color: #6b6f63; background: transparent; min-width: 0; }
+.count-steps li.on { background: #6b4f3a; color: #fff; border-color: #6b4f3a; }
+.count-steps b { display: inline-block; width: 20px; height: 20px; line-height: 20px; text-align: center; border-radius: 50%; background: rgba(255,255,255,.25); margin-right: 4px; }
+.count-manage-box, .count-variance-box { margin: 10px 0; }
+.count-manage-box > summary, .count-variance-box > summary, .count-value-history > summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
+.count-review { overflow-wrap: anywhere; }
+.count-review td small { display: block; color: #6b6f63; font-size: 11px; }
+.count-review-actions { display: flex; gap: 8px; margin-top: 10px; }
+.count-review-actions button { flex: 1; min-width: 0; }
+.count-cmp { margin-top: 12px; }
+.count-cmp-pick { display: flex; gap: 8px; }
+.count-cmp-pick label { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 12px; gap: 2px; }
+.count-cmp-pick select { width: 100%; min-width: 0; }
+.count-cmp-total { margin: 8px 0; overflow-wrap: anywhere; }
+.count-cmp td, .count-cmp th { font-size: 12px; }
+.count-value .item-chart-wrap { margin: 8px 0; max-width: 100%; }

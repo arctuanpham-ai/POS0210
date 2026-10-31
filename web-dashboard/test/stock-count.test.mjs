@@ -67,3 +67,19 @@ test("giá ước tính nhập tay dùng khi chưa có giá phiếu chi, giá ph
   assert.equal(r.estimated, 1);
   assert.deepEqual(r.unpriced, []);
 });
+
+import { makeValuation, countValuation, compareStock } from "../stock-count.js";
+test("valuation lưu giá tại thời điểm đếm và so sánh hai kỳ", async () => {
+  const costsOld = { cf_phin: { unitCost: 0.2 } }, costsNew = { cf_phin: { unitCost: 0.4 }, sua_dac: { unitCost: 0.05 } };
+  const a = { countedAt: 1, items: { cf_phin: 1000 } };
+  a.valuation = makeValuation(a, costsOld);
+  const b = { countedAt: 2, items: { cf_phin: 3000, sua_dac: 2000 } };
+  assert.equal(countValuation(a, costsNew).total, 200); // giữ giá cũ
+  assert.equal(countValuation(b, costsNew).total, 1300);
+  const c = compareStock(a, b, costsNew);
+  assert.equal(c.totalA, 200); assert.equal(c.totalB, 1300); assert.equal(c.dTotal, 1100);
+  const phin = c.rows.find((r) => r.materialId === "cf_phin");
+  assert.equal(phin.dQty, 2000); assert.equal(phin.dVal, 1000);
+  const sua = c.rows.find((r) => r.materialId === "sua_dac");
+  assert.equal(sua.qtyA, null); assert.equal(sua.valB, 100);
+});

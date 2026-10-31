@@ -639,3 +639,17 @@ body:has(#login-view:not([hidden])), body:has(#pin-view:not([hidden])) { backgro
 .page[data-page="appfood"] .sales-chart { max-width: 100%; box-sizing: border-box; overflow-x: auto; }
 .page[data-page="appfood"] .row-line > span { min-width: 0; overflow-wrap: anywhere; }
 .page[data-page="appfood"] .metric strong, .page[data-page="appfood"] .metric small { overflow-wrap: anywhere; }
+
+/* Kiểm đếm: danh sách đếm chỉnh được, gợi ý vật tư. */
+.count-row.manage { grid-template-columns: minmax(0, 1fr) 6.5em 2.6em 2.2em; }
+.count-row .count-label { min-width: 0; overflow-wrap: anywhere; }
+.count-del { width: 2.2em; height: 2.2em; padding: 0; border: 1px solid #d7c3a7; border-radius: 50%; background: #faf8f3; color: #6b4f3a; font-size: 18px; line-height: 1; }
+.count-del:hover { background: #f0e6d6; }
+.count-manage { display: grid; gap: 8px; margin-top: 6px; padding: 12px; border: 1px dashed #d7c3a7; border-radius: 12px; background: #faf8f3; }
+.count-sub { margin: 0; font-weight: 800; color: #1e1e1e; }
+.count-suggest { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 0; border-bottom: 1px solid #e6dccb; }
+.count-suggest > div:first-child { flex: 1 1 14em; min-width: 0; }
+.count-suggest small { display: block; color: #6b6f63; font-size: 12px; font-weight: 500; }
+.count-suggest-actions { display: flex; gap: 6px; }
+.count-add { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.count-add select { flex: 1 1 12em; width: auto; min-width: 0; }

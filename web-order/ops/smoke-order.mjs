@@ -95,6 +95,17 @@ for (const [i, c] of cases.entries()) {
   if (r.ok !== want) failed++;
   for (const p of [`online_orders/${code}`, `online_limits/${keyU}`, `online_limits/${keyP}`]) await fetch(`https://firestore.googleapis.com/v1/${root}/${p}`, { method: "DELETE", headers: { authorization: `Bearer ${admin}` } });
 }
+// Bản chụp menu cho khách: khách ẩn danh đọc được, nhưng không ghi được.
+{
+  const r = await fetch(`https://firestore.googleapis.com/v1/${root}/online_menu/data`, { headers: { authorization: `Bearer ${signIn.idToken}` } });
+  const j = r.ok ? await r.json() : null;
+  const n = j?.fields?.items?.arrayValue?.values?.length ?? 0;
+  console.log(`[bản chụp menu] khách đọc được -> HTTP ${r.status} ${r.ok ? `ĐÚNG (${n} món)` : "SAI (cần dựng bản chụp / sửa rules)"}`);
+  if (!r.ok) failed++;
+  const w = await fetch(`https://firestore.googleapis.com/v1/${root}/online_menu/data?updateMask.fieldPaths=hash`, { method: "PATCH", headers: { authorization: `Bearer ${signIn.idToken}`, "content-type": "application/json" }, body: JSON.stringify({ fields: { hash: { stringValue: "hack" } } }) });
+  console.log(`[bản chụp menu] khách ghi bị chặn -> HTTP ${w.status} ${w.status === 403 ? "ĐÚNG" : "SAI"}`);
+  if (w.status !== 403) failed++;
+}
 // Bộ đếm lượt truy cập: khách ẩn danh tăng đúng 1 (tạo rồi cập nhật) được; tăng 2 hoặc bộ đếm lạ thì bị chặn. Dọn tài liệu thử bằng quyền chủ quán.
 {
   const statDoc = `${root}/online_stats/20000101`;

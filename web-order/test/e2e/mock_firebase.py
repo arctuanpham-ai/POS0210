@@ -24,7 +24,7 @@ export const initializeFirestore = () => ({});
 export const getFirestore = () => ({});
 export const collection = (db, ...segs) => ({ type: 'col', path: segs.join('/') });
 export const doc = (db, ...segs) => ({ type: 'doc', path: segs.join('/'), id: segs[segs.length - 1] });
-export const getDoc = async (ref) => snapDoc(ref.path);
+export const getDoc = async (ref) => { window.__reads = (window.__reads || 0) + 1; return snapDoc(ref.path); };
 export const getDocs = async (q) => {
   const out = [];
   for (const p of Object.keys(S.docs)) {
@@ -34,6 +34,7 @@ export const getDocs = async (q) => {
       out.push(snapDoc(p));
     }
   }
+  window.__reads = (window.__reads || 0) + out.length;
   return { docs: out, empty: out.length === 0 };
 };
 export const where = (f, op, v) => ({ kind: 'where', f, op, v });

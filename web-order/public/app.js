@@ -25,6 +25,7 @@ import { vietQrPayload } from "./vietqr.js";
 import { STATS_COLLECTION, decide, keysFor, vnDayKey } from "./stats-core.js";
 import { qrSvg, qrPngDataUrl } from "./qr.js";
 import { openStatus } from "./hours-core.js";
+import { SNAPSHOT_DOC, THUMB_DOC_PREFIX, mergeThumbChunks, usableSnapshot } from "./menu-snapshot.js";
 import { attributionForOrder, parseTouch, readStored, updateAttribution } from "./source-core.js";
 import { fold, indexItem, searchEntries, suggestions, usableKeywords } from "./search-core.js";
 
@@ -57,6 +58,8 @@ const MENU_TTL = 5 * 60_000;
 const THUMB_TTL = 24 * 3_600_000;
 
 const state = {
+  snapshotAt: 0,
+  snapshot: undefined, // undefined = chưa đọc, null = không có/lỗi
   promo: null,
   uid: null,
   shop: { ...DEFAULT_SHOP },
@@ -206,20 +209,43 @@ function applyMenu(items, cats) {
   if (items.length) track("menu");
 }
 
+/** Bản chụp menu (online_menu/data): khách mới chỉ đọc ~3 tài liệu thay vì ~125. Không có / lỗi / sai phiên bản thì trả null và dùng cách đọc cũ. */
+async function readSnapshot() {
+  if (state.snapshot !== undefined && Date.now() - state.snapshotAt < 60_000) return state.snapshot; // dùng chung giữa menu và ảnh trong cùng một lượt tải
+  state.snapshotAt = Date.now();
+  try {
+    const snap = await getDoc(ref("online_menu", SNAPSHOT_DOC));
+    const data = snap.exists() ? snap.data() : null;
+    state.snapshot = usableSnapshot(data) ? data : null;
+  } catch { state.snapshot = null; }
+  return state.snapshot;
+}
+
+/** Menu thô {items, cats, combos, hidden}. force = đọc thẳng collection thật (dùng khi luật từ chối đơn vì giá/món vừa đổi, cần bản mới nhất). */
+async function readMenuRaw(force) {
+  if (!force) {
+    const snap = await readSnapshot();
+    if (snap) return { items: snap.items, cats: snap.cats, combos: snap.combos, hidden: snap.hidden };
+  }
+  const [itemSnap, catSnap, hiddenSnap, comboSnap] = await Promise.all([getDocs(col("menu")), getDocs(col("menuCategories")), getDoc(ref("online_config", "menu")).catch(() => null), getDocs(col("combos")).catch(() => null)]);
+  const rows = (snap) => (snap ? snap.docs.map((d) => ({ ...d.data(), id: d.id })) : []);
+  return { items: rows(itemSnap), cats: rows(catSnap), combos: rows(comboSnap), hidden: Array.isArray(hiddenSnap?.data?.()?.hidden) ? hiddenSnap.data().hidden : [] };
+}
+
 async function loadMenu(force = false) {
   const cached = store.get(KEYS.menu);
   if (cached && cached.items && Date.now() - cached.at < MENU_TTL && !force) applyMenu(cached.items, cached.cats);
   else if (cached && cached.items && !state.items.length) applyMenu(cached.items, cached.cats); // hiện bản cũ trong lúc tải bản mới
   if (!force && cached && Date.now() - cached.at < MENU_TTL) { loadThumbs(); return; }
   try {
-    const [itemSnap, catSnap, hiddenSnap, comboSnap] = await Promise.all([getDocs(col("menu")), getDocs(col("menuCategories")), getDoc(ref("online_config", "menu")).catch(() => null), getDocs(col("combos")).catch(() => null)]);
+    const raw = await readMenuRaw(force);
     // Món chủ quán đã ẩn khỏi đặt món online: loại hẳn, không vào bộ nhớ đệm, không hiển thị dưới bất kỳ dạng nào.
-    const hidden = new Set(Array.isArray(hiddenSnap?.data?.()?.hidden) ? hiddenSnap.data().hidden : []);
-    const cats = catSnap.docs.map((d) => ({ ...d.data(), id: d.id }));
-    const combos = comboSnap ? comboSnap.docs.map((d) => ({ ...d.data(), id: d.id })) : [];
+    const hidden = new Set(raw.hidden);
+    const cats = raw.cats.map((c) => ({ ...c }));
+    const combos = raw.combos;
     const catOff = new Set(cats.filter((c) => c.active === false).map((c) => c.id));
     // Món ngừng bán (active=false), món thuộc nhóm đang tắt, món bị ẩn riêng: loại hẳn, không hiện mờ.
-    const items = itemSnap.docs.map((d) => ({ ...d.data(), id: d.id })).filter((m) => m.deleted !== true && m.name && m.active !== false && !hidden.has(m.id) && !catOff.has(m.categoryId));
+    const items = raw.items.map((m) => ({ ...m })).filter((m) => m.deleted !== true && m.name && m.active !== false && !hidden.has(m.id) && !catOff.has(m.categoryId));
     const comboItems = comboItemsFrom(combos, hidden);
     if (comboItems.length) { items.push(...comboItems); cats.push(COMBO_CATEGORY); }
     store.set(KEYS.menu, { at: Date.now(), items, cats });
@@ -247,11 +273,20 @@ async function loadThumbs() {
   if (thumbsInFlight) return thumbsInFlight;
   thumbsInFlight = (async () => {
     try {
-      const snap = await getDocs(col("menuThumbs"));
-      const map = {};
-      snap.docs.forEach((d) => { const t = d.data().thumb; if (typeof t === "string" && t.startsWith("data:image/")) map[d.id] = t; });
+      let map = {}, ver = Number(state.shop.thumbsVersion || 0);
+      const shot = await readSnapshot();
+      if (shot) {
+        // Ảnh nằm trong vài tài liệu gộp sẵn (thumbs_0, thumbs_1…): ~2-3 lượt đọc thay vì ~52.
+        const parts = Math.max(0, Math.min(8, Math.floor(Number(shot.thumbsParts) || 0)));
+        const docs = await Promise.all(Array.from({ length: parts }, (_, i) => getDoc(ref("online_menu", `${THUMB_DOC_PREFIX}${i}`)).then((x) => (x.exists() ? x.data() : null))));
+        map = mergeThumbChunks(docs);
+        ver = Number(shot.thumbsVer || 0); // bản chụp cũ hơn thumbsVersion thì lần sau tự tải lại (rẻ), không bị kẹt
+      } else {
+        const snap = await getDocs(col("menuThumbs"));
+        snap.docs.forEach((d) => { const t = d.data().thumb; if (typeof t === "string" && t.startsWith("data:image/")) map[d.id] = t; });
+      }
       state.thumbs = map;
-      store.set(KEYS.thumbs, { at: Date.now(), map, ver: Number(state.shop.thumbsVersion || 0) });
+      store.set(KEYS.thumbs, { at: Date.now(), map, ver });
       renderMenu();
     } catch { /* không có ảnh vẫn đặt được */ } finally { thumbsInFlight = null; }
   })();

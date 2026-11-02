@@ -58,6 +58,7 @@ const MENU_TTL = 5 * 60_000;
 const THUMB_TTL = 24 * 3_600_000;
 
 const state = {
+  top: [], // id các món bán chạy (từ bản chụp menu)
   snapshotAt: 0,
   snapshot: undefined, // undefined = chưa đọc, null = không có/lỗi
   promo: null,
@@ -193,9 +194,10 @@ function renderLegalFooter(s, name) {
 
 /* ---------- Menu ---------- */
 const { COMBO_CATEGORY, comboItemsFrom } = comboTools;
-function applyMenu(items, cats) {
+function applyMenu(items, cats, top = []) {
   state.items = items;
   state.cats = cats;
+  state.top = Array.isArray(top) ? top : [];
   // Dọn giỏ: món đã tắt/xoá sau lần mở trước thì bỏ khỏi giỏ.
   const ok = menuById();
   const cats2 = catById();
@@ -225,17 +227,17 @@ async function readSnapshot() {
 async function readMenuRaw(force) {
   if (!force) {
     const snap = await readSnapshot();
-    if (snap) return { items: snap.items, cats: snap.cats, combos: snap.combos, hidden: snap.hidden };
+    if (snap) return { items: snap.items, cats: snap.cats, combos: snap.combos, hidden: snap.hidden, top: Array.isArray(snap.top) ? snap.top : [] };
   }
   const [itemSnap, catSnap, hiddenSnap, comboSnap] = await Promise.all([getDocs(col("menu")), getDocs(col("menuCategories")), getDoc(ref("online_config", "menu")).catch(() => null), getDocs(col("combos")).catch(() => null)]);
   const rows = (snap) => (snap ? snap.docs.map((d) => ({ ...d.data(), id: d.id })) : []);
-  return { items: rows(itemSnap), cats: rows(catSnap), combos: rows(comboSnap), hidden: Array.isArray(hiddenSnap?.data?.()?.hidden) ? hiddenSnap.data().hidden : [] };
+  return { top: [], items: rows(itemSnap), cats: rows(catSnap), combos: rows(comboSnap), hidden: Array.isArray(hiddenSnap?.data?.()?.hidden) ? hiddenSnap.data().hidden : [] };
 }
 
 async function loadMenu(force = false) {
   const cached = store.get(KEYS.menu);
-  if (cached && cached.items && Date.now() - cached.at < MENU_TTL && !force) applyMenu(cached.items, cached.cats);
-  else if (cached && cached.items && !state.items.length) applyMenu(cached.items, cached.cats); // hiện bản cũ trong lúc tải bản mới
+  if (cached && cached.items && Date.now() - cached.at < MENU_TTL && !force) applyMenu(cached.items, cached.cats, cached.top);
+  else if (cached && cached.items && !state.items.length) applyMenu(cached.items, cached.cats, cached.top); // hiện bản cũ trong lúc tải bản mới
   if (!force && cached && Date.now() - cached.at < MENU_TTL) { loadThumbs(); return; }
   try {
     const raw = await readMenuRaw(force);
@@ -248,8 +250,9 @@ async function loadMenu(force = false) {
     const items = raw.items.map((m) => ({ ...m })).filter((m) => m.deleted !== true && m.name && m.active !== false && !hidden.has(m.id) && !catOff.has(m.categoryId));
     const comboItems = comboItemsFrom(combos, hidden);
     if (comboItems.length) { items.push(...comboItems); cats.push(COMBO_CATEGORY); }
-    store.set(KEYS.menu, { at: Date.now(), items, cats });
-    applyMenu(items, cats);
+    const top = (raw.top?.length ? raw.top : state.top).filter((id) => items.some((m) => m.id === id)); // món bán chạy còn bán được
+    store.set(KEYS.menu, { at: Date.now(), items, cats, top });
+    applyMenu(items, cats, top);
     $("#menu-error").hidden = true;
     $("#menu-retry").hidden = true;
   } catch (error) {
@@ -349,7 +352,7 @@ function renderSearchNote(found, query) {
 }
 
 function renderMenu() {
-  const sections = menuSections(state.items, state.cats);
+  const sections = menuSections(state.items, state.cats, { top: state.top });
   const cats = catById();
   const query = state.query.trim();
   if (query && state.items.length) {
@@ -371,10 +374,11 @@ function renderMenu() {
 
 function refreshDish(id) {
   const item = menuById()[id];
-  const node = document.querySelector(`[data-dish="${CSS.escape(id)}"]`);
-  if (!item || !node) return;
+  const nodes = [...document.querySelectorAll(`[data-dish="${CSS.escape(id)}"]`)]; // món có thể hiện 2 lần (mục "Bán chạy nhất" và nhóm riêng)
+  if (!item || !nodes.length) return;
   const focusNote = document.activeElement?.dataset?.note === id;
-  node.outerHTML = dishHtml(item, catById()[item.categoryId]);
+  const html = dishHtml(item, catById()[item.categoryId]);
+  for (const node of nodes) node.outerHTML = html;
   if (focusNote) document.querySelector(`[data-note="${CSS.escape(id)}"]`)?.focus();
 }
 

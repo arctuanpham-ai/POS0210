@@ -264,3 +264,22 @@ test("splitPhones: một hoặc hai số, mỗi số một liên kết tel", () 
   assert.deepEqual(_sp(""), []);
   assert.match(_pl("0912 345 678 / 0987 654 321", (x) => x), /tel:0912345678.*tel:0987654321/);
 });
+
+import { menuSections as _ms, COMBO_CATEGORY as _CC } from "../public/order-core.js";
+test("menuSections: combo, bán chạy, cơm trưa, cà phê, rồi các nhóm còn lại theo thứ tự quán đặt", () => {
+  const cats = [
+    { id: "an", name: "Ăn sáng", sortOrder: 1, active: true }, { id: "tra", name: "Trà", sortOrder: 2, active: true },
+    { id: "cf", name: "Cà phê", sortOrder: 3, active: true }, { id: "ct", name: "cơm trưa", sortOrder: 4, active: true },
+    { id: "off", name: "Đồ ăn vặt", sortOrder: 5, active: false }, _CC,
+  ];
+  const items = [
+    { id: "a1", categoryId: "an", name: "Bánh mì", price: 25000 }, { id: "t1", categoryId: "tra", name: "Trà đào", price: 30000 },
+    { id: "c1", categoryId: "cf", name: "Bạc xỉu", price: 30000 }, { id: "k1", categoryId: "ct", name: "Cơm gà", price: 45000 },
+    { id: "o1", categoryId: "off", name: "Hạt", price: 20000 }, { id: "c_x", categoryId: _CC.id, name: "Combo X", price: 60000, active: true },
+  ];
+  const names = (top) => _ms(items, cats, { top }).map((s) => s.name);
+  assert.deepEqual(names(["c1", "k1"]), ["Combo", "Bán chạy nhất", "cơm trưa", "Cà phê", "Ăn sáng", "Trà", "Đồ ăn vặt"]);
+  assert.deepEqual(names([]), ["Combo", "cơm trưa", "Cà phê", "Ăn sáng", "Trà", "Đồ ăn vặt"], "không có thống kê thì không có mục bán chạy");
+  assert.deepEqual(_ms(items, cats, { top: ["c1", "o1", "nope", "c_x"] }).find((s) => s.id === "_top").items.map((m) => m.id), ["c1"], "chỉ món đang bán được, không combo, không id lạ");
+  assert.deepEqual(_ms(items, cats).map((s) => s.name), names([]), "gọi không có tuỳ chọn vẫn chạy");
+});

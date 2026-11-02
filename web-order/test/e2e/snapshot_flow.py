@@ -99,6 +99,30 @@ def run():
         names = " ".join(page.locator(".dish h3").all_inner_texts())
         check("(collection)" in names and "bản chụp" not in names, f"dùng collection khi bản chụp không hợp lệ: {names}")
         ctx.close()
+
+        print("4. Thứ tự: Combo, Bán chạy nhất, Cơm trưa, Cà phê, rồi nhóm còn lại; món bán chạy hiện 2 chỗ vẫn đồng bộ số lượng")
+        d = snap_seed()
+        s = d[f"{ROOT}/online_menu/data"]
+        s["cats"] = [{"id": "c1", "name": "Cà phê", "sortOrder": 1, "active": True}, {"id": "c0", "name": "Ăn sáng", "sortOrder": 2, "active": True}, {"id": "c3", "name": "cơm trưa", "sortOrder": 3, "active": True}]
+        s["items"] = [
+            {"id": "a", "categoryId": "c1", "name": "Bạc xỉu", "price": 30000, "active": True},
+            {"id": "n", "categoryId": "c1", "name": "Cà phê muối", "price": 35000, "active": True},
+            {"id": "m", "categoryId": "c0", "name": "Bánh mì trứng", "price": 25000, "active": True},
+            {"id": "k", "categoryId": "c3", "name": "Cơm gà", "price": 45000, "active": True},
+        ]
+        s["hidden"] = []; s["top"] = ["k", "n", "ghost"]
+        ctx, page, errors = open_page(browser, d)
+        heads = page.locator("#menu h2").all_inner_texts()
+        check(heads == ["Combo", "Bán chạy nhất", "cơm trưa", "Cà phê", "Ăn sáng"], f"thứ tự nhóm: {heads}")
+        top_items = page.locator("#cat-_top .dish h3").all_inner_texts()
+        check(top_items == ["Cơm gà", "Cà phê muối"], f"mục bán chạy theo thứ tự thống kê, bỏ id lạ: {top_items}")
+        check(page.locator("[data-dish='k']").count() == 2, "món bán chạy hiện thêm trong nhóm riêng")
+        page.locator("#cat-_top [data-dish='k'] [data-act='inc']").click()
+        check(page.locator("[data-dish='k'] .stepper").count() == 2, "bấm Thêm ở mục bán chạy: cả 2 chỗ đều hiện số lượng")
+        check("45.000" in page.inner_text("#cart-total"), "giỏ chỉ tính 1 phần")
+        page.screenshot(path=f"{SHOTS}/s4-order.png")
+        check(not errors, "không lỗi JS: " + "; ".join(errors[:3]))
+        ctx.close()
         browser.close()
     print("\nKẾT QUẢ:", "TẤT CẢ ĐẠT" if not failures else f"{len(failures)} LỖI")
     sys.exit(1 if failures else 0)

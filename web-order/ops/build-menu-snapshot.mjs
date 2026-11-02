@@ -5,7 +5,7 @@
 import { execSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { STORE_ID, STORE_OWNER_UID, firebaseConfig } from "../public/config.js";
-import { SNAPSHOT_DOC, THUMB_DOC_PREFIX, buildSnapshot, menuContent, menuHash, usableSnapshot } from "../public/menu-snapshot.js";
+import { SNAPSHOT_DOC, THUMB_DOC_PREFIX, TOP_REFRESH_MS, buildSnapshot, menuContent, menuHash, topSellerIds, usableSnapshot } from "../public/menu-snapshot.js";
 
 export const THUMB_MAX_AGE_MS = 24 * 3_600_000;
 
@@ -34,13 +34,14 @@ export function encodeValue(v) {
 }
 export const encodeFields = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, encodeValue(v)]));
 
-/** Có cần dựng lại không, và có cần đọc lại ảnh không? */
+/** Có cần dựng lại không; có cần đọc lại ảnh / thống kê bán hàng không? (thống kê chỉ đọc lại sau 12 giờ để tiết kiệm lượt đọc) */
 export function planRebuild({ existing, hash, shopThumbsVer, now, force = false }) {
-  if (force || !usableSnapshot(existing)) return { write: true, thumbs: true, why: force ? "bắt buộc" : "chưa có bản chụp / sai phiên bản" };
+  if (force || !usableSnapshot(existing)) return { write: true, thumbs: true, top: true, why: force ? "bắt buộc" : "chưa có bản chụp / sai phiên bản" };
   const thumbsStale = Number(existing.thumbsVer || 0) < Number(shopThumbsVer || 0) || !Number(existing.thumbsParts) || now - Number(existing.thumbsBuiltAt || 0) > THUMB_MAX_AGE_MS;
-  if (existing.hash !== hash) return { write: true, thumbs: thumbsStale, why: "menu đổi" };
-  if (thumbsStale) return { write: true, thumbs: true, why: "ảnh đổi hoặc quá 24 giờ" };
-  return { write: false, thumbs: false, why: "không đổi" };
+  const topStale = now - Number(existing.topAt || 0) > TOP_REFRESH_MS;
+  if (existing.hash !== hash) return { write: true, thumbs: thumbsStale, top: topStale, why: "menu đổi" };
+  if (thumbsStale || topStale) return { write: true, thumbs: thumbsStale, top: topStale, why: thumbsStale ? "ảnh đổi hoặc quá 24 giờ" : "làm mới món bán chạy" };
+  return { write: false, thumbs: false, top: false, why: "không đổi" };
 }
 
 async function main() {
@@ -81,7 +82,12 @@ async function main() {
     const rows = await list("menuThumbs");
     thumbs = Object.fromEntries(rows.filter((t) => typeof t.thumb === "string").map((t) => [t.id, t.thumb]));
   }
-  const built = buildSnapshot({ items, cats, combos, hidden, thumbs, thumbsVer: Number(shop?.thumbsVersion || 0), keep: existing, now, by: "ACTIONS" });
+  let top = null;
+  if (plan.top) {
+    const dailies = await list("dashboardDaily");
+    top = topSellerIds(dailies, items, { hidden });
+  }
+  const built = buildSnapshot({ items, cats, combos, hidden, thumbs, thumbsVer: Number(shop?.thumbsVersion || 0), top, keep: existing, now, by: "ACTIONS" });
   const writes = [{ update: { name: `${root}/online_menu/${SNAPSHOT_DOC}`, fields: encodeFields(built.data) } }];
   for (const [id, data] of Object.entries(built.thumbDocs || {})) writes.push({ update: { name: `${root}/online_menu/${id}`, fields: encodeFields(data) } });
   // Số nhóm ảnh giảm so với bản cũ: xoá các nhóm dư.
@@ -89,7 +95,7 @@ async function main() {
   // Ghi ảnh trước rồi mới ghi menu (cùng một commit nguyên tử): khách không bao giờ thấy menu mới kèm danh sách nhóm ảnh cũ.
   const r = await api(`${db}:commit`, { method: "POST", body: JSON.stringify({ writes: [...writes.slice(1), writes[0]] }) });
   if (!r.ok) throw new Error(`ghi bản chụp: HTTP ${r.status} ${(await r.text()).slice(0, 300)}`);
-  console.log(`Bản chụp menu đã cập nhật (${plan.why}): ${built.data.items.length} món, ${built.data.cats.length} nhóm, ${built.data.combos.length} combo, ${built.data.thumbsParts} nhóm ảnh${plan.thumbs ? " (đã làm mới ảnh)" : ""}. Đã đọc ${reads} tài liệu.`);
+  console.log(`Bản chụp menu đã cập nhật (${plan.why}): ${built.data.items.length} món, ${built.data.cats.length} nhóm, ${built.data.combos.length} combo, ${built.data.thumbsParts} nhóm ảnh${plan.thumbs ? " (đã làm mới ảnh)" : ""}${plan.top ? `, ${built.data.top.length} món bán chạy` : ""}. Đã đọc ${reads} tài liệu.`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main().catch((e) => { console.error(`LỖI: ${e.message}`); process.exit(1); });

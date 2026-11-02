@@ -14,16 +14,24 @@ const existing = (extra = {}) => ({ ...buildSnapshot({ items: [{ id: "a", name: 
 
 test("planRebuild: không đổi thì không ghi, không đọc ảnh", () => {
   const e = existing();
-  assert.deepEqual(planRebuild({ existing: e, hash: e.hash, shopThumbsVer: 5, now: NOW }), { write: false, thumbs: false, why: "không đổi" });
+  const e2 = { ...e, topAt: NOW - 1000 };
+  assert.deepEqual(planRebuild({ existing: e2, hash: e.hash, shopThumbsVer: 5, now: NOW }), { write: false, thumbs: false, top: false, why: "không đổi" });
 });
 test("planRebuild: menu đổi thì ghi nhưng không đọc lại ảnh; ảnh đổi / quá 24 giờ thì đọc ảnh", () => {
   const e = existing();
-  const a = planRebuild({ existing: e, hash: "khac", shopThumbsVer: 5, now: NOW });
-  assert.equal(a.write, true); assert.equal(a.thumbs, false);
-  assert.equal(planRebuild({ existing: e, hash: e.hash, shopThumbsVer: 6, now: NOW }).thumbs, true);
+  const a = planRebuild({ existing: { ...e, topAt: NOW - 1000 }, hash: "khac", shopThumbsVer: 5, now: NOW });
+  assert.equal(a.write, true); assert.equal(a.thumbs, false); assert.equal(a.top, false);
+  assert.equal(planRebuild({ existing: { ...e, topAt: NOW - 1000 }, hash: e.hash, shopThumbsVer: 6, now: NOW }).thumbs, true);
   assert.equal(planRebuild({ existing: e, hash: e.hash, shopThumbsVer: 5, now: NOW + THUMB_MAX_AGE_MS + 5000 }).thumbs, true);
 });
 test("planRebuild: chưa có bản chụp hoặc --force thì dựng đủ", () => {
   assert.deepEqual(planRebuild({ existing: null, hash: "x", shopThumbsVer: 0, now: NOW }).thumbs, true);
   assert.equal(planRebuild({ existing: existing(), hash: existing().hash, shopThumbsVer: 5, now: NOW, force: true }).write, true);
+});
+
+test("planRebuild: thống kê bán chạy chỉ đọc lại sau 12 giờ", () => {
+  const e = { ...existing(), topAt: NOW - 13 * 3_600_000 };
+  const p = planRebuild({ existing: e, hash: e.hash, shopThumbsVer: 5, now: NOW });
+  assert.deepEqual({ write: p.write, top: p.top, thumbs: p.thumbs }, { write: true, top: true, thumbs: false });
+  assert.equal(planRebuild({ existing: { ...e, topAt: NOW - 3_600_000 }, hash: e.hash, shopThumbsVer: 5, now: NOW }).write, false);
 });

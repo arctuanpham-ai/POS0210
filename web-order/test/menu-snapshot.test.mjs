@@ -48,3 +48,22 @@ test("usableSnapshot từ chối dữ liệu thiếu / sai phiên bản", () => 
   assert.equal(usableSnapshot({ schema: 2, items: [], cats: [], combos: [], hidden: [] }), false);
   assert.equal(usableSnapshot({ schema: 1, items: [], cats: [] }), false);
 });
+
+import { topSellerIds } from "../public/menu-snapshot.js";
+test("topSellerIds: cộng mọi ngày + phần trong combo, bỏ món rẻ/ẩn/không có trong menu, cần đủ 3 món", () => {
+  const menu = [
+    { id: "cf", name: "Cà phê sữa", price: 27000, active: true }, { id: "tra", name: "Trà đá", price: 5000, active: true },
+    { id: "bm", name: "Bánh mì trứng", price: 25000, active: true }, { id: "bun", name: "Bún gà 50", price: 50000, active: true },
+    { id: "off", name: "Món ngừng", price: 30000, active: false }, { id: "hid", name: "Món ẩn", price: 30000, active: true },
+    { id: "it", name: "Ít bán", price: 30000, active: true },
+  ];
+  const days = [
+    { items: [{ name: "Cà phê sữa", qty: 10 }, { name: "Trà đá", qty: 99 }, { name: "Món ngừng", qty: 50 }, { name: "Món ẩn", qty: 40 }, { name: "Ít bán", qty: 1 }, { name: "Món đã xoá khỏi menu", qty: 80 }] },
+    { items: [{ name: "Bánh mì trứng", qty: 4 }, { name: "Bún gà 50", qty: 5 }, { name: "COMBO · Cafe Ngon [1× Cà phê sữa + 2× Bánh mì trứng]", qty: 3 }, { name: "Cà phê sữa", qty: 2 }] },
+  ];
+  // cf: 10 + 2 + 3 = 15; bm: 4 + 6 = 10; bun: 5
+  assert.deepEqual(topSellerIds(days, menu, { hidden: ["hid"] }), ["cf", "bm", "bun"]);
+  assert.deepEqual(topSellerIds(days, menu, { hidden: ["hid"], limit: 2 }), ["cf", "bm"]);
+  assert.deepEqual(topSellerIds([days[1]], menu, { hidden: ["hid"], minQty: 6 }), [], "dưới 3 món đủ doanh số thì không hiện mục");
+  assert.deepEqual(topSellerIds([], menu), []);
+});

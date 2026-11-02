@@ -218,7 +218,19 @@ export const cartFromOrder = (order, menuById, categoryById = {}) => {
 export const rememberCode = (codes, code, n = 5) => [code, ...(codes || []).filter((c) => c !== code)].filter((c) => CODE_PATTERN.test(c)).slice(0, n);
 
 /** Menu hiển thị: gom theo nhóm, nhóm theo sortOrder, bỏ món đã xoá. Món đang tắt vẫn có (hiện mờ). */
-export const menuSections = (items, categories) => {
+const foldName = (v) => String(v || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/[^a-z0-9]+/g, " ").trim();
+export const TOP_SECTION = Object.freeze({ id: "_top", name: "Bán chạy nhất" });
+/** Thứ tự ưu tiên khi hiện menu: combo, bán chạy, cơm trưa, cà phê, rồi các nhóm còn lại theo thứ tự quán đã đặt. Số nhỏ = lên trước. */
+const sectionRank = (s) => {
+  if (s.id === COMBO_CATEGORY.id) return 0;
+  if (s.id === TOP_SECTION.id) return 1;
+  const n = foldName(s.name);
+  if (/(^| )com trua( |$)/.test(n)) return 2;
+  if (n === "ca phe" || n === "cafe") return 3;
+  return 9;
+};
+
+export const menuSections = (items, categories, { top = [] } = {}) => {
   const cats = [...(categories || [])].sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
   const catById = Object.fromEntries(cats.map((c) => [c.id, c]));
   const live = (items || []).filter((m) => m && m.deleted !== true && m.name && Number(m.price) > 0);
@@ -227,9 +239,13 @@ export const menuSections = (items, categories) => {
     .filter((s) => s.items.length);
   const orphans = live.filter((m) => !catById[m.categoryId]);
   if (orphans.length) sections.push({ id: "_other", name: "Khác", active: true, items: orphans });
-  // Nhóm không còn món nào bán được vẫn hiện (mờ) nhưng xuống cuối; thứ tự còn lại giữ nguyên (sort ổn định).
+  // Mục "Bán chạy nhất": các món đề xuất (theo thống kê bán hàng), chỉ món đang bán được; món vẫn hiện thêm trong nhóm riêng của nó.
+  const byId = Object.fromEntries(live.map((m) => [m.id, m]));
+  const topItems = (top || []).map((id) => byId[id]).filter((m) => m && isOrderable(m, catById[m.categoryId]) && m.categoryId !== COMBO_CATEGORY.id);
+  if (topItems.length) sections.push({ id: TOP_SECTION.id, name: TOP_SECTION.name, active: true, items: topItems });
+  // Nhóm không còn món nào bán được vẫn hiện (mờ) nhưng xuống cuối; sau đó theo thứ tự ưu tiên ở trên, còn lại giữ nguyên (sort ổn định).
   const sellable = (s) => s.active && s.items.some((m) => isOrderable(m));
-  return sections.map((s, i) => ({ s, i })).sort((a, b) => Number(sellable(b.s)) - Number(sellable(a.s)) || a.i - b.i).map(({ s }) => s);
+  return sections.map((s, i) => ({ s, i })).sort((a, b) => Number(sellable(b.s)) - Number(sellable(a.s)) || sectionRank(a.s) - sectionRank(b.s) || a.i - b.i).map(({ s }) => s);
 };
 
 /** Combo của quán (users/.../combos) hiển thị như một nhóm "Combo"; id dòng món = "c_" + id combo để rules tra đúng bảng. */

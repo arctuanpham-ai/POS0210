@@ -50,6 +50,41 @@ export const menuContent = ({ items, cats, combos, hidden }) => ({
 
 export const menuHash = (content) => fnv(stableJson(content));
 
+const nameKey = (v) => String(v || "").toLocaleLowerCase("vi").normalize("NFC").replace(/\s+/g, " ").trim();
+export const TOP_REFRESH_MS = 12 * 3_600_000;
+
+/**
+ * Món bán chạy: cộng số phần bán của MỌI ngày có snapshot (dashboardDaily: items [{name, qty}]), tính cả phần nằm trong combo
+ * ("COMBO · Tên [1×A + 2×B]"), rồi ghép theo tên với menu hiện tại. Bỏ món ẩn / ngừng bán / giá dưới `minPrice` (món bán kèm như trà đá, bánh mì thêm
+ * luôn bán nhiều nhưng không phải món để "đề xuất"). Ít hơn `minItems` món đủ doanh số thì trả [] (không hiện mục này).
+ * @returns {string[]} id món, bán nhiều nhất trước
+ */
+export function topSellerIds(dailyDocs, items, { hidden = [], limit = 8, minQty = 3, minItems = 3, minPrice = 10_000 } = {}) {
+  const sold = new Map();
+  const add = (name, qty) => { const k = nameKey(name); if (k && qty > 0) sold.set(k, (sold.get(k) || 0) + qty); };
+  for (const day of dailyDocs || []) {
+    for (const it of Array.isArray(day?.items) ? day.items : []) {
+      const qty = Number(it?.qty || 0);
+      if (!(qty > 0)) continue;
+      const name = String(it?.name || "");
+      if (name.startsWith("COMBO")) {
+        const m = /\[(.*)\]\s*$/.exec(name);
+        if (m) for (const part of m[1].split("+")) { const x = /^\s*(\d+)\s*×\s*(.+?)\s*$/.exec(part); if (x) add(x[2], Number(x[1]) * qty); }
+      } else add(name, qty);
+    }
+  }
+  const hide = new Set((hidden || []).map(String));
+  const byName = new Map();
+  for (const m of items || []) {
+    if (!m || m.deleted === true || m.active === false || !m.name || !(Number(m.price) >= minPrice) || hide.has(String(m.id))) continue;
+    const k = nameKey(m.name);
+    if (!byName.has(k)) byName.set(k, m);
+  }
+  const ranked = [...byName.entries()].map(([k, m]) => ({ id: String(m.id), name: k, qty: sold.get(k) || 0 })).filter((x) => x.qty >= minQty)
+    .sort((a, b) => b.qty - a.qty || a.name.localeCompare(b.name, "vi"));
+  return ranked.length >= minItems ? ranked.slice(0, limit).map((x) => x.id) : [];
+}
+
 /** Chia ảnh nhỏ {menu_<id>: dataUrl} thành các nhóm không vượt `maxBytes` ký tự. Ném lỗi nếu cần quá MAX_THUMB_CHUNKS nhóm. */
 export function chunkThumbs(map, maxBytes = THUMB_CHUNK_BYTES) {
   const chunks = [];
@@ -68,10 +103,11 @@ export function chunkThumbs(map, maxBytes = THUMB_CHUNK_BYTES) {
 /**
  * Dựng các tài liệu cần ghi.
  * @param thumbs   {menu_<id>: dataUrl} hoặc null = giữ nguyên ảnh đang lưu (chỉ cập nhật menu)
- * @param keep     { thumbsParts, thumbsVer, thumbsBuiltAt } của bản đang lưu, dùng khi thumbs == null
+ * @param top      id món bán chạy (topSellerIds) hoặc null = giữ bản cũ
+ * @param keep     { thumbsParts, thumbsVer, thumbsBuiltAt, top, topAt } của bản đang lưu, dùng khi thumbs == null
  * @returns {{ data: object, thumbDocs: object|null, hash: string }}  thumbDocs: { thumbs_0: {map}, ... } hoặc null nếu không đổi ảnh
  */
-export function buildSnapshot({ items, cats, combos, hidden, thumbs = null, thumbsVer = 0, keep = null, now = Date.now(), by = "" }) {
+export function buildSnapshot({ items, cats, combos, hidden, thumbs = null, thumbsVer = 0, top = null, keep = null, now = Date.now(), by = "" }) {
   const content = menuContent({ items, cats, combos, hidden });
   const chunks = thumbs ? chunkThumbs(thumbs) : null;
   const data = {
@@ -79,6 +115,9 @@ export function buildSnapshot({ items, cats, combos, hidden, thumbs = null, thum
     thumbsParts: chunks ? chunks.length : Number(keep?.thumbsParts || 0),
     thumbsVer: chunks ? Number(thumbsVer || 0) : Number(keep?.thumbsVer || 0),
     thumbsBuiltAt: chunks ? now : Number(keep?.thumbsBuiltAt || 0),
+    // Món bán chạy (id): tính lại khi có `top`, ngược lại giữ bản cũ.
+    top: Array.isArray(top) ? top.map(String) : (Array.isArray(keep?.top) ? keep.top : []),
+    topAt: Array.isArray(top) ? now : Number(keep?.topAt || 0),
     ...content,
   };
   const thumbDocs = chunks ? Object.fromEntries(chunks.map((map, i) => [`${THUMB_DOC_PREFIX}${i}`, { map, part: i, builtAt: now }])) : null;

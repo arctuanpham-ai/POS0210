@@ -47,13 +47,37 @@ for (const m of (menu.documents || []).filter((d) => d !== plain && d.fields.act
     if (many.length >= 10) mk(`${many.length} dòng (nhánh đơn dài)`, many);
   }
 }
+// Nguồn khách (src), số lượng nhiều trên 1 dòng, và các đơn nguồn sai phải bị chặn.
+{
+  const plainsS = cases.filter((x) => x.label !== "combo"), combosS = cases.filter((x) => x.label === "combo");
+  const base = plainsS[0];
+  const SRC = { source: "facebook", medium: "paid_social", campaign: "com_trua_khung_gio_202611", content: "anh_01", at: Date.now(), first: { source: "facebook", campaign: "loi_ich_dat_truc_tiep_202611", content: "anh_01", at: Date.now() } };
+  if (base) {
+    const push = (label, extra) => cases.push({ ...base, label, ...extra });
+    push("1 món, số lượng 20 (tối đa)", { qty: 20 });
+    push("1 món, số lượng 21 (phải bị chặn)", { qty: 21, expectDeny: true });
+    push("có nguồn UTM đầy đủ (1 dòng)", { src: SRC });
+    push("nguồn tối giản chỉ có source", { src: { source: "google" } });
+    if (plainsS.length >= 3) push("có nguồn UTM (3 dòng)", { multi: plainsS.slice(0, 3), src: SRC });
+    const longList = [...combosS, ...plainsS].filter((x, i, a) => a.findIndex((y) => y.id === x.id) === i).slice(0, 12);
+    if (longList.length >= 8) {
+      push(`có nguồn UTM (${longList.length} dòng, nhánh đơn dài)`, { multi: longList, src: SRC });
+      push("8 dòng, mỗi dòng số lượng 5 (nhánh đơn dài)", { multi: longList.slice(0, 8).map((x) => ({ ...x, qty: 5 })) });
+    }
+    if (plainsS.length >= 3) push("3 dòng, mỗi dòng số lượng 20", { multi: plainsS.slice(0, 3).map((x) => ({ ...x, qty: 20 })) });
+    push("nguồn có khoá lạ (phải bị chặn)", { src: { ...SRC, hack: "x" }, expectDeny: true });
+    push("nguồn quá dài 41 ký tự (phải bị chặn)", { src: { ...SRC, campaign: "a".repeat(41) }, expectDeny: true });
+    push("nguồn thiếu source (phải bị chặn)", { src: { medium: "paid_social" }, expectDeny: true });
+    push("nguồn có kiểu dữ liệu sai (phải bị chặn)", { src: { source: "facebook", at: "hôm nay" }, expectDeny: true });
+  }
+}
 let failed = 0;
 for (const [i, c] of cases.entries()) {
   const phone = `0900000${String(i).padStart(3, "0")}`;
   const code = makeOrderCode();
   const lines = (c.multi || [c]).map((x) => ({ id: x.id, name: x.name, qty: x.qty || 1, note: "", price: x.price }));
   const phoneVal = c.rawPhone ? normalizePhone(c.rawPhone) : phone;
-  const order = buildOrderDoc({ code, uid, value: { name: "KIEM THU TU DONG", phone: phoneVal, mode: c.mode || "pickup", address: c.address || "", table: "", note: c.note || "" }, lines });
+  const order = buildOrderDoc({ code, uid, value: { name: "KIEM THU TU DONG", phone: phoneVal, mode: c.mode || "pickup", address: c.address || "", table: "", note: c.note || "" }, lines, src: c.src || null });
   const { createdAt, ...rest } = order;
   const keyU = limitKeyForUid(uid), keyP = limitKeyForPhone(phoneVal);
   const body = {
@@ -65,8 +89,9 @@ for (const [i, c] of cases.entries()) {
   };
   const r = await fetch(`https://firestore.googleapis.com/v1/${db}:commit`, { method: "POST", headers: { authorization: `Bearer ${signIn.idToken}`, "content-type": "application/json" }, body: JSON.stringify(body) });
   const text = await r.text();
-  console.log(`[${c.label}] ${c.name} ${c.price}đ -> HTTP ${r.status} ${r.ok ? "ĐẶT ĐƯỢC" : text.slice(0, 300)}`);
-  if (!r.ok) failed++;
+  const want = !c.expectDeny;
+  console.log(`[${c.label}] ${c.name} ${c.price}đ -> HTTP ${r.status} ${r.ok === want ? (want ? "ĐẶT ĐƯỢC" : "BỊ CHẶN ĐÚNG") : `SAI (mong ${want ? "đặt được" : "bị chặn"}) ${text.slice(0, 300)}`}`);
+  if (r.ok !== want) failed++;
   for (const p of [`online_orders/${code}`, `online_limits/${keyU}`, `online_limits/${keyP}`]) await fetch(`https://firestore.googleapis.com/v1/${root}/${p}`, { method: "DELETE", headers: { authorization: `Bearer ${admin}` } });
 }
 // Bộ đếm lượt truy cập: khách ẩn danh tăng đúng 1 (tạo rồi cập nhật) được; tăng 2 hoặc bộ đếm lạ thì bị chặn. Dọn tài liệu thử bằng quyền chủ quán.

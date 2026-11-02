@@ -58,6 +58,7 @@ for (const m of (menu.documents || []).filter((d) => d !== plain && d.fields.act
     push("1 món, số lượng 21 (phải bị chặn)", { qty: 21, expectDeny: true });
     push("có nguồn UTM đầy đủ (1 dòng)", { src: SRC });
     push("nguồn tối giản chỉ có source", { src: { source: "google" } });
+    if (plainsS.length >= 2) push("có nguồn UTM (2 dòng)", { multi: plainsS.slice(0, 2), src: SRC });
     if (plainsS.length >= 3) push("có nguồn UTM (3 dòng)", { multi: plainsS.slice(0, 3), src: SRC });
     const longList = [...combosS, ...plainsS].filter((x, i, a) => a.findIndex((y) => y.id === x.id) === i).slice(0, 12);
     if (longList.length >= 8) {

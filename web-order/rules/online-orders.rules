@@ -280,22 +280,12 @@ function validLimitRelease(key) {
 }
 
 // ---- Nguồn khách của đơn (tuỳ chọn): chỉ các khoá đã định, chuỗi ngắn; không chứa thông tin cá nhân ----
-function shortText(m, k) {
-  return !(k in m) || (m[k] is string && m[k].size() <= 40);
-}
-
+// Viết gọn có chủ đích: đơn 3 dòng đã gần chạm ngân sách biểu thức của Firestore, mỗi biểu thức thêm vào đây đều tính vào đó.
 function validSrc(s) {
-  return s is map
-    && s.keys().hasOnly(['source', 'medium', 'campaign', 'content', 'term', 'at', 'first'])
-    && 'source' in s && s.source is string && s.source.size() >= 1 && s.source.size() <= 40
-    && shortText(s, 'medium') && shortText(s, 'campaign') && shortText(s, 'content') && shortText(s, 'term')
-    && (!('at' in s) || s.at is int)
-    && (!('first' in s) || validFirstSrc(s.first));
-}
-
-function validFirstSrc(f) {
-  return f is map
-    && f.keys().hasOnly(['source', 'campaign', 'content', 'at'])
-    && shortText(f, 'source') && shortText(f, 'campaign') && shortText(f, 'content')
-    && (!('at' in f) || f.at is int);
+  return s.keys().hasOnly(['source', 'medium', 'campaign', 'content', 'term', 'at', 'first'])
+    && s.source is string && s.source.size() >= 1 && s.source.size() <= 40
+    && s.get('medium', '').size() <= 40 && s.get('campaign', '').size() <= 40
+    && s.get('content', '').size() <= 40 && s.get('term', '').size() <= 40
+    && s.get('at', 0) is int
+    && s.get('first', {}).keys().hasOnly(['source', 'campaign', 'content', 'at']);
 }

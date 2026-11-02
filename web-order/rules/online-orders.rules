@@ -66,6 +66,12 @@ match /users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/menuThumbs/{itemId} {
   allow read: if true;
 }
 
+// Bản chụp menu + ảnh nhỏ gộp sẵn cho khách (đọc ~3 tài liệu thay vì ~125). Chỉ chủ quán ghi; máy chủ dựng (GitHub Actions) dùng quyền quản trị.
+match /users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/online_menu/{docId} {
+  allow read: if true;
+  allow write: if isShopOwner();
+}
+
 // ---- Thông tin quán hiển thị cho khách (tên, địa chỉ, SĐT, giờ mở, tài khoản nhận tiền, bật/tắt đặt món) ----
 match /users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/online_config/{docId} {
   allow read: if true;

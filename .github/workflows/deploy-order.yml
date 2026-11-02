@@ -46,6 +46,9 @@ jobs:
         run: |
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
           npx -y firebase-tools@latest deploy --only hosting --project pos0210-17ce4 --non-interactive 2>&1 | tee "$RUNNER_TEMP/hosting.log"; rc=${PIPESTATUS[0]}; if [ $rc -ne 0 ]; then echo "::error title=hosting::$(tail -c 900 "$RUNNER_TEMP/hosting.log" | tr '\n' ' ' | sed 's/%/ /g')"; fi; exit $rc
+      - name: Dựng bản chụp menu cho khách (online_menu)
+        continue-on-error: true
+        run: node web-order/ops/build-menu-snapshot.mjs
       - name: Smoke test đặt hàng thật (món thường + combo, tự dọn)
         id: smoke
         continue-on-error: true

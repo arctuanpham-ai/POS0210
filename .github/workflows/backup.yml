@@ -13,6 +13,9 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      # Điều kiện "if" của bước không đọc được ngữ cảnh secrets (GitHub báo workflow lỗi ở mỗi lần push), nên đổi sang biến môi trường.
+      HAS_DRIVE_KEY: ${{ secrets.GDRIVE_REFRESH_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -24,7 +27,7 @@ jobs:
           echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_POS0210_17CE4 }}' > "$RUNNER_TEMP/sa.json"
           gcloud auth activate-service-account --key-file="$RUNNER_TEMP/sa.json" >/dev/null 2>&1
       - name: Backup
-        if: github.event_name != 'schedule' || secrets.GDRIVE_REFRESH_TOKEN != ''
+        if: github.event_name != 'schedule' || env.HAS_DRIVE_KEY == 'true'
         env:
           DRY_RUN: ${{ github.event.inputs.dry_run || (secrets.GDRIVE_REFRESH_TOKEN == '' && '1') || '0' }}
           GDRIVE_CLIENT_ID: ${{ secrets.GDRIVE_CLIENT_ID }}

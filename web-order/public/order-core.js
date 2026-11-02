@@ -125,7 +125,7 @@ export const validateCheckout = ({ name, phone, delivery, address, table, note, 
  * Tài liệu đơn mới. createdAt do nơi gọi gán bằng serverTimestamp() (rules bắt createdAt == request.time).
  * Trường rejectReason/transferContent/expiresAt khởi tạo rỗng: rules bắt đúng giá trị này khi tạo.
  */
-export const buildOrderDoc = ({ code, uid, value, lines, pricing }) => ({
+export const buildOrderDoc = ({ code, uid, value, lines, pricing, src = null }) => ({
   code,
   uid,
   name: value.name,
@@ -142,6 +142,7 @@ export const buildOrderDoc = ({ code, uid, value, lines, pricing }) => ({
   rejectReason: "",
   transferContent: "",
   expiresAt: null,
+  ...(src ? { src } : {}),
 });
 
 export const limitKeyForUid = (uid) => `u_${uid}`;

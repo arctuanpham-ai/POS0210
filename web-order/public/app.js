@@ -25,6 +25,7 @@ import { vietQrPayload } from "./vietqr.js";
 import { STATS_COLLECTION, decide, keysFor, vnDayKey } from "./stats-core.js";
 import { qrSvg, qrPngDataUrl } from "./qr.js";
 import { openStatus } from "./hours-core.js";
+import { attributionForOrder, parseTouch, readStored, updateAttribution } from "./source-core.js";
 import { fold, indexItem, searchEntries, suggestions, usableKeywords } from "./search-core.js";
 
 const $ = (selector) => document.querySelector(selector);
@@ -51,7 +52,7 @@ const store = {
   set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* đầy hoặc bị chặn: bỏ qua */ } },
   del(key) { try { localStorage.removeItem(key); } catch { /* bỏ qua */ } },
 };
-const KEYS = { cart: "pos0210o.cart", codes: "pos0210o.codes", profile: "pos0210o.profile", menu: "pos0210o.menu5", thumbs: "pos0210o.thumbs", hist: "pos0210o.hist" };
+const KEYS = { cart: "pos0210o.cart", codes: "pos0210o.codes", profile: "pos0210o.profile", menu: "pos0210o.menu5", thumbs: "pos0210o.thumbs", hist: "pos0210o.hist", attr: "pos0210o.attr" };
 const MENU_TTL = 5 * 60_000;
 const THUMB_TTL = 24 * 3_600_000;
 
@@ -118,6 +119,16 @@ const authPromise = new Promise((resolve) => { authReady = resolve; });
 onAuthStateChanged(auth, (user) => { if (user) { state.uid = user.uid; authReady(user.uid); } });
 signInAnonymously(auth).catch((error) => { state.authError = error; authReady(null); });
 track("visit"); track("device");
+/* Nguồn khách (UTM / nơi giới thiệu): nhớ 7 ngày trên máy khách, chỉ là dữ liệu bổ sung, lỗi gì cũng bỏ qua, không ảnh hưởng đặt món. */
+function captureSource() {
+  try {
+    const touch = parseTouch(location.search, document.referrer, location.hostname);
+    const next = updateAttribution(readStored(store.get(KEYS.attr)), touch, Date.now());
+    if (next) store.set(KEYS.attr, next); else store.del(KEYS.attr);
+  } catch { /* bỏ qua */ }
+}
+const orderSource = () => { try { return attributionForOrder(readStored(store.get(KEYS.attr)), Date.now()); } catch { return null; } };
+captureSource();
 const ensureUid = async () => (await authPromise) || state.uid;
 
 /* ---------- Thông tin quán ---------- */
@@ -506,7 +517,8 @@ async function sendOrder(uid, value, lines) {
     if (uBase >= LIMITS.maxPendingOrders || pBase >= LIMITS.maxPendingOrders) throw Object.assign(new Error("limit"), { code: "limit" });
     const code = makeOrderCode();
     const batch = writeBatch(db);
-    const orderDoc = buildOrderDoc({ code, uid, value, lines, pricing: priceNow(lines) });
+    // Lần thử đầu kèm nguồn khách; nếu bị từ chối (ví dụ rules chưa cập nhật) thì lần thử lại gửi đơn KHÔNG kèm nguồn để không mất đơn.
+    const orderDoc = buildOrderDoc({ code, uid, value, lines, pricing: priceNow(lines), src: attempt === 0 ? orderSource() : null });
     batch.set(ref("online_orders", code), { ...orderDoc, createdAt: serverTimestamp() });
     batch.set(ref("online_limits", limitKeyForUid(uid)), { pending: uBase + 1, lastAt: serverTimestamp(), lastOrder: code });
     batch.set(ref("online_limits", limitKeyForPhone(value.phone)), { pending: pBase + 1, lastAt: serverTimestamp(), lastOrder: code });

@@ -124,7 +124,8 @@ match /users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/online_limits/{key} {
 function orderBase(code) {
   let d = request.resource.data;
   // Đủ đúng 17 trường: size() == 17 và mọi trường đều được đọc bên dưới (thiếu trường nào là lỗi -> từ chối).
-  return d.size() == 17
+  // Đơn có thể kèm thêm đúng 1 trường tuỳ chọn "src" (nguồn khách / UTM, 18 trường); đơn cũ không có src vẫn hợp lệ.
+  return (d.size() == 17 || (d.size() == 18 && validSrc(d.src)))
     && code.matches('^[A-HJ-NP-Z2-9]{6}$')
     && d.code == code
     && d.uid == request.auth.uid
@@ -276,4 +277,25 @@ function validLimitRelease(key) {
     && after.status == 'cancelled'
     && after.uid == request.auth.uid
     && (key == 'u_' + request.auth.uid || key == 'p_' + after.phone);
+}
+
+// ---- Nguồn khách của đơn (tuỳ chọn): chỉ các khoá đã định, chuỗi ngắn; không chứa thông tin cá nhân ----
+function shortText(m, k) {
+  return !(k in m) || (m[k] is string && m[k].size() <= 40);
+}
+
+function validSrc(s) {
+  return s is map
+    && s.keys().hasOnly(['source', 'medium', 'campaign', 'content', 'term', 'at', 'first'])
+    && 'source' in s && s.source is string && s.source.size() >= 1 && s.source.size() <= 40
+    && shortText(s, 'medium') && shortText(s, 'campaign') && shortText(s, 'content') && shortText(s, 'term')
+    && (!('at' in s) || s.at is int)
+    && (!('first' in s) || validFirstSrc(s.first));
+}
+
+function validFirstSrc(f) {
+  return f is map
+    && f.keys().hasOnly(['source', 'campaign', 'content', 'at'])
+    && shortText(f, 'source') && shortText(f, 'campaign') && shortText(f, 'content')
+    && (!('at' in f) || f.at is int);
 }

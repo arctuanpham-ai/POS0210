@@ -311,3 +311,12 @@ export const notifyPayload = ({ topic, code, order, click = "" }) => {
     ...(click ? { click } : {}),
   };
 };
+
+/** Chuỗi số điện thoại của quán (một hoặc nhiều số, cách nhau bởi , ; / hoặc " - ") -> danh sách {text, tel}. */
+export function splitPhones(raw) {
+  return String(raw ?? "").split(/\s*[,;/|]\s*|\s+-\s+|\s+(?:hoặc|hoac)\s+/i).map((t) => t.trim()).filter(Boolean)
+    .map((text) => ({ text, tel: text.replace(/[^\d+]/g, "") })).filter((p) => p.tel.length >= 6);
+}
+
+/** HTML các số bấm gọi được (mỗi số một liên kết tel:); `esc` là hàm thoát HTML của trang gọi. */
+export const phoneLinksHtml = (raw, esc) => splitPhones(raw).map((p) => `<a href="tel:${esc(p.tel)}">${esc(p.text)}</a>`).join(" · ");

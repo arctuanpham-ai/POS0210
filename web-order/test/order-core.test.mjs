@@ -255,3 +255,12 @@ test("không bật giảm online thì giá như cũ", () => {
   assert.equal(pricingFor(lines, null).discount, 0);
   assert.equal(pricingFor(lines, null, new Date(), { onlinePercent: 0 }).total, 30000);
 });
+
+import { splitPhones as _sp, phoneLinksHtml as _pl } from "../public/order-core.js";
+test("splitPhones: một hoặc hai số, mỗi số một liên kết tel", () => {
+  assert.deepEqual(_sp("0912 345 678").map((p) => p.tel), ["0912345678"]);
+  assert.deepEqual(_sp("0912 345 678 / 0987.654.321").map((p) => p.tel), ["0912345678", "0987654321"]);
+  assert.deepEqual(_sp("0912345678, 0987654321").length, 2);
+  assert.deepEqual(_sp(""), []);
+  assert.match(_pl("0912 345 678 / 0987 654 321", (x) => x), /tel:0912345678.*tel:0987654321/);
+});

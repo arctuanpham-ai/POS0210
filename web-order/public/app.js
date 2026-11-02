@@ -19,7 +19,7 @@ import { APP_CHECK_SITE_KEY, DEFAULT_SHOP, NOTIFY_CLICK, NOTIFY_TOPIC, STORE_ID,
 import {
   FINAL_STATUSES, LIMITS, comboTools, pricingFor, MODE_LABELS, STATUS, STATUS_TEXT, buildOrderDoc, cartFromOrder, cartLines, changeQty, countdownText, isOrderable,
   limitKeyForPhone, limitKeyForUid, linesCount, linesTotal, makeOrderCode, menuSections, money, orderView, pendingBase, progressSteps, rememberCode,
-  notifyPayload, onlineDiscountPercent, onlinePrice, setNote, toMillis, validateCheckout,
+  notifyPayload, onlineDiscountPercent, onlinePrice, phoneLinksHtml, setNote, toMillis, validateCheckout,
 } from "./order-core.js";
 import { vietQrPayload } from "./vietqr.js";
 import { STATS_COLLECTION, decide, keysFor, vnDayKey } from "./stats-core.js";
@@ -152,7 +152,7 @@ function renderShop() {
   $("#track-name").textContent = name;
   const rows = [];
   if (s.address) rows.push(["Địa chỉ", `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.address)}" target="_blank" rel="noopener">${esc(s.address)}</a>`]);
-  if (s.phone) rows.push(["Điện thoại", `<a href="tel:${esc(String(s.phone).replace(/[^\d+]/g, ""))}">${esc(s.phone)}</a>`]);
+  if (s.phone) rows.push(["Điện thoại", phoneLinksHtml(s.phone, esc)]);
   if (s.hours) rows.push(["Giờ mở cửa", esc(s.hours)]);
   $("#shop-info").innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("");
   $("#shop-info").hidden = !rows.length;
@@ -172,7 +172,7 @@ function renderLegalFooter(s, name) {
   if (s.owner) rows.push(["Chủ hộ / đại diện", esc(s.owner)]);
   if (s.regNo) rows.push(["Mã số", esc(s.regNo)]);
   if (s.address) rows.push(["Địa chỉ", esc(s.address)]);
-  if (s.phone) rows.push(["Điện thoại", `<a href="tel:${esc(String(s.phone).replace(/[^\d+]/g, ""))}">${esc(s.phone)}</a>`]);
+  if (s.phone) rows.push(["Điện thoại", phoneLinksHtml(s.phone, esc)]);
   if (s.email) rows.push(["Email", `<a href="mailto:${esc(s.email)}">${esc(s.email)}</a>`]);
   $("#legal-info").innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("");
 }
@@ -684,7 +684,7 @@ function renderTrack() {
   }
   if (view.status === STATUS.REJECTED) extra = `<p class="reject-reason"><b>Lý do:</b> ${esc(order.rejectReason || "Quán chưa nhận được đơn lúc này.")}</p>`;
   const spinner = view.status === STATUS.NEW ? '<div class="spinner" aria-hidden="true"></div>' : "";
-  const phone = state.shop.phone ? `<p class="muted small">Cần hỗ trợ? Gọi quán <a href="tel:${esc(String(state.shop.phone).replace(/[^\d+]/g, ""))}">${esc(state.shop.phone)}</a></p>` : "";
+  const phone = state.shop.phone ? `<p class="muted small">Cần hỗ trợ? Gọi quán ${phoneLinksHtml(state.shop.phone, esc)}</p>` : "";
   const canEdit = view.status === STATUS.NEW || view.status === STATUS.AWAITING_PAYMENT;
   const editRow = canEdit ? `<div class="cancel-row"><button type="button" class="secondary" data-act2="edit">✏️ Sửa đơn</button><button type="button" class="danger-link" data-act2="cancel">Huỷ đơn</button></div><p class="muted small">Bạn chỉ sửa hoặc huỷ đơn được khi chưa thanh toán.</p>` : "";
   const actions = editRow + (view.status === STATUS.EXPIRED

@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
 import { doc, getDoc, getFirestore } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { STORE_ID, STORE_OWNER_UID, firebaseConfig } from "./config.js";
+import { phoneLinksHtml } from "./order-core.js";
 
 const $ = (selector) => document.querySelector(selector);
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -21,7 +22,7 @@ async function load() {
   if (s.owner) rows.push(["Chủ hộ / đại diện", esc(s.owner)]);
   if (s.regNo) rows.push(["Mã số", esc(s.regNo)]);
   if (s.address) rows.push(["Địa chỉ", esc(s.address)]);
-  if (s.phone) rows.push(["Điện thoại", `<a href="tel:${esc(String(s.phone).replace(/[^\d+]/g, ""))}">${esc(s.phone)}</a>`]);
+  if (s.phone) rows.push(["Điện thoại", phoneLinksHtml(s.phone, esc)]);
   if (s.email) rows.push(["Email", `<a href="mailto:${esc(s.email)}">${esc(s.email)}</a>`]);
   if (s.hours) rows.push(["Giờ mở cửa", esc(s.hours)]);
   $("#p-info").innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("") || "<div><dt></dt><dd>Quán đang cập nhật thông tin.</dd></div>";

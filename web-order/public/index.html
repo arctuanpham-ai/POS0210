@@ -46,6 +46,7 @@
           </div>
           <button type="button" class="pill" id="open-history" hidden>🧾 Lịch sử đơn</button>
         </div>
+        <p class="open-status" id="open-status" role="status" hidden></p>
         <dl class="shop-info" id="shop-info" hidden></dl>
         <p class="hero-note">Đơn gửi trực tiếp đến quán. Không cần đăng nhập hay cài app.</p>
         <p class="hero-note allergen">Món có thể chứa hoặc tiếp xúc với thành phần gây dị ứng (sữa, trứng, đậu phộng, gluten…). Nếu bạn bị dị ứng, hãy ghi vào ghi chú hoặc gọi quán trước khi đặt.</p>
@@ -53,6 +54,16 @@
       </header>
 
       <button type="button" class="track-banner" id="track-banner" hidden>Bạn có đơn đang theo dõi. Bấm để xem trạng thái</button>
+
+      <div class="search" id="search-box" role="search">
+        <div class="search-field">
+          <input type="search" id="menu-search" placeholder="Tìm món: cà phê, bánh mì, trà…" aria-label="Tìm món" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search" role="combobox" aria-expanded="false" aria-controls="search-suggest" maxlength="60" />
+          <button type="button" class="search-clear" id="search-clear" aria-label="Xoá từ khoá" hidden>×</button>
+          <ul class="search-suggest" id="search-suggest" role="listbox" hidden></ul>
+        </div>
+        <div class="kw-chips" id="kw-chips" aria-label="Gợi ý từ khoá" hidden></div>
+        <p class="search-note" id="search-note" role="status" hidden></p>
+      </div>
 
       <nav class="cat-chips" id="cat-chips" aria-label="Nhóm món"></nav>
 

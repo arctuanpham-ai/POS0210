@@ -24,6 +24,8 @@ import {
 import { vietQrPayload } from "./vietqr.js";
 import { STATS_COLLECTION, decide, keysFor, vnDayKey } from "./stats-core.js";
 import { qrSvg, qrPngDataUrl } from "./qr.js";
+import { openStatus } from "./hours-core.js";
+import { fold, indexItem, searchEntries, suggestions, usableKeywords } from "./search-core.js";
 
 const $ = (selector) => document.querySelector(selector);
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -68,6 +70,8 @@ const state = {
   submitting: false,
   sheetOpen: false,
   catFilter: "",
+  query: "",
+  searchIndex: null,
 };
 
 const serverNow = () => Date.now() + state.clockOffset;
@@ -101,7 +105,7 @@ async function syncClock() {
     const header = response.headers.get("date");
     if (!header) return;
     const server = new Date(header).getTime();
-    if (Number.isFinite(server)) state.clockOffset = server - (started + Date.now()) / 2;
+    if (Number.isFinite(server)) { state.clockOffset = server - (started + Date.now()) / 2; renderOpenStatus(); }
   } catch { /* giữ chênh lệch cũ */ }
 }
 
@@ -123,6 +127,16 @@ async function loadShop() {
   renderShop();
 }
 
+/** "Đang mở cửa" / "Đã đóng cửa" theo giờ mở cửa của quán, tính theo giờ Việt Nam (đồng hồ chỉnh theo máy chủ). Không đọc được giờ thì ẩn. */
+function renderOpenStatus() {
+  const node = $("#open-status");
+  const status = openStatus(state.shop.hours, serverNow());
+  if (!status.known) { node.hidden = true; node.textContent = ""; return; }
+  node.hidden = false;
+  node.className = `open-status ${status.open ? (status.soon ? "soon" : "open") : "closed"}`;
+  node.innerHTML = `<span class="dot" aria-hidden="true"></span><span><b>${esc(status.label)}</b><span class="detail"> · ${esc(status.detail)}</span></span>`;
+}
+
 function renderShop() {
   const s = state.shop;
   const name = String(s.name || DEFAULT_SHOP.name);
@@ -137,6 +151,7 @@ function renderShop() {
   if (s.hours) rows.push(["Giờ mở cửa", esc(s.hours)]);
   $("#shop-info").innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("");
   $("#shop-info").hidden = !rows.length;
+  renderOpenStatus();
   renderLegalFooter(s, name);
   const closed = s.orderingEnabled === false;
   $("#closed-banner").hidden = !closed && !s.notice;
@@ -236,9 +251,56 @@ function dishHtml(item, cat) {
   return `<article class="dish${sellable ? "" : " off"}${comboImg ? " combo-dish" : ""}" data-dish="${esc(item.id)}"><div class="dish-img${comboImg ? " combo" : ""}">${comboImg || img}</div><div class="dish-body"><h3>${esc(item.name.trim())}</h3>${item.description ? `<p class="desc">${esc(item.description)}</p>` : ""}<b class="price">${money(item.price)}</b></div><div class="dish-ctl">${control}</div>${note}</article>`;
 }
 
+/** Chỉ mục tìm kiếm (đã bỏ dấu) dựng lại khi menu đổi; kèm các từ khoá gợi ý còn ra món. */
+function searchData() {
+  const cached = state.searchIndex;
+  if (cached && cached.items === state.items && cached.cats === state.cats) return cached;
+  const sections = menuSections(state.items, state.cats);
+  const entries = sections.flatMap((s) => s.items.map((m) => indexItem(m, s.name)));
+  const categoryNames = sections.map((s) => s.name);
+  // Từ khoá gợi ý bỏ những từ trùng tên nhóm (nhóm đã có hàng chip riêng bên dưới).
+  const keywords = usableKeywords(entries, 20).filter((kw) => !categoryNames.some((n) => fold(n) === fold(kw))).slice(0, 8);
+  state.searchIndex = { items: state.items, cats: state.cats, entries, categoryNames, keywords };
+  return state.searchIndex;
+}
+
+const capitalize = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+const keywordChipsHtml = (list) => list.map((kw) => `<button type="button" data-kw="${esc(kw)}">${esc(capitalize(kw))}</button>`).join("");
+
+/** Dòng báo kết quả và các từ khoá gợi ý, theo từ khoá đang gõ. */
+function renderSearchNote(found, query) {
+  const note = $("#search-note");
+  const chips = $("#kw-chips");
+  const { keywords } = searchData();
+  const showKeywords = (on) => { chips.hidden = !on || !keywords.length; chips.innerHTML = on ? keywordChipsHtml(keywords) : ""; };
+  if (!query || !state.items.length) { note.hidden = true; showKeywords(!!state.items.length); return; }
+  note.hidden = false;
+  if (!found.items.length) {
+    note.textContent = `Không thấy món nào khớp “${query}”. Thử một từ khoá khác:`;
+    showKeywords(true);
+  } else if (found.fuzzy) {
+    note.textContent = `Không có món khớp đúng “${query}”. Đây là các món gần giống:`;
+    showKeywords(false);
+  } else {
+    note.textContent = `${found.items.length} món cho “${query}”`;
+    showKeywords(false);
+  }
+}
+
 function renderMenu() {
   const sections = menuSections(state.items, state.cats);
   const cats = catById();
+  const query = state.query.trim();
+  if (query && state.items.length) {
+    const found = searchEntries(searchData().entries, query);
+    $("#cat-chips").innerHTML = "";
+    $("#menu").innerHTML = found.items.length
+      ? `<section class="menu-section" id="cat-_search"><h2>Kết quả tìm món</h2>${found.items.map((m) => dishHtml(m, cats[m.categoryId])).join("")}</section>`
+      : "";
+    renderSearchNote(found, query);
+    return;
+  }
+  renderSearchNote(null, "");
   $("#cat-chips").innerHTML = sections.length > 1
     ? sections.map((s) => `<a href="#cat-${esc(s.id)}" data-cat="${esc(s.id)}">${esc(s.name)}</a>`).join("")
     : "";
@@ -672,6 +734,54 @@ $("#menu").addEventListener("input", (event) => {
   persistCart();
 });
 
+/* ---------- Ô tìm món: gõ là lọc, gợi ý tên món / nhóm, từ khoá gợi ý ---------- */
+const searchInput = $("#menu-search");
+let suggestHideTimer = null;
+
+function hideSuggest() {
+  $("#search-suggest").hidden = true;
+  searchInput.setAttribute("aria-expanded", "false");
+}
+
+function renderSuggest() {
+  const list = $("#search-suggest");
+  const query = state.query.trim();
+  const found = query && state.items.length ? suggestions(searchData().entries, searchData().categoryNames, query) : [];
+  if (!found.length || document.activeElement !== searchInput) { hideSuggest(); return; }
+  list.innerHTML = found.map((x) => `<li role="option"><button type="button" data-suggest="${esc(x.text)}"><span class="s-kind">${x.type === "category" ? "Nhóm" : "Món"}</span>${esc(x.text)}</button></li>`).join("");
+  list.hidden = false;
+  searchInput.setAttribute("aria-expanded", "true");
+}
+
+function setQuery(value, { fromChoice = false } = {}) {
+  state.query = String(value ?? "").slice(0, 60);
+  if (searchInput.value !== state.query) searchInput.value = state.query;
+  $("#search-clear").hidden = !state.query;
+  renderMenu();
+  if (fromChoice) { hideSuggest(); searchInput.blur(); $("#search-note").scrollIntoView({ behavior: "smooth", block: "start" }); } else renderSuggest();
+}
+
+searchInput.addEventListener("input", () => setQuery(searchInput.value));
+searchInput.addEventListener("focus", () => { clearTimeout(suggestHideTimer); renderSuggest(); });
+searchInput.addEventListener("blur", () => { suggestHideTimer = setTimeout(hideSuggest, 180); });
+searchInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") { event.preventDefault(); hideSuggest(); searchInput.blur(); }
+  else if (event.key === "Escape") { setQuery(""); hideSuggest(); }
+});
+$("#search-clear").addEventListener("click", () => { setQuery(""); searchInput.focus(); });
+$("#search-suggest").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-suggest]");
+  if (button) setQuery(button.dataset.suggest, { fromChoice: true });
+});
+$("#kw-chips").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-kw]");
+  if (button) setQuery(button.dataset.kw, { fromChoice: true });
+});
+$("#search-note").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-kw]");
+  if (button) setQuery(button.dataset.kw, { fromChoice: true });
+});
+
 $("#cat-chips").addEventListener("click", (event) => {
   const link = event.target.closest("[data-cat]");
   if (!link) return;
@@ -803,7 +913,8 @@ $("#history-body").addEventListener("click", (event) => {
 $("#back-to-menu").addEventListener("click", () => { showScreen("menu"); });
 $("#track-banner").addEventListener("click", () => { if (state.code) showScreen("track"); });
 
-document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { syncClock(); if (state.order) renderTrack(); } });
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { syncClock(); renderOpenStatus(); if (state.order) renderTrack(); } });
+setInterval(renderOpenStatus, 30_000);
 
 /* ---------- Khởi động ---------- */
 renderShop();

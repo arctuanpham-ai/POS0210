@@ -269,3 +269,30 @@ body.has-cart .legal-foot { margin-bottom: 96px; }
 .policy p, .policy li { font-size: 14.5px; } .policy ul { padding-left: 20px; margin: 6px 0; }
 .policy .box { padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); }
 .policy .back { display: inline-block; margin-bottom: 6px; font-weight: 700; }
+
+/* ===== Trạng thái mở cửa ===== */
+.open-status { display: flex; width: fit-content; align-items: center; gap: 8px; margin: 6px 16px 2px; padding: 6px 14px; border-radius: 999px; font-size: 14px; line-height: 1.3; }
+.open-status .dot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
+.open-status .detail { font-weight: 500; opacity: .85; }
+.open-status.open { background: #eaf3ec; color: var(--ok); }
+.open-status.soon { background: #fbf0dc; color: #8a5a00; }
+.open-status.closed { background: #f8e3df; color: var(--danger); }
+.open-status[hidden] { display: none; }
+
+/* ===== Ô tìm món ===== */
+.search { margin: 4px 0 2px; }
+.search-field { position: relative; }
+#menu-search { padding-right: 44px; font-size: 16px; -webkit-appearance: none; appearance: none; }
+#menu-search::-webkit-search-cancel-button, #menu-search::-webkit-search-decoration { -webkit-appearance: none; display: none; }
+.search-clear { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: #eee6d8; color: var(--ink); font-size: 20px; line-height: 1; cursor: pointer; }
+.search-suggest { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 20; margin: 0; padding: 4px; list-style: none; max-height: 280px; overflow-y: auto; background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgba(30, 30, 30, .14); }
+.search-suggest[hidden] { display: none; }
+.search-suggest button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font: inherit; font-size: 15px; text-align: left; cursor: pointer; }
+.search-suggest button:hover, .search-suggest button:focus-visible { background: #f3eadb; }
+.search-suggest .s-kind { flex: none; padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 11px; font-weight: 700; }
+.kw-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 2px; }
+.kw-chips[hidden] { display: none; }
+.kw-chips::before { content: "Gợi ý:"; color: var(--muted); font-size: 13px; }
+.kw-chips button { padding: 6px 12px; border: 1px dashed #b9a284; border-radius: 999px; background: transparent; color: var(--accent); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.search-note { margin: 10px 2px 2px; color: var(--muted); font-size: 13px; }
+.search-note[hidden] { display: none; }

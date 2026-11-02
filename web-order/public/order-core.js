@@ -259,11 +259,20 @@ const ruleInTime = (rule, now) => {
   return true;
 };
 
+/** Mức giảm giá khi đặt online (% so với giá tại quán) từ online_config/shop. Chỉ nhận số nguyên 1-50; mọi giá trị khác = không giảm. */
+export const onlineDiscountPercent = (shop) => {
+  const p = Math.floor(Number(shop?.onlineDiscountPercent));
+  return Number.isFinite(p) && p > 0 && p <= 50 ? p : 0;
+};
+
+/** Giá một phần sau giảm online, để hiển thị trên menu (cùng cách làm tròn xuống như tổng giảm của đơn). */
+export const onlinePrice = (price, percent) => Math.max(0, Number(price) - Math.floor((Number(price) * (Number(percent) || 0)) / 100));
+
 /**
  * Tính giá như POS (PricingCore.calculatePricing, phần tự động áp dụng): giá combo là giá cố định nên chỉ tính trên món lẻ.
  * total = subtotal + surcharge - discount. promo = { rules: [{ name, kind: DISCOUNT|SURCHARGE, percent, startAt, endAt, startMinute, endMinute }] }.
  */
-export const pricingFor = (lines, promo, now = new Date()) => {
+export const pricingFor = (lines, promo, now = new Date(), { onlinePercent = 0 } = {}) => {
   const subtotal = linesTotal(lines);
   const comboSub = lines.filter((l) => String(l.id).startsWith(COMBO_ID_PREFIX)).reduce((a, l) => a + l.price * l.qty, 0);
   const base = Math.max(0, subtotal - comboSub);
@@ -276,7 +285,12 @@ export const pricingFor = (lines, promo, now = new Date()) => {
     const d = Math.floor((after * Math.floor(Number(r.percent))) / 100);
     if (d > discount) { discount = d; best = r; }
   }
-  return { subtotal, surcharge, discount, total: Math.max(0, subtotal + surcharge - discount), discountName: best?.name || "", surchargeNames: surchargeRules.map((r) => r.name).filter(Boolean) };
+  // Giảm giá riêng cho đơn đặt online (% so với giá tại quán), tính trên MỌI dòng kể cả combo. Không cộng dồn với khuyến mãi của POS:
+  // lấy mức giảm lớn hơn. Giá từng dòng vẫn là giá menu (luật Firestore đối chiếu đúng giá menu), mức giảm nằm ở trường discount của đơn.
+  let discountName = best?.name || "";
+  const onlineDiscount = onlinePercent > 0 ? Math.floor((subtotal * onlinePercent) / 100) : 0;
+  if (onlineDiscount > 0 && onlineDiscount >= discount) { discount = onlineDiscount; discountName = `Đặt online giảm ${onlinePercent}%`; }
+  return { subtotal, surcharge, discount, total: Math.max(0, subtotal + surcharge - discount), discountName, surchargeNames: surchargeRules.map((r) => r.name).filter(Boolean) };
 };
 
 /**

@@ -17,7 +17,7 @@ threading.Thread(target=srv.serve_forever, daemon=True).start()
 BASE = f"http://127.0.0.1:{port}/"
 
 SEED = {
-  f"{ROOT}/online_config/shop": {"name": "0210 Cafe", "tagline": "Cà phê · Ăn sáng", "address": "12 Lê Lợi, Hồng Bàng, Hải Phòng", "phone": "0912 345 678", "hours": "6:30 – 22:00 hằng ngày", "orderingEnabled": True, "bank": "Techcombank", "account": "19031234567890", "holder": "NGUYEN VAN A"},
+  f"{ROOT}/online_config/shop": {"onlineDiscountPercent": 0, "name": "0210 Cafe", "tagline": "Cà phê · Ăn sáng", "address": "12 Lê Lợi, Hồng Bàng, Hải Phòng", "phone": "0912 345 678", "hours": "6:30 – 22:00 hằng ngày", "orderingEnabled": True, "bank": "Techcombank", "account": "19031234567890", "holder": "NGUYEN VAN A"},
   f"{ROOT}/menuCategories/c1": {"id": "c1", "name": "Cà phê", "sortOrder": 1, "active": True},
   f"{ROOT}/menuCategories/c2": {"id": "c2", "name": "Ăn sáng", "sortOrder": 2, "active": True},
   f"{ROOT}/menu/a": {"id": "a", "categoryId": "c1", "name": "Bạc xỉu", "price": 30000, "active": True, "description": "Sữa đặc, cà phê"},

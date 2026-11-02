@@ -195,3 +195,63 @@ test("thông báo ntfy: có mã đơn, số phần, tổng, hình thức; KHÔNG
   assert.equal(p.click, "https://x.y/#donline");
   assert.equal(notifyPayload({ topic: "t", code: "Z", order: { mode: "delivery", items: [{ qty: 1 }], total: 1000 } }).message, "1 phần · 1.000đ · Giao tận nơi");
 });
+
+/* ---------- Giảm giá khi đặt online ---------- */
+import { onlineDiscountPercent, onlinePrice } from "../public/order-core.js";
+
+const L = (id, price, qty = 1) => ({ id, name: id, price, qty, note: "" });
+
+test("mức giảm online: chỉ nhận số nguyên 1-50, còn lại là không giảm", () => {
+  assert.equal(onlineDiscountPercent({ onlineDiscountPercent: 10 }), 10);
+  assert.equal(onlineDiscountPercent({ onlineDiscountPercent: "10" }), 10);
+  assert.equal(onlineDiscountPercent({ onlineDiscountPercent: 0 }), 0);
+  assert.equal(onlineDiscountPercent({ onlineDiscountPercent: -5 }), 0);
+  assert.equal(onlineDiscountPercent({ onlineDiscountPercent: 51 }), 0);
+  assert.equal(onlineDiscountPercent({ onlineDiscountPercent: "abc" }), 0);
+  assert.equal(onlineDiscountPercent({}), 0);
+  assert.equal(onlineDiscountPercent(null), 0);
+});
+
+test("giá một phần sau giảm 10%", () => {
+  assert.equal(onlinePrice(30000, 10), 27000);
+  assert.equal(onlinePrice(35000, 10), 31500);
+  assert.equal(onlinePrice(6000, 10), 5400);
+  assert.equal(onlinePrice(25000, 0), 25000);
+});
+
+test("đơn online giảm 10% trên mọi dòng, kể cả combo; luật Firestore (giảm ≤ 60%, tổng khớp) vẫn đúng", () => {
+  const lines = [L("a", 30000, 2), L("b", 35000), L("c_x", 69000)];
+  const sum = 30000 * 2 + 35000 + 69000;
+  const p = pricingFor(lines, null, new Date(), { onlinePercent: 10 });
+  assert.equal(p.subtotal, sum);
+  assert.equal(p.discount, Math.floor(sum / 10));
+  assert.equal(p.total, sum - p.discount);
+  assert.equal(p.surcharge, 0);
+  assert.equal(p.discountName, "Đặt online giảm 10%");
+  assert.ok(p.discount * 100 <= sum * 60);
+  assert.equal(p.total, sum + p.surcharge - p.discount);
+});
+
+test("tổng đơn khớp tổng giá từng món sau giảm khi giá tròn chục", () => {
+  const lines = [L("a", 30000, 2), L("b", 35000), L("c", 25000, 3)];
+  const p = pricingFor(lines, null, new Date(), { onlinePercent: 10 });
+  const perDish = lines.reduce((t, l) => t + onlinePrice(l.price, 10) * l.qty, 0);
+  assert.equal(p.total, perDish);
+});
+
+test("không cộng dồn với khuyến mãi của POS: lấy mức giảm lớn hơn", () => {
+  const promo = { rules: [{ name: "Giờ vàng", kind: "DISCOUNT", percent: 20 }] };
+  const lines = [L("a", 50000)];
+  const big = pricingFor(lines, promo, new Date(), { onlinePercent: 10 });
+  assert.equal(big.discount, 10000);
+  assert.equal(big.discountName, "Giờ vàng");
+  const small = pricingFor(lines, { rules: [{ name: "Nhỏ", kind: "DISCOUNT", percent: 5 }] }, new Date(), { onlinePercent: 10 });
+  assert.equal(small.discount, 5000);
+  assert.equal(small.discountName, "Đặt online giảm 10%");
+});
+
+test("không bật giảm online thì giá như cũ", () => {
+  const lines = [L("a", 30000)];
+  assert.equal(pricingFor(lines, null).discount, 0);
+  assert.equal(pricingFor(lines, null, new Date(), { onlinePercent: 0 }).total, 30000);
+});

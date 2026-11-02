@@ -19,7 +19,7 @@ import { APP_CHECK_SITE_KEY, DEFAULT_SHOP, NOTIFY_CLICK, NOTIFY_TOPIC, STORE_ID,
 import {
   FINAL_STATUSES, LIMITS, comboTools, pricingFor, MODE_LABELS, STATUS, STATUS_TEXT, buildOrderDoc, cartFromOrder, cartLines, changeQty, countdownText, isOrderable,
   limitKeyForPhone, limitKeyForUid, linesCount, linesTotal, makeOrderCode, menuSections, money, orderView, pendingBase, progressSteps, rememberCode,
-  notifyPayload, setNote, toMillis, validateCheckout,
+  notifyPayload, onlineDiscountPercent, onlinePrice, setNote, toMillis, validateCheckout,
 } from "./order-core.js";
 import { vietQrPayload } from "./vietqr.js";
 import { STATS_COLLECTION, decide, keysFor, vnDayKey } from "./stats-core.js";
@@ -96,6 +96,9 @@ function track(event) {
 const menuById = () => Object.fromEntries(state.items.map((m) => [m.id, m]));
 const catById = () => Object.fromEntries(state.cats.map((c) => [c.id, c]));
 const currentLines = () => cartLines(state.cart, menuById(), catById());
+/** Giảm giá khi đặt online (%), mọi chỗ tính tiền dùng chung để menu, giỏ, đơn gửi lên và nhãn trên ảnh luôn khớp nhau. */
+const onlinePct = () => onlineDiscountPercent(state.shop);
+const priceNow = (lines) => pricingFor(lines, state.promo, new Date(), { onlinePercent: onlinePct() });
 
 /* ---------- Giờ máy chủ: đồng hồ điện thoại khách có thể sai, nên lấy chênh lệch từ header Date của chính trang ---------- */
 async function syncClock() {
@@ -125,6 +128,8 @@ async function loadShop() {
     state.promo = promoSnap?.exists?.() ? promoSnap.data() : null;
   } catch { /* dùng mặc định */ }
   renderShop();
+  // Menu có thể tải xong trước cấu hình quán: nếu ảnh đã nhớ cũ hơn thumbsVersion thì tải lại.
+  if (state.items.length && Number(state.shop.thumbsVersion || 0) > Number(store.get(KEYS.thumbs)?.ver || 0)) loadThumbs();
 }
 
 /** "Đang mở cửa" / "Đã đóng cửa" theo giờ mở cửa của quán, tính theo giờ Việt Nam (đồng hồ chỉnh theo máy chủ). Không đọc được giờ thì ẩn. */
@@ -220,23 +225,33 @@ async function loadMenu(force = false) {
   loadThumbs();
 }
 
+let thumbsInFlight = null;
+/** Ảnh món (menuThumbs). Nhớ trên máy khách 24 giờ; nếu chủ quán vừa đổi ảnh (thumbsVersion trong online_config/shop lớn hơn bản đã nhớ) thì tải lại ngay. */
 async function loadThumbs() {
   const cached = store.get(KEYS.thumbs);
-  if (cached && Date.now() - cached.at < THUMB_TTL) { state.thumbs = cached.map || {}; renderMenu(); return; }
+  const want = Number(state.shop.thumbsVersion || 0);
+  const fresh = cached && Date.now() - cached.at < THUMB_TTL && Number(cached.ver || 0) >= want;
+  if (fresh) { state.thumbs = cached.map || {}; renderMenu(); return; }
   if (cached?.map) { state.thumbs = cached.map; renderMenu(); }
-  try {
-    const snap = await getDocs(col("menuThumbs"));
-    const map = {};
-    snap.docs.forEach((d) => { const t = d.data().thumb; if (typeof t === "string" && t.startsWith("data:image/")) map[d.id] = t; });
-    state.thumbs = map;
-    store.set(KEYS.thumbs, { at: Date.now(), map });
-    renderMenu();
-  } catch { /* không có ảnh vẫn đặt được */ }
+  if (thumbsInFlight) return thumbsInFlight;
+  thumbsInFlight = (async () => {
+    try {
+      const snap = await getDocs(col("menuThumbs"));
+      const map = {};
+      snap.docs.forEach((d) => { const t = d.data().thumb; if (typeof t === "string" && t.startsWith("data:image/")) map[d.id] = t; });
+      state.thumbs = map;
+      store.set(KEYS.thumbs, { at: Date.now(), map, ver: Number(state.shop.thumbsVersion || 0) });
+      renderMenu();
+    } catch { /* không có ảnh vẫn đặt được */ } finally { thumbsInFlight = null; }
+  })();
+  return thumbsInFlight;
 }
 
 function dishHtml(item, cat) {
   const entry = state.cart[item.id];
   const sellable = isOrderable(item, cat);
+  const pct = onlinePct();
+  const promoOn = sellable && pct > 0;
   const thumb = state.thumbs[`menu_${item.id}`] || state.thumbs[item.id];
   // Combo: ghép ảnh các món thành phần, dấu + ở giữa.
   const tile = (id, name) => { const t = state.thumbs[`menu_${id}`] || state.thumbs[id]; return t ? `<img src="${esc(t)}" alt="" loading="lazy" width="56" height="56" />` : `<span class="dish-initial small">${esc(String(name || "?").trim().charAt(0).toUpperCase())}</span>`; };
@@ -248,7 +263,7 @@ function dishHtml(item, cat) {
       ? `<div class="stepper"><button type="button" data-act="dec" data-id="${esc(item.id)}" aria-label="Bớt 1 ${esc(item.name.trim())}">−</button><b aria-live="polite">${entry.qty}</b><button type="button" data-act="inc" data-id="${esc(item.id)}" aria-label="Thêm 1 ${esc(item.name.trim())}">+</button></div>`
       : `<button type="button" class="add" data-act="inc" data-id="${esc(item.id)}">Thêm</button>`;
   const note = sellable && entry ? `<input class="dish-note" data-note="${esc(item.id)}" maxlength="${LIMITS.maxLineNote}" placeholder="Ghi chú món (ít đá, ít ngọt…)" value="${esc(entry.note)}" autocomplete="off" />` : "";
-  return `<article class="dish${sellable ? "" : " off"}${comboImg ? " combo-dish" : ""}" data-dish="${esc(item.id)}"><div class="dish-img${comboImg ? " combo" : ""}">${comboImg || img}</div><div class="dish-body"><h3>${esc(item.name.trim())}</h3>${item.description ? `<p class="desc">${esc(item.description)}</p>` : ""}<b class="price">${money(item.price)}</b></div><div class="dish-ctl">${control}</div>${note}</article>`;
+  return `<article class="dish${sellable ? "" : " off"}${comboImg ? " combo-dish" : ""}" data-dish="${esc(item.id)}"><div class="dish-img${comboImg ? " combo" : ""}">${comboImg || img}${promoOn ? `<span class="disc-badge" title="Giảm ${pct}% khi đặt online"><span class="sr-only">Giảm ${pct}% khi đặt online</span><span aria-hidden="true">-${pct}%</span></span>` : ""}</div><div class="dish-body"><h3>${esc(item.name.trim())}</h3>${item.description ? `<p class="desc">${esc(item.description)}</p>` : ""}<b class="price">${promoOn ? `<span class="price-now">${money(onlinePrice(item.price, pct))}</span><s class="price-old">${money(item.price)}</s>` : money(item.price)}</b></div><div class="dish-ctl">${control}</div>${note}</article>`;
 }
 
 /** Chỉ mục tìm kiếm (đã bỏ dấu) dựng lại khi menu đổi; kèm các từ khoá gợi ý còn ra món. */
@@ -326,7 +341,7 @@ function renderCartBar() {
   const closed = state.shop.orderingEnabled === false;
   bar.hidden = !lines.length || !$("#screen-track").hidden;
   $("#cart-count").textContent = `${linesCount(lines)} món`;
-  $("#cart-total").textContent = money(pricingFor(lines, state.promo).total);
+  $("#cart-total").textContent = money(priceNow(lines).total);
   $("#cart-open").disabled = closed;
   $("#cart-open").textContent = closed ? "Tạm ngưng nhận đơn" : "Xem giỏ & đặt";
   document.body.classList.toggle("has-cart", !bar.hidden);
@@ -339,7 +354,7 @@ function sheetLinesHtml(lines) {
 function renderSheet() {
   const lines = currentLines();
   $("#sheet-lines").innerHTML = sheetLinesHtml(lines);
-  const pr = pricingFor(lines, state.promo);
+  const pr = priceNow(lines);
   $("#sheet-total").textContent = money(pr.total);
   $("#submit-total").textContent = money(pr.total);
   const promoRows = [];
@@ -491,7 +506,7 @@ async function sendOrder(uid, value, lines) {
     if (uBase >= LIMITS.maxPendingOrders || pBase >= LIMITS.maxPendingOrders) throw Object.assign(new Error("limit"), { code: "limit" });
     const code = makeOrderCode();
     const batch = writeBatch(db);
-    const orderDoc = buildOrderDoc({ code, uid, value, lines, pricing: pricingFor(lines, state.promo) });
+    const orderDoc = buildOrderDoc({ code, uid, value, lines, pricing: priceNow(lines) });
     batch.set(ref("online_orders", code), { ...orderDoc, createdAt: serverTimestamp() });
     batch.set(ref("online_limits", limitKeyForUid(uid)), { pending: uBase + 1, lastAt: serverTimestamp(), lastOrder: code });
     batch.set(ref("online_limits", limitKeyForPhone(value.phone)), { pending: pBase + 1, lastAt: serverTimestamp(), lastOrder: code });
@@ -637,7 +652,11 @@ async function saveQrImage(button) {
 }
 
 function summaryHtml(order) {
-  const lines = (order.items || []).map((l) => `<li><span>${l.qty}× ${esc(String(l.name).trim())}${l.note ? `<small>${esc(l.note)}</small>` : ""}</span><b>${money(l.price * l.qty)}</b></li>`).join("");
+  const adjust = [
+    Number(order.surcharge) > 0 ? `<li class="sum-adj"><span>Phụ thu</span><b>+${money(order.surcharge)}</b></li>` : "",
+    Number(order.discount) > 0 ? `<li class="sum-adj"><span>Giảm giá</span><b>−${money(order.discount)}</b></li>` : "",
+  ].join("");
+  const lines = (order.items || []).map((l) => `<li><span>${l.qty}× ${esc(String(l.name).trim())}${l.note ? `<small>${esc(l.note)}</small>` : ""}</span><b>${money(l.price * l.qty)}</b></li>`).join("") + adjust;
   const where = order.mode === "delivery" ? `Giao tới: ${esc(order.address)}` : order.mode === "dinein" ? `Tại quán · bàn ${esc(order.table)}` : "Mang đi";
   return `<details class="summary"><summary>Đơn ${esc(order.code)} · ${money(order.total)} · ${esc(MODE_LABELS[order.mode] || "")}</summary><ul>${lines}</ul><p class="muted small">${where}${order.note ? `<br>Ghi chú: ${esc(order.note)}` : ""}</p></details>`;
 }

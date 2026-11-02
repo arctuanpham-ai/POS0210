@@ -118,3 +118,19 @@ test("đơn khách đã huỷ: nhân viên chỉ ghi nhận được nếu khác
   const now = Date.now();
   assert.equal(groupOrders([{ ...order, id: "a", createdAt: now - 1000 }], now).recent.length, 1);
 });
+
+test("form thông tin quán: giảm giá khi đặt online", () => {
+  const base = { name: "0210" };
+  assert.equal(validateShopConfig(base).value.onlineDiscountPercent, undefined, "không truyền thì không ghi đè");
+  let r = validateShopConfig({ ...base, onlineDiscountPercent: "10" });
+  assert.ok(r.ok); assert.equal(r.value.onlineDiscountPercent, 10);
+  r = validateShopConfig({ ...base, onlineDiscountPercent: "0" });
+  assert.ok(r.ok); assert.equal(r.value.onlineDiscountPercent, 0);
+  r = validateShopConfig({ ...base, onlineDiscountPercent: "" });
+  assert.ok(r.ok); assert.equal(r.value.onlineDiscountPercent, 0, "để trống = không giảm");
+  for (const bad of ["51", "-1", "7.5", "abc"]) {
+    r = validateShopConfig({ ...base, onlineDiscountPercent: bad });
+    assert.equal(r.ok, false, bad);
+    assert.ok(r.errors.onlineDiscountPercent, bad);
+  }
+});

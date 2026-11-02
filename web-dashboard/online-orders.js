@@ -109,6 +109,13 @@ export const validateShopConfig = (input) => {
     notice: text(input.notice, 160), legalName: text(input.legalName, 100), regNo: text(input.regNo, 30), owner: text(input.owner, 60), email: text(input.email, 80), siteUrl: text(input.siteUrl, 200), bank: text(input.bank, 40), account: text(input.account, 25).replace(/\s+/g, ""), holder: text(input.holder, 60),
     orderingEnabled: input.orderingEnabled !== false,
   };
+  // Giảm giá khi đặt online (% so với giá tại quán). Không truyền = không đổi; để trống = 0 (không giảm).
+  if (input.onlineDiscountPercent !== undefined) {
+    const raw = String(input.onlineDiscountPercent).trim();
+    const n = raw === "" ? 0 : Number(raw);
+    if (!Number.isInteger(n) || n < 0 || n > 50) errors.onlineDiscountPercent = "Mức giảm khi đặt online phải là số nguyên từ 0 đến 50 (%).";
+    else value.onlineDiscountPercent = n;
+  }
   if (!value.name) errors.name = "Nhập tên quán";
   if (value.phone && !/^[\d+\s.()-]{8,20}$/.test(value.phone)) errors.phone = "Số điện thoại chưa đúng";
   if (value.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.email)) errors.email = "Email chưa đúng";

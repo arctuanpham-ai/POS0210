@@ -698,3 +698,5 @@ body:has(#login-view:not([hidden])), body:has(#pin-view:not([hidden])) { backgro
 .count-cmp-total { margin: 8px 0; overflow-wrap: anywhere; }
 .count-cmp td, .count-cmp th { font-size: 12px; }
 .count-value .item-chart-wrap { margin: 8px 0; max-width: 100%; }
+
+.oo-items .oo-adj { color: var(--muted, #6b6f63); font-style: italic; }

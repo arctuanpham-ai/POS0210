@@ -26,6 +26,8 @@ export const DEFAULT_SHOP = {
   hours: "",
   notice: "",
   orderingEnabled: true,
+  // Giảm giá cho đơn đặt online so với giá tại quán (%). Chủ quán đổi trong web quản lý > Đơn online > Thông tin quán; 0 = không giảm.
+  onlineDiscountPercent: 10,
   bank: "",
   account: "",
   holder: "",

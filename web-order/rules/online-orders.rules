@@ -295,3 +295,20 @@ function validSrc(s) {
     && s.get('at', 0) is int
     && s.get('first', {}).keys().hasOnly(['source', 'campaign', 'content', 'at']);
 }
+
+// ---- Lượt vào trang theo nguồn (UTM / Facebook / Google / không xác định): mỗi nguồn-mỗi ngày một tài liệu, khách ẩn danh chỉ được tăng đúng 1 ----
+// Mã tài liệu <yyyymmdd>~<8 ký tự hex>; chỉ chủ quán đọc. Chuỗi nguồn tối đa 40 ký tự.
+function validVisitSrc(id) {
+  let d = request.resource.data;
+  return id.matches('^20[0-9]{6}~[0-9a-f]{8}$')
+    && d.keys().hasOnly(['visit', 'source', 'medium', 'campaign', 'content'])
+    && d.source is string && d.source.size() >= 1 && d.source.size() <= 40
+    && d.get('medium', '').size() <= 40 && d.get('campaign', '').size() <= 40 && d.get('content', '').size() <= 40;
+}
+
+match /users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/online_stats_src/{id} {
+  allow read: if isShopOwner();
+  allow create: if isGuest() && validVisitSrc(id) && request.resource.data.visit == 1;
+  allow update: if isGuest() && validVisitSrc(id) && request.resource.data.visit == resource.data.visit + 1 && request.resource.data.source == resource.data.source;
+  allow delete: if isShopOwner();
+}

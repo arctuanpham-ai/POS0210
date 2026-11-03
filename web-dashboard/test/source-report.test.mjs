@@ -39,3 +39,24 @@ test("không có dữ liệu: rỗng, không chia cho 0", () => {
   const r = buildSourceReport([], NOW, 7);
   assert.deepEqual(r.channels, []); assert.equal(r.total.revenue, 0);
 });
+
+test("lượt vào theo nguồn: gộp theo nhóm và chiến dịch, đơn ÷ lượt vào, lọc theo ngày", () => {
+  const day = (ms) => new Date(ms + 7 * 3_600_000).toISOString().slice(0, 10).replace(/-/g, "");
+  const today = day(NOW), old = day(NOW - 9 * 86_400_000);
+  const visits = [
+    { id: `${today}~aaaaaaaa`, visit: 20, source: "facebook", medium: "paid_social", campaign: "com_trua", content: "p1" },
+    { id: `${today}~bbbbbbbb`, visit: 5, source: "facebook", medium: "paid_social", campaign: "com_trua", content: "p2" },
+    { id: `${today}~cccccccc`, visit: 8, source: "unknown", medium: "", campaign: "", content: "" },
+    { id: `${old}~dddddddd`, visit: 99, source: "facebook", medium: "paid_social", campaign: "cu", content: "" },
+  ];
+  const orders = [mk("done", 50000, ads("com_trua", "p1")), mk("done", 30000, ads("com_trua", "p1")), mk("new", 20000, ads("com_trua", "p2"))];
+  const r = buildSourceReport(orders, NOW, 7, visits);
+  const fb = r.channels.find((c) => c.key === "Facebook Ads");
+  assert.equal(fb.visits, 25); assert.equal(fb.orders, 3); assert.equal(fb.perVisit, 3 / 25);
+  assert.equal(r.channels.find((c) => c.key === UNKNOWN).visits, 8);
+  assert.equal(r.total.visits, 33, "lượt vào ngoài khoảng ngày không tính");
+  const p1 = r.campaigns.find((c) => c.key.endsWith("com_trua · p1"));
+  assert.equal(p1.visits, 20); assert.equal(p1.orders, 2);
+  assert.equal(r.campaigns.some((c) => c.key.includes("· cu")), false);
+  assert.equal(buildSourceReport(orders, NOW, 7).channels[0].perVisit, null, "không có lượt vào thì không tính tỷ lệ");
+});

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ATTR_TTL_MS, attributionForOrder, buildUtmUrl, cleanTag, parseTouch, updateAttribution } from "../public/source-core.js";
+import { ATTR_TTL_MS, attributionForOrder, buildUtmUrl, cleanTag, parseTouch, updateAttribution, visitDocId, visitSource } from "../public/source-core.js";
 import { buildOrderDoc, ORDER_KEYS } from "../public/order-core.js";
 
 const T0 = Date.UTC(2026, 10, 3, 3, 0);
@@ -28,7 +28,8 @@ test("UTM không hợp lệ hoặc quá dài bị làm sạch / cắt", () => {
   const t = parseTouch(`?utm_source=Face Book<script>&utm_campaign=${long}`, "", "h");
   assert.equal(t.source, "face_bookscript");
   assert.equal(t.campaign.length, 40);
-  assert.equal(cleanTag("  Cơm Trưa! "), "cm_tra");
+  assert.equal(cleanTag("  Cơm Trưa! "), "com_trua", "bỏ dấu tiếng Việt, không làm mất chữ");
+  assert.equal(cleanTag("Chiến dịch Đặt trực tiếp"), "chien_dich_dat_truc_tiep");
   assert.equal(parseTouch("?utm_campaign=x", "", "h").source, "(not_set)");
   assert.equal(parseTouch("?utm_source=%%%", "", "h"), null);
 });
@@ -77,4 +78,13 @@ test("đơn không có nguồn (trình duyệt khác / chưa từng có UTM): kh
 test("buildUtmUrl: link quảng cáo thật", () => {
   const url = buildUtmUrl("https://datmon0210.web.app/", { source: "facebook", medium: "paid_social", campaign: "com_trua", content: "Post 01" });
   assert.equal(url, "https://datmon0210.web.app/?utm_source=facebook&utm_medium=paid_social&utm_campaign=com_trua&utm_content=post_01");
+});
+
+test("lượt vào theo nguồn: nguồn không xác định, mã tài liệu ổn định và khác nhau theo chiến dịch", () => {
+  assert.deepEqual(visitSource(null), { source: "unknown", medium: "", campaign: "", content: "" });
+  const a = visitSource(parseTouch(FB, "", "h")), b = visitSource(parseTouch("?utm_source=facebook&utm_medium=paid_social&utm_campaign=khac", "", "h"));
+  assert.match(visitDocId("20261103", a), /^20261103~[0-9a-f]{8}$/);
+  assert.equal(visitDocId("20261103", a), visitDocId("20261103", { ...a }));
+  assert.notEqual(visitDocId("20261103", a), visitDocId("20261103", b));
+  assert.notEqual(visitDocId("20261103", a), visitDocId("20261104", a));
 });

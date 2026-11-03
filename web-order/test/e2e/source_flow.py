@@ -81,6 +81,9 @@ def run():
         check(isinstance(src.get("at"), int) and src["at"] > 0, "có thời điểm ghi nhận nguồn")
         check(o["code"] and len(o) == 18, f"đơn 18 trường (17 + src), mã đơn vẫn sinh như cũ: {o['code']} / {len(o)}")
         check(o["total"] == 30000 and o["discount"] == 0, "giá, giảm giá không đổi")
+        vs = [x for x in page.evaluate("window.__stats || []") if "/online_stats_src/" in x["path"]]
+        check(len(vs) == 1 and vs[0]["data"].get("source") == "facebook" and vs[0]["data"].get("campaign") == "com_trua" and vs[0]["data"].get("content") == "post_01", f"lượt vào được đếm theo nguồn, đúng 1 lần: {[v['data'] for v in vs]}")
+        check(vs and set(vs[0]["data"].keys()) <= {"visit", "source", "medium", "campaign", "content"} and "/20" in vs[0]["path"], "bộ đếm chỉ có các khoá cho phép")
         check(not errors, "không lỗi JS: " + "; ".join(errors[:3]))
         ctx.close()
 
@@ -110,6 +113,8 @@ def run():
 
         print("5. Trình duyệt khác / không UTM: đơn bình thường, không src")
         ctx, page, errors = open_page(browser, seedd, "")
+        vs = [x for x in page.evaluate("window.__stats || []") if "/online_stats_src/" in x["path"]]
+        check(len(vs) == 1 and vs[0]["data"].get("source") == "unknown", f"không UTM: lượt vào ghi là không xác định: {[v['data'] for v in vs]}")
         o = order_it(page)
         check("src" not in o and len(o) == 17, "đơn 17 trường, đặt món không lỗi")
         ctx.close()

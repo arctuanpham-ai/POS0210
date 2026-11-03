@@ -6,9 +6,9 @@
 export const ATTR_TTL_MS = 7 * 86_400_000;
 export const ATTR_FIELD_MAX = 40;
 
-/** Chuẩn hoá một giá trị UTM: chữ thường, chỉ giữ chữ-số _ - . ~ và khoảng trắng đổi thành _, tối đa 40 ký tự. */
+/** Chuẩn hoá một giá trị UTM: chữ thường, bỏ dấu tiếng Việt ("Cơm trưa" -> com_trua), chỉ giữ chữ-số _ - . ~ và khoảng trắng đổi thành _, tối đa 40 ký tự. */
 export const cleanTag = (value) =>
-  String(value ?? "").trim().toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_.~-]/g, "").slice(0, ATTR_FIELD_MAX);
+  String(value ?? "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/\s+/g, "_").replace(/[^a-z0-9_.~-]/g, "").slice(0, ATTR_FIELD_MAX);
 
 const FACEBOOK_HOSTS = /(^|\.)(facebook\.com|fb\.com|fb\.me|fb\.watch|messenger\.com)$/;
 const GOOGLE_HOSTS = /(^|\.)google\.[a-z.]{2,6}$/;
@@ -82,3 +82,12 @@ export function buildUtmUrl(base, { source, medium, campaign, content, term }) {
   }
   return url.toString();
 }
+
+/** Nguồn của MỘT LƯỢT VÀO trang (chỉ theo URL / nơi giới thiệu của lượt này, không dùng nguồn đã nhớ): touch null -> "unknown". */
+export const visitSource = (touch) => ({
+  source: touch?.source || "unknown", medium: touch?.medium || "", campaign: touch?.campaign || "", content: touch?.content || "",
+});
+
+const fnv = (text) => { let h = 0x811c9dc5; for (let i = 0; i < text.length; i += 1) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16).padStart(8, "0"); };
+/** Mã tài liệu bộ đếm lượt vào theo nguồn: <yyyymmdd>~<băm 8 ký tự của nguồn/phương tiện/chiến dịch/nội dung>. */
+export const visitDocId = (dayKey, v) => `${dayKey}~${fnv([v.source, v.medium, v.campaign, v.content].join("\u0001"))}`;

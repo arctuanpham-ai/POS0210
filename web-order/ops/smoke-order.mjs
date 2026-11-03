@@ -106,6 +106,27 @@ for (const [i, c] of cases.entries()) {
   console.log(`[bản chụp menu] khách ghi bị chặn -> HTTP ${w.status} ${w.status === 403 ? "ĐÚNG" : "SAI"}`);
   if (w.status !== 403) failed++;
 }
+// Lượt vào theo nguồn (online_stats_src): khách ẩn danh tạo / tăng đúng 1 với đúng các khoá; sai thì bị chặn. Dọn bằng quyền chủ quán.
+{
+  const id = "20000101~0badf00d";
+  const doc = `${root}/online_stats_src/${id}`;
+  const commit = async (name, fields, inc) => (await fetch(`https://firestore.googleapis.com/v1/${db}:commit`, { method: "POST", headers: { authorization: `Bearer ${signIn.idToken}`, "content-type": "application/json" }, body: JSON.stringify({ writes: [{ update: { name, fields: fields }, updateMask: { fieldPaths: Object.keys(fields) }, updateTransforms: [{ fieldPath: "visit", increment: { integerValue: String(inc) } }] }] }) })).status;
+  const f = { source: { stringValue: "facebook" }, medium: { stringValue: "paid_social" }, campaign: { stringValue: "smoke" }, content: { stringValue: "" } };
+  const results = [
+    ["tạo lượt vào +1", await commit(doc, f, 1), true],
+    ["tăng tiếp +1", await commit(doc, f, 1), true],
+    ["tăng +2 bị chặn", await commit(doc, f, 2), false],
+    ["mã tài liệu sai bị chặn", await commit(`${root}/online_stats_src/hack`, f, 1), false],
+    ["khoá lạ bị chặn", await commit(doc, { ...f, extra: { stringValue: "x" } }, 1), false],
+    ["nguồn quá dài bị chặn", await commit(doc, { ...f, campaign: { stringValue: "a".repeat(41) } }, 1), false],
+  ];
+  for (const [label, status, wantOk] of results) {
+    const ok = status >= 200 && status < 300;
+    console.log(`[lượt vào theo nguồn] ${label} -> HTTP ${status} ${ok === wantOk ? "ĐÚNG" : "SAI"}`);
+    if (ok !== wantOk) failed++;
+  }
+  await fetch(`https://firestore.googleapis.com/v1/${doc}`, { method: "DELETE", headers: { authorization: `Bearer ${admin}` } });
+}
 // Bộ đếm lượt truy cập: khách ẩn danh tăng đúng 1 (tạo rồi cập nhật) được; tăng 2 hoặc bộ đếm lạ thì bị chặn. Dọn tài liệu thử bằng quyền chủ quán.
 {
   const statDoc = `${root}/online_stats/20000101`;

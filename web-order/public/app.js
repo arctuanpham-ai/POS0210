@@ -26,7 +26,7 @@ import { STATS_COLLECTION, decide, keysFor, vnDayKey } from "./stats-core.js";
 import { qrSvg, qrPngDataUrl } from "./qr.js";
 import { openStatus } from "./hours-core.js";
 import { SNAPSHOT_DOC, THUMB_DOC_PREFIX, mergeThumbChunks, usableSnapshot } from "./menu-snapshot.js";
-import { attributionForOrder, parseTouch, readStored, updateAttribution } from "./source-core.js";
+import { attributionForOrder, parseTouch, readStored, updateAttribution, visitDocId, visitSource } from "./source-core.js";
 import { fold, indexItem, searchEntries, suggestions, usableKeywords } from "./search-core.js";
 
 const $ = (selector) => document.querySelector(selector);
@@ -96,6 +96,11 @@ function track(event) {
     const patch = {};
     for (const key of keysFor(event, now)) patch[key] = increment(1);
     authPromise.then((uid) => { if (uid) return setDoc(ref(STATS_COLLECTION, vnDayKey(now)), patch, { merge: true }); return null; }).catch(() => { /* đếm lỗi: bỏ qua */ });
+    // Lượt vào theo nguồn (link quảng cáo có UTM, Facebook, Google, không xác định…): bộ đếm ẩn danh, mỗi lượt vào ghi thêm 1 lần.
+    if (event === "visit") {
+      const v = visitSource(currentTouch);
+      authPromise.then((uid) => { if (uid) return setDoc(ref("online_stats_src", visitDocId(vnDayKey(now), v)), { visit: increment(1), ...v }, { merge: true }); return null; }).catch(() => { /* bỏ qua */ });
+    }
   } catch { /* không bao giờ làm hỏng trang vì bộ đếm */ }
 }
 const menuById = () => Object.fromEntries(state.items.map((m) => [m.id, m]));
@@ -122,17 +127,19 @@ let authReady;
 const authPromise = new Promise((resolve) => { authReady = resolve; });
 onAuthStateChanged(auth, (user) => { if (user) { state.uid = user.uid; authReady(user.uid); } });
 signInAnonymously(auth).catch((error) => { state.authError = error; authReady(null); });
+let currentTouch = null; // nguồn của lượt vào hiện tại (chỉ theo URL/nơi giới thiệu của lần mở trang này); phải khai báo trước khi gọi captureSource
+captureSource();
 track("visit"); track("device");
 /* Nguồn khách (UTM / nơi giới thiệu): nhớ 7 ngày trên máy khách, chỉ là dữ liệu bổ sung, lỗi gì cũng bỏ qua, không ảnh hưởng đặt món. */
 function captureSource() {
   try {
     const touch = parseTouch(location.search, document.referrer, location.hostname);
+    currentTouch = touch;
     const next = updateAttribution(readStored(store.get(KEYS.attr)), touch, Date.now());
     if (next) store.set(KEYS.attr, next); else store.del(KEYS.attr);
   } catch { /* bỏ qua */ }
 }
 const orderSource = () => { try { return attributionForOrder(readStored(store.get(KEYS.attr)), Date.now()); } catch { return null; } };
-captureSource();
 const ensureUid = async () => (await authPromise) || state.uid;
 
 /* ---------- Thông tin quán ---------- */

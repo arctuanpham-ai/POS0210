@@ -3656,6 +3656,7 @@ fun Printer(vm: PosViewModel) {
                     FilterChip(selected=paperMm=="58",onClick={vm.saveSetting("printer_paper_mm","58")},label={Text("58 mm")})
                     FilterChip(selected=paperMm=="80",onClick={vm.saveSetting("printer_paper_mm","80")},label={Text("80 mm")})
                 }
+                SettingSwitch("In phiếu bếp (tắt = vẫn gửi bếp, không in giấy)",settings.firstOrNull{it.key=="kitchen_print_enabled"}?.value!="false"){vm.saveSetting("kitchen_print_enabled",it.toString())}
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = mode == "TEST",

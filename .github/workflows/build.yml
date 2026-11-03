@@ -76,3 +76,11 @@ jobs:
           make_latest: false
           files: app/build/outputs/apk/debug/app-debug.apk
           fail_on_unmatched_files: true
+      - name: Publish APK to apk-latest branch
+        run: |
+          mkdir -p "$RUNNER_TEMP/apkpub" && cp app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/apkpub/POS0210-latest.apk"
+          cd "$RUNNER_TEMP/apkpub" && git init -q && git checkout -q -b apk-latest
+          git config user.name "pos0210-ci" && git config user.email "ci@users.noreply.github.com"
+          echo "${{ github.sha }}" > BUILD_SHA.txt
+          git add -A && git commit -qm "APK ${{ github.sha }}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" apk-latest

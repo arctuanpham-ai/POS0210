@@ -334,7 +334,7 @@ fun saveSetting(key:String,value:String){
  val e=currentEmployee.value?:return
  val allowed=when(key){
   "storage_root_uri","master_config_uri","autoback_tree_uri" -> e.role=="ADMIN"||e.canManageSystem
-  "bank_name","bank_account","bank_holder","qr_prefix","printer_mode","printer_mac","printer_name","kitchen_printer_mac","kitchen_printer_name","receipt_printer_mac","receipt_printer_name","printer_paper_mm","bank_notification_enabled","bank_notification_vibrate","bank_notification_tts" -> e.role=="ADMIN"||e.role=="MANAGER"
+  "bank_name","bank_account","bank_holder","qr_prefix","printer_mode","printer_mac","printer_name","kitchen_print_enabled","kitchen_printer_mac","kitchen_printer_name","receipt_printer_mac","receipt_printer_name","printer_paper_mm","bank_notification_enabled","bank_notification_vibrate","bank_notification_tts" -> e.role=="ADMIN"||e.role=="MANAGER"
   else -> e.role=="ADMIN"
  }
  if(!allowed){viewModelScope.launch{audit("SECURITY",key,"SETTING_DENIED","role=${e.role}")};return}
@@ -420,6 +420,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
   audit("STORAGE","POS0210","ATTACH","writes=$allowWrites")
  }
 }
+ fun kitchenPrintEnabled()=setting("kitchen_print_enabled")!="false"
  fun setting(key:String)=settings.value.firstOrNull{it.key==key}?.value?:""
  fun paymentSession(sessionId:String)=dao.activePaymentSession(sessionId)
  fun openPaymentSession(session:TableSessionEntity,table:DiningTableEntity,amount:Long){
@@ -604,6 +605,16 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
     return@launch
    }
 
+   if(!kitchenPrintEnabled()){
+    val now=System.currentTimeMillis()
+    if(repo.finalizeKitchenPrint(job.id,b.id,now)){
+     audit("PRINT",b.id,"KITCHEN_PRINT_SKIPPED","reason=kitchen_print_disabled,operator=${e.name},job=${job.id}")
+     printerMessage.value="ĐÃ GỬI BẾP #${b.serviceNo.toString().padStart(3,'0')} · Đang TẮT in phiếu bếp"
+     autoBackup()
+    }
+    return@launch
+   }
+
    if(printerMode()!="BLUETOOTH"){
     val now=System.currentTimeMillis()
     if(repo.finalizeKitchenPrint(job.id,b.id,now)){
@@ -673,7 +684,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    if(dao.cancelBatch(b.id)>0){
     audit("BATCH",b.id,"CANCELLED","reason=${reason.trim()},operator=${e.name}")
     autoBackup()
-    if(printerMode()=="BLUETOOTH"&&kitchenPrinterMac().isNotBlank()){
+    if(kitchenPrintEnabled()&&printerMode()=="BLUETOOTH"&&kitchenPrinterMac().isNotBlank()){
      val table=currentTable.value?.name ?: "Bàn"
      val profile=printerProfile()
      val pr=BluetoothPrinter.printBitmap(getApplication(),kitchenPrinterMac(),ReceiptRenderer.cancel(table,b.sequence,e.name,reason.trim(),profile),profile,vn.ecohome.pos0210.printing.PrintJobType.CANCEL)

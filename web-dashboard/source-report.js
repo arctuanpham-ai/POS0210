@@ -1,8 +1,8 @@
 // Báo cáo nguồn đơn online (UTM / nơi giới thiệu). Hàm thuần: không Firebase, không DOM.
 // Doanh thu chỉ tính đơn đã thanh toán (cùng tập trạng thái với phễu: paid / delivering / done); đơn huỷ, từ chối, hết hạn không tính.
 // Đây là doanh thu ĐƯỢC GẮN nguồn, không phải doanh thu tăng thêm nhờ quảng cáo.
-import { ooToMillis } from "./online-orders.js?v=20261104-2";
-import { TEST_ORDER_NAME, dayKeyVN, lastDays } from "./stats-view.js?v=20261104-2";
+import { ooToMillis } from "./online-orders.js?v=20261104-3";
+import { TEST_ORDER_NAME, dayKeyVN, lastDays } from "./stats-view.js?v=20261104-3";
 
 const PAID = new Set(["paid", "delivering", "done"]);
 const LOST = new Set(["rejected", "expired", "cancelled"]);

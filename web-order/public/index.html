@@ -35,41 +35,34 @@
   <div id="app">
     <!-- ===== Màn hình menu ===== -->
     <div id="screen-menu">
-      <div class="cover" id="hero-photo"><img src="assets/banner.jpg" alt="0210 · Đặt món trực tiếp giảm 10% so với giá tại quán" width="1600" height="634" decoding="async" onerror="this.parentElement.hidden=true" /></div>
       <header class="hero">
         <div class="hero-head">
           <img class="logo wide" src="assets/logo.png" alt="0210 Breakfast Coffee Drinks" width="124" height="52" />
-          <div>
-            <h1 id="shop-name" class="sr-only">0210</h1>
-            <p class="tagline" id="shop-tagline" hidden></p>
-          </div>
-          <button type="button" class="pill" id="open-history" hidden>🧾 Lịch sử đơn</button>
+          <p class="motto" aria-hidden="true"><span>Good food</span><span>Good people</span><span>Good day</span></p>
+          <h1 id="shop-name" class="sr-only">0210</h1>
+          <p class="tagline sr-only" id="shop-tagline" hidden></p>
+          <button type="button" class="pill" id="open-history" hidden><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6"/></svg><span>Lịch sử đơn</span></button>
         </div>
         <p class="open-status" id="open-status" role="status" hidden></p>
         <p class="banner" id="closed-banner" hidden></p>
-        <details class="shop-more" id="shop-more">
-          <summary>
-            <svg class="pin" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
-            <span class="short" id="shop-short">Hoàng Huy Riverside</span>
-            <span class="more"><span class="more-on">Xem thông tin quán</span><span class="more-off">Thu gọn</span></span>
-          </summary>
-          <div class="shop-more-body">
-            <dl class="shop-info" id="shop-info" hidden></dl>
-            <p class="hero-note">Đơn gửi trực tiếp đến quán. Không cần đăng nhập hay cài app.</p>
-            <p class="hero-note allergen">Món có thể chứa hoặc tiếp xúc với thành phần gây dị ứng (sữa, trứng, đậu phộng, gluten…). Nếu bạn bị dị ứng, hãy ghi vào ghi chú hoặc gọi quán trước khi đặt.</p>
-            <img class="shop-photos" src="assets/shop-photos.jpg" alt="Không gian quán 0210" width="1280" height="507" loading="lazy" decoding="async" onerror="this.hidden=true" />
-          </div>
-        </details>
       </header>
 
-      <p class="offer" id="offer-note" hidden></p>
-
       <button type="button" class="track-banner" id="track-banner" hidden>Bạn có đơn đang theo dõi. Bấm để xem trạng thái</button>
+
+      <section class="promo" id="promo-banner" aria-label="Ưu đãi đặt trực tiếp" hidden>
+        <div class="promo-text">
+          <p class="promo-title">Đặt món trực tiếp tại 0210</p>
+          <p class="promo-big"><span>GIẢM</span> <b id="promo-pct">10%</b></p>
+          <p class="promo-sub">So với giá tại quán</p>
+          <p class="promo-note"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M7.8 12.3l3 3 5.4-6"/></svg>Giá trên web đã bao gồm ưu đãi</p>
+        </div>
+        <img class="promo-img" src="assets/banner-food.jpg" alt="Cơm gà chiên mắm" width="592" height="321" decoding="async" />
+      </section>
 
       <div class="search" id="search-box" role="search">
         <div class="search-field">
           <svg class="search-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14zm5-2 5 5"/></svg>
-          <input type="search" id="menu-search" placeholder="Tìm món bạn muốn ăn..." aria-label="Tìm món" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search" role="combobox" aria-expanded="false" aria-controls="search-suggest" maxlength="60" />
+          <input type="search" id="menu-search" placeholder="Tìm món: cà phê, cơm, bánh mì..." aria-label="Tìm món" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search" role="combobox" aria-expanded="false" aria-controls="search-suggest" maxlength="60" />
           <button type="button" class="search-clear" id="search-clear" aria-label="Xoá từ khoá" hidden>×</button>
           <ul class="search-suggest" id="search-suggest" role="listbox" hidden></ul>
         </div>
@@ -84,6 +77,31 @@
         <button type="button" class="secondary" id="menu-retry" hidden>Thử lại</button>
         <div id="menu" aria-live="polite"><p class="muted center">Đang tải menu…</p></div>
       </main>
+
+      <section class="why" id="why" aria-labelledby="why-title">
+        <h2 id="why-title">Vì sao nên đặt trực tiếp tại 0210?</h2>
+        <ul class="why-grid">
+          <li><svg viewBox="0 0 48 48" width="34" height="34" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="33" r="5"/><circle cx="37" cy="33" r="5"/><path d="M17 33h12l5-12h-9M29 33l-3-12h-6M34 21l-2-7h-4M4 24h8M6 29h6"/></g></svg><div><b>Giao hàng theo từng đơn</b><span>Nhanh chóng, giữ trọn chất lượng</span></div></li>
+          <li><svg viewBox="0 0 48 48" width="34" height="34" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 34a16 16 0 0 1 32 0zM5 38h38M24 15v-3M22 12h4"/></g></svg><div><b>Món ăn đúng chất lượng</b><span>Đúng định lượng như tại quán</span></div></li>
+          <li><svg viewBox="0 0 48 48" width="34" height="34" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="22" cy="14" rx="11" ry="4"/><path d="M11 14v6c0 2.2 4.9 4 11 4s11-1.8 11-4v-6M11 20v6c0 2.2 4.9 4 11 4s11-1.8 11-4v-6M11 26v6c0 2.2 4.9 4 11 4s11-1.8 11-4v-6"/></g></svg><div><b>Giá rõ ràng</b><span>Không đội giá do ứng dụng trung gian</span></div></li>
+          <li><svg viewBox="0 0 48 48" width="34" height="34" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="13" y="5" width="22" height="38" rx="4"/><path d="M21 9h6M19 25l4 4 7-8"/></g></svg><div><b>Đặt món nhanh chóng</b><span>Dễ dàng và hỗ trợ trực tiếp từ 0210</span></div></li>
+        </ul>
+      </section>
+
+      <details class="shop-more" id="shop-more">
+        <summary>
+          <svg class="ico" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M12 11v6M12 7.5v.2"/></svg>
+          <span class="t">Thông tin quán &amp; hướng dẫn đặt món</span>
+          <svg class="chev" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></svg>
+        </summary>
+        <div class="shop-more-body">
+          <dl class="shop-info" id="shop-info" hidden></dl>
+          <p class="hero-note">Đơn gửi trực tiếp đến quán. Không cần đăng nhập hay cài app.</p>
+          <p class="hero-note"><b>Giao hàng và phí vận chuyển:</b> phạm vi, phí và thời gian giao (nếu có) do quán thông báo khi xác nhận đơn. Với những địa chỉ giao hàng xa, 0210 sẽ liên hệ xác nhận phí vận chuyển trước khi giao. <a href="chinh-sach#giao-hang">Xem chính sách giao hàng</a>.</p>
+          <p class="hero-note allergen">Món có thể chứa hoặc tiếp xúc với thành phần gây dị ứng (sữa, trứng, đậu phộng, gluten…). Nếu bạn bị dị ứng, hãy ghi vào ghi chú hoặc gọi quán trước khi đặt.</p>
+          <img class="shop-photos" src="assets/shop-photos.jpg" alt="Không gian quán 0210" width="1280" height="507" loading="lazy" decoding="async" onerror="this.hidden=true" />
+        </div>
+      </details>
     </div>
 
     <!-- ===== Màn hình theo dõi đơn ===== -->

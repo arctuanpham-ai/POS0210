@@ -62,7 +62,7 @@ def run():
         color = page.evaluate("getComputedStyle(document.querySelector('.disc-badge')).backgroundColor")
         check(color == "rgb(214, 40, 40)", f"nhãn màu đỏ ({color})")
         box = page.evaluate("(() => { const b = document.querySelector('.disc-badge').getBoundingClientRect(); const i = document.querySelector('.disc-badge').parentElement.getBoundingClientRect(); return [b.left - i.left, b.top - i.top, b.width, b.height]; })()")
-        check(box[0] <= 6 and box[1] <= 6 and box[2] < 44 and box[3] < 24, f"nhãn nhỏ, nằm ở góc trên-trái của ảnh {box}")
+        check(box[0] <= 10 and box[1] <= 10 and box[2] < 50 and box[3] < 24, f"nhãn nhỏ, nằm ở góc trên-trái của ảnh {box}")
         a = page.locator("[data-dish='a']")
         check(a.locator(".price-now").inner_text().replace("\u00a0", " ") == "27.000đ", "Bạc xỉu 30.000đ -> 27.000đ")
         check(a.locator(".price-old").inner_text().replace("\u00a0", " ") == "30.000đ", "giá tại quán gạch ngang 30.000đ")

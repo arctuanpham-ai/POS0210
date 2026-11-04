@@ -19,7 +19,7 @@ import { APP_CHECK_SITE_KEY, DEFAULT_SHOP, NOTIFY_CLICK, NOTIFY_TOPIC, STORE_ID,
 import {
   FINAL_STATUSES, LIMITS, comboTools, pricingFor, MODE_LABELS, STATUS, STATUS_TEXT, buildOrderDoc, cartFromOrder, cartLines, changeQty, countdownText, isOrderable,
   limitKeyForPhone, limitKeyForUid, linesCount, linesTotal, makeOrderCode, menuSections, money, orderView, pendingBase, progressSteps, rememberCode,
-  notifyPayload, offerMessage, onlineDiscountPercent, onlinePrice, phoneLinksHtml, shortAddress, setNote, toMillis, validateCheckout,
+  notifyPayload, offerMessage, onlineDiscountPercent, onlinePrice, phoneLinksHtml, setNote, toMillis, validateCheckout,
 } from "./order-core.js";
 import { vietQrPayload } from "./vietqr.js";
 import { STATS_COLLECTION, decide, keysFor, vnDayKey } from "./stats-core.js";
@@ -166,13 +166,13 @@ function renderOpenStatus() {
   node.innerHTML = `<span class="dot" aria-hidden="true"></span><span><b>${esc(status.label)}</b><span class="detail"> · ${esc(status.detail)}</span></span>`;
 }
 
-if (window.matchMedia?.("(min-width: 768px)").matches) $("#shop-more").open = true; // màn hình rộng: thông tin quán luôn mở ở cột trái
 /** Dòng ưu đãi đặt trực tiếp, lấy % từ cấu hình quán (không tự tính giá). */
 function renderOffer() {
-  const text = offerMessage(onlinePct());
-  const node = $("#offer-note");
-  node.hidden = !text;
-  node.textContent = text;
+  const pct = onlinePct();
+  const node = $("#promo-banner");
+  node.hidden = !offerMessage(pct);
+  $("#promo-pct").textContent = `${pct}%`;
+  node.setAttribute("aria-label", offerMessage(pct) || "Ưu đãi đặt trực tiếp");
 }
 
 function renderShop() {
@@ -189,8 +189,6 @@ function renderShop() {
   if (s.hours) rows.push(["Giờ mở cửa", esc(s.hours)]);
   $("#shop-info").innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("");
   $("#shop-info").hidden = !rows.length;
-  const short = shortAddress(s);
-  $("#shop-short").textContent = short || "Thông tin quán";
   renderOffer();
   renderOpenStatus();
   renderLegalFooter(s, name);
@@ -331,9 +329,9 @@ function dishHtml(item, cat) {
     ? `<span class="soldout">Tạm hết</span>`
     : entry
       ? `<div class="stepper"><button type="button" data-act="dec" data-id="${esc(item.id)}" aria-label="Bớt 1 ${esc(item.name.trim())}">−</button><b aria-live="polite">${entry.qty}</b><button type="button" data-act="inc" data-id="${esc(item.id)}" aria-label="Thêm 1 ${esc(item.name.trim())}">+</button></div>`
-      : `<button type="button" class="add" data-act="inc" data-id="${esc(item.id)}">Thêm</button>`;
+      : `<button type="button" class="add" data-act="inc" data-id="${esc(item.id)}" aria-label="Thêm ${esc(item.name.trim())}"><span aria-hidden="true">+</span></button>`;
   const note = sellable && entry ? `<input class="dish-note" data-note="${esc(item.id)}" maxlength="${LIMITS.maxLineNote}" placeholder="Ghi chú món (ít đá, ít ngọt…)" value="${esc(entry.note)}" autocomplete="off" />` : "";
-  return `<article class="dish${sellable ? "" : " off"}${comboImg ? " combo-dish" : ""}" data-dish="${esc(item.id)}"><div class="dish-img${comboImg ? " combo" : ""}">${comboImg || img}${promoOn ? `<span class="disc-badge" title="Giảm ${pct}% khi đặt online"><span class="sr-only">Giảm ${pct}% khi đặt online</span><span aria-hidden="true">-${pct}%</span></span>` : ""}</div><div class="dish-body"><h3>${esc(item.name.trim())}</h3>${item.description ? `<p class="desc">${esc(item.description)}</p>` : ""}<b class="price">${promoOn ? `<span class="price-now">${money(onlinePrice(item.price, pct))}</span><s class="price-old">${money(item.price)}</s>` : money(item.price)}</b></div><div class="dish-ctl">${control}</div>${note}</article>`;
+  return `<article class="dish${sellable ? "" : " off"}${comboImg ? " combo-dish" : ""}${entry ? " in-cart" : ""}" data-dish="${esc(item.id)}"><div class="dish-img${comboImg ? " combo" : ""}">${comboImg || img}${promoOn ? `<span class="disc-badge" title="Giảm ${pct}% khi đặt online"><span class="sr-only">Giảm ${pct}% khi đặt online</span><span aria-hidden="true">-${pct}%</span></span>` : ""}</div><div class="dish-body"><h3>${esc(item.name.trim())}</h3>${item.description ? `<p class="desc">${esc(item.description)}</p>` : ""}<b class="price">${promoOn ? `<span class="price-now">${money(onlinePrice(item.price, pct))}</span><s class="price-old">${money(item.price)}</s>` : money(item.price)}</b></div><div class="dish-ctl">${control}</div>${note}</article>`;
 }
 
 /** Chỉ mục tìm kiếm (đã bỏ dấu) dựng lại khi menu đổi; kèm các từ khoá gợi ý còn ra món. */
@@ -387,7 +385,7 @@ function renderMenu() {
   }
   renderSearchNote(null, "");
   $("#cat-chips").innerHTML = sections.length > 1
-    ? sections.map((s) => `<a href="#cat-${esc(s.id)}" data-cat="${esc(s.id)}">${esc(s.name)}</a>`).join("")
+    ? sections.map((s) => `<a href="#cat-${esc(s.id)}" data-cat="${esc(s.id)}">${s.id === "_top" ? '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4 6.1 20.5l1.2-6.5L2.5 9.4l6.6-.9z"/></svg>' : ""}${esc(s.name)}</a>`).join("")
     : "";
   activeCat = "";
   if (sections.length > 1) setActiveCat(sections[0].id, { follow: false });

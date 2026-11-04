@@ -81,7 +81,9 @@ def run():
 
         print("2. Ô tìm món")
         check(page.locator("#menu-search").count() == 1, "có ô tìm món")
-        check(page.locator("#kw-chips button").count() >= 1, "ô trống: có từ khoá gợi ý")
+        check(not page.locator("#kw-chips").is_visible(), "ô trống, chưa bấm: chưa hiện từ khoá gợi ý")
+        page.click("#menu-search"); page.wait_for_timeout(200)
+        check(page.locator("#kw-chips button").count() >= 1, "bấm vào ô tìm: có từ khoá gợi ý")
         kw = [t.strip() for t in page.locator("#kw-chips button").all_inner_texts()]
         check("Cà phê" not in kw, f"từ khoá gợi ý không trùng tên nhóm ({kw})")
         check(page.locator("#cat-chips a").count() == 2, "ô trống: có chip nhóm món")

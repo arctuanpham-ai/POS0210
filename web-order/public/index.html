@@ -37,7 +37,6 @@
     <div id="screen-menu">
       <div class="cover" id="hero-photo"><img src="assets/cover.jpg" alt="Quán 0210: mặt tiền và không gian bên trong" width="1280" height="507" decoding="async" onerror="this.parentElement.hidden=true" /></div>
       <header class="hero">
-        
         <div class="hero-head">
           <img class="logo wide" src="assets/logo.png" alt="0210 Breakfast Coffee Drinks" width="124" height="52" />
           <div>
@@ -47,17 +46,30 @@
           <button type="button" class="pill" id="open-history" hidden>🧾 Lịch sử đơn</button>
         </div>
         <p class="open-status" id="open-status" role="status" hidden></p>
-        <dl class="shop-info" id="shop-info" hidden></dl>
-        <p class="hero-note">Đơn gửi trực tiếp đến quán. Không cần đăng nhập hay cài app.</p>
-        <p class="hero-note allergen">Món có thể chứa hoặc tiếp xúc với thành phần gây dị ứng (sữa, trứng, đậu phộng, gluten…). Nếu bạn bị dị ứng, hãy ghi vào ghi chú hoặc gọi quán trước khi đặt.</p>
         <p class="banner" id="closed-banner" hidden></p>
+        <details class="shop-more" id="shop-more">
+          <summary>
+            <svg class="pin" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
+            <span class="short" id="shop-short">Hoàng Huy Riverside</span>
+            <span class="more"><span class="more-on">Xem thông tin quán</span><span class="more-off">Thu gọn</span></span>
+          </summary>
+          <div class="shop-more-body">
+            <dl class="shop-info" id="shop-info" hidden></dl>
+            <p class="hero-note">Đơn gửi trực tiếp đến quán. Không cần đăng nhập hay cài app.</p>
+            <p class="hero-note allergen">Món có thể chứa hoặc tiếp xúc với thành phần gây dị ứng (sữa, trứng, đậu phộng, gluten…). Nếu bạn bị dị ứng, hãy ghi vào ghi chú hoặc gọi quán trước khi đặt.</p>
+            <img class="shop-photos" src="assets/cover.jpg" alt="Không gian quán 0210" width="1280" height="507" loading="lazy" decoding="async" onerror="this.hidden=true" />
+          </div>
+        </details>
       </header>
+
+      <p class="offer" id="offer-note" hidden></p>
 
       <button type="button" class="track-banner" id="track-banner" hidden>Bạn có đơn đang theo dõi. Bấm để xem trạng thái</button>
 
       <div class="search" id="search-box" role="search">
         <div class="search-field">
-          <input type="search" id="menu-search" placeholder="Tìm món: cà phê, bánh mì, trà…" aria-label="Tìm món" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search" role="combobox" aria-expanded="false" aria-controls="search-suggest" maxlength="60" />
+          <svg class="search-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14zm5-2 5 5"/></svg>
+          <input type="search" id="menu-search" placeholder="Tìm món bạn muốn ăn..." aria-label="Tìm món" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search" role="combobox" aria-expanded="false" aria-controls="search-suggest" maxlength="60" />
           <button type="button" class="search-clear" id="search-clear" aria-label="Xoá từ khoá" hidden>×</button>
           <ul class="search-suggest" id="search-suggest" role="listbox" hidden></ul>
         </div>

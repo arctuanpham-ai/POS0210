@@ -19,7 +19,7 @@ import { APP_CHECK_SITE_KEY, DEFAULT_SHOP, NOTIFY_CLICK, NOTIFY_TOPIC, STORE_ID,
 import {
   FINAL_STATUSES, LIMITS, comboTools, pricingFor, MODE_LABELS, STATUS, STATUS_TEXT, buildOrderDoc, cartFromOrder, cartLines, changeQty, countdownText, isOrderable,
   limitKeyForPhone, limitKeyForUid, linesCount, linesTotal, makeOrderCode, menuSections, money, orderView, pendingBase, progressSteps, rememberCode,
-  notifyPayload, onlineDiscountPercent, onlinePrice, phoneLinksHtml, setNote, toMillis, validateCheckout,
+  notifyPayload, offerMessage, onlineDiscountPercent, onlinePrice, phoneLinksHtml, shortAddress, setNote, toMillis, validateCheckout,
 } from "./order-core.js";
 import { vietQrPayload } from "./vietqr.js";
 import { STATS_COLLECTION, decide, keysFor, vnDayKey } from "./stats-core.js";
@@ -76,6 +76,7 @@ const state = {
   sheetOpen: false,
   catFilter: "",
   query: "",
+  searchFocus: false,
   searchIndex: null,
 };
 
@@ -103,6 +104,7 @@ function track(event) {
     }
   } catch { /* không bao giờ làm hỏng trang vì bộ đếm */ }
 }
+let activeCat = ""; // nhóm món đang chọn trên thanh nhóm (khai báo sớm vì renderMenu dùng)
 const menuById = () => Object.fromEntries(state.items.map((m) => [m.id, m]));
 const catById = () => Object.fromEntries(state.cats.map((c) => [c.id, c]));
 const currentLines = () => cartLines(state.cart, menuById(), catById());
@@ -164,6 +166,15 @@ function renderOpenStatus() {
   node.innerHTML = `<span class="dot" aria-hidden="true"></span><span><b>${esc(status.label)}</b><span class="detail"> · ${esc(status.detail)}</span></span>`;
 }
 
+if (window.matchMedia?.("(min-width: 768px)").matches) $("#shop-more").open = true; // màn hình rộng: thông tin quán luôn mở ở cột trái
+/** Dòng ưu đãi đặt trực tiếp, lấy % từ cấu hình quán (không tự tính giá). */
+function renderOffer() {
+  const text = offerMessage(onlinePct());
+  const node = $("#offer-note");
+  node.hidden = !text;
+  node.textContent = text;
+}
+
 function renderShop() {
   const s = state.shop;
   const name = String(s.name || DEFAULT_SHOP.name);
@@ -178,6 +189,9 @@ function renderShop() {
   if (s.hours) rows.push(["Giờ mở cửa", esc(s.hours)]);
   $("#shop-info").innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("");
   $("#shop-info").hidden = !rows.length;
+  const short = shortAddress(s);
+  $("#shop-short").textContent = short || "Thông tin quán";
+  renderOffer();
   renderOpenStatus();
   renderLegalFooter(s, name);
   const closed = s.orderingEnabled === false;
@@ -344,7 +358,7 @@ function renderSearchNote(found, query) {
   const chips = $("#kw-chips");
   const { keywords } = searchData();
   const showKeywords = (on) => { chips.hidden = !on || !keywords.length; chips.innerHTML = on ? keywordChipsHtml(keywords) : ""; };
-  if (!query || !state.items.length) { note.hidden = true; showKeywords(!!state.items.length); return; }
+  if (!query || !state.items.length) { note.hidden = true; showKeywords(!!state.items.length && state.searchFocus); return; }
   note.hidden = false;
   if (!found.items.length) {
     note.textContent = `Không thấy món nào khớp “${query}”. Thử một từ khoá khác:`;
@@ -375,6 +389,8 @@ function renderMenu() {
   $("#cat-chips").innerHTML = sections.length > 1
     ? sections.map((s) => `<a href="#cat-${esc(s.id)}" data-cat="${esc(s.id)}">${esc(s.name)}</a>`).join("")
     : "";
+  activeCat = "";
+  if (sections.length > 1) setActiveCat(sections[0].id, { follow: false });
   $("#menu").innerHTML = sections.map((s) => `<section class="menu-section" id="cat-${esc(s.id)}"><h2>${esc(s.name)}</h2>${s.items.map((m) => dishHtml(m, cats[m.categoryId])).join("")}</section>`).join("")
     || (state.items.length ? "" : '<p class="muted center">Đang tải menu…</p>');
 }
@@ -839,8 +855,9 @@ function setQuery(value, { fromChoice = false } = {}) {
 }
 
 searchInput.addEventListener("input", () => setQuery(searchInput.value));
-searchInput.addEventListener("focus", () => { clearTimeout(suggestHideTimer); renderSuggest(); });
-searchInput.addEventListener("blur", () => { suggestHideTimer = setTimeout(hideSuggest, 180); });
+/* Từ khoá gợi ý chỉ hiện khi khách bấm vào ô tìm (hoặc khi không có kết quả) để không chiếm chỗ đầu trang. */
+searchInput.addEventListener("focus", () => { clearTimeout(suggestHideTimer); state.searchFocus = true; if (!state.query.trim()) renderSearchNote(null, ""); renderSuggest(); });
+searchInput.addEventListener("blur", () => { suggestHideTimer = setTimeout(() => { hideSuggest(); state.searchFocus = false; if (!state.query.trim()) renderSearchNote(null, ""); }, 180); });
 searchInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") { event.preventDefault(); hideSuggest(); searchInput.blur(); }
   else if (event.key === "Escape") { setQuery(""); hideSuggest(); }
@@ -863,8 +880,37 @@ $("#cat-chips").addEventListener("click", (event) => {
   const link = event.target.closest("[data-cat]");
   if (!link) return;
   event.preventDefault();
+  setActiveCat(link.dataset.cat);
+  spyLockUntil = Date.now() + 1000; // đang cuộn có hiệu ứng tới nhóm vừa chọn: không để việc dò theo trang đổi chip giữa chừng
   document.getElementById(`cat-${link.dataset.cat}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
 });
+
+/* Nhóm đang xem được tô đậm; thanh nhóm tự cuộn ngang để chip đang chọn luôn nằm trong tầm nhìn. */
+function setActiveCat(id, { follow = true } = {}) {
+  if (!id || id === activeCat) return;
+  activeCat = id;
+  const bar = $("#cat-chips");
+  bar.querySelectorAll("[data-cat]").forEach((a) => {
+    const on = a.dataset.cat === id;
+    a.classList.toggle("active", on);
+    if (on) a.setAttribute("aria-current", "true"); else a.removeAttribute("aria-current");
+    if (on && follow && bar.scrollWidth > bar.clientWidth) bar.scrollTo({ left: a.offsetLeft - (bar.clientWidth - a.offsetWidth) / 2, behavior: "smooth" });
+  });
+}
+let spyQueued = false;
+let spyLockUntil = 0;
+function spyCategories() {
+  spyQueued = false;
+  if (state.query.trim() || Date.now() < spyLockUntil) return;
+  const bar = $("#cat-chips");
+  const line = (bar.getBoundingClientRect().bottom || 0) + 24;
+  let current = "";
+  const secs = [...document.querySelectorAll("#menu .menu-section")];
+  secs.forEach((sec) => { if (sec.getBoundingClientRect().top <= line) current = sec.id.replace(/^cat-/, ""); });
+  if (secs.length && window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2) current = secs[secs.length - 1].id.replace(/^cat-/, ""); // cuối trang: nhóm ngắn cuối cùng cũng được chọn
+  setActiveCat(current || document.querySelector("#cat-chips [data-cat]")?.dataset.cat);
+}
+window.addEventListener("scroll", () => { if (!spyQueued) { spyQueued = true; requestAnimationFrame(spyCategories); } }, { passive: true });
 
 $("#cart-open").addEventListener("click", openSheet);
 $("#sheet-close").addEventListener("click", closeSheet);

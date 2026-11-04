@@ -331,9 +331,27 @@ export const notifyPayload = ({ topic, code, order, click = "" }) => {
 
 /** Chuỗi số điện thoại của quán (một hoặc nhiều số, cách nhau bởi , ; / hoặc " - ") -> danh sách {text, tel}. */
 export function splitPhones(raw) {
-  return String(raw ?? "").split(/\s*[,;/|]\s*|\s+-\s+|\s+(?:hoặc|hoac)\s+/i).map((t) => t.trim()).filter(Boolean)
+  return String(raw ?? "").split(/\s*[,;/|·•]\s*|\s+-\s+|\s+(?:hoặc|hoac)\s+/i).map((t) => t.trim()).filter(Boolean)
     .map((text) => ({ text, tel: text.replace(/[^\d+]/g, "") })).filter((p) => p.tel.length >= 6);
 }
 
 /** HTML các số bấm gọi được (mỗi số một liên kết tel:); `esc` là hàm thoát HTML của trang gọi. */
 export const phoneLinksHtml = (raw, esc) => splitPhones(raw).map((p) => `<a href="tel:${esc(p.tel)}">${esc(p.text)}</a>`).join(" · ");
+
+/** Địa chỉ ngắn để hiện ngay đầu trang: ưu tiên trường shortAddress của quán, nếu không thì bỏ số lô/số nhà đứng đầu ("LK 02-10 Hoàng Huy riverside" -> "Hoàng Huy Riverside"). */
+export const shortAddress = (shop) => {
+  const set = String(shop?.shortAddress || "").trim();
+  if (set) return set;
+  const full = String(shop?.address || "").trim();
+  if (!full) return "";
+  const first = full.split(",")[0].trim();
+  const rest = first.replace(/^(?:lk|lô|lo|số|so)?\s*\d[\d\-/.\s]*/i, "").trim();
+  const base = rest.length >= 3 ? rest : first;
+  return base.split(/\s+/).map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1) : w)).join(" ");
+};
+
+/** Câu truyền thông ưu đãi đặt trực tiếp; rỗng nếu quán chưa bật giảm giá online (chỉ là lời nhắn, không tính giá). */
+export const offerMessage = (percent) => {
+  const p = Math.floor(Number(percent));
+  return Number.isFinite(p) && p > 0 ? `Đặt trực tiếp trên web – Giá giảm ${p}% so với tại quán` : "";
+};

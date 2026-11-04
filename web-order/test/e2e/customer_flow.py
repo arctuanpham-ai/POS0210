@@ -59,6 +59,8 @@ def run():
         page.goto(BASE); page.wait_for_function("window.__orderReady === true"); page.wait_for_selector(".dish")
         page.wait_for_timeout(300)
         check(page.inner_text("#shop-name") == "0210 Cafe", "tên quán lấy từ cấu hình")
+        check(not page.locator("#shop-info").is_visible(), "thông tin quán thu gọn mặc định trên mobile")
+        page.click("#shop-more > summary"); page.wait_for_timeout(150)
         check("12 Lê Lợi" in page.inner_text("#shop-info") and "6:30" in page.inner_text("#shop-info"), "địa chỉ, giờ mở cửa hiển thị")
         check(page.locator("a[href^='tel:']").count() >= 1, "có link gọi điện")
         check(page.locator("#legal-foot a[href^='chinh-sach']").count() >= 3, "chân trang có link chính sách, hoàn tiền, khiếu nại")

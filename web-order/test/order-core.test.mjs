@@ -283,3 +283,21 @@ test("menuSections: combo, bán chạy, cơm trưa, cà phê, rồi các nhóm c
   assert.deepEqual(_ms(items, cats, { top: ["c1", "o1", "nope", "c_x"] }).find((s) => s.id === "_top").items.map((m) => m.id), ["c1"], "chỉ món đang bán được, không combo, không id lạ");
   assert.deepEqual(_ms(items, cats).map((s) => s.name), names([]), "gọi không có tuỳ chọn vẫn chạy");
 });
+
+import { shortAddress, offerMessage, splitPhones as splitPhones2 } from "../public/order-core.js";
+test("địa chỉ ngắn đầu trang", () => {
+  assert.equal(shortAddress({ address: "LK 02-10 Hoàng Huy riverside" }), "Hoàng Huy Riverside");
+  assert.equal(shortAddress({ address: "LK 02-10 Hoàng Huy riverside", shortAddress: "Hoàng Huy" }), "Hoàng Huy");
+  assert.equal(shortAddress({ address: "12 Lê Lợi, Hồng Bàng" }), "Lê Lợi");
+  assert.equal(shortAddress({ address: "Hoàng Huy Riverside" }), "Hoàng Huy Riverside");
+  assert.equal(shortAddress({}), "");
+});
+test("thông điệp ưu đãi theo cấu hình, không cấu hình thì rỗng", () => {
+  assert.equal(offerMessage(10), "Đặt trực tiếp trên web – Giá giảm 10% so với tại quán");
+  assert.equal(offerMessage(15), "Đặt trực tiếp trên web – Giá giảm 15% so với tại quán");
+  assert.equal(offerMessage(0), "");
+  assert.equal(offerMessage(undefined), "");
+});
+test("tách số điện thoại cả khi ngăn bằng dấu chấm giữa", () => {
+  assert.deepEqual(splitPhones2("0702245400 · 0968563539").map((p) => p.tel), ["0702245400", "0968563539"]);
+});

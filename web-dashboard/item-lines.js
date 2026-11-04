@@ -1,6 +1,6 @@
 // Phân tích món từ DÒNG MÓN của từng bill (orderItems) + sổ app food + phiếu mua. Hàm thuần, không đọc Firebase, không có DOM.
-import { expandComboName } from "./demo-receipts.js?v=20261104-3";
-import { materialById, materialCosts, recipeCost } from "./cost-recipe.js?v=20261104-3";
+import { expandComboName } from "./demo-receipts.js?v=20261104-4";
+import { materialById, materialCosts, recipeCost } from "./cost-recipe.js?v=20261104-4";
 
 const nameKey = (s) => String(s || "").toLocaleLowerCase("vi").normalize("NFC").replace(/\s+/g, " ").trim();
 const isCombo = (name) => String(name || "").startsWith("COMBO");

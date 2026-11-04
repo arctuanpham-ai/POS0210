@@ -12,6 +12,7 @@ import {
   getDoc as rawGetDoc,
   runTransaction as rawRunTransaction,
   getDocs as rawGetDocs,
+  getDocsFromServer,
   query,
   where,
   orderBy,
@@ -23,56 +24,56 @@ import {
   deleteDoc as rawDeleteDoc,
   writeBatch as rawWriteBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { isPendingSync } from "./pending-sync.js?v=20261104-3";
-import { foodMonth, freshness, freshnessText, ledgerBuild, parseCoverage, payoutGroups, periodDays, receivable, summarizeSales, vnDay } from "./food-ledger.js?v=20261104-3";
-import { GRAB_SHEET, parseGrabRows } from "./grab-report.js?v=20261104-3";
-import { appLabel, buildEntry, entryProblem, foodAppTotals, foodInPeriod, normalizeFoodApp, otherDeduction, parseMoneyInput } from "./food-app.js?v=20261104-3";
-import { buildProfile, profileHeadline } from "./customer-profile.js?v=20261104-3";
-import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261104-3";
-import { buildCancelRequest, buildCancelledReceipt, buildEditedReceipt, pendingCancelRequest, resolveCancelRequest, calculateReceiptTotal, createStableDraft, freshenDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261104-3";
-import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261104-3";
-import { FUNNEL, buildStats, dayKeyVN, dayLabel, funnelSteps, pct } from "./stats-view.js?v=20261104-3";
-import { buildSourceReport } from "./source-report.js?v=20261104-3";
-import { SNAPSHOT_DOC, THUMB_DOC_PREFIX, TOP_REFRESH_MS, buildSnapshot, topSellerIds, usableSnapshot } from "./menu-snapshot.js?v=20261104-3";
-import { approvedKeys, vagueKey, vagueMaterials } from "./vague-materials.js?v=20261104-3";
-import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions, searchMaterials } from "./material-search.js?v=20261104-3";
-import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261104-3";
-import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261104-3";
-import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261104-3";
-import { buildSimulation } from "./sim-data.js?v=20261104-3";
-import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261104-3";
-import { menuCsv } from "./menu-export.js?v=20261104-3";
-import { KIND_LABELS, MATERIALS, buildDynamicMaterials, catalogRules, registerDynamicMaterials, similarMaterials, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261104-3";
-import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261104-3";
-import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261104-3";
-import { buildFlag, flagAfterEdit, flagAfterReview, flagApprovalProblem, isFlagOpen, needsOwnerReview, receiptFlag, BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261104-3";
-import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261104-3";
-import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261104-3";
-import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261104-3";
-import { otherCostRows } from "./other-costs.js?v=20261104-3";
-import { paybackStatus } from "./payback.js?v=20261104-3";
-import { topSellers } from "./top-banner.js?v=20261104-3";
-import { reconcileDays, reconcileRevenue } from "./revenue-check.js?v=20261104-3";
-import { prepList, profitRanking, tomorrowSales } from "./plan-profit.js?v=20261104-3";
-import { OO_LABELS, OO_MODE_LABELS, OO_REJECT_REASONS, attentionCount, buildTransition, groupOrders, isPending, limitKeys, minutesAgoText, newOrderCodes, nextActions, ooToMillis, overdueOrders, releasedCount, validateShopConfig } from "./online-orders.js?v=20261104-3";
-import { menuEditProblem, menuGroups, mergePlan, nameIssues, nextProductCode, normName, soldCombos, soldNotInMenu } from "./menu-view.js?v=20261104-3";
-import { POS_CEILING, SPARK, dayUsage, lastPacificDays, nextReset, pacificDay, usageTrend } from "./usage.js?v=20261104-3";
-import { AI_SCOPES, buildAiPack, scopeRange } from "./ai-export.js?v=20261104-3";
-import { COUNT_ITEMS, buildDemoCounts, compareStock, countToBase, countValuation, makeValuation, stockValue, varianceBetween } from "./stock-count.js?v=20261104-3";
-import { addCountItem, addableMaterials, buyDaysLast30, countUnitFor, dismissCountItem, isMilkRaw, firstPurchaseTimes, normalizeCountConfig, removeCountItem, searchCountMaterials, suggestCountItems } from "./count-items.js?v=20261104-3";
-import { normalizeText as normText } from "./expense-rules.js?v=20261104-3";
-import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261104-3";
-import { dataSpanDays, materialAlerts, purchaseEvents, readiness } from "./material-alerts.js?v=20261104-3";
-import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261104-3";
-import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261104-3";
-import { compareKeys, compareRows, weekTotals } from "./day-compare.js?v=20261104-3";
-import { comboCount, formatBaseQty, materialConsumption, outputRows } from "./item-output.js?v=20261104-3";
-import { NTFY_TOPIC, sendTest as ntfySendTest } from "./ntfy.js?v=20261104-3";
-import { analyzeItem, itemChoices, itemSeries } from "./item-analysis.js?v=20261104-3";
-import { itemComboChart, lineChart } from "./item-chart.js?v=20261104-3";
-import { appDeductionRates, buildLineBills, channelEconomics, costTrend, itemBillStats } from "./item-lines.js?v=20261104-3";
-import { channelView, compareView, costTrendView, coverageNote, hoursView, pairsView } from "./item-view.js?v=20261104-3";
-import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261104-3";
+import { isPendingSync } from "./pending-sync.js?v=20261104-4";
+import { foodMonth, freshness, freshnessText, ledgerBuild, parseCoverage, payoutGroups, periodDays, receivable, summarizeSales, vnDay } from "./food-ledger.js?v=20261104-4";
+import { GRAB_SHEET, parseGrabRows } from "./grab-report.js?v=20261104-4";
+import { appLabel, buildEntry, entryProblem, foodAppTotals, foodInPeriod, normalizeFoodApp, otherDeduction, parseMoneyInput } from "./food-app.js?v=20261104-4";
+import { buildProfile, profileHeadline } from "./customer-profile.js?v=20261104-4";
+import { matchesPayer, normalizePayer } from "./payer-filter.js?v=20261104-4";
+import { buildCancelRequest, buildCancelledReceipt, buildEditedReceipt, pendingCancelRequest, resolveCancelRequest, calculateReceiptTotal, createStableDraft, freshenDraft, receiptToDraft, validateReceipt } from "./expense-domain.js?v=20261104-4";
+import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261104-4";
+import { FUNNEL, buildStats, dayKeyVN, dayLabel, funnelSteps, pct } from "./stats-view.js?v=20261104-4";
+import { buildSourceReport } from "./source-report.js?v=20261104-4";
+import { SNAPSHOT_DOC, THUMB_DOC_PREFIX, TOP_REFRESH_MS, buildSnapshot, topSellerIds, usableSnapshot } from "./menu-snapshot.js?v=20261104-4";
+import { approvedKeys, vagueKey, vagueMaterials } from "./vague-materials.js?v=20261104-4";
+import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions, searchMaterials } from "./material-search.js?v=20261104-4";
+import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261104-4";
+import { DETAIL_ITEMIZED, buildSummaryLines, detailGap, detailLevelSummary, detailRequired, isSummaryReceipt, validateSummaryReceipt } from "./expense-rules.js?v=20261104-4";
+import { classifyMaterial, groupCodeOrNull, groupLabelOf, materialCodeFor, normalizeQuantity, reviewItems, ruleIdFor, rulesToLearn, summarizeReview } from "./expense-rules.js?v=20261104-4";
+import { buildSimulation } from "./sim-data.js?v=20261104-4";
+import { buildMonthlyReport, lastMonthKeys, monthKeyOf, monthlyCsv, monthlyJson, startOfPreviousMonth } from "./monthly-report.js?v=20261104-4";
+import { menuCsv } from "./menu-export.js?v=20261104-4";
+import { KIND_LABELS, MATERIALS, buildDynamicMaterials, catalogRules, registerDynamicMaterials, similarMaterials, costLevel, draftRecipeFor, matchMaterial, materialById, materialCosts, recipeCost, sliderSpec, unitFactor, usageVsPurchase } from "./cost-recipe.js?v=20261104-4";
+import { DEFAULT_DAILY_SALES, DEMO_COLLECTION, DEMO_WASTE, averageDailySales, buildDemoReceipts, dailyMaterialUsage } from "./demo-receipts.js?v=20261104-4";
+import { hourRows, hourlyTotals, topItems } from "./charts-view.js?v=20261104-4";
+import { buildFlag, flagAfterEdit, flagAfterReview, flagApprovalProblem, isFlagOpen, needsOwnerReview, receiptFlag, BANK_CHOICES, FUND_PERSONAL, ROLE_BUYER, ROLE_LABELS, ROLE_OWNER, ROLE_TREASURER, STATUS_LABELS, asciiUpper, bankOf, batchCode, canTreasure, changedAfterPaid, duplicateSuspects, hashPin, isMine, legacyOpenReceipts, selfReviewBlocked, bankDeeplink, countsAsCost, initialReview, reviewStatus, isPaidOut, paidEditProblem, memberByPinHash, memberId, memberOf, myAlerts, needsReminder, payerQueues, receiptCode, reimbursementStatus, transferNote, validateBatchSelection, validPin, vietQrPayload } from "./reimburse.js?v=20261104-4";
+import { bookingDate, closedMonthEditProblem, monthLabel, withShiftNote } from "./month-close.js?v=20261104-4";
+import { EXPENSE_KINDS, KIND_SHORT, NON_MATERIAL, detectKind, splitByKind } from "./expense-kind.js?v=20261104-4";
+import { INITIAL_CATEGORIES, fundMonth, prevMonthKey, monthRange } from "./fund-close.js?v=20261104-4";
+import { otherCostRows } from "./other-costs.js?v=20261104-4";
+import { paybackStatus } from "./payback.js?v=20261104-4";
+import { topSellers } from "./top-banner.js?v=20261104-4";
+import { reconcileDays, reconcileRevenue } from "./revenue-check.js?v=20261104-4";
+import { prepList, profitRanking, tomorrowSales } from "./plan-profit.js?v=20261104-4";
+import { OO_LABELS, OO_MODE_LABELS, OO_REJECT_REASONS, attentionCount, buildTransition, groupOrders, isPending, limitKeys, minutesAgoText, newOrderCodes, nextActions, ooToMillis, overdueOrders, releasedCount, validateShopConfig } from "./online-orders.js?v=20261104-4";
+import { menuEditProblem, menuGroups, mergePlan, nameIssues, nextProductCode, normName, soldCombos, soldNotInMenu } from "./menu-view.js?v=20261104-4";
+import { POS_CEILING, SPARK, dayUsage, lastPacificDays, nextReset, pacificDay, usageTrend } from "./usage.js?v=20261104-4";
+import { AI_SCOPES, buildAiPack, scopeRange } from "./ai-export.js?v=20261104-4";
+import { COUNT_ITEMS, buildDemoCounts, compareStock, countToBase, countValuation, makeValuation, stockValue, varianceBetween } from "./stock-count.js?v=20261104-4";
+import { addCountItem, addableMaterials, buyDaysLast30, countUnitFor, dismissCountItem, isMilkRaw, firstPurchaseTimes, normalizeCountConfig, removeCountItem, searchCountMaterials, suggestCountItems } from "./count-items.js?v=20261104-4";
+import { normalizeText as normText } from "./expense-rules.js?v=20261104-4";
+import { mergeReceipts, planLoad } from "./receipt-cache.js?v=20261104-4";
+import { dataSpanDays, materialAlerts, purchaseEvents, readiness } from "./material-alerts.js?v=20261104-4";
+import { ACK_TIMEOUT_MS, canRequestSync, syncCommandStatus } from "./remote-sync-view.js?v=20261104-4";
+import { filterBillRows, buildBillDetail, buildBillRows, chunk, dayRange, keyOfTime, methodLabel, summarizeBillRows, timeLabel } from "./bill-history-view.js?v=20261104-4";
+import { compareKeys, compareRows, weekTotals } from "./day-compare.js?v=20261104-4";
+import { comboCount, formatBaseQty, materialConsumption, outputRows } from "./item-output.js?v=20261104-4";
+import { NTFY_TOPIC, sendTest as ntfySendTest } from "./ntfy.js?v=20261104-4";
+import { analyzeItem, itemChoices, itemSeries } from "./item-analysis.js?v=20261104-4";
+import { itemComboChart, lineChart } from "./item-chart.js?v=20261104-4";
+import { appDeductionRates, buildLineBills, channelEconomics, costTrend, itemBillStats } from "./item-lines.js?v=20261104-4";
+import { channelView, compareView, costTrendView, coverageNote, hoursView, pairsView } from "./item-view.js?v=20261104-4";
+import { SALES_PERIODS, changePct, monthSeries, periodPlan, aggregateItems, dailyKeys, dateKeyOf, liveSummary, periodDailySummary, serviceStatusLabel, summarizeDaily } from "./sales-snapshot-view.js?v=20261104-4";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDhnjjTS1Da99p76VrjMGSKQxgib3b23zk",
@@ -4890,7 +4891,7 @@ async function loadOoStats() {
   try {
     const [statSnap, orderSnap, srcSnap] = await Promise.all([
       getDocs(query(collection(db, ...root, "online_stats"), where("__name__", ">=", dayKeyVN(Date.now() - 45 * 86_400_000)), limit(60))),
-      getDocs(query(collection(db, ...root, "online_stats_src"), limit(1000))).catch((e) => { ooStats.srcError = e; return null; }),
+      getDocsFromServer(query(collection(db, ...root, "online_stats_src"), limit(1000))).catch((e) => { ooStats.srcError = e; return null; }),
       getDocs(query(collection(db, ...root, "online_orders"), where("createdAt", ">=", Timestamp.fromMillis(Date.now() - 32 * 86_400_000)))),
     ]);
     countUsage("reads", statSnap.size + orderSnap.size + (srcSnap?.size || 0));
@@ -4898,7 +4899,7 @@ async function loadOoStats() {
     ooStats.docs = statSnap.docs.map((d) => ({ ...d.data(), id: d.id }));
     ooStats.orders = orderSnap.docs.map((d) => d.data());
     ooStats.loaded = true;
-    $("#oo-stats-note").textContent = srcSnap ? `(chẩn đoán v3) đọc được ${srcSnap.size} tài liệu nguồn, ${ooStats.visitDocs.length} dòng` : `Không đọc được lượt vào theo nguồn (online_stats_src): ${ooStats.srcError?.code || ooStats.srcError?.message || "lỗi không rõ"}`;
+    $("#oo-stats-note").textContent = srcSnap ? `(chẩn đoán v4) đọc từ máy chủ ${srcSnap.size} tài liệu nguồn, ${ooStats.visitDocs.length} dòng` : `Không đọc được lượt vào theo nguồn (online_stats_src): ${ooStats.srcError?.code || ooStats.srcError?.message || "lỗi không rõ"}`;
   } catch (error) {
     $("#oo-stats-note").textContent = error.code === "permission-denied" ? "Chưa có quyền đọc thống kê (online_stats): cần cập nhật Firestore Rules." : `Không tải được: ${error.message || error}`;
   } finally { ooStats.loading = false; }

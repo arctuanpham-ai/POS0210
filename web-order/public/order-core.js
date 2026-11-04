@@ -258,8 +258,19 @@ export const comboItemsFrom = (combos, hidden = new Set()) =>
     .map((c) => ({
       id: `${COMBO_ID_PREFIX}${c.id}`, name: String(c.name), price: Math.round(Number(c.price)), categoryId: COMBO_CATEGORY.id, sortOrder: Number(c.sortOrder || 0), active: true,
       parts: (Array.isArray(c.items) ? c.items : []).filter((p) => p && p.menuItemId).map((p) => ({ id: String(p.menuItemId), name: String(p.name || "").trim() })).slice(0, 3),
+      lines: (Array.isArray(c.items) ? c.items : []).filter((p) => p && p.menuItemId).map((p) => ({ id: String(p.menuItemId), qty: Math.max(1, Math.floor(Number(p.qty) || 1)) })),
       description: (Array.isArray(c.items) ? c.items : []).filter((p) => p && p.name).map((p) => `${Number(p.qty) > 1 ? `${Number(p.qty)}× ` : ""}${String(p.name).trim()}`).join(" + ") || String(c.description || ""),
     }));
+/** Combo rẻ hơn mua lẻ bao nhiêu: tổng giá các món thành phần (theo SL) trừ giá combo. Thiếu giá một món → null (không đoán). */
+export const comboSaving = (combo, items) => {
+  const lines = combo?.lines;
+  if (!lines?.length) return null;
+  const byId = new Map((items || []).map((m) => [m.id, m]));
+  let sum = 0;
+  for (const l of lines) { const m = byId.get(l.id); const p = Number(m?.price); if (!(p > 0)) return null; sum += p * l.qty; }
+  const saving = sum - Number(combo.price);
+  return saving > 0 ? Math.round(saving) : null;
+};
 export const comboTools = Object.freeze({ COMBO_CATEGORY, comboItemsFrom });
 
 /* ---------- Khuyến mãi / phụ thu tự động của POS (online_config/promo do máy POS đẩy lên) ---------- */

@@ -353,3 +353,14 @@ test("chọn trang: Món lẻ = mọi nhóm trừ combo; Combo = tất cả comb
   assert.deepEqual(menuViews(SECS).map((v) => v.id), [HOME_VIEW, RETAIL_VIEW, COMBO_VIEW, "com", "cf", "sang", "tra", "vat"]);
   assert.deepEqual(menuViews([]), []);
 });
+
+import { comboSaving as _comboSaving, comboItemsFrom as _comboItemsFrom } from "../public/order-core.js";
+test("comboSaving: tổng món lẻ (theo SL) trừ giá combo; thiếu giá → null; không lời → null", () => {
+  const items = [{ id: "a", price: 30000 }, { id: "b", price: 25000 }];
+  const [c] = _comboItemsFrom([{ id: "1", name: "C", price: 49000, items: [{ menuItemId: "a", name: "A", qty: 1 }, { menuItemId: "b", name: "B", qty: 1 }] }]);
+  assert.equal(_comboSaving(c, items), 6000);
+  assert.equal(_comboSaving({ ...c, price: 55000 }, items), null);
+  assert.equal(_comboSaving(c, [items[0]]), null);
+  const [d] = _comboItemsFrom([{ id: "2", name: "D", price: 80000, items: [{ menuItemId: "a", name: "A", qty: 3 }] }]);
+  assert.equal(_comboSaving(d, items), 10000);
+});

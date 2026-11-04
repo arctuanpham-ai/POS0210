@@ -4885,12 +4885,12 @@ function ooCardHtml(order, now) {
 const ooStats = { days: 1, docs: [], orders: [], visitDocs: [], loaded: false, loading: false };
 async function loadOoStats() {
   if (!state.role || ooStats.loading) return;
-  ooStats.loading = true;
+  ooStats.loading = true; ooStats.srcError = null;
   $("#oo-stats-note").textContent = "Đang tải…";
   try {
     const [statSnap, orderSnap, srcSnap] = await Promise.all([
       getDocs(query(collection(db, ...root, "online_stats"), where("__name__", ">=", dayKeyVN(Date.now() - 45 * 86_400_000)), limit(60))),
-      getDocs(query(collection(db, ...root, "online_stats_src"), where("__name__", ">=", dayKeyVN(Date.now() - 32 * 86_400_000)), limit(1000))).catch(() => null),
+      getDocs(query(collection(db, ...root, "online_stats_src"), where("__name__", ">=", dayKeyVN(Date.now() - 32 * 86_400_000)), limit(1000))).catch((e) => { ooStats.srcError = e; return null; }),
       getDocs(query(collection(db, ...root, "online_orders"), where("createdAt", ">=", Timestamp.fromMillis(Date.now() - 32 * 86_400_000)))),
     ]);
     countUsage("reads", statSnap.size + orderSnap.size + (srcSnap?.size || 0));
@@ -4898,7 +4898,7 @@ async function loadOoStats() {
     ooStats.docs = statSnap.docs.map((d) => ({ ...d.data(), id: d.id }));
     ooStats.orders = orderSnap.docs.map((d) => d.data());
     ooStats.loaded = true;
-    $("#oo-stats-note").textContent = "";
+    $("#oo-stats-note").textContent = srcSnap ? "" : `Không đọc được lượt vào theo nguồn (online_stats_src): ${ooStats.srcError?.code || ooStats.srcError?.message || "lỗi không rõ"}`;
   } catch (error) {
     $("#oo-stats-note").textContent = error.code === "permission-denied" ? "Chưa có quyền đọc thống kê (online_stats): cần cập nhật Firestore Rules." : `Không tải được: ${error.message || error}`;
   } finally { ooStats.loading = false; }

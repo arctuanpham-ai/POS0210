@@ -390,7 +390,7 @@ export const menuViews = (sections) => {
   const retail = retailOnly(all);
   if (!retail.length && !hasCombo) return [];
   return [
-    { id: HOME_VIEW, name: "Nổi bật" },
+    { id: HOME_VIEW, name: all.some((s) => s.id === TOP_SECTION.id) ? "Bán chạy" : "Nổi bật" },
     ...(retail.length ? [{ id: RETAIL_VIEW, name: "Món lẻ" }] : []),
     ...(hasCombo ? [{ id: COMBO_VIEW, name: "Combo" }] : []),
     ...retail.map((s) => ({ id: s.id, name: s.name })),
@@ -407,9 +407,11 @@ export const menuLayout = (sections, view = HOME_VIEW, limits = HOME_LIMITS) => 
   if (valid === COMBO_VIEW) return combo ? [{ ...combo, name: COMBO_HOME_SECTION.name }] : [];
   if (valid !== HOME_VIEW) return retail.filter((s) => s.id === valid);
   const out = [];
-  const featured = featuredRetail(all, limits.featured);
+  const top = all.find((s) => s.id === TOP_SECTION.id);
+  const topItems = top ? top.items.filter((m) => isOrderable(m)).slice(0, limits.featured) : [];
+  const featured = topItems.length ? topItems : featuredRetail(all, limits.featured);
   const retailTotal = retail.filter((s) => s.active !== false).reduce((n, s) => n + s.items.filter((m) => isOrderable(m, s)).length, 0);
-  if (featured.length) out.push({ id: FEATURED_SECTION.id, name: FEATURED_SECTION.name, active: true, items: featured, more: retailTotal > featured.length ? { view: RETAIL_VIEW, label: "Xem tất cả món lẻ" } : null });
+  if (featured.length) out.push({ id: FEATURED_SECTION.id, name: topItems.length ? "Món bán chạy" : FEATURED_SECTION.name, active: true, items: featured, more: retailTotal > featured.length ? { view: RETAIL_VIEW, label: "Xem tất cả món lẻ" } : null });
   if (combo?.items.length) out.push({ id: COMBO_HOME_SECTION.id, name: COMBO_HOME_SECTION.name, active: true, items: combo.items.slice(0, limits.combos), more: combo.items.length > limits.combos ? { view: COMBO_VIEW, label: "Xem tất cả combo" } : null });
   return out.concat(retail);
 };

@@ -331,14 +331,14 @@ function dishHtml(item, cat) {
       ? `<div class="stepper"><button type="button" data-act="dec" data-id="${esc(item.id)}" aria-label="Bớt 1 ${esc(item.name.trim())}">−</button><b aria-live="polite">${entry.qty}</b><button type="button" data-act="inc" data-id="${esc(item.id)}" aria-label="Thêm 1 ${esc(item.name.trim())}">+</button></div>`
       : `<button type="button" class="add" data-act="inc" data-id="${esc(item.id)}" aria-label="Thêm ${esc(item.name.trim())}"><span aria-hidden="true">+</span></button>`;
   const note = sellable && entry ? `<input class="dish-note" data-note="${esc(item.id)}" maxlength="${LIMITS.maxLineNote}" placeholder="Ghi chú món (ít đá, ít ngọt…)" value="${esc(entry.note)}" autocomplete="off" />` : "";
-  return `<article class="dish${sellable ? "" : " off"}${comboImg ? " combo-dish" : ""}${entry ? " in-cart" : ""}" data-dish="${esc(item.id)}"><div class="dish-img${comboImg ? " combo" : ""}">${comboImg || img}${promoOn ? `<span class="disc-badge" title="Giảm ${pct}% khi đặt online"><span class="sr-only">Giảm ${pct}% khi đặt online</span><span aria-hidden="true">-${pct}%</span></span>` : ""}</div><div class="dish-body"><h3>${esc(item.name.trim())}</h3>${item.description ? `<p class="desc">${esc(item.description)}</p>` : ""}<b class="price">${promoOn ? `<span class="price-now">${money(onlinePrice(item.price, pct))}</span><s class="price-old">${money(item.price)}</s>` : money(item.price)}</b></div><div class="dish-ctl">${control}</div>${note}</article>`;
+  return `<article class="dish${sellable ? "" : " off"}${comboImg ? " combo-dish" : ""}${entry ? " in-cart" : ""}" data-dish="${esc(item.id)}"><div class="dish-img${comboImg ? " combo" : ""}">${comboImg || img}${comboImg ? `<span class="save-badge">Tiết kiệm</span>` : ""}${promoOn ? `<span class="disc-badge" title="Giảm ${pct}% khi đặt online"><span class="sr-only">Giảm ${pct}% khi đặt online</span><span aria-hidden="true">-${pct}%</span></span>` : ""}</div><div class="dish-body"><h3>${esc(item.name.trim())}</h3>${item.description ? `<p class="desc">${esc(item.description)}</p>` : ""}<b class="price">${promoOn ? `<span class="price-now">${money(onlinePrice(item.price, pct))}</span><s class="price-old">${money(item.price)}</s>` : money(item.price)}</b></div><div class="dish-ctl">${control}</div>${note}</article>`;
 }
 
 /** Chỉ mục tìm kiếm (đã bỏ dấu) dựng lại khi menu đổi; kèm các từ khoá gợi ý còn ra món. */
 function searchData() {
   const cached = state.searchIndex;
   if (cached && cached.items === state.items && cached.cats === state.cats) return cached;
-  const sections = menuSections(state.items, state.cats);
+  const sections = menuSections(state.items, state.cats, { top: state.top });
   const entries = sections.flatMap((s) => s.items.map((m) => indexItem(m, s.name)));
   const categoryNames = sections.map((s) => s.name);
   // Từ khoá gợi ý bỏ những từ trùng tên nhóm (nhóm đã có hàng chip riêng bên dưới).
@@ -398,7 +398,7 @@ const chipIcon = (v) => `<svg viewBox="0 0 24 24" width="18" height="18" aria-hi
 const sectionHtml = (sec, cats) => `<section class="menu-section" id="cat-${esc(sec.id)}"><div class="sec-head"><h2>${esc(sec.name)}</h2>${sec.more ? `<button type="button" class="see-all" data-view="${esc(sec.more.view)}">${esc(sec.more.label)} <span aria-hidden="true">→</span></button>` : ""}</div>${sec.items.map((m) => dishHtml(m, cats[m.categoryId])).join("")}</section>`;
 
 function renderMenu() {
-  const sections = menuSections(state.items, state.cats);
+  const sections = menuSections(state.items, state.cats, { top: state.top });
   const cats = catById();
   const query = state.query.trim();
   if (query && state.items.length) {

@@ -113,9 +113,9 @@ def run():
         s["hidden"] = []; s["top"] = ["k", "n", "ghost"]
         ctx, page, errors = open_page(browser, d)
         heads = page.locator("#menu h2").all_inner_texts()
-        check(heads == ["Món lẻ nổi bật", "Combo tiện lợi", "cơm trưa", "Cà phê", "Ăn sáng"], f"thứ tự nhóm: {heads}")
+        check(heads == ["Món bán chạy", "Combo tiện lợi", "cơm trưa", "Cà phê", "Ăn sáng"], f"thứ tự nhóm: {heads}")
         top_items = page.locator("#cat-_featured .dish h3").all_inner_texts()
-        check(top_items == ["Cơm gà", "Bánh mì trứng"], f"món lẻ nổi bật: món ăn chính, giá cao trước, không đồ uống: {top_items}")
+        check(top_items == ["Cơm gà", "Cà phê muối"], f"món bán chạy: đúng danh sách thống kê (bỏ món không tồn tại): {top_items}")
         check(page.locator("#cat-_top").count() == 0, "không còn mục Bán chạy nhất")
         check(page.locator("[data-dish='k']").count() == 2, "món nổi bật hiện thêm trong nhóm riêng")
         page.locator("#cat-_featured [data-dish='k'] [data-act='inc']").click()

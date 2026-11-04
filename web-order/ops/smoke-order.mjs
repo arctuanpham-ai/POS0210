@@ -127,6 +127,12 @@ for (const [i, c] of cases.entries()) {
   }
   await fetch(`https://firestore.googleapis.com/v1/${doc}`, { method: "DELETE", headers: { authorization: `Bearer ${admin}` } });
 }
+// (chẩn đoán tạm) liệt kê tài liệu lượt vào theo nguồn bằng quyền chủ quán
+try {
+  const r = await fetch(`https://firestore.googleapis.com/v1/${root}/online_stats_src?pageSize=50`, { headers: { authorization: `Bearer ${admin}` } });
+  const j = await r.json();
+  console.log(`[chẩn đoán src] HTTP ${r.status}, ${(j.documents || []).length} tài liệu: ` + (j.documents || []).map((d) => `${d.name.split("/").pop()}=${d.fields?.visit?.integerValue}/${d.fields?.source?.stringValue}`).join(", "));
+} catch (e) { console.log("[chẩn đoán src] lỗi " + e.message); }
 // Bộ đếm lượt truy cập: khách ẩn danh tăng đúng 1 (tạo rồi cập nhật) được; tăng 2 hoặc bộ đếm lạ thì bị chặn. Dọn tài liệu thử bằng quyền chủ quán.
 {
   const statDoc = `${root}/online_stats/20000101`;

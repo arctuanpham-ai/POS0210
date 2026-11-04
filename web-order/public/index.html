@@ -28,8 +28,25 @@
   <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700;800&display=swap" />
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
   <link rel="stylesheet" href="order.css" />
+  <!-- Phông chữ nạp không chặn hiển thị: trang hiện ngay bằng phông hệ thống, đổi sang Montserrat khi tải xong. -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700;800&display=swap" media="print" onload="this.media='all'" />
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700;800&display=swap" /></noscript>
+  <!-- Tải trước song song các tệp mã để không phải chờ nối đuôi nhau. -->
+  <link rel="modulepreload" href="app.js" />
+  <link rel="modulepreload" href="config.js" />
+  <link rel="modulepreload" href="order-core.js" />
+  <link rel="modulepreload" href="source-core.js" />
+  <link rel="modulepreload" href="stats-core.js" />
+  <link rel="modulepreload" href="menu-snapshot.js" />
+  <link rel="modulepreload" href="search-core.js" />
+  <link rel="modulepreload" href="hours-core.js" />
+  <link rel="modulepreload" href="qr.js" />
+  <link rel="modulepreload" href="vietqr.js" />
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js" crossorigin />
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js" crossorigin />
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js" crossorigin />
 </head>
 <body>
   <div id="app">

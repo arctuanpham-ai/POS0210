@@ -295,7 +295,7 @@ body.has-cart .legal-foot { margin-bottom: 96px; }
 .cat-chips a { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; white-space: nowrap; }
 .cat-chips a.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 .menu-section { scroll-margin-top: 64px; }
-#menu .menu-section:first-child > h2 { margin-top: 14px; }
+#menu .menu-section:first-child > h2, #menu .menu-section:first-child > .sec-head { margin-top: 14px; }
 
 /* Món ăn: thẻ 2 cột (ảnh trên, tên + giá, nút + ở góc); combo chiếm cả hàng */
 .menu-section { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: start; }
@@ -325,14 +325,19 @@ body.has-cart .legal-foot { margin-bottom: 96px; }
 .dish.combo-dish .price-old { display: inline; margin-left: 6px; }
 .dish.combo-dish .dish-note { margin: 8px 0 0; }
 
-/* Vì sao nên đặt trực tiếp */
-.why { margin: 30px 0 0; }
-.why h2 { font-size: 18px; font-weight: 800; letter-spacing: .005em; }
-.why-grid { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: 1fr; gap: 10px; }
-.why-grid li { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); }
-.why-grid svg { flex: none; color: var(--accent); }
-.why-grid b { display: block; font-size: 14px; line-height: 1.3; }
-.why-grid span { display: block; margin-top: 2px; color: var(--muted); font-size: 12.5px; line-height: 1.35; }
+/* Bốn lợi ích đặt trực tiếp: gọn, ngay dưới banner (điện thoại 2×2, máy tính 4×1) */
+.why { margin: 10px 0 0; }
+.why-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.why-grid li { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; background: #fbf5ea; }
+.why-grid svg { flex: none; width: 26px; height: 26px; color: var(--accent); }
+.why-grid b { display: block; font-size: 12.5px; line-height: 1.25; }
+.why-grid span { display: block; margin-top: 1px; color: var(--muted); font-size: 11px; line-height: 1.3; }
+
+/* Đầu mỗi mục món: tiêu đề + nút "Xem tất cả" */
+.sec-head { grid-column: 1 / -1; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 18px 0 2px; }
+.sec-head h2 { margin: 0; font-size: 18px; }
+.see-all { flex: none; padding: 6px 0; border: 0; background: none; color: var(--accent); font-size: 13px; font-weight: 700; }
+.see-all:hover { text-decoration: underline; }
 
 /* Thông tin quán & hướng dẫn (thu gọn, cuối trang) */
 .shop-more { margin: 18px 0 0; border: 1px solid #d5c4aa; border-radius: 14px; background: var(--card); overflow: hidden; }
@@ -347,8 +352,7 @@ body.has-cart .legal-foot { margin-bottom: 96px; }
 .shop-more-body .hero-note { padding: 0 14px 10px; }
 .shop-photos { display: block; width: calc(100% - 28px); height: auto; margin: 2px 14px 12px; border-radius: 12px; }
 
-@media (max-width: 370px) { .motto { font-size: 7.5px; letter-spacing: .14em; padding-left: 8px; } .hero-head { gap: 8px; } .hero-head .pill { padding: 7px 10px; } .promo-big span { font-size: 24px; } .promo-big b { font-size: 33px; } }
-@media (min-width: 480px) { .why-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 370px) { .why-grid b { font-size: 12px; } .why-grid span { font-size: 10.5px; } .why-grid li { padding: 7px 8px; gap: 6px; } .motto { font-size: 7.5px; letter-spacing: .14em; padding-left: 8px; } .hero-head { gap: 8px; } .hero-head .pill { padding: 7px 10px; } .promo-big span { font-size: 24px; } .promo-big b { font-size: 33px; } }
 @media (min-width: 768px) {
   #app { padding: 0 28px 48px; }
   .cat-chips { position: static; flex-wrap: wrap; overflow-x: visible; margin: 14px 0 4px; padding: 0; border: 0; background: none; }
@@ -359,8 +363,10 @@ body.has-cart .legal-foot { margin-bottom: 96px; }
   .motto { font-size: 10px; } .logo.wide { height: 48px; }
   .menu-section { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; }
   .dish.combo-dish { grid-column: span 2; }
-  .why-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .why-grid li { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .why { margin-top: 14px; }
+  .why-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  .why-grid li { padding: 12px 14px; gap: 12px; }
+  .why-grid svg { width: 34px; height: 34px; } .why-grid b { font-size: 14px; } .why-grid span { font-size: 12.5px; }
   .shop-more-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 24px; align-items: start; }
   .shop-more-body .shop-photos { grid-column: 2; grid-row: 1 / span 4; width: calc(100% - 14px); margin: 4px 14px 12px 0; }
 }

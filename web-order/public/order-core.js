@@ -355,3 +355,61 @@ export const offerMessage = (percent) => {
   const p = Math.floor(Number(percent));
   return Number.isFinite(p) && p > 0 ? `Đặt trực tiếp trên web – Giá giảm ${p}% so với tại quán` : "";
 };
+
+/* ---------- Trang chủ menu: món lẻ nổi bật → combo tiện lợi → các nhóm còn lại; chọn nhóm = lọc đúng nhóm đó ---------- */
+export const HOME_VIEW = "home";
+export const RETAIL_VIEW = "retail";
+export const COMBO_VIEW = "combo";
+export const FEATURED_SECTION = Object.freeze({ id: "_featured", name: "Món lẻ nổi bật" });
+export const COMBO_HOME_SECTION = Object.freeze({ id: "_combo", name: "Combo tiện lợi" });
+export const HOME_LIMITS = Object.freeze({ featured: 6, combos: 4 });
+
+/** Nhóm đồ uống / ăn vặt (theo tên nhóm của quán) không tính là "món ăn chính" khi chọn món lẻ nổi bật. */
+const NOT_MAIN_CATEGORY = /(^| )(ca phe|cafe|coffee|tra|nuoc|nuoc ep|sinh to|do uong|matcha|smoothie|soda|da xay|an vat|topping)( |$)/;
+export const isMainCategory = (name) => !NOT_MAIN_CATEGORY.test(foldName(name));
+
+const retailOnly = (sections) => (sections || []).filter((s) => s && s.id !== COMBO_CATEGORY.id && s.id !== TOP_SECTION.id);
+
+/**
+ * Món lẻ nổi bật: món ăn chính (loại nhóm đồ uống/ăn vặt), đang bán được, giá cao xếp trước (cơm, bún, bít tết… thường là món chính),
+ * tối đa `limit` món. Chỉ dùng dữ liệu menu thật, không ghi cứng tên món. Quá ít món chính thì lấy từ mọi món lẻ đang bán.
+ */
+export const featuredRetail = (sections, limit = HOME_LIMITS.featured) => {
+  const retail = retailOnly(sections).filter((s) => s.active !== false);
+  const pool = (list) => list.flatMap((s) => s.items.filter((m) => isOrderable(m, s)));
+  const byPrice = (a, b) => Number(b.price) - Number(a.price) || Number(a.sortOrder || 0) - Number(b.sortOrder || 0);
+  let items = pool(retail.filter((s) => isMainCategory(s.name)));
+  if (items.length < 2) items = pool(retail);
+  return items.sort(byPrice).slice(0, limit);
+};
+
+/** Các "trang" của menu: Nổi bật (mặc định), Món lẻ, Combo và từng nhóm thật của quán. */
+export const menuViews = (sections) => {
+  const all = sections || [];
+  const hasCombo = all.some((s) => s.id === COMBO_CATEGORY.id && s.items.length);
+  const retail = retailOnly(all);
+  if (!retail.length && !hasCombo) return [];
+  return [
+    { id: HOME_VIEW, name: "Nổi bật" },
+    ...(retail.length ? [{ id: RETAIL_VIEW, name: "Món lẻ" }] : []),
+    ...(hasCombo ? [{ id: COMBO_VIEW, name: "Combo" }] : []),
+    ...retail.map((s) => ({ id: s.id, name: s.name })),
+  ];
+};
+
+/** Các mục hiển thị theo trang đang chọn. Mỗi mục: {id, name, items, more?: {view, label}}. Trang không còn tồn tại → về Nổi bật. */
+export const menuLayout = (sections, view = HOME_VIEW, limits = HOME_LIMITS) => {
+  const all = sections || [];
+  const combo = all.find((s) => s.id === COMBO_CATEGORY.id);
+  const retail = retailOnly(all);
+  const valid = menuViews(all).some((v) => v.id === view) ? view : HOME_VIEW;
+  if (valid === RETAIL_VIEW) return retail;
+  if (valid === COMBO_VIEW) return combo ? [{ ...combo, name: COMBO_HOME_SECTION.name }] : [];
+  if (valid !== HOME_VIEW) return retail.filter((s) => s.id === valid);
+  const out = [];
+  const featured = featuredRetail(all, limits.featured);
+  const retailTotal = retail.filter((s) => s.active !== false).reduce((n, s) => n + s.items.filter((m) => isOrderable(m, s)).length, 0);
+  if (featured.length) out.push({ id: FEATURED_SECTION.id, name: FEATURED_SECTION.name, active: true, items: featured, more: retailTotal > featured.length ? { view: RETAIL_VIEW, label: "Xem tất cả món lẻ" } : null });
+  if (combo?.items.length) out.push({ id: COMBO_HOME_SECTION.id, name: COMBO_HOME_SECTION.name, active: true, items: combo.items.slice(0, limits.combos), more: combo.items.length > limits.combos ? { view: COMBO_VIEW, label: "Xem tất cả combo" } : null });
+  return out.concat(retail);
+};

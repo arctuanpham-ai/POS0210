@@ -54,20 +54,20 @@ def run():
         print("1. Mặc định giảm 10% khi đặt online (shop chưa đặt mức giảm)")
         ctx, page, errors = open_page(browser, seed({}))
         sellable = page.locator(".dish:not(.off)")
-        n = sellable.count()
+        n = page.evaluate("new Set([...document.querySelectorAll('.dish:not(.off)')].map(d => d.dataset.dish)).size")
         check(n == 3, f"3 món bán được (2 món lẻ + 1 combo): {n}")
-        check(page.locator(".disc-badge").count() == n, "mỗi món bán được có nhãn giảm giá ở góc ảnh")
+        check(page.locator(".disc-badge").count() == sellable.count(), "mỗi món bán được có nhãn giảm giá ở góc ảnh (kể cả bản hiện ở mục nổi bật)")
         check(page.locator(".dish.off .disc-badge").count() == 0, "món tạm hết không có nhãn")
         check("-10%" in page.locator(".disc-badge").first.text_content(), "nhãn ghi -10%")
         color = page.evaluate("getComputedStyle(document.querySelector('.disc-badge')).backgroundColor")
         check(color == "rgb(214, 40, 40)", f"nhãn màu đỏ ({color})")
         box = page.evaluate("(() => { const b = document.querySelector('.disc-badge').getBoundingClientRect(); const i = document.querySelector('.disc-badge').parentElement.getBoundingClientRect(); return [b.left - i.left, b.top - i.top, b.width, b.height]; })()")
         check(box[0] <= 10 and box[1] <= 10 and box[2] < 50 and box[3] < 24, f"nhãn nhỏ, nằm ở góc trên-trái của ảnh {box}")
-        a = page.locator("[data-dish='a']")
+        a = page.locator("[data-dish='a']").first
         check(a.locator(".price-now").inner_text().replace("\u00a0", " ") == "27.000đ", "Bạc xỉu 30.000đ -> 27.000đ")
         check(a.locator(".price-old").inner_text().replace("\u00a0", " ") == "30.000đ", "giá tại quán gạch ngang 30.000đ")
         check(page.evaluate("getComputedStyle(document.querySelector('[data-dish=a] .price-old')).textDecorationLine") == "line-through", "giá cũ có gạch ngang")
-        combo = page.locator("[data-dish='c_x']")
+        combo = page.locator("[data-dish='c_x']").first
         check(combo.locator(".disc-badge").count() == 1 and "62.100" in combo.locator(".price-now").inner_text(), "combo 69.000đ -> 62.100đ, có nhãn")
         page.screenshot(path=f"{SHOTS}/d1-menu.png")
 
@@ -110,7 +110,7 @@ def run():
         print("5. Chủ quán đặt mức giảm 15%")
         ctx, page, errors = open_page(browser, seed({"onlineDiscountPercent": 15}))
         check("-15%" in page.locator(".disc-badge").first.text_content(), "nhãn -15%")
-        check(page.locator("[data-dish='a'] .price-now").inner_text().replace("\u00a0", " ") == "25.500đ", "30.000đ -> 25.500đ")
+        check(page.locator("[data-dish='a'] .price-now").first.inner_text().replace("\u00a0", " ") == "25.500đ", "30.000đ -> 25.500đ")
         ctx.close()
 
         print("6. Ảnh món: chủ quán đổi ảnh (thumbsVersion) thì khách thấy ngay, không đổi thì dùng ảnh đã nhớ")

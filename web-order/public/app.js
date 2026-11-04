@@ -19,7 +19,7 @@ import { APP_CHECK_SITE_KEY, DEFAULT_SHOP, NOTIFY_CLICK, NOTIFY_TOPIC, STORE_ID,
 import {
   FINAL_STATUSES, LIMITS, comboTools, pricingFor, MODE_LABELS, STATUS, STATUS_TEXT, buildOrderDoc, cartFromOrder, cartLines, changeQty, countdownText, isOrderable,
   limitKeyForPhone, limitKeyForUid, linesCount, linesTotal, makeOrderCode, menuSections, money, orderView, pendingBase, progressSteps, rememberCode,
-  notifyPayload, offerMessage, onlineDiscountPercent, onlinePrice, phoneLinksHtml, setNote, toMillis, validateCheckout,
+  notifyPayload, HOME_VIEW, menuLayout, menuViews, offerMessage, onlineDiscountPercent, onlinePrice, phoneLinksHtml, setNote, toMillis, validateCheckout,
 } from "./order-core.js";
 import { vietQrPayload } from "./vietqr.js";
 import { STATS_COLLECTION, decide, keysFor, vnDayKey } from "./stats-core.js";
@@ -77,6 +77,7 @@ const state = {
   catFilter: "",
   query: "",
   searchFocus: false,
+  view: HOME_VIEW, // trang menu đang chọn: nổi bật / món lẻ / combo / một nhóm
   searchIndex: null,
 };
 
@@ -104,7 +105,6 @@ function track(event) {
     }
   } catch { /* không bao giờ làm hỏng trang vì bộ đếm */ }
 }
-let activeCat = ""; // nhóm món đang chọn trên thanh nhóm (khai báo sớm vì renderMenu dùng)
 const menuById = () => Object.fromEntries(state.items.map((m) => [m.id, m]));
 const catById = () => Object.fromEntries(state.cats.map((c) => [c.id, c]));
 const currentLines = () => cartLines(state.cart, menuById(), catById());
@@ -370,8 +370,10 @@ function renderSearchNote(found, query) {
   }
 }
 
+const sectionHtml = (sec, cats) => `<section class="menu-section" id="cat-${esc(sec.id)}"><div class="sec-head"><h2>${esc(sec.name)}</h2>${sec.more ? `<button type="button" class="see-all" data-view="${esc(sec.more.view)}">${esc(sec.more.label)} <span aria-hidden="true">→</span></button>` : ""}</div>${sec.items.map((m) => dishHtml(m, cats[m.categoryId])).join("")}</section>`;
+
 function renderMenu() {
-  const sections = menuSections(state.items, state.cats, { top: state.top });
+  const sections = menuSections(state.items, state.cats);
   const cats = catById();
   const query = state.query.trim();
   if (query && state.items.length) {
@@ -384,13 +386,25 @@ function renderMenu() {
     return;
   }
   renderSearchNote(null, "");
-  $("#cat-chips").innerHTML = sections.length > 1
-    ? sections.map((s) => `<a href="#cat-${esc(s.id)}" data-cat="${esc(s.id)}">${s.id === "_top" ? '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4 6.1 20.5l1.2-6.5L2.5 9.4l6.6-.9z"/></svg>' : ""}${esc(s.name)}</a>`).join("")
+  const views = menuViews(sections);
+  if (!views.some((v) => v.id === state.view)) state.view = HOME_VIEW; // trang đang xem không còn (menu đổi): về Nổi bật
+  $("#cat-chips").innerHTML = views.length > 1
+    ? views.map((v) => `<a href="#cat-${esc(v.id)}" data-view="${esc(v.id)}"${v.id === state.view ? ' class="active" aria-current="true"' : ""}>${esc(v.name)}</a>`).join("")
     : "";
-  activeCat = "";
-  if (sections.length > 1) setActiveCat(sections[0].id, { follow: false });
-  $("#menu").innerHTML = sections.map((s) => `<section class="menu-section" id="cat-${esc(s.id)}"><h2>${esc(s.name)}</h2>${s.items.map((m) => dishHtml(m, cats[m.categoryId])).join("")}</section>`).join("")
+  $("#menu").innerHTML = menuLayout(sections, state.view).map((sec) => sectionHtml(sec, cats)).join("")
     || (state.items.length ? "" : '<p class="muted center">Đang tải menu…</p>');
+}
+
+/** Chọn trang menu (Nổi bật / Món lẻ / Combo / một nhóm): chỉ hiện đúng danh sách đó, đưa khách về đầu danh sách, chip đang chọn luôn nằm trong tầm nhìn. */
+function setView(id) {
+  if (!id || id === state.view) return;
+  state.view = id;
+  renderMenu();
+  const bar = $("#cat-chips");
+  const chip = bar.querySelector(".active");
+  if (chip && bar.scrollWidth > bar.clientWidth) bar.scrollTo({ left: chip.offsetLeft - (bar.clientWidth - chip.offsetWidth) / 2, behavior: "smooth" });
+  const top = $("#menu").getBoundingClientRect().top + window.scrollY - (bar.getBoundingClientRect().height || 0) - 12;
+  if (window.scrollY > top) window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
 }
 
 function refreshDish(id) {
@@ -875,40 +889,15 @@ $("#search-note").addEventListener("click", (event) => {
 });
 
 $("#cat-chips").addEventListener("click", (event) => {
-  const link = event.target.closest("[data-cat]");
+  const link = event.target.closest("[data-view]");
   if (!link) return;
   event.preventDefault();
-  setActiveCat(link.dataset.cat);
-  spyLockUntil = Date.now() + 1000; // đang cuộn có hiệu ứng tới nhóm vừa chọn: không để việc dò theo trang đổi chip giữa chừng
-  document.getElementById(`cat-${link.dataset.cat}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  setView(link.dataset.view);
 });
-
-/* Nhóm đang xem được tô đậm; thanh nhóm tự cuộn ngang để chip đang chọn luôn nằm trong tầm nhìn. */
-function setActiveCat(id, { follow = true } = {}) {
-  if (!id || id === activeCat) return;
-  activeCat = id;
-  const bar = $("#cat-chips");
-  bar.querySelectorAll("[data-cat]").forEach((a) => {
-    const on = a.dataset.cat === id;
-    a.classList.toggle("active", on);
-    if (on) a.setAttribute("aria-current", "true"); else a.removeAttribute("aria-current");
-    if (on && follow && bar.scrollWidth > bar.clientWidth) bar.scrollTo({ left: a.offsetLeft - (bar.clientWidth - a.offsetWidth) / 2, behavior: "smooth" });
-  });
-}
-let spyQueued = false;
-let spyLockUntil = 0;
-function spyCategories() {
-  spyQueued = false;
-  if (state.query.trim() || Date.now() < spyLockUntil) return;
-  const bar = $("#cat-chips");
-  const line = (bar.getBoundingClientRect().bottom || 0) + 24;
-  let current = "";
-  const secs = [...document.querySelectorAll("#menu .menu-section")];
-  secs.forEach((sec) => { if (sec.getBoundingClientRect().top <= line) current = sec.id.replace(/^cat-/, ""); });
-  if (secs.length && window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2) current = secs[secs.length - 1].id.replace(/^cat-/, ""); // cuối trang: nhóm ngắn cuối cùng cũng được chọn
-  setActiveCat(current || document.querySelector("#cat-chips [data-cat]")?.dataset.cat);
-}
-window.addEventListener("scroll", () => { if (!spyQueued) { spyQueued = true; requestAnimationFrame(spyCategories); } }, { passive: true });
+$("#menu").addEventListener("click", (event) => {
+  const more = event.target.closest(".see-all[data-view]");
+  if (more) setView(more.dataset.view);
+});
 
 $("#cart-open").addEventListener("click", openSheet);
 $("#sheet-close").addEventListener("click", closeSheet);

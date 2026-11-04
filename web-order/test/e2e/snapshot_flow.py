@@ -80,7 +80,7 @@ def run():
         check("Món bị ẩn" not in " ".join(names), "món ẩn riêng bị loại")
         check(page.locator("[data-dish='c_x']").count() == 1, "combo dựng từ bản chụp")
         page.wait_for_timeout(500)
-        check(page.locator("[data-dish='a'] .dish-img img").count() == 1 and page.locator("[data-dish='n'] .dish-img img").count() == 1, "ảnh từ cả 2 nhóm ảnh đều hiện")
+        check(page.locator("[data-dish='a'] .dish-img img").count() >= 1 and page.locator("[data-dish='n'] .dish-img img").count() >= 1, "ảnh từ cả 2 nhóm ảnh đều hiện")
         reads = page.evaluate("window.__reads")
         check(reads <= 8, f"tổng lượt đọc Firestore lúc mở trang: {reads} (cũ ~125)")
         print(f"      (lượt đọc khi mở trang: {reads})")
@@ -100,7 +100,7 @@ def run():
         check("(collection)" in names and "bản chụp" not in names, f"dùng collection khi bản chụp không hợp lệ: {names}")
         ctx.close()
 
-        print("4. Thứ tự: Combo, Bán chạy nhất, Cơm trưa, Cà phê, rồi nhóm còn lại; món bán chạy hiện 2 chỗ vẫn đồng bộ số lượng")
+        print("4. Thứ tự: Món lẻ nổi bật, Combo tiện lợi, rồi các nhóm; món nổi bật hiện 2 chỗ vẫn đồng bộ số lượng")
         d = snap_seed()
         s = d[f"{ROOT}/online_menu/data"]
         s["cats"] = [{"id": "c1", "name": "Cà phê", "sortOrder": 1, "active": True}, {"id": "c0", "name": "Ăn sáng", "sortOrder": 2, "active": True}, {"id": "c3", "name": "cơm trưa", "sortOrder": 3, "active": True}]
@@ -113,12 +113,13 @@ def run():
         s["hidden"] = []; s["top"] = ["k", "n", "ghost"]
         ctx, page, errors = open_page(browser, d)
         heads = page.locator("#menu h2").all_inner_texts()
-        check(heads == ["Combo", "Bán chạy nhất", "cơm trưa", "Cà phê", "Ăn sáng"], f"thứ tự nhóm: {heads}")
-        top_items = page.locator("#cat-_top .dish h3").all_inner_texts()
-        check(top_items == ["Cơm gà", "Cà phê muối"], f"mục bán chạy theo thứ tự thống kê, bỏ id lạ: {top_items}")
-        check(page.locator("[data-dish='k']").count() == 2, "món bán chạy hiện thêm trong nhóm riêng")
-        page.locator("#cat-_top [data-dish='k'] [data-act='inc']").click()
-        check(page.locator("[data-dish='k'] .stepper").count() == 2, "bấm Thêm ở mục bán chạy: cả 2 chỗ đều hiện số lượng")
+        check(heads == ["Món lẻ nổi bật", "Combo tiện lợi", "cơm trưa", "Cà phê", "Ăn sáng"], f"thứ tự nhóm: {heads}")
+        top_items = page.locator("#cat-_featured .dish h3").all_inner_texts()
+        check(top_items == ["Cơm gà", "Bánh mì trứng"], f"món lẻ nổi bật: món ăn chính, giá cao trước, không đồ uống: {top_items}")
+        check(page.locator("#cat-_top").count() == 0, "không còn mục Bán chạy nhất")
+        check(page.locator("[data-dish='k']").count() == 2, "món nổi bật hiện thêm trong nhóm riêng")
+        page.locator("#cat-_featured [data-dish='k'] [data-act='inc']").click()
+        check(page.locator("[data-dish='k'] .stepper").count() == 2, "bấm Thêm ở mục nổi bật: cả 2 chỗ đều hiện số lượng")
         check("45.000" in page.inner_text("#cart-total"), "giỏ chỉ tính 1 phần")
         page.screenshot(path=f"{SHOTS}/s4-order.png")
         check(not errors, "không lỗi JS: " + "; ".join(errors[:3]))

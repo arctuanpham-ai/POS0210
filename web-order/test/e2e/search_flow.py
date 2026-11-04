@@ -86,7 +86,7 @@ def run():
         check(page.locator("#kw-chips button").count() >= 1, "bấm vào ô tìm: có từ khoá gợi ý")
         kw = [t.strip() for t in page.locator("#kw-chips button").all_inner_texts()]
         check("Cà phê" not in kw, f"từ khoá gợi ý không trùng tên nhóm ({kw})")
-        check(page.locator("#cat-chips a").count() == 2, "ô trống: có chip nhóm món")
+        check(page.locator("#cat-chips a").count() == 4, "ô trống: có chip Nổi bật, Món lẻ và 2 nhóm món")
         page.click("#menu-search"); page.keyboard.type("ca phe")
         page.wait_for_timeout(100)
         check(page.locator(".dish").count() == 2, "'ca phe' (không dấu) ra 2 món nhóm Cà phê")
@@ -119,9 +119,9 @@ def run():
         check(not page.locator("#cartbar").is_hidden() and "1 món" in page.inner_text("#cart-count"), "thêm món từ kết quả tìm được vào giỏ")
         page.click("#search-clear")
         check(page.input_value("#menu-search") == "", "nút × xoá từ khoá")
-        check(page.locator(".dish").count() == 3 and page.locator("#cat-chips a").count() == 2, "xoá từ khoá: menu đầy đủ, chip nhóm trở lại")
+        check(page.evaluate("new Set([...document.querySelectorAll('.dish')].map(d => d.dataset.dish)).size") == 3 and page.locator("#cat-chips a").count() == 4, "xoá từ khoá: menu đầy đủ, chip nhóm trở lại")
         check("1 món" in page.inner_text("#cart-count"), "giỏ hàng còn nguyên")
-        check(page.locator("[data-dish='p'] .stepper").count() == 1, "món vừa thêm hiện bộ đếm số lượng trong menu")
+        check(page.locator("[data-dish='p'] .stepper").count() >= 1, "món vừa thêm hiện bộ đếm số lượng trong menu")
 
         print("5. Không có kết quả / gõ sai")
         page.fill("#menu-search", "pizza")

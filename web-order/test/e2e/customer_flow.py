@@ -65,7 +65,7 @@ def run():
         check(page.locator("a[href^='tel:']").count() >= 1, "có link gọi điện")
         check(page.locator("#legal-foot a[href^='chinh-sach']").count() >= 3, "chân trang có link chính sách, hoàn tiền, khiếu nại")
         check(page.locator("#legal-name").inner_text() == "0210 Cafe", "chân trang có tên chủ quản")
-        check(page.locator(".menu-section").count() == 2, "2 nhóm món")
+        check(page.locator(".menu-section").count() == 3 and page.locator("#cat-_featured").count() == 1, "món lẻ nổi bật + 2 nhóm món")
         check(page.locator(".dish.off").count() == 0 and "Tạm hết" not in page.inner_text("#menu") and "Món tắt" not in page.inner_text("#menu"), "món ngừng bán bị ẩn hẳn, không hiện mờ")
         check(page.locator(".dish.off [data-act]").count() == 0, "món tắt không có nút thêm")
         page.screenshot(path=f"{SHOTS}/1-menu.png")

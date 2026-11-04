@@ -14,6 +14,7 @@ BASE=f"http://127.0.0.1:{port}/"
 cats=[("c1","Cà phê"),("c2","Ăn sáng"),("c3","Cơm trưa"),("c4","Đồ uống"),("c5","Đồ ăn vặt")]
 SEED={f"{ROOT}/online_config/shop":{"name":"0210","address":"LK 02-10 Hoàng Huy riverside","phone":"0702245400 · 0968563539","hours":"6:30 - 18:00","orderingEnabled":True,"onlineDiscountPercent":10,"bank":"Techcombank","account":"1","holder":"X"}}
 for i,(cid,n) in enumerate(cats): SEED[f"{ROOT}/menuCategories/{cid}"]={"id":cid,"name":n,"sortOrder":i,"active":True}
+for i in range(7): SEED[f"{ROOT}/combos/k{i}"]={"id":f"k{i}","name":f"Combo thử {i}","price":60000+i*1000,"active":True,"sortOrder":i,"items":[{"menuItemId":"m0","name":"Bạc xỉu","qty":1}]}
 names=["Bạc xỉu","Americano","Bánh mì trứng","Cơm gà","Trà đào","Khoai tây chiên"]
 for i in range(25): SEED[f"{ROOT}/menu/m{i}"]={"id":f"m{i}","categoryId":cats[i%5][0],"name":(names[i] if i<len(names) else f"Món số {i}"),"price":25000+i*1000,"active":True,"description":"Mô tả ngắn của món"}
 
@@ -42,7 +43,7 @@ with sync_playwright() as p:
           return {dishTop:r('.dish').top,dishBottom:r('.dish').bottom,vh:innerHeight,hs:document.documentElement.scrollWidth>innerWidth,coverH:r('#promo-banner').height,heroH:r('.hero').height,chipsOneRow:new Set(chips).size===1,chipsScroll:document.querySelector('#cat-chips').scrollWidth>document.querySelector('#cat-chips').clientWidth,offerH:r('#promo-banner').height,searchH:r('#menu-search').height,sbar:getComputedStyle(document.querySelector('#cat-chips')).scrollbarWidth}}""")
         check(not m["hs"],"không tràn ngang")
         check(m["dishTop"]<m["vh"]-60 and m["dishBottom"]>0,f"thấy thẻ món đầu tiên không cần cuộn (đỉnh {round(m['dishTop'])}px / cao {m['vh']}px)")
-        check(m["dishTop"]<460,f"món đầu tiên nằm trong 460px đầu trang ({round(m['dishTop'])})")
+        check(m["dishTop"]<650,f"món đầu tiên nằm trong 650px đầu trang ({round(m['dishTop'])})")
         check(115<=m["coverH"]<=150,f"banner giảm giá cao 115–150px ({round(m['coverH'])}px)")
         check(m["chipsOneRow"] and m["chipsScroll"],"thanh nhóm một hàng, cuộn ngang được")
         check(m["searchH"]>=44,f"ô tìm đủ lớn để chạm ({round(m['searchH'])}px)")
@@ -51,11 +52,21 @@ with sync_playwright() as p:
         tx=page.evaluate("""()=>{const b=document.querySelector('#promo-banner').getBoundingClientRect();return [...document.querySelectorAll('#promo-banner .promo-text > *')].every(e=>{const r=e.getBoundingClientRect();return r.left>=b.left&&r.right<=b.right&&r.top>=b.top&&r.bottom<=b.bottom})}""")
         check(tx,"chữ trong banner không bị cắt")
         check(page.input_value("#menu-search")=="" and page.get_attribute("#menu-search","placeholder")=="Tìm món: cà phê, cơm, bánh mì...","placeholder tìm món")
-        order=page.evaluate("""()=>{const y=s=>document.querySelector(s).getBoundingClientRect().top+scrollY;return [y('.hero'),y('#promo-banner'),y('#search-box'),y('#cat-chips'),y('.dish'),y('#why'),y('#shop-more')]}""")
-        check(order==sorted(order),f"thứ tự: header, banner, tìm kiếm, nhóm món, món, lợi ích, thông tin quán")
-        check(page.locator(".why-grid li").count()==4 and "Vì sao nên đặt trực tiếp tại 0210?" in page.inner_text("#why"),"khối lợi ích có 4 thẻ")
+        order=page.evaluate("""()=>{const y=s=>document.querySelector(s).getBoundingClientRect().top+scrollY;return [y('.hero'),y('#promo-banner'),y('#why'),y('#search-box'),y('#cat-chips'),y('.dish'),y('#shop-more')]}""")
+        check(order==sorted(order),f"thứ tự: header, banner, 4 lợi ích, tìm kiếm, nhóm món, món, thông tin quán")
+        check(page.locator(".why-grid li").count()==4 and "Giao hàng theo từng đơn" in page.inner_text("#why") and "Không đội giá" in page.inner_text("#why") and "Vì sao nên" not in page.inner_text("#why"),"4 lợi ích compact, không lặp tiêu đề dài")
+        wh=page.evaluate("document.querySelector('#why').getBoundingClientRect().height")
+        wc=page.evaluate("new Set([...document.querySelectorAll('.why-grid li')].map(e=>Math.round(e.getBoundingClientRect().left))).size")
+        check(wc==2 and wh<190,f"lợi ích: lưới 2 cột × 2 hàng, cao {round(wh)}px")
+        secs=page.evaluate("[...document.querySelectorAll('#menu .menu-section')].map(s=>s.id)")
+        check(secs[0]=="cat-_featured" and secs[1]=="cat-_combo",f"món lẻ nổi bật trước combo ({secs[:3]})")
+        check(page.locator("#cat-_featured .dish").count()<=6 and page.locator("#cat-_featured .dish").count()>=4,"món lẻ nổi bật 4–6 món")
+        check(page.locator("#cat-_combo .dish").count()==4,"combo tiện lợi 4 combo")
+        check("Xem tất cả món lẻ" in page.inner_text("#cat-_featured .sec-head") and "Xem tất cả combo" in page.inner_text("#cat-_combo .sec-head"),"có nút xem tất cả món lẻ / combo")
+        chips=[t.strip() for t in page.locator("#cat-chips a").all_inner_texts()]
+        check(chips[:3]==["Nổi bật","Món lẻ","Combo"] and "Cơm trưa" in chips,f"chip: Nổi bật, Món lẻ, Combo + nhóm thật ({chips})")
         check(not page.locator("#shop-info").is_visible(),"thông tin quán thu gọn mặc định")
-        cols=page.evaluate("[...document.querySelectorAll('#menu .menu-section:nth-of-type(2) .dish')].slice(0,2).map(e=>Math.round(e.getBoundingClientRect().left))")
+        cols=page.evaluate("[...document.querySelectorAll('#cat-_featured .dish')].slice(0,2).map(e=>Math.round(e.getBoundingClientRect().left))")
         check(len(set(cols))==2,f"món ăn xếp 2 cột trên điện thoại ({cols})")
         page.screenshot(path=f"{OUT}/m{w}.png")
         if w==390:
@@ -74,22 +85,31 @@ with sync_playwright() as p:
             page.keyboard.type("bạc"); page.wait_for_timeout(300)
             check(page.locator(".dish").count()>=1 and "Bạc xỉu" in page.inner_text("#menu"),"tìm được món")
             page.click("#search-clear"); page.wait_for_timeout(200); page.evaluate("document.activeElement.blur()"); page.wait_for_timeout(400)
-            check(page.locator("#cat-chips a").count()==5,"xoá tìm: thanh nhóm trở lại")
-            # nhóm: chọn + cuộn
-            check(page.locator("#cat-chips a.active").count()==1,"có đúng 1 nhóm đang chọn")
-            cid=page.get_attribute("#cat-chips a >> nth=2","data-cat")
-            page.click("#cat-chips a >> nth=2"); page.wait_for_timeout(1500)
-            act=page.inner_text("#cat-chips a.active"); check(act==page.inner_text("#cat-chips a >> nth=2"),f"bấm nhóm: chip đang chọn đổi ({act})")
-            top=page.evaluate(f"document.querySelector('#cat-{cid}').getBoundingClientRect().top")
-            check(0<=top<120,f"bấm nhóm: cuộn tới đúng mục, không bị thanh nhóm che ({round(top)}px)")
-            page.evaluate("window.scrollTo(0,0)"); page.wait_for_timeout(500)
-            check(page.inner_text("#cat-chips a.active")==page.inner_text("#cat-chips a >> nth=0"),"cuộn lên đầu: chip đầu được chọn")
-            cid3=page.get_attribute("#cat-chips a >> nth=3","data-cat")
-            page.wait_for_timeout(900)
-            page.evaluate(f"window.scrollTo(0,document.querySelector('#cat-{cid3}').getBoundingClientRect().top+scrollY-64)"); page.wait_for_timeout(500)
-            check(page.inner_text("#cat-chips a.active")==page.inner_text("#cat-chips a >> nth=3"),"cuộn trang: chip nhóm tương ứng sáng lên")
-            page.evaluate("window.scrollTo(0,document.documentElement.scrollHeight)"); page.wait_for_timeout(500)
-            check(page.inner_text("#cat-chips a.active")==page.inner_text("#cat-chips a >> nth=4"),"cuối trang: chip nhóm cuối được chọn")
+            check(page.locator("#cat-chips a").count()>=8,"xoá tìm: thanh nhóm trở lại")
+            check(page.locator("#cat-chips a.active").count()==1 and page.inner_text("#cat-chips a.active")=="Nổi bật","mặc định chip Nổi bật được chọn")
+            # chọn Combo: chỉ còn combo
+            page.click("#cat-chips a >> text=Combo"); page.wait_for_timeout(500)
+            ids=page.evaluate("[...document.querySelectorAll('#menu .menu-section')].map(s=>s.id)")
+            check(ids==["cat-_combo"] and page.locator(".dish").count()==7,f"chọn Combo: chỉ hiện 7 combo ({ids})")
+            check(page.inner_text("#cat-chips a.active")=="Combo","chip Combo đang chọn")
+            # chọn Món lẻ: không còn combo
+            page.click("#cat-chips a >> text=Món lẻ"); page.wait_for_timeout(500)
+            ids=page.evaluate("[...document.querySelectorAll('#menu .menu-section')].map(s=>s.id)")
+            check("cat-_combo" not in ids and len(ids)==5 and page.locator(".combo-dish").count()==0,f"chọn Món lẻ: mọi nhóm món, không combo ({ids})")
+            # chọn một nhóm: chỉ nhóm đó
+            page.click("#cat-chips a >> text=Cà phê"); page.wait_for_timeout(500)
+            ids=page.evaluate("[...document.querySelectorAll('#menu .menu-section')].map(s=>s.id)")
+            check(len(ids)==1 and page.locator(".dish").count()==5,f"chọn Cà phê: chỉ hiện đúng nhóm ({ids})")
+            top=page.evaluate("document.querySelector('#menu').getBoundingClientRect().top")
+            check(top>=0,f"chọn nhóm: danh sách không bị thanh nhóm che ({round(top)}px)")
+            # từ Món lẻ nổi bật bấm xem tất cả
+            page.click("#cat-chips a >> text=Nổi bật"); page.wait_for_timeout(500)
+            page.click("#cat-_featured .see-all"); page.wait_for_timeout(500)
+            check(page.inner_text("#cat-chips a.active")=="Món lẻ" and page.locator("#menu .menu-section").count()==5,"Xem tất cả món lẻ chuyển sang trang Món lẻ")
+            page.click("#cat-chips a >> text=Nổi bật"); page.wait_for_timeout(500)
+            page.click("#cat-_combo .see-all"); page.wait_for_timeout(500)
+            check(page.inner_text("#cat-chips a.active")=="Combo" and page.locator(".dish").count()==7,"Xem tất cả combo chuyển sang trang Combo")
+            page.click("#cat-chips a >> text=Nổi bật"); page.wait_for_timeout(400)
             page.evaluate("window.scrollTo(0,0)")
             # giỏ hàng
             page.click(".dish .add >> nth=0"); page.wait_for_timeout(300)
@@ -106,6 +126,7 @@ with sync_playwright() as p:
         check(not page.locator("#shop-more").evaluate("e=>e.open"),f"{w}: thông tin quán thu gọn mặc định")
         check(not page.evaluate("document.documentElement.scrollWidth>innerWidth"),f"{w}: không tràn ngang")
         check(page.evaluate("document.querySelector('.dish').getBoundingClientRect().top")<h-80,f"{w}: thấy món đầu tiên")
+        check(page.evaluate("new Set([...document.querySelectorAll('.why-grid li')].map(e=>Math.round(e.getBoundingClientRect().top))).size")==(1 if w>=1000 else 1),f"{w}: bốn lợi ích cùng một hàng")
         if w==1440: check(page.evaluate("new Set([...document.querySelectorAll('#cat-chips a')].map(a=>Math.round(a.getBoundingClientRect().top))).size")==1,f"{w}: các chip nhóm cùng một hàng")
         page.screenshot(path=f"{OUT}/d{w}.png"); check(not errs,f"{w}: không lỗi runtime")
         ctx.close()

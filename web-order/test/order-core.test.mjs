@@ -301,3 +301,55 @@ test("thông điệp ưu đãi theo cấu hình, không cấu hình thì rỗng"
 test("tách số điện thoại cả khi ngăn bằng dấu chấm giữa", () => {
   assert.deepEqual(splitPhones2("0702245400 · 0968563539").map((p) => p.tel), ["0702245400", "0968563539"]);
 });
+
+import { featuredRetail, menuLayout, menuViews, isMainCategory, HOME_VIEW, RETAIL_VIEW, COMBO_VIEW } from "../public/order-core.js";
+const mk = (id, categoryId, price, extra = {}) => ({ id, categoryId, name: `Món ${id}`, price, active: true, sortOrder: 0, ...extra });
+const SECS = [
+  { id: "_combo", name: "Combo", active: true, items: [1, 2, 3, 4, 5, 6, 7].map((n) => ({ ...mk(`c_${n}`, "_combo", 60000 + n), parts: [] })) },
+  { id: "com", name: "cơm trưa", active: true, items: [mk("com1", "com", 59000), mk("com2", "com", 75000), mk("addon", "com", 29000)] },
+  { id: "cf", name: "Cà phê", active: true, items: [mk("cf1", "cf", 50000), mk("cf2", "cf", 25000)] },
+  { id: "sang", name: "Ăn sáng", active: true, items: [mk("bit", "sang", 85000), mk("bun", "sang", 50000), mk("bm", "sang", 25000), mk("off", "sang", 99000, { active: false })] },
+  { id: "tra", name: "Trà", active: true, items: [mk("t1", "tra", 40000)] },
+  { id: "vat", name: "Đồ ăn vặt", active: true, items: [mk("v1", "vat", 45000)] },
+];
+test("nhóm món chính: loại đồ uống và ăn vặt, giữ 'Ăn sáng'", () => {
+  assert.equal(isMainCategory("cơm trưa"), true);
+  assert.equal(isMainCategory("Ăn sáng"), true);
+  assert.equal(isMainCategory("Cà phê"), false);
+  assert.equal(isMainCategory("Trà sữa"), false);
+  assert.equal(isMainCategory("Nước ép"), false);
+  assert.equal(isMainCategory("Đồ ăn vặt"), false);
+  assert.equal(isMainCategory("Đồ uống"), false);
+});
+test("món lẻ nổi bật: món ăn chính, giá cao trước, không có món tắt/combo/đồ uống", () => {
+  const ids = featuredRetail(SECS).map((m) => m.id);
+  assert.deepEqual(ids, ["bit", "com2", "com1", "bun", "addon", "bm"]);
+  assert.deepEqual(featuredRetail(SECS, 2).map((m) => m.id), ["bit", "com2"]);
+});
+test("món lẻ nổi bật: quá ít món chính thì lấy mọi món lẻ", () => {
+  const only = [{ id: "cf", name: "Cà phê", active: true, items: [mk("a", "cf", 30000), mk("b", "cf", 40000)] }];
+  assert.deepEqual(featuredRetail(only).map((m) => m.id), ["b", "a"]);
+  assert.deepEqual(featuredRetail([]), []);
+});
+test("trang chủ: món lẻ nổi bật → combo (tối đa 4) → các nhóm; có nút xem tất cả", () => {
+  const l = menuLayout(SECS);
+  assert.deepEqual(l.map((s) => s.id), ["_featured", "_combo", "com", "cf", "sang", "tra", "vat"]);
+  assert.equal(l[0].items.length, 6);
+  assert.deepEqual(l[0].more, { view: RETAIL_VIEW, label: "Xem tất cả món lẻ" });
+  assert.equal(l[1].items.length, 4);
+  assert.deepEqual(l[1].more, { view: COMBO_VIEW, label: "Xem tất cả combo" });
+  assert.equal(l[1].name, "Combo tiện lợi");
+});
+test("trang chủ: ít combo / ít món lẻ thì không hiện nút xem tất cả", () => {
+  const few = [{ id: "_combo", name: "Combo", active: true, items: SECS[0].items.slice(0, 3) }, { id: "m", name: "Cơm", active: true, items: [mk("x", "m", 50000), mk("y", "m", 40000)] }];
+  const l = menuLayout(few);
+  assert.equal(l[0].more, null); assert.equal(l[1].more, null);
+});
+test("chọn trang: Món lẻ = mọi nhóm trừ combo; Combo = tất cả combo; nhóm = đúng nhóm đó; trang lạ về Nổi bật", () => {
+  assert.deepEqual(menuLayout(SECS, RETAIL_VIEW).map((s) => s.id), ["com", "cf", "sang", "tra", "vat"]);
+  const c = menuLayout(SECS, COMBO_VIEW); assert.equal(c.length, 1); assert.equal(c[0].items.length, 7);
+  assert.deepEqual(menuLayout(SECS, "sang").map((s) => s.id), ["sang"]);
+  assert.equal(menuLayout(SECS, "khong-co")[0].id, "_featured");
+  assert.deepEqual(menuViews(SECS).map((v) => v.id), [HOME_VIEW, RETAIL_VIEW, COMBO_VIEW, "com", "cf", "sang", "tra", "vat"]);
+  assert.deepEqual(menuViews([]), []);
+});

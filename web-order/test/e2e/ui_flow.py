@@ -43,7 +43,7 @@ with sync_playwright() as p:
         check(not m["hs"],"không tràn ngang")
         check(m["dishTop"]<m["vh"]-60 and m["dishBottom"]>0,f"thấy thẻ món đầu tiên không cần cuộn (đỉnh {round(m['dishTop'])}px / cao {m['vh']}px)")
         check(m["dishTop"]<560,f"món đầu tiên nằm trong 560px đầu trang ({round(m['dishTop'])})")
-        check(m["coverH"]<=151,f"ảnh bìa thấp ({round(m['coverH'])}px)")
+        check(m["coverH"]<=176,f"ảnh bìa thấp ({round(m['coverH'])}px)")
         check(m["chipsOneRow"] and m["chipsScroll"],"thanh nhóm một hàng, cuộn ngang được")
         check(m["searchH"]>=44,f"ô tìm đủ lớn để chạm ({round(m['searchH'])}px)")
         check("Giá giảm 10% so với tại quán" in page.inner_text("#offer-note"),"có thông điệp ưu đãi")

@@ -227,7 +227,7 @@ label.radio input { width: 20px; height: 20px; margin: 0; }
 @media (min-width: 700px) { .cover { margin: 16px 0 0; border-radius: 22px; overflow: hidden; } }
 @media (min-width: 768px) {
   #screen-menu > .cover { grid-column: 1 / -1; grid-row: 1; }
-  #screen-menu > .cover img { max-height: 380px; object-fit: cover; }
+  #screen-menu > .cover img { max-height: 440px; object-fit: cover; }
   #screen-menu > .hero { grid-row: 2 / span 6; }
 }
 @media (orientation: landscape) and (max-height: 520px) {
@@ -339,7 +339,7 @@ body.has-cart .legal-foot { margin-bottom: 96px; }
 #menu .menu-section:first-child > h2 { margin-top: 12px; }
 
 @media (max-width: 767px) {
-  .cover img { max-height: 150px; object-fit: cover; object-position: center; }
+  .cover img { max-height: 175px; object-fit: cover; object-position: center; } /* banner có chữ: giữ gần đủ khung, không cắt chữ ở khổ ≤430px */
   .cat-chips { position: sticky; top: 0; z-index: 5; flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; margin: 8px -16px 0; padding: 8px 16px; background: var(--bg); border-bottom: 1px solid var(--line); scrollbar-width: none; }
   .cat-chips::-webkit-scrollbar { display: none; }
   .menu-section { scroll-margin-top: 64px; }

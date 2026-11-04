@@ -370,6 +370,31 @@ function renderSearchNote(found, query) {
   }
 }
 
+const CHIP_SVG = {
+  home: '<path d="M12 3l2.2 5.3L20 9l-4.3 3.8L17 18.5 12 15.6 7 18.5l1.3-5.7L4 9l5.8-.7z"/>',
+  retail: '<path d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M17 21V3c-2.5 1.5-3.5 4-3.5 7.5H17"/>',
+  combo: '<path d="M4 8h16v4H4zM6 12v8h12v-8M12 8v12M12 8c-2 0-4-.8-4-2.5S9.5 3 12 8zM12 8c2 0 4-.8 4-2.5S14.5 3 12 8z"/>',
+  rice: '<path d="M3 12h18a9 9 0 0 1-18 0zM8 9c0-2 1.5-3 4-3s4 1 4 3M9 21h6"/>',
+  coffee: '<path d="M5 9h11v5a5 5 0 0 1-5 5H10a5 5 0 0 1-5-5zM16 10h2a2.5 2.5 0 0 1 0 5h-2M8 3v3M12 3v3"/>',
+  bread: '<path d="M5 11a4 4 0 0 1 2-7h10a4 4 0 0 1 2 7v8a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z"/>',
+  tea: '<path d="M4 10h13v3a6 6 0 0 1-6 6h-1a6 6 0 0 1-6-6zM17 11h1.5a2.5 2.5 0 0 1 0 5H17M9 3c-1 1 1 2 0 4M13 3c-1 1 1 2 0 4"/>',
+  snack: '<path d="M6 10h12l-1.5 11h-9zM8 10l-1-5M12 10V4M16 10l1-5"/>',
+  juice: '<path d="M6 5h12l-1.5 15h-9zM7 10h10M14 5l2-3"/>',
+};
+const chipIconKey = (v) => {
+  const n = String(v.name || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
+  if (v.id === HOME_VIEW) return "home";
+  if (v.id === "retail") return "retail";
+  if (v.id === "combo") return "combo";
+  if (/com|bun|pho|mi |bit tet/.test(n + " ")) return "rice";
+  if (/ca phe|cafe|coffee/.test(n)) return "coffee";
+  if (/an sang|banh/.test(n)) return "bread";
+  if (/tra|matcha/.test(n)) return "tea";
+  if (/an vat|snack/.test(n)) return "snack";
+  if (/nuoc|ep|sinh to|smoothie/.test(n)) return "juice";
+  return "retail";
+};
+const chipIcon = (v) => `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${CHIP_SVG[chipIconKey(v)]}</svg>`;
 const sectionHtml = (sec, cats) => `<section class="menu-section" id="cat-${esc(sec.id)}"><div class="sec-head"><h2>${esc(sec.name)}</h2>${sec.more ? `<button type="button" class="see-all" data-view="${esc(sec.more.view)}">${esc(sec.more.label)} <span aria-hidden="true">→</span></button>` : ""}</div>${sec.items.map((m) => dishHtml(m, cats[m.categoryId])).join("")}</section>`;
 
 function renderMenu() {
@@ -389,7 +414,7 @@ function renderMenu() {
   const views = menuViews(sections);
   if (!views.some((v) => v.id === state.view)) state.view = HOME_VIEW; // trang đang xem không còn (menu đổi): về Nổi bật
   $("#cat-chips").innerHTML = views.length > 1
-    ? views.map((v) => `<a href="#cat-${esc(v.id)}" data-view="${esc(v.id)}"${v.id === state.view ? ' class="active" aria-current="true"' : ""}>${esc(v.name)}</a>`).join("")
+    ? views.map((v) => `<a href="#cat-${esc(v.id)}" data-view="${esc(v.id)}"${v.id === state.view ? ' class="active" aria-current="true"' : ""}>${chipIcon(v)}<span>${esc(v.name)}</span></a>`).join("")
     : "";
   $("#menu").innerHTML = menuLayout(sections, state.view).map((sec) => sectionHtml(sec, cats)).join("")
     || (state.items.length ? "" : '<p class="muted center">Đang tải menu…</p>');

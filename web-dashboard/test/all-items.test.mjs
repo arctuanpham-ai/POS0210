@@ -36,7 +36,7 @@ test("xếp hạng tại quán và mang đi", () => {
 });
 
 test("tên món trên app được quy đổi về tên POS", async () => {
-  const { itemsByChannel } = await import("../all-items.js?v=20261106-7");
+  const { itemsByChannel } = await import("../all-items.js?v=20261106-8");
   const days = ["2026-11-03"];
   const storeDocs = { "2026-11-03": { paidBills: 1, items: [{ name: "Bún gà 50", qty: 2 }] } };
   const ledgerRows = [{ app: "SHOPEE", saleDay: "2026-11-03", status: "OK", items: [{ name: "Bún gà Tô lớn", qty: 1 }] }];

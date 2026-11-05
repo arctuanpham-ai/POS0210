@@ -1,14 +1,19 @@
 // Thống kê món bán ra gộp mọi kênh: tại quán (snapshot POS), đặt món online, GrabFood, ShopeeFood, Xanh Ngon. Hàm thuần.
 // Số phần = sản lượng thực làm: combo được tách thành món lẻ (như thống kê tại quán).
-import { expandComboName } from "./demo-receipts.js?v=20261106-6";
-import { outputRows } from "./item-output.js?v=20261106-6";
-import { isOnlineRevenue, onlineDay } from "./all-channels.js?v=20261106-6";
+import { expandComboName } from "./demo-receipts.js?v=20261106-7";
+import { outputRows } from "./item-output.js?v=20261106-7";
+import { isOnlineRevenue, onlineDay } from "./all-channels.js?v=20261106-7";
 
 export const ITEM_CHANNELS = Object.freeze(["STORE", "ONLINE", "GRAB", "SHOPEE", "XANHNGON"]);
 /** "Mang đi" = mọi kênh không phải khách ngồi tại quán: đặt món online và các app giao đồ ăn. */
 export const TAKEAWAY = Object.freeze(["ONLINE", "GRAB", "SHOPEE", "XANHNGON"]);
 
 const nameKey = (s) => String(s || "").toLocaleLowerCase("vi").normalize("NFC").replace(/\s+/g, " ").trim();
+/** Bảng quy đổi tên: tên trên app/online (khoá thường, bỏ dấu cách thừa) → tên món trong POS. Thêm dòng mới khi app đặt tên khác quán. */
+export const ITEM_ALIASES = Object.freeze({
+  "bún gà tô lớn": "Bún gà 50",
+});
+const aliasKey = Object.fromEntries(Object.entries(ITEM_ALIASES).map(([a, b]) => [nameKey(a), b]));
 const blank = () => ({ STORE: 0, ONLINE: 0, GRAB: 0, SHOPEE: 0, XANHNGON: 0 });
 
 /** Gộp số phần theo món và theo kênh. Trả { items: Map, orders: {kênh: số đơn có tên món}, noItems: {kênh: số đơn thiếu tên món} }. */
@@ -17,8 +22,9 @@ export function itemsByChannel({ days, storeDocs = {}, onlineOrders = [], ledger
   const items = new Map();
   const orders = blank(), noItems = blank();
   const add = (channel, name, qty) => {
-    const k = nameKey(name);
+    let k = nameKey(name);
     if (!k || !(qty > 0)) return;
+    if (aliasKey[k]) { name = aliasKey[k]; k = nameKey(name); }
     const cur = items.get(k) || { key: k, name: String(name).trim(), qty: blank() };
     cur.qty[channel] += qty;
     items.set(k, cur);

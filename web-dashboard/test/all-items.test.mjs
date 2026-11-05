@@ -34,3 +34,15 @@ test("xếp hạng tại quán và mang đi", () => {
   assert.equal(take.rows[0].name, "Bạc xỉu"); assert.equal(take.rows[0].qty, 6);
   assert.equal(rankItems(r.items, null, 1).rows.length, 1);
 });
+
+test("tên món trên app được quy đổi về tên POS", async () => {
+  const { itemsByChannel } = await import("../all-items.js?v=20261106-7");
+  const days = ["2026-11-03"];
+  const storeDocs = { "2026-11-03": { paidBills: 1, items: [{ name: "Bún gà 50", qty: 2 }] } };
+  const ledgerRows = [{ app: "SHOPEE", saleDay: "2026-11-03", status: "OK", items: [{ name: "Bún gà Tô lớn", qty: 1 }] }];
+  const r = itemsByChannel({ days, storeDocs, ledgerRows });
+  const it = r.items.get("bún gà 50");
+  assert.equal(it.qty.STORE, 2);
+  assert.equal(it.qty.SHOPEE, 1);
+  assert.equal(r.items.has("bún gà tô lớn"), false);
+});

@@ -1,5 +1,5 @@
 // Khối giao diện phụ của trang phân tích món: chuỗi HTML thuần, nhận hàm định dạng từ app.js (h). Không đọc Firebase.
-import { lineChart } from "./item-chart.js?v=20261104-9";
+import { lineChart } from "./item-chart.js?v=20261105-1";
 
 const empty = (text) => `<p class="muted empty-state">${text}</p>`;
 const card = (title, body, sub = "") => `<section class="item-card"><h4>${title}</h4>${sub ? `<p class="item-sub">${sub}</p>` : ""}${body}</section>`;
@@ -55,8 +55,8 @@ export const channelView = ({ rows, stats, price, cost, note }, h) => {
   const warns = rows.filter((r) => r.key !== "STORE" && r.ok === false).map((r) => `${r.label}: ${r.reason}`);
   const tips = rows.filter((r) => r.key !== "STORE" && r.ok !== false && r.margin !== undefined).map((r) => `Bán qua ${r.label}, mỗi phần chỉ còn lãi <b>${h.money(Math.round(r.margin))}</b> (biên ${h.pct(r.marginPct)}), ${r.vsStore < 0 ? `thấp hơn tại quán ${h.money(Math.round(-r.vsStore))}` : "không thấp hơn tại quán"}. ${r.appPriceToMatch ? `Muốn lãi bằng tại quán, giá đăng trên app khoảng ${h.money(r.appPriceToMatch)}.` : ""}`);
   const mix = stats && (stats.channels.GRAB.bills || stats.channels.SHOPEE.bills)
-    ? `<p class="item-sub">Đơn app nhập qua POS (đời cũ) có món này: Grab ${stats.channels.GRAB.qty} phần, Shopee ${stats.channels.SHOPEE.qty} phần. Đơn app mới chỉ có trong sổ đối soát, không có tên món, nên chưa tách được số phần bán qua app.</p>`
-    : `<p class="item-sub">Đơn app trong sổ đối soát chỉ có mã đơn và tiền, không có tên món, nên chưa biết món này bán qua app bao nhiêu phần. Bảng trên cho biết lãi nếu bán qua từng kênh.</p>`;
+    ? `<p class="item-sub">Đơn app nhập qua POS (đời cũ) có món này: Grab ${stats.channels.GRAB.qty} phần, Shopee ${stats.channels.SHOPEE.qty} phần. Số phần bán qua app từ sổ đối soát xem ở tab App food, mục \"Món bán qua app food\".</p>`
+    : `<p class="item-sub">Số phần bán qua app theo sổ đối soát xem ở tab App food, mục \"Món bán qua app food\". Bảng trên cho biết lãi nếu bán qua từng kênh.</p>`;
   return `${card("Lãi một phần theo kênh bán", table, note)}${tips.map((t) => `<p class="item-tip">${t}</p>`).join("")}${warns.length ? `<p class="muted">${warns.join(" · ")}.</p>` : ""}${mix}`;
 };
 

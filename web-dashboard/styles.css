@@ -700,3 +700,4 @@ body:has(#login-view:not([hidden])), body:has(#pin-view:not([hidden])) { backgro
 .count-value .item-chart-wrap { margin: 8px 0; max-width: 100%; }
 
 .oo-items .oo-adj { color: var(--muted, #6b6f63); font-style: italic; }
+.fi-bar { display: block; height: 3px; margin-top: 5px; border-radius: 2px; background: #c9b48a; max-width: 100%; }

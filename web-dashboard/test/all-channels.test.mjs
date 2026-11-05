@@ -24,15 +24,16 @@ test("gộp doanh thu mọi kênh, không tính đơn chưa trả / huỷ / cầ
   const r = revenueByDay({ days, storeDocs, onlineOrders: online, ledgerRows: ledger });
   assert.equal(r.totals.STORE.revenue, 1000);
   assert.equal(r.totals.ONLINE.revenue, 300);
-  assert.equal(r.totals.GRAB.revenue, 300);
-  assert.equal(r.totals.SHOPEE.revenue, 70);
-  assert.equal(r.total, 1670);
+  assert.equal(r.totals.GRAB.revenue, 200);
+  assert.equal(r.totals.SHOPEE.revenue, 50);
+  assert.deepEqual(r.unpaid, { count: 1, value: 50 });
+  assert.equal(r.total, 1550);
   assert.equal(r.count, 10 + 2 + 1 + 1);
   assert.deepEqual(r.storeMissing, ["2026-11-05"]);
   assert.deepEqual(r.review, { count: 1, value: 50 });
 });
 test("lọc kênh và hình thức online", () => {
-  assert.equal(revenueByDay({ days, storeDocs, onlineOrders: online, ledgerRows: ledger, channels: ["GRAB", "SHOPEE"] }).total, 370);
+  assert.equal(revenueByDay({ days, storeDocs, onlineOrders: online, ledgerRows: ledger, channels: ["GRAB", "SHOPEE"] }).total, 250);
   const o = revenueByDay({ days, storeDocs, onlineOrders: online, ledgerRows: ledger, channels: ["ONLINE"], onlineMode: "delivery" });
   assert.equal(o.total, 200);
   assert.deepEqual(o.storeMissing, []);
@@ -41,7 +42,7 @@ test("danh sách bill gộp: sắp mới nhất trước, lọc kênh, tìm mã"
   const storeBills = [{ id: "b1", tableName: "Bàn 1", billNo: 7, closedAt: at("2026-11-05", 11), total: 90, method: "CASH", flow: "prepaid" }];
   const all = unifiedBills({ days, storeBills, storeDay: "2026-11-05", onlineOrders: online, ledgerRows: ledger });
   assert.deepEqual(all.rows.map((x) => x.id), ["SHOPEE_S1", "GRAB_G2", "STORE_b1", "ONLINE_b", "GRAB_G1", "ONLINE_a"]);
-  assert.equal(all.total, 70 + 90 + 100 + 300 + 200);
+  assert.equal(all.total, 50 + 90 + 100 + 200 + 200);
   assert.equal(all.byChannel.GRAB.count, 1);
   assert.equal(unifiedBills({ days, onlineOrders: online, ledgerRows: ledger, channel: "ONLINE" }).rows.length, 2);
   assert.equal(unifiedBills({ days, ledgerRows: ledger, q: "g1" }).rows.length, 1);
@@ -52,6 +53,6 @@ test("lọc theo tình trạng tiền về chỉ giữ đơn app food", () => {
   const w = unifiedBills({ days, onlineOrders: online, ledgerRows: ledger, status: "WAIT" });
   assert.deepEqual(w.rows.map((x) => x.id), ["SHOPEE_S1"]);
   assert.deepEqual(unifiedBills({ days, ledgerRows: ledger, status: "REVIEW" }).rows.map((x) => x.id), ["GRAB_G2"]);
-  const x = unifiedBills({ days, ledgerRows: [{ app: "XANHNGON", code: "X1", saleDay: "2026-11-05", orderValue: 40, status: "OK" }], channel: "XANHNGON" });
-  assert.equal(x.total, 40);
+  const x = unifiedBills({ days, ledgerRows: [{ app: "XANHNGON", code: "X1", saleDay: "2026-11-05", orderValue: 40, received: 30, status: "OK" }], channel: "XANHNGON" });
+  assert.equal(x.total, 30);
 });

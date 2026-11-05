@@ -30,3 +30,23 @@ test("gói có prompt, bảng tháng, ngày, món, bill, phiếu", () => {
   assert.match(text, /PC1,MATERIAL,Hương,PERSONAL,APPROVED,PENDING,100,Sữa/);
   assert.match(text, /chưa chốt tháng nào/);
 });
+
+test("gói AI có đủ các kênh online và app food, món theo kênh", () => {
+  const scope = scopeRange("month", { now });
+  const blank = () => ({ revenue: 0, count: 0 });
+  const text = buildAiPack({
+    now, scope,
+    channelMonths: [{ monthKey: "2026-10", store: 1000, online: 200, grab: 300, shopee: 400, xanhngon: 0, total: 1900, onlineCount: 1, appCount: 3, unpaid: 0, review: 50 }],
+    channelDays: [{ day: "2026-10-16", storeAvailable: true, STORE: { revenue: 1000, count: 4 }, ONLINE: { revenue: 200, count: 1 }, GRAB: { revenue: 300, count: 2 }, SHOPEE: { revenue: 400, count: 1 }, XANHNGON: blank(), total: 1900 }],
+    channelItems: [{ name: "Bún gà 50", qty: 5, by: { STORE: 3, ONLINE: 0, GRAB: 1, SHOPEE: 1, XANHNGON: 0 } }],
+    channelOrders: [{ at: now, channel: "SHOPEE", code: "05116-1", value: 100000, received: 77832, deduct: 22168, payoutDay: "", status: "CHUA_VE", items: "Bún gà Tô lớn x1" }],
+  });
+  assert.match(text, /2c\. Doanh thu mọi kênh theo tháng/);
+  assert.match(text, /2026-10,1000,200,300,400,0,1900,1,3,0,50/);
+  assert.match(text, /3b\. Theo ngày theo kênh/);
+  assert.match(text, /4b\. Món bán theo kênh/);
+  assert.match(text, /Bún gà 50,3,0,1,1,0,2,5/);
+  assert.match(text, /5b\. Đơn online và app food/);
+  assert.match(text, /SHOPEE,05116-1,100000,77832,22168,,CHUA_VE/);
+  assert.match(text, /Kênh bán/);
+});

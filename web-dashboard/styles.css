@@ -704,3 +704,28 @@ body:has(#login-view:not([hidden])), body:has(#pin-view:not([hidden])) { backgro
 
 /* Nhiều tab: màn rộng thì xuống dòng để thấy hết (kể cả Tài khoản); màn hẹp vẫn vuốt ngang */
 @media (min-width: 720px) { .tabbar { flex-wrap: wrap; overflow-x: visible; } }
+
+/* KPI hôm nay */
+.live-strip .full { background: #e8efe0; border-color: #b9cba4; }
+.kpi-card { margin: 12px 0; padding: 16px; border: 1px solid #d7c3a7; border-radius: 16px; background: #fcfbf8; display: grid; gap: 8px; }
+.kpi-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.kpi-head .eyebrow { margin: 0; }
+.kpi-head strong { font-size: clamp(20px, 5vw, 26px); letter-spacing: -.03em; }
+.kpi-bar { position: relative; height: 14px; border-radius: 8px; background: #ece5d8; overflow: hidden; display: flex; }
+.kpi-bar i { display: block; height: 100%; }
+.kpi-bar .c { background: #41633a; }
+.kpi-bar .o { background: #b9cba4; }
+.kpi-bar u { position: absolute; top: 0; bottom: 0; width: 2px; background: #1e1e1e; text-decoration: none; }
+.kpi-legend { display: flex; gap: 14px; flex-wrap: wrap; margin: 0; font-size: 12px; color: #6b6f63; }
+.kpi-legend span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; background: #41633a; }
+.kpi-legend .o::before { background: #b9cba4; }
+.kpi-legend .t::before { background: #1e1e1e; width: 3px; border-radius: 0; }
+.kpi-row { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; padding: 6px 0; border-top: 1px solid #eee7da; }
+.kpi-row span small { display: block; color: #6b6f63; font-size: 12px; }
+.kpi-row b { font-size: 16px; white-space: nowrap; }
+.kpi-row b.up, .kpi-pace.up { color: #2f6b2b; }
+.kpi-row b.down, .kpi-pace.down { color: #a3341f; }
+.kpi-row b.warn { color: #8a5a00; }
+.kpi-pace { margin: 0; font-size: 13px; font-weight: 700; }
+.kpi-cheer { margin: 4px 0 0; padding: 12px 14px; border-radius: 12px; background: #f3ecdd; font-weight: 700; line-height: 1.45; }
+.kpi-note { margin: 0; font-size: 12px; }

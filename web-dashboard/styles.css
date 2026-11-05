@@ -701,3 +701,6 @@ body:has(#login-view:not([hidden])), body:has(#pin-view:not([hidden])) { backgro
 
 .oo-items .oo-adj { color: var(--muted, #6b6f63); font-style: italic; }
 .fi-bar { display: block; height: 3px; margin-top: 5px; border-radius: 2px; background: #c9b48a; max-width: 100%; }
+
+/* Nhiều tab: màn rộng thì xuống dòng để thấy hết (kể cả Tài khoản); màn hẹp vẫn vuốt ngang */
+@media (min-width: 720px) { .tabbar { flex-wrap: wrap; overflow-x: visible; } }

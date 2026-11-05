@@ -98,7 +98,7 @@ test("app food theo tháng: doanh thu và phí theo ngày bán, tiền về theo
   const oct = foodMonth(rows, "2026-10");
   assert.equal(oct.gross, 250000);
   assert.equal(oct.commission, 50000);
-  assert.equal(oct.accrual, 200000);
+  assert.equal(oct.accrual, 197000);
   assert.equal(oct.orders, 2);
   assert.equal(oct.vat + oct.pit, 3000);
   assert.equal(oct.cashIn, 78500 + 158500);

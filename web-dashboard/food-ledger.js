@@ -153,7 +153,7 @@ const nextMonthStart = (monthKey) => { const [y, m] = monthKey.split("-").map(Nu
 /**
  * App food trong một tháng (monthKey = yyyy-MM, giờ Việt Nam).
  * - gross / commission / other / vat / pit: theo NGÀY BÁN (doanh thu và chi phí thuộc tháng bán).
- * - accrual = gross − commission − other (VAT/PIT app giữ hộ là thuế, không tính vào chi phí).
+ * - accrual = received: tiền THỰC NHẬN sau chiết khấu, phí, thuế app giữ hộ (doanh thu app food đưa vào tài chính).
  * - cashIn: tiền app đã chuyển về TK theo NGÀY GIẢI NGÂN trong tháng (dòng tiền), không phụ thuộc tháng bán.
  * - review: số đơn bị cờ, không nằm trong doanh thu.
  */
@@ -162,5 +162,5 @@ export function foodMonth(rows, monthKey) {
   const to = nextMonthStart(monthKey);
   const s = summarizeSales(rows, from, to);
   const cashIn = (Array.isArray(rows) ? rows : []).filter((r) => r.status !== "REVIEW" && r.payoutDay && r.payoutDay >= from && r.payoutDay < to).reduce((t, r) => t + r.received, 0);
-  return { monthKey, orders: s.orders, gross: s.gross, commission: s.commission, other: s.other, vat: s.vat, pit: s.pit, accrual: s.gross - s.commission - s.other, cashIn, review: s.review, reviewAmount: s.reviewAmount };
+  return { monthKey, orders: s.orders, gross: s.gross, commission: s.commission, other: s.other, vat: s.vat, pit: s.pit, accrual: s.received, received: s.received, cashIn, review: s.review, reviewAmount: s.reviewAmount };
 }

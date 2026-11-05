@@ -464,3 +464,8 @@ body.has-cart .legal-foot { margin-bottom: 96px; }
 .save-line { margin: 3px 0 0; font-size: 11px; line-height: 1.3; color: #4f6a22; }
 .save-line b { display: inline-block; padding: 1px 6px; border-radius: 6px; background: #e8efd6; font-weight: 800; }
 .save-line span { font-weight: 700; color: #b32323; white-space: nowrap; }
+
+.shop-addr { display: flex; align-items: center; gap: 6px; margin: 8px 0 0; color: #5b4636; font-size: 12.5px; font-weight: 600; line-height: 1.35; }
+.shop-addr svg { flex: none; color: #8a6a4c; }
+.open-status { margin-top: 6px; }
+@media (max-width: 370px) { .shop-addr { font-size: 11px; } }

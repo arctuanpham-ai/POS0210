@@ -12,7 +12,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500&family=Montserrat:wght@400..800&display=swap" />
-    <link rel="stylesheet" href="styles.css?v=20261105-1" />
+    <link rel="stylesheet" href="styles.css?v=20261105-2" />
     <title>0210 · Manager</title>
   </head>
   <body>
@@ -57,6 +57,7 @@
           <a href="#ban" data-tab="ban">Bàn</a>
           <a href="#donline" data-tab="donline">Đơn online<span id="donline-badge" class="tab-badge" hidden></span></a>
           <a href="#appfood" data-tab="appfood">App food</a>
+          <a href="#tonghop" data-tab="tonghop">Tổng hợp</a>
           <a href="#doanhthu" data-tab="doanhthu">Doanh thu tại quán</a>
           <a href="#bill" data-tab="bill">Lịch sử bill</a>
           <a href="#taichinh" data-tab="taichinh">Tài chính</a>
@@ -84,7 +85,22 @@
         <section data-needs-sync id="tables" class="table-grid" aria-live="polite"></section>
         </div>
 
-        <div class="page" data-page="doanhthu" hidden>
+        <div class="page" data-page="tonghop" hidden>
+        <section class="section-heading first-section">
+          <div><p class="eyebrow">TỔNG HỢP MỌI KÊNH</p><h2>Doanh thu: tại quán + online + app food</h2></div>
+        </section>
+        <div class="panel bill-filters" id="ac-filters">
+          <div class="field-row"><label for="ac-period">Kỳ</label><select id="ac-period"><option value="today">Hôm nay</option><option value="7">7 ngày</option><option value="14">14 ngày</option><option value="30" selected>30 ngày</option><option value="month">Tháng này</option><option value="lastmonth">Tháng trước</option></select></div>
+          <div class="field-row"><label for="ac-channel">Kênh</label><select id="ac-channel"><option value="ALL">Gộp mọi kênh</option><option value="STORE">Tại quán</option><option value="ONLINE">Đặt món online</option><option value="APP">Cả hai app food</option><option value="GRAB">GrabFood</option><option value="SHOPEE">ShopeeFood</option></select></div>
+          <div class="field-row"><label for="ac-mode">Online</label><select id="ac-mode"><option value="ALL">Mọi hình thức</option><option value="delivery">Giao tận nơi</option><option value="pickup">Mang đi</option><option value="dinein">Tại quán</option></select></div>
+          <div class="field-row"><button type="button" id="ac-refresh" class="secondary">Làm mới</button></div>
+          <p id="ac-note" class="panel-total"></p>
+        </div>
+        <section id="ac-summary" class="summary-grid" aria-label="Tổng doanh thu theo kênh"></section>
+        <section id="ac-days" class="table-wrap" aria-label="Doanh thu từng ngày theo kênh"></section>
+        <p class="muted">Tại quán lấy từ số chốt ngày của POS (không gồm app food). Online tính đơn đã nhận tiền, theo ngày nhận tiền. App food tính theo ngày bán trong sổ đối soát, bỏ đơn cần xem lại. Doanh thu app là giá trị đơn trước chiết khấu của app; tiền thực nhận xem ở tab App food.</p>
+      </div>
+      <div class="page" data-page="doanhthu" hidden>
         <p class="pending-banner" role="status"><b>Đang chờ cập nhật số liệu.</b> Các con số ở mục này đang được tính lại và sẽ hiện đầy đủ khi máy POS đồng bộ theo bản nâng cấp mới. Dữ liệu gốc (bill, phiếu chi) vẫn an toàn, không mất.</p>
         <section id="top-banner" class="top-banner" aria-live="polite" hidden></section>
         <details class="panel revenue-check" id="revenue-check">
@@ -158,6 +174,17 @@
         <p id="bill-history-notice" class="sales-notice" role="status"></p>
         <section id="bill-history-summary" class="summary-grid" aria-label="Tổng kết bill trong ngày"></section>
         <section id="bill-history-list" class="bill-list" aria-live="polite"></section>
+        <section class="section-heading compact">
+          <div><p class="eyebrow">TẤT CẢ KÊNH · GỘP MỘT DANH SÁCH</p><h2>Tại quán + online + GrabFood + ShopeeFood</h2></div>
+        </section>
+        <div class="panel bill-filters" id="ab-filters">
+          <div class="field-row"><label for="ab-range">Khoảng</label><select id="ab-range"><option value="day">Ngày đã chọn</option><option value="7">7 ngày đến ngày đã chọn</option><option value="30">30 ngày đến ngày đã chọn</option></select></div>
+          <div class="field-row"><label for="ab-channel">Kênh</label><select id="ab-channel"><option value="ALL">Tất cả</option><option value="STORE">Tại quán</option><option value="ONLINE">Đặt món online</option><option value="GRAB">GrabFood</option><option value="SHOPEE">ShopeeFood</option></select></div>
+          <div class="field-row"><label for="ab-q">Tìm</label><input id="ab-q" type="search" placeholder="Mã đơn, bàn, tên khách" autocomplete="off" /></div>
+          <p id="ab-note" class="panel-total"></p>
+        </div>
+        <section id="ab-summary" class="summary-grid" aria-label="Tổng kết bill mọi kênh"></section>
+        <section id="ab-list" class="bill-list" aria-live="polite"></section>
         <section class="section-heading compact">
           <div><p class="eyebrow">BILL APP FOOD · TỪ FILE ĐỐI SOÁT</p><h2>Đơn Grab, Shopee đã nhập vào sổ</h2></div>
         </section>
@@ -776,7 +803,7 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261105-1"></script>
+    <script type="module" src="app.js?v=20261105-2"></script>
     <script>
       // Trang không chạy được (thường do trình duyệt còn giữ file cũ): báo rõ thay vì để nút đăng nhập "chết".
       setTimeout(function () {

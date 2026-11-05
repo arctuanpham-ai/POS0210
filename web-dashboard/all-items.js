@@ -1,8 +1,8 @@
 // Thống kê món bán ra gộp mọi kênh: tại quán (snapshot POS), đặt món online, GrabFood, ShopeeFood, Xanh Ngon. Hàm thuần.
 // Số phần = sản lượng thực làm: combo được tách thành món lẻ (như thống kê tại quán).
-import { expandComboName } from "./demo-receipts.js?v=20261106-8";
-import { outputRows } from "./item-output.js?v=20261106-8";
-import { isOnlineRevenue, onlineDay } from "./all-channels.js?v=20261106-8";
+import { expandComboName } from "./demo-receipts.js?v=20261106-9";
+import { outputRows } from "./item-output.js?v=20261106-9";
+import { isOnlineRevenue, onlineDay } from "./all-channels.js?v=20261106-9";
 
 export const ITEM_CHANNELS = Object.freeze(["STORE", "ONLINE", "GRAB", "SHOPEE", "XANHNGON"]);
 /** "Mang đi" = mọi kênh không phải khách ngồi tại quán: đặt món online và các app giao đồ ăn. */
@@ -14,6 +14,7 @@ export const ITEM_ALIASES = Object.freeze({
   "bún gà tô lớn": "Bún gà 50",
   "bún gà": "Bún gà 50",
   "café kem muối": "Cafe muối",
+  "cold brew cam": "coldbrew cam",
 });
 const aliasKey = Object.fromEntries(Object.entries(ITEM_ALIASES).map(([a, b]) => [nameKey(a), b]));
 const blank = () => ({ STORE: 0, ONLINE: 0, GRAB: 0, SHOPEE: 0, XANHNGON: 0 });

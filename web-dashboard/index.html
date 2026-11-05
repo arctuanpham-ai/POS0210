@@ -12,7 +12,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500&family=Montserrat:wght@400..800&display=swap" />
-    <link rel="stylesheet" href="styles.css?v=20261106-5" />
+    <link rel="stylesheet" href="styles.css?v=20261106-6" />
     <title>0210 · Manager</title>
   </head>
   <body>
@@ -100,6 +100,16 @@
         <section id="ac-summary" class="summary-grid" aria-label="Tổng doanh thu theo kênh"></section>
         <section id="ac-days" class="table-wrap" aria-label="Doanh thu từng ngày theo kênh"></section>
         <p class="muted">Tại quán lấy từ số chốt ngày của POS (không gồm app food). Online tính đơn đã nhận tiền, theo ngày nhận tiền. App food: chỉ lấy tiền thực nhận về tài khoản (sau chiết khấu, thuế, phí), theo ngày bán, bỏ đơn cần xem lại; chi tiết khấu trừ, quảng cáo và thuế xem ở tab App food.</p>
+        <section class="section-heading compact">
+          <div><p class="eyebrow">MÓN BÁN RA · THEO KÊNH</p><h2>Top món tại quán và mang đi</h2></div>
+        </section>
+        <div class="panel bill-filters" id="ai-filters">
+          <div class="field-row"><label for="ai-view">Xem</label><select id="ai-view"><option value="split" selected>Tách: tại quán | mang đi</option><option value="all">Gộp tất cả kênh</option><option value="TAKEAWAY">Chỉ mang đi (online + app)</option><option value="STORE">Chỉ tại quán</option><option value="ONLINE">Chỉ online</option><option value="GRAB">Chỉ GrabFood</option><option value="SHOPEE">Chỉ ShopeeFood</option><option value="XANHNGON">Chỉ Xanh Ngon</option></select></div>
+          <div class="field-row"><label for="ai-limit">Số món</label><select id="ai-limit"><option value="10" selected>Top 10</option><option value="20">Top 20</option><option value="50">Top 50</option></select></div>
+          <p class="muted">Theo kỳ đã chọn ở trên. Mang đi gồm đặt món online và các app giao đồ ăn.</p>
+        </div>
+        <section id="ai-report" aria-live="polite"></section>
+
       </div>
       <div class="page" data-page="doanhthu" hidden>
         <section id="top-banner" class="top-banner" aria-live="polite" hidden></section>
@@ -136,10 +146,7 @@
         </section>
         <section id="peak-hours" class="hbar-chart" aria-label="Biểu đồ số bill theo giờ"></section>
 
-        <section class="section-heading compact">
-          <div><p class="eyebrow">MÓN BÁN NHIỀU</p><h2>Top 10 theo số phần (đã tách combo)</h2></div>
-        </section>
-        <section id="top-items" class="hbar-chart" aria-label="Biểu đồ món bán nhiều"></section>
+        <p class="muted">Top món bán nhiều gộp mọi kênh (tại quán, online, GrabFood, ShopeeFood) nằm ở tab Tổng hợp. Mục dưới đây chỉ tính tại quán, dùng để phân tích sâu từng món và nguyên liệu.</p>
 
         <section class="section-heading compact">
           <div><p class="eyebrow">THỐNG KÊ MÓN</p><h2>Món đã bán</h2></div>
@@ -786,7 +793,7 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261106-5"></script>
+    <script type="module" src="app.js?v=20261106-6"></script>
     <script>
       // Trang không chạy được (thường do trình duyệt còn giữ file cũ): báo rõ thay vì để nút đăng nhập "chết".
       setTimeout(function () {

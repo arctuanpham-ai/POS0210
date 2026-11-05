@@ -729,3 +729,16 @@ body:has(#login-view:not([hidden])), body:has(#pin-view:not([hidden])) { backgro
 .kpi-pace { margin: 0; font-size: 13px; font-weight: 700; }
 .kpi-cheer { margin: 4px 0 0; padding: 12px 14px; border-radius: 12px; background: #f3ecdd; font-weight: 700; line-height: 1.45; }
 .kpi-note { margin: 0; font-size: 12px; }
+
+/* Top món theo kênh */
+.ai-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 760px) { .ai-cols { grid-template-columns: minmax(0, 1fr); } }
+.ai-col { min-width: 0; padding: 14px; border: 1px solid #e2d6c2; border-radius: 14px; background: #fcfbf8; }
+.ai-col h4 { margin: 0 0 8px; font-size: 16px; }
+.ai-col h4 small { color: #6b6f63; font-weight: 600; font-size: 12px; margin-left: 6px; }
+.ai-row { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; padding: 7px 0; border-top: 1px solid #eee7da; }
+.ai-name { position: relative; min-width: 0; flex: 1; padding-bottom: 7px; overflow-wrap: anywhere; }
+.ai-name small { display: block; color: #6b6f63; font-size: 12px; }
+.ai-name i { position: absolute; left: 0; bottom: 0; height: 3px; border-radius: 2px; background: #c9b48a; max-width: 100%; }
+.ai-row strong { white-space: nowrap; }
+.ai-note { margin-top: 10px; font-size: 12px; }

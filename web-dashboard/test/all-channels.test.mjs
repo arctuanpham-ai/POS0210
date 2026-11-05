@@ -47,3 +47,11 @@ test("danh sách bill gộp: sắp mới nhất trước, lọc kênh, tìm mã"
   assert.equal(unifiedBills({ days, ledgerRows: ledger, q: "g1" }).rows.length, 1);
   assert.equal(unifiedBills({ days, storeBills, storeDay: "2026-11-09" }).rows.length, 0);
 });
+
+test("lọc theo tình trạng tiền về chỉ giữ đơn app food", () => {
+  const w = unifiedBills({ days, onlineOrders: online, ledgerRows: ledger, status: "WAIT" });
+  assert.deepEqual(w.rows.map((x) => x.id), ["SHOPEE_S1"]);
+  assert.deepEqual(unifiedBills({ days, ledgerRows: ledger, status: "REVIEW" }).rows.map((x) => x.id), ["GRAB_G2"]);
+  const x = unifiedBills({ days, ledgerRows: [{ app: "XANHNGON", code: "X1", saleDay: "2026-11-05", orderValue: 40, status: "OK" }], channel: "XANHNGON" });
+  assert.equal(x.total, 40);
+});

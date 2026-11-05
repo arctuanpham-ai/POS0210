@@ -1,14 +1,17 @@
 // Gộp doanh thu và bill của mọi kênh bán: tại quán (POS), đặt món online, GrabFood, ShopeeFood. Hàm thuần: không Firebase, không DOM.
 // Không cộng trùng: POS không đọc đơn online, và bill app food đã có trong sổ app food được lọc khỏi doanh thu tại quán bằng cách
 // chỉ lấy snapshot dashboardDaily (doanh thu tại quán, không gồm app food) cho kênh "Tại quán".
-import { OO_LABELS, ooToMillis } from "./online-orders.js?v=20261105-3";
+import { OO_LABELS, ooToMillis } from "./online-orders.js?v=20261105-4";
 
 export const CHANNELS = Object.freeze([
   { key: "STORE", label: "Tại quán" },
   { key: "ONLINE", label: "Đặt món online" },
   { key: "GRAB", label: "GrabFood" },
   { key: "SHOPEE", label: "ShopeeFood" },
+  { key: "XANHNGON", label: "Xanh Ngon" },
 ]);
+/** Các kênh là app giao đồ ăn (có sổ đối soát). Thêm app mới: thêm vào CHANNELS và danh sách này. */
+export const APP_KEYS = Object.freeze(["GRAB", "SHOPEE", "XANHNGON"]);
 export const channelLabel = (key) => CHANNELS.find((c) => c.key === key)?.label || String(key);
 
 const VN_OFFSET_MS = 7 * 3_600_000;
@@ -41,8 +44,8 @@ export function revenueByDay({ days, storeDocs = {}, onlineOrders = [], ledgerRo
   const want = new Set(channels && channels.length ? channels : CHANNELS.map((c) => c.key));
   const set = new Set(days);
   const blank = () => ({ revenue: 0, count: 0 });
-  const rows = new Map(days.map((day) => [day, { day, STORE: blank(), ONLINE: blank(), GRAB: blank(), SHOPEE: blank(), total: 0, count: 0, storeAvailable: Boolean(storeDocs?.[day]) }]));
-  const totals = { STORE: blank(), ONLINE: blank(), GRAB: blank(), SHOPEE: blank() };
+  const rows = new Map(days.map((day) => [day, { day, STORE: blank(), ONLINE: blank(), GRAB: blank(), SHOPEE: blank(), XANHNGON: blank(), total: 0, count: 0, storeAvailable: Boolean(storeDocs?.[day]) }]));
+  const totals = { STORE: blank(), ONLINE: blank(), GRAB: blank(), SHOPEE: blank(), XANHNGON: blank() };
   let review = { count: 0, value: 0 };
   const add = (day, key, amount) => { const r = rows.get(day); if (!r || !want.has(key)) return; r[key].revenue += amount; r[key].count += 1; totals[key].revenue += amount; totals[key].count += 1; };
   for (const day of days) {
@@ -57,7 +60,7 @@ export function revenueByDay({ days, storeDocs = {}, onlineOrders = [], ledgerRo
     if (set.has(day)) add(day, "ONLINE", Number(o.total || 0));
   }
   for (const r of ledgerRows || []) {
-    if (!set.has(r?.saleDay) || (r.app !== "GRAB" && r.app !== "SHOPEE")) continue;
+    if (!set.has(r?.saleDay) || !APP_KEYS.includes(r.app)) continue;
     if (!want.has(r.app)) continue;
     if (!ledgerCounts(r)) { review.count += 1; review.value += Number(r.orderValue || 0); continue; }
     add(r.saleDay, r.app, Number(r.orderValue || 0));
@@ -73,17 +76,18 @@ export function revenueByDay({ days, storeDocs = {}, onlineOrders = [], ledgerRo
  * storeBills: dòng bill tại quán (buildBillRows) của MỘT ngày, kèm storeDay; chỉ khi xem 1 ngày mới có từng bill tại quán.
  * Mỗi dòng: { id, channel, day, at, title, sub, amount, tag, tagKind, refund }.
  */
-export function unifiedBills({ days, storeBills = [], storeDay = "", onlineOrders = [], ledgerRows = [], channel = "ALL", q = "", onlineMode = "ALL" }) {
+export function unifiedBills({ days, storeBills = [], storeDay = "", onlineOrders = [], ledgerRows = [], channel = "ALL", q = "", onlineMode = "ALL", status = "ALL" }) {
   const set = new Set(days);
   const out = [];
   const money0 = (n) => Number(n || 0);
-  if (channel === "ALL" || channel === "STORE") {
+  const appOnly = status !== "ALL"; // tình trạng tiền về chỉ có ở đơn app food
+  if (!appOnly && (channel === "ALL" || channel === "STORE")) {
     for (const b of storeBills || []) {
       if (!set.has(storeDay)) break;
       out.push({ id: `STORE_${b.id}`, ref: b.id, channel: "STORE", day: storeDay, at: money0(b.closedAt), title: `${b.tableName} · #${b.billNo}`, sub: b.paymentMissing ? "Chưa rõ" : String(b.method || ""), amount: money0(b.total), tag: b.refund ? "Đã hoàn" : b.flow === "prepaid" ? "Trả trước" : "Trả sau", tagKind: b.refund ? "warn" : b.flow === "prepaid" ? "" : "postpaid", refund: Boolean(b.refund) });
     }
   }
-  if (channel === "ALL" || channel === "ONLINE") {
+  if (!appOnly && (channel === "ALL" || channel === "ONLINE")) {
     for (const o of onlineOrders || []) {
       if (!isOnlineRevenue(o) || (onlineMode !== "ALL" && o.mode !== onlineMode)) continue;
       const day = onlineDay(o);
@@ -91,11 +95,13 @@ export function unifiedBills({ days, storeBills = [], storeDay = "", onlineOrder
       out.push({ id: `ONLINE_${o.id || o.code}`, channel: "ONLINE", day, at: onlineMs(o), title: `${o.code || o.id} · ${o.name || "Khách"}`, sub: `${{ delivery: "Giao tận nơi", pickup: "Mang đi", dinein: "Tại quán" }[o.mode] || o.mode || ""} · ${OO_LABELS[o.status] || o.status}`, amount: money0(o.total), tag: "Đã nhận tiền", tagKind: "", refund: false });
     }
   }
-  for (const app of ["GRAB", "SHOPEE"]) {
+  for (const app of APP_KEYS) {
     if (channel !== "ALL" && channel !== app) continue;
     for (const r of ledgerRows || []) {
       if (r.app !== app || !set.has(r.saleDay)) continue;
       const review = !ledgerCounts(r);
+      const st = review ? "REVIEW" : r.payoutDay ? "PAID" : "WAIT";
+      if (appOnly && st !== status) continue;
       out.push({ id: `${app}_${r.code}`, channel: app, day: r.saleDay, at: money0(r.saleAt), title: `${r.code}`, sub: `thực nhận ${money0(r.received).toLocaleString("vi-VN")}đ${(r.problems || []).length ? ` · ${r.problems.join("; ")}` : ""}`, amount: money0(r.orderValue), tag: review ? "Cần xem lại" : r.payoutDay ? "Đã nhận tiền" : "Chưa về", tagKind: review ? "warn" : r.payoutDay ? "" : "postpaid", refund: false, review });
     }
   }

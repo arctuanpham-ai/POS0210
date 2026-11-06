@@ -1,8 +1,8 @@
 // Báo cáo nguồn đơn online (UTM / nơi giới thiệu). Hàm thuần: không Firebase, không DOM.
 // Doanh thu chỉ tính đơn đã thanh toán (cùng tập trạng thái với phễu: paid / delivering / done); đơn huỷ, từ chối, hết hạn không tính.
 // Đây là doanh thu ĐƯỢC GẮN nguồn, không phải doanh thu tăng thêm nhờ quảng cáo.
-import { ooToMillis } from "./online-orders.js?v=20261106-14";
-import { TEST_ORDER_NAME, dayKeyVN, lastDays } from "./stats-view.js?v=20261106-14";
+import { ooToMillis } from "./online-orders.js?v=20261106-15";
+import { TEST_ORDER_NAME, dayKeyVN, lastDays } from "./stats-view.js?v=20261106-15";
 
 const PAID = new Set(["paid", "delivering", "done"]);
 const LOST = new Set(["rejected", "expired", "cancelled"]);
@@ -62,4 +62,24 @@ export function buildSourceReport(orders, nowMs, days, visitDocs = []) {
     total.visits += n;
   }
   return { channels: finish(channels), campaigns: finish(campaigns), total };
+}
+
+/**
+ * Chất lượng lượt vào theo nguồn / quảng cáo (online_stats_eng): n = số phiên đo được, b10 = ở dưới 10 giây, eng = có cuộn hoặc chạm,
+ * inapp = mở trong app (Facebook/Instagram/Zalo…), slow = menu hiện sau hơn 3 giây. Gộp các ngày; trả về tỷ lệ 0..1.
+ */
+export function engagementReport(docs = []) {
+  const m = new Map();
+  const tot = { n: 0, b10: 0, eng: 0, inapp: 0, slow: 0 };
+  for (const d of docs) {
+    const n = Number(d.n) || 0;
+    if (!n) continue;
+    const key = campaignKey(d);
+    const c = m.get(key) || { n: 0, b10: 0, eng: 0, inapp: 0, slow: 0 };
+    for (const k of ["n", "b10", "eng", "inapp", "slow"]) { const v = Number(d[k]) || 0; c[k] += v; tot[k] += v; }
+    m.set(key, c);
+  }
+  const rate = (c, k) => (c.n ? c[k] / c.n : null);
+  const fin = (key, c) => ({ key, ...c, bounce: rate(c, "b10"), engaged: rate(c, "eng"), inappRate: rate(c, "inapp"), slowRate: rate(c, "slow") });
+  return { rows: [...m.entries()].map(([k, c]) => fin(k, c)).sort((a, b) => b.n - a.n), total: fin("Tổng", tot) };
 }

@@ -60,3 +60,18 @@ test("lượt vào theo nguồn: gộp theo nhóm và chiến dịch, đơn ÷ l
   assert.equal(r.campaigns.some((c) => c.key.includes("· cu")), false);
   assert.equal(buildSourceReport(orders, NOW, 7).channels[0].perVisit, null, "không có lượt vào thì không tính tỷ lệ");
 });
+
+import { engagementReport } from "../source-report.js";
+test("engagementReport: gộp theo chiến dịch và tính tỷ lệ", () => {
+  const r = engagementReport([
+    { source: "facebook", medium: "cpc", campaign: "c1", content: "a", n: 10, b10: 7, eng: 3, inapp: 9, slow: 2 },
+    { source: "facebook", medium: "cpc", campaign: "c1", content: "a", n: 10, b10: 5, eng: 5, inapp: 10, slow: 0 },
+    { source: "facebook", medium: "cpc", campaign: "c1", content: "b", n: 4, b10: 1, eng: 4, inapp: 0, slow: 0 },
+    { source: "x", n: 0 },
+  ]);
+  assert.equal(r.rows.length, 2);
+  assert.equal(r.rows[0].n, 20);
+  assert.equal(r.rows[0].bounce, 0.6);
+  assert.equal(r.total.n, 24);
+  assert.equal(engagementReport([]).total.engaged, null);
+});

@@ -107,6 +107,12 @@ function track(event) {
 }
 /* ---------- Thời gian ở lại trang: chỉ tính lúc tab đang mở, ghi 1 lần mỗi phiên, ẩn danh theo khung (không lưu theo người) ---------- */
 const DWELL_FLAG = "pos0210o.stats.dwell";
+// Chất lượng lượt vào: có cuộn/chạm không, trình duyệt trong app không, menu hiện nhanh hay chậm (không lưu gì theo người).
+const engage = { moved: false, menuMs: 0 };
+const markMoved = () => { engage.moved = true; };
+addEventListener("scroll", () => { if (scrollY > 40) markMoved(); }, { passive: true });
+addEventListener("pointerdown", markMoved, { passive: true });
+const inAppBrowser = () => /FBAN|FBAV|FB_IAB|FBIOS|Instagram|Zalo|Messenger/i.test(navigator.userAgent || "");
 const dwell = { visible: document.visibilityState !== "hidden", since: Date.now(), acc: 0 };
 const dwellSeconds = () => (dwell.acc + (dwell.visible ? Date.now() - dwell.since : 0)) / 1000;
 function flushDwell(ordered) {
@@ -116,7 +122,15 @@ function flushDwell(ordered) {
     try { flag = sessionStorage.getItem(DWELL_FLAG); } catch { /* bỏ qua */ }
     if (flag === day) return;
     try { sessionStorage.setItem(DWELL_FLAG, day); } catch { /* bỏ qua */ }
-    const key = dwellKey(dwellSeconds(), ordered);
+    const secs = dwellSeconds(), key = dwellKey(secs, ordered);
+    if (currentTouch !== undefined) {
+      const v = visitSource(currentTouch), p = { n: increment(1), ...v };
+      if (secs < 10 && !ordered) p.b10 = increment(1);
+      if (engage.moved || ordered) p.eng = increment(1);
+      if (inAppBrowser()) p.inapp = increment(1);
+      if (engage.menuMs > 3000) p.slow = increment(1);
+      authPromise.then((uid) => { if (uid) return setDoc(ref("online_stats_eng", visitDocId(vnDayKey(now), v)), p, { merge: true }); return null; }).catch(() => { /* bỏ qua */ });
+    }
     authPromise.then((uid) => { if (uid) return setDoc(ref(STATS_COLLECTION, vnDayKey(now)), { [key]: increment(1) }, { merge: true }); return null; }).catch(() => { /* bỏ qua */ });
   } catch { /* không bao giờ làm hỏng trang vì bộ đếm */ }
 }
@@ -248,7 +262,7 @@ function applyMenu(items, cats, top = []) {
   if (changed) store.set(KEYS.cart, state.cart);
   renderMenu();
   renderCartBar();
-  if (items.length) track("menu");
+  if (items.length) { if (!engage.menuMs) engage.menuMs = Math.round(performance.now()); track("menu"); }
 }
 
 /** Bản chụp menu (online_menu/data): khách mới chỉ đọc ~3 tài liệu thay vì ~125. Không có / lỗi / sai phiên bản thì trả null và dùng cách đọc cũ. */

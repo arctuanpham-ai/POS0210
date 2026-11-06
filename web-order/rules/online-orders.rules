@@ -312,3 +312,27 @@ match /users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/online_stats_src/{id} {
   allow update: if isGuest() && validVisitSrc(id) && request.resource.data.visit == resource.data.visit + 1 && request.resource.data.source == resource.data.source;
   allow delete: if isShopOwner();
 }
+
+// ---- Chất lượng lượt vào theo nguồn (ẩn danh): mỗi phiên ghi 1 lần khi rời trang. n = số phiên đo được; b10 = ở dưới 10 giây;
+// eng = có cuộn hoặc chạm; inapp = trình duyệt trong app (Facebook/Instagram/Zalo/Messenger); slow = menu hiện sau hơn 3 giây.
+function engDelta(k) {
+  let d = request.resource.data.get(k, 0) - resource.data.get(k, 0);
+  return d == 0 || d == 1;
+}
+
+function validEngBase(id) {
+  let d = request.resource.data;
+  return id.matches('^20[0-9]{6}~[0-9a-f]{8}$')
+    && d.keys().hasOnly(['n', 'b10', 'eng', 'inapp', 'slow', 'source', 'medium', 'campaign', 'content'])
+    && d.source is string && d.source.size() >= 1 && d.source.size() <= 40
+    && d.get('medium', '').size() <= 40 && d.get('campaign', '').size() <= 40 && d.get('content', '').size() <= 40;
+}
+
+match /users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/online_stats_eng/{id} {
+  allow read: if isShopOwner();
+  allow create: if isGuest() && validEngBase(id) && request.resource.data.n == 1
+    && request.resource.data.get('b10', 1) == 1 && request.resource.data.get('eng', 1) == 1 && request.resource.data.get('inapp', 1) == 1 && request.resource.data.get('slow', 1) == 1;
+  allow update: if isGuest() && validEngBase(id) && request.resource.data.n == resource.data.n + 1 && request.resource.data.source == resource.data.source
+    && engDelta('b10') && engDelta('eng') && engDelta('inapp') && engDelta('slow');
+  allow delete: if isShopOwner();
+}

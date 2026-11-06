@@ -1,8 +1,8 @@
 // Thống kê món bán ra gộp mọi kênh: tại quán (snapshot POS), đặt món online, GrabFood, ShopeeFood, Xanh Ngon. Hàm thuần.
 // Số phần = sản lượng thực làm: combo được tách thành món lẻ (như thống kê tại quán).
-import { expandComboName } from "./demo-receipts.js?v=20261106-12";
-import { outputRows } from "./item-output.js?v=20261106-12";
-import { isOnlineRevenue, onlineDay } from "./all-channels.js?v=20261106-12";
+import { expandComboName } from "./demo-receipts.js?v=20261106-13";
+import { outputRows } from "./item-output.js?v=20261106-13";
+import { isOnlineRevenue, onlineDay } from "./all-channels.js?v=20261106-13";
 
 export const ITEM_CHANNELS = Object.freeze(["STORE", "ONLINE", "GRAB", "SHOPEE", "XANHNGON"]);
 /** "Mang đi" = mọi kênh không phải khách ngồi tại quán: đặt món online và các app giao đồ ăn. */

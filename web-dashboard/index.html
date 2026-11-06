@@ -12,7 +12,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500&family=Montserrat:wght@400..800&display=swap" />
-    <link rel="stylesheet" href="styles.css?v=20261106-12" />
+    <link rel="stylesheet" href="styles.css?v=20261106-13" />
     <title>0210 · Manager</title>
   </head>
   <body>
@@ -330,6 +330,12 @@
         <div class="page" data-page="appfood" hidden>
         <section class="section-heading first-section">
           <div><p class="eyebrow">APP GIAO ĐỒ ĂN</p><h2>Doanh thu, tiền về và món bán qua app</h2></div>
+        </section>
+        <section class="panel" id="fa-request"><h3>Cập nhật doanh thu từ app</h3>
+          <div class="fa-import-bar"><button type="button" id="fa-request-btn" class="secondary">Yêu cầu cập nhật Grab + Shopee</button></div>
+          <p id="fa-request-title" role="status"></p>
+          <p id="fa-request-detail" class="muted"></p>
+          <p id="fa-request-schedule" class="muted"></p>
         </section>
         <div class="filter-row" id="app-tabs" role="tablist" aria-label="Chọn app"></div>
         <section class="panel" id="app-import"><h3>Nhập file đối soát</h3>
@@ -794,7 +800,7 @@
 
     <template id="metric-template"><article class="metric"><p></p><strong></strong></article></template>
     <template id="table-template"><button class="table-card"><span class="table-state"></span><strong></strong><small></small><b></b></button></template>
-    <script type="module" src="app.js?v=20261106-12"></script>
+    <script type="module" src="app.js?v=20261106-13"></script>
     <script>
       // Trang không chạy được (thường do trình duyệt còn giữ file cũ): báo rõ thay vì để nút đăng nhập "chết".
       setTimeout(function () {

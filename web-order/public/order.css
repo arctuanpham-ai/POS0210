@@ -469,3 +469,15 @@ body.has-cart .legal-foot { margin-bottom: 96px; }
 .shop-addr svg { flex: none; color: #8a6a4c; }
 .open-status { margin-top: 6px; }
 @media (max-width: 370px) { .shop-addr { font-size: 11px; } }
+
+/* Dòng tiếng Anh phụ (song ngữ trên cùng một trang; tiếng Việt vẫn là chính) */
+small.en { display: block; margin-top: 1px; font-size: .74em; font-weight: 500; line-height: 1.3; letter-spacing: 0; text-transform: none; opacity: .72; }
+.cat-chips small.en { font-size: 10px; white-space: nowrap; }
+.dish-body h3 small.en { font-size: 11.5px; }
+#submit small.en, #cart-open small.en { display: inline; margin-left: 4px; font-size: .78em; }
+#cart-open small.en { display: block; margin: 0; font-size: 10.5px; }
+#cart-count small.en { font-size: 10.5px; }
+.pill small.en { display: inline; margin-left: 4px; font-size: 10.5px; }
+.progress small.en { font-size: 9.5px; }
+.en-inline { opacity: .65; font-size: .85em; }
+label > small.en { margin: 0 0 3px; }

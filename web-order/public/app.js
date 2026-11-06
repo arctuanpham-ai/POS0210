@@ -22,7 +22,7 @@ import {
   notifyPayload, HOME_VIEW, menuLayout, menuViews, offerMessage, comboSaving, onlineDiscountPercent, onlinePrice, phoneLinksHtml, setNote, toMillis, validateCheckout,
 } from "./order-core.js";
 import { vietQrPayload } from "./vietqr.js";
-import { STATS_COLLECTION, decide, keysFor, vnDayKey } from "./stats-core.js";
+import { STATS_COLLECTION, decide, dwellKey, keysFor, vnDayKey } from "./stats-core.js";
 import { qrSvg, qrPngDataUrl } from "./qr.js";
 import { openStatus } from "./hours-core.js";
 import { SNAPSHOT_DOC, THUMB_DOC_PREFIX, mergeThumbChunks, usableSnapshot } from "./menu-snapshot.js";
@@ -105,6 +105,27 @@ function track(event) {
     }
   } catch { /* không bao giờ làm hỏng trang vì bộ đếm */ }
 }
+/* ---------- Thời gian ở lại trang: chỉ tính lúc tab đang mở, ghi 1 lần mỗi phiên, ẩn danh theo khung (không lưu theo người) ---------- */
+const DWELL_FLAG = "pos0210o.stats.dwell";
+const dwell = { visible: document.visibilityState !== "hidden", since: Date.now(), acc: 0 };
+const dwellSeconds = () => (dwell.acc + (dwell.visible ? Date.now() - dwell.since : 0)) / 1000;
+function flushDwell(ordered) {
+  try {
+    const now = Date.now(), day = vnDayKey(now);
+    let flag = null;
+    try { flag = sessionStorage.getItem(DWELL_FLAG); } catch { /* bỏ qua */ }
+    if (flag === day) return;
+    try { sessionStorage.setItem(DWELL_FLAG, day); } catch { /* bỏ qua */ }
+    const key = dwellKey(dwellSeconds(), ordered);
+    authPromise.then((uid) => { if (uid) return setDoc(ref(STATS_COLLECTION, vnDayKey(now)), { [key]: increment(1) }, { merge: true }); return null; }).catch(() => { /* bỏ qua */ });
+  } catch { /* không bao giờ làm hỏng trang vì bộ đếm */ }
+}
+document.addEventListener("visibilitychange", () => {
+  const hidden = document.visibilityState === "hidden", now = Date.now();
+  if (hidden && dwell.visible) { dwell.acc += now - dwell.since; dwell.visible = false; flushDwell(false); }
+  else if (!hidden && !dwell.visible) { dwell.since = now; dwell.visible = true; }
+});
+addEventListener("pagehide", () => flushDwell(false));
 const menuById = () => Object.fromEntries(state.items.map((m) => [m.id, m]));
 const catById = () => Object.fromEntries(state.cats.map((c) => [c.id, c]));
 const currentLines = () => cartLines(state.cart, menuById(), catById());
@@ -573,6 +594,7 @@ async function submitOrder(event) {
     if (!uid) throw Object.assign(new Error("auth"), { code: "auth" });
     track("submit");
     const result = await sendOrder(uid, checked.value, lines);
+    flushDwell(true);
     store.set(KEYS.profile, { name: checked.value.name, phone: checked.value.phone, address: form.address.value.trim(), delivery: form.receive.value === "delivery" });
     store.set(KEYS.codes, rememberCode(store.get(KEYS.codes, []), result.code));
     store.set(KEYS.hist, rememberCode(store.get(KEYS.hist, []), result.code, 40));

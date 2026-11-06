@@ -1,12 +1,13 @@
 // Thống kê lượt truy cập trang đặt món theo từng cấp (phễu). Hàm thuần: không Firebase, không DOM.
 // Khớp với web-order/public/stats-core.js (cùng tên bộ đếm) và online_orders.
-import { ooToMillis } from "./online-orders.js?v=20261106-11";
+import { ooToMillis } from "./online-orders.js?v=20261106-12";
 
 export const FUNNEL = Object.freeze([
   ["visit", "Lượt vào trang"], ["menu", "Xem được menu"], ["add", "Thêm món vào giỏ"], ["cart", "Mở giỏ hàng"],
   ["submit", "Bấm gửi đơn"], ["created", "Đơn gửi được"], ["paid", "Đã thanh toán"],
 ]);
 const HOURS = Array.from({ length: 24 }, (_, h) => `vh${String(h).padStart(2, "0")}`);
+export const DWELL_LABELS = Object.freeze(["Dưới 10 giây", "10–30 giây", "30–60 giây", "1–2 phút", "2–5 phút", "5–10 phút", "Trên 10 phút"]);
 const PAID = new Set(["paid", "delivering", "done"]);
 export const TEST_ORDER_NAME = "KIEM THU TU DONG";
 const VN = 7 * 3_600_000;
@@ -37,14 +38,16 @@ export const buildStats = (statDocs, orders, nowMs, days) => {
   }
   const total = Object.fromEntries([...FUNNEL.map(([k]) => [k, 0]), ["device", 0]]);
   const hours = HOURS.map(() => 0);
+  const dwell = { no: DWELL_LABELS.map(() => 0), yes: DWELL_LABELS.map(() => 0) };
   const rows = keys.map((day) => {
     const s = byId.get(day) || {}, o = orderDay.get(day) || { created: 0, paid: 0 };
     const row = { day, visit: num(s.visit), device: num(s.device), menu: num(s.menu), add: num(s.add), cart: num(s.cart), submit: num(s.submit), created: o.created, paid: o.paid };
     for (const k of Object.keys(total)) total[k] += row[k];
     HOURS.forEach((h, i) => { hours[i] += num(s[h]); });
+    DWELL_LABELS.forEach((_, i) => { dwell.no[i] += num(s[`dwa${i}`]); dwell.yes[i] += num(s[`dwb${i}`]); });
     return row;
   });
-  return { rows, total, hours };
+  return { rows, total, hours, dwell };
 };
 
 /** Phễu: mỗi cấp kèm % so với lượt vào và % giữ lại so với cấp trước. */
@@ -53,3 +56,18 @@ export const funnelSteps = (total) => FUNNEL.map(([key, label], i) => {
   return { key, label, value, ofVisit: base ? value / base : null, ofPrev: prev ? value / prev : (i ? null : 1) };
 });
 export const pct = (v) => (v == null ? "–" : `${Math.round(v * 1000) / 10}%`);
+
+/** Tóm tắt thời gian ở lại: tổng lượt đo, khung trung vị, tỷ lệ thoát nhanh (<10 giây), tách người gửi đơn / không gửi. */
+export const dwellSummary = (dwell) => {
+  const no = dwell?.no || [], yes = dwell?.yes || [];
+  const all = DWELL_LABELS.map((_, i) => num(no[i]) + num(yes[i]));
+  const sum = (a) => a.reduce((t, v) => t + num(v), 0);
+  const total = sum(all);
+  const median = (arr) => { const t = sum(arr); if (!t) return null; let run = 0; for (let i = 0; i < arr.length; i++) { run += num(arr[i]); if (run * 2 >= t) return DWELL_LABELS[i]; } return null; };
+  return {
+    total, ordered: sum(yes), notOrdered: sum(no),
+    median: median(all), medianOrdered: median(yes), medianNotOrdered: median(no),
+    quick: total ? num(all[0]) / total : null, // thoát dưới 10 giây
+    rows: DWELL_LABELS.map((label, i) => ({ label, all: all[i], no: num(no[i]), yes: num(yes[i]), share: total ? all[i] / total : null })),
+  };
+};

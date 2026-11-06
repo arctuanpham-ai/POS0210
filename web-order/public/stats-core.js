@@ -7,7 +7,15 @@ export const STAT_LABELS = Object.freeze({
   visit: "Lượt vào trang", device: "Thiết bị khác nhau", menu: "Xem được menu", add: "Thêm món vào giỏ", cart: "Mở giỏ hàng", submit: "Bấm gửi đơn",
 });
 export const HOUR_KEYS = Object.freeze(Array.from({ length: 24 }, (_, h) => `vh${String(h).padStart(2, "0")}`));
-export const STAT_KEYS = Object.freeze([...STAT_EVENTS, ...HOUR_KEYS]);
+// Thời gian khách ở lại trang (chỉ tính lúc tab đang mở), gom theo khung, ẩn danh: dwa* = khách không gửi đơn, dwb* = khách đã gửi đơn.
+export const DWELL_EDGES = Object.freeze([10, 30, 60, 120, 300, 600]); // giây
+export const DWELL_LABELS = Object.freeze(["Dưới 10 giây", "10–30 giây", "30–60 giây", "1–2 phút", "2–5 phút", "5–10 phút", "Trên 10 phút"]);
+export const DWELL_KEYS_NO = Object.freeze(DWELL_LABELS.map((_, i) => `dwa${i}`));
+export const DWELL_KEYS_YES = Object.freeze(DWELL_LABELS.map((_, i) => `dwb${i}`));
+/** Chỉ số khung (0..6) của số giây ở lại. */
+export const dwellBucket = (seconds) => { const s = Number(seconds); const i = DWELL_EDGES.findIndex((e) => s < e); return i < 0 ? DWELL_EDGES.length : i; };
+export const dwellKey = (seconds, ordered) => (ordered ? DWELL_KEYS_YES : DWELL_KEYS_NO)[dwellBucket(seconds)];
+export const STAT_KEYS = Object.freeze([...STAT_EVENTS, ...HOUR_KEYS, ...DWELL_KEYS_NO, ...DWELL_KEYS_YES]);
 export const STATS_COLLECTION = "online_stats";
 
 const VN_OFFSET_MS = 7 * 3_600_000;

@@ -26,3 +26,17 @@ test("phễu: % so với lượt vào và so với cấp trước, không chia c
   const empty = funnelSteps({});
   assert.equal(empty[0].ofVisit, null); assert.equal(empty[3].ofPrev, null);
 });
+
+test("thời gian ở lại: gộp theo ngày và tóm tắt", async () => {
+  const { buildStats, dwellSummary } = await import("../stats-view.js");
+  const now = Date.parse("2026-11-06T05:00:00Z");
+  const docs = [{ id: "20261106", dwa0: 3, dwa1: 2, dwb2: 1, dwb4: 2 }, { id: "20261105", dwa0: 1 }];
+  const r = buildStats(docs, [], now, 2);
+  assert.deepEqual(r.dwell.no.slice(0, 2), [4, 2]);
+  const s = dwellSummary(r.dwell);
+  assert.equal(s.total, 9);
+  assert.equal(s.ordered, 3);
+  assert.equal(s.quick, 4 / 9);
+  assert.equal(s.median, "10–30 giây");
+  assert.equal(s.medianOrdered, "2–5 phút");
+});

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { STAT_KEYS, STAT_EVENTS, decide, keysFor, vnDayKey, vnHour, HOUR_KEYS } from "../public/stats-core.js";
+import { dwellBucket, dwellKey, STAT_KEYS, STAT_EVENTS, decide, keysFor, vnDayKey, vnHour, HOUR_KEYS } from "../public/stats-core.js";
 
 test("ngày và giờ theo giờ Việt Nam (UTC+7)", () => {
   const ms = Date.UTC(2026, 9, 20, 17, 30); // 00:30 ngày 21/10 giờ VN
@@ -40,6 +40,12 @@ test("rules online_stats khai báo đủ mọi bộ đếm và chỉ chủ quán
   for (const k of STAT_KEYS) { assert.ok(rules.includes(`statInc('${k}')`), `thiếu statInc ${k}`); assert.ok(fn.includes(`'${k}'`), `thiếu ${k} trong statKeys`); }
   assert.equal((fn.match(/'[a-z0-9]+'/g) || []).length, STAT_KEYS.length);
   assert.match(block, /allow read: if isShopOwner\(\)/);
-  assert.equal(STAT_KEYS.length, STAT_EVENTS.length + HOUR_KEYS.length);
+  assert.equal(STAT_KEYS.length, STAT_EVENTS.length + HOUR_KEYS.length + 14);
   assert.ok(!/\?[^:\n]*:/.test(block.replace(/'[^']*'/g, "")), "không dùng toán tử ba ngôi");
+});
+
+test("khung thời gian ở lại: mốc 10 giây, 30 giây, 1/2/5/10 phút", () => {
+  assert.deepEqual([0, 9.9, 10, 29, 30, 59, 60, 119, 120, 299, 300, 599, 600, 5000].map(dwellBucket), [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6]);
+  assert.equal(dwellKey(5, false), "dwa0");
+  assert.equal(dwellKey(200, true), "dwb4");
 });

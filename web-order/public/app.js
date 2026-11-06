@@ -22,7 +22,6 @@ import {
   notifyPayload, HOME_VIEW, menuLayout, menuViews, offerMessage, comboSaving, onlineDiscountPercent, onlinePrice, phoneLinksHtml, setNote, toMillis, validateCheckout,
 } from "./order-core.js";
 import { vietQrPayload } from "./vietqr.js";
-import { annotateStatic, catEn, countEn, enLine, itemEn, MODE_EN, STATUS_EN, STEP_EN, UI } from "./lang-en.js";
 import { pixelTrack, startPixel } from "./fb-pixel.js";
 import { STATS_COLLECTION, decide, dwellKey, keysFor, vnDayKey } from "./stats-core.js";
 import { qrSvg, qrPngDataUrl } from "./qr.js";
@@ -170,7 +169,6 @@ signInAnonymously(auth).catch((error) => { state.authError = error; authReady(nu
 let currentTouch = null; // nguồn của lượt vào hiện tại (chỉ theo URL/nơi giới thiệu của lần mở trang này); phải khai báo trước khi gọi captureSource
 captureSource();
 startPixel();
-try { annotateStatic(document); } catch { /* dòng tiếng Anh chỉ là phụ */ }
 track("visit"); track("device");
 /* Nguồn khách (UTM / nơi giới thiệu): nhớ 7 ngày trên máy khách, chỉ là dữ liệu bổ sung, lỗi gì cũng bỏ qua, không ảnh hưởng đặt món. */
 function captureSource() {
@@ -370,12 +368,12 @@ function dishHtml(item, cat) {
   const comboImg = item.parts?.length ? item.parts.map((p) => `<span class="ct">${tile(p.id, p.name)}</span>`).join('<b class="plus">+</b>') : "";
   const img = thumb ? `<img src="${esc(thumb)}" alt="" loading="lazy" width="72" height="72" />` : `<span class="dish-initial">${esc(String(item.name).trim().charAt(0).toUpperCase())}</span>`;
   const control = !sellable
-    ? `<span class="soldout">Tạm hết${enLine(UI.soldOut)}</span>`
+    ? `<span class="soldout">Tạm hết</span>`
     : entry
       ? `<div class="stepper"><button type="button" data-act="dec" data-id="${esc(item.id)}" aria-label="Bớt 1 ${esc(item.name.trim())}">−</button><b aria-live="polite">${entry.qty}</b><button type="button" data-act="inc" data-id="${esc(item.id)}" aria-label="Thêm 1 ${esc(item.name.trim())}">+</button></div>`
       : `<button type="button" class="add" data-act="inc" data-id="${esc(item.id)}" aria-label="Thêm ${esc(item.name.trim())}"><span aria-hidden="true">+</span></button>`;
   const note = sellable && entry ? `<input class="dish-note" data-note="${esc(item.id)}" maxlength="${LIMITS.maxLineNote}" placeholder="Ghi chú món (ít đá, ít ngọt…)" value="${esc(entry.note)}" autocomplete="off" />` : "";
-  return `<article class="dish${sellable ? "" : " off"}${comboImg ? " combo-dish" : ""}${entry ? " in-cart" : ""}" data-dish="${esc(item.id)}"><div class="dish-img${comboImg ? " combo" : ""}">${comboImg || img}${promoOn ? `<span class="disc-badge" title="Giảm ${pct}% khi đặt online"><span class="sr-only">Giảm ${pct}% khi đặt online</span><span aria-hidden="true">-${pct}%</span></span>` : ""}</div><div class="dish-body"><h3>${esc(item.name.trim())}${enLine(itemEn(item.name))}</h3>${comboImg ? saveLine(item, promoOn ? pct : 0) : ""}${item.description ? `<p class="desc">${esc(item.description)}</p>` : ""}<b class="price">${promoOn ? `<span class="price-now">${money(onlinePrice(item.price, pct))}</span><s class="price-old">${money(item.price)}</s>` : money(item.price)}</b></div><div class="dish-ctl">${control}</div>${note}</article>`;
+  return `<article class="dish${sellable ? "" : " off"}${comboImg ? " combo-dish" : ""}${entry ? " in-cart" : ""}" data-dish="${esc(item.id)}"><div class="dish-img${comboImg ? " combo" : ""}">${comboImg || img}${promoOn ? `<span class="disc-badge" title="Giảm ${pct}% khi đặt online"><span class="sr-only">Giảm ${pct}% khi đặt online</span><span aria-hidden="true">-${pct}%</span></span>` : ""}</div><div class="dish-body"><h3>${esc(item.name.trim())}</h3>${comboImg ? saveLine(item, promoOn ? pct : 0) : ""}${item.description ? `<p class="desc">${esc(item.description)}</p>` : ""}<b class="price">${promoOn ? `<span class="price-now">${money(onlinePrice(item.price, pct))}</span><s class="price-old">${money(item.price)}</s>` : money(item.price)}</b></div><div class="dish-ctl">${control}</div>${note}</article>`;
 }
 
 /** Chỉ mục tìm kiếm (đã bỏ dấu) dựng lại khi menu đổi; kèm các từ khoá gợi ý còn ra món. */
@@ -439,7 +437,7 @@ const chipIconKey = (v) => {
   return "retail";
 };
 const chipIcon = (v) => `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${CHIP_SVG[chipIconKey(v)]}</svg>`;
-const sectionHtml = (sec, cats) => `<section class="menu-section" id="cat-${esc(sec.id)}"><div class="sec-head"><h2>${esc(sec.name)}${enLine(catEn(sec.name))}</h2>${sec.more ? `<button type="button" class="see-all" data-view="${esc(sec.more.view)}">${esc(sec.more.label)} <span aria-hidden="true">→</span></button>` : ""}</div>${sec.items.map((m) => dishHtml(m, cats[m.categoryId])).join("")}</section>`;
+const sectionHtml = (sec, cats) => `<section class="menu-section" id="cat-${esc(sec.id)}"><div class="sec-head"><h2>${esc(sec.name)}</h2>${sec.more ? `<button type="button" class="see-all" data-view="${esc(sec.more.view)}">${esc(sec.more.label)} <span aria-hidden="true">→</span></button>` : ""}</div>${sec.items.map((m) => dishHtml(m, cats[m.categoryId])).join("")}</section>`;
 
 function renderMenu() {
   const sections = menuSections(state.items, state.cats, { top: state.top });
@@ -449,7 +447,7 @@ function renderMenu() {
     const found = searchEntries(searchData().entries, query);
     $("#cat-chips").innerHTML = "";
     $("#menu").innerHTML = found.items.length
-      ? `<section class="menu-section" id="cat-_search"><h2>Kết quả tìm món${enLine(UI.searchResults)}</h2>${found.items.map((m) => dishHtml(m, cats[m.categoryId])).join("")}</section>`
+      ? `<section class="menu-section" id="cat-_search"><h2>Kết quả tìm món</h2>${found.items.map((m) => dishHtml(m, cats[m.categoryId])).join("")}</section>`
       : "";
     renderSearchNote(found, query);
     return;
@@ -458,7 +456,7 @@ function renderMenu() {
   const views = menuViews(sections);
   if (!views.some((v) => v.id === state.view)) state.view = HOME_VIEW; // trang đang xem không còn (menu đổi): về Nổi bật
   $("#cat-chips").innerHTML = views.length > 1
-    ? views.map((v) => `<a href="#cat-${esc(v.id)}" data-view="${esc(v.id)}"${v.id === state.view ? ' class="active" aria-current="true"' : ""}>${chipIcon(v)}<span>${esc(v.name)}${enLine(catEn(v.name))}</span></a>`).join("")
+    ? views.map((v) => `<a href="#cat-${esc(v.id)}" data-view="${esc(v.id)}"${v.id === state.view ? ' class="active" aria-current="true"' : ""}>${chipIcon(v)}<span>${esc(v.name)}</span></a>`).join("")
     : "";
   $("#menu").innerHTML = menuLayout(sections, state.view).map((sec) => sectionHtml(sec, cats)).join("")
     || (state.items.length ? "" : '<p class="muted center">Đang tải menu…</p>');
@@ -494,10 +492,10 @@ function renderCartBar() {
   const bar = $("#cartbar");
   const closed = state.shop.orderingEnabled === false;
   bar.hidden = !lines.length || !$("#screen-track").hidden;
-  $("#cart-count").innerHTML = `${linesCount(lines)} món${enLine(countEn(linesCount(lines)))}`;
+  $("#cart-count").textContent = `${linesCount(lines)} món`;
   $("#cart-total").textContent = money(priceNow(lines).total);
   $("#cart-open").disabled = closed;
-  $("#cart-open").innerHTML = closed ? `Tạm ngưng nhận đơn${enLine(UI.paused)}` : `Xem giỏ &amp; đặt${enLine(UI.viewCart)}`;
+  $("#cart-open").textContent = closed ? "Tạm ngưng nhận đơn" : "Xem giỏ & đặt";
   document.body.classList.toggle("has-cart", !bar.hidden);
 }
 
@@ -814,13 +812,13 @@ function summaryHtml(order) {
   ].join("");
   const lines = (order.items || []).map((l) => `<li><span>${l.qty}× ${esc(String(l.name).trim())}${l.note ? `<small>${esc(l.note)}</small>` : ""}</span><b>${money(l.price * l.qty)}</b></li>`).join("") + adjust;
   const where = order.mode === "delivery" ? `Giao tới: ${esc(order.address)}` : order.mode === "dinein" ? `Tại quán · bàn ${esc(order.table)}` : "Mang đi";
-  return `<details class="summary"><summary>Đơn ${esc(order.code)} · ${money(order.total)} · ${esc(MODE_LABELS[order.mode] || "")}${MODE_EN[order.mode] ? ` / ${MODE_EN[order.mode]}` : ""}</summary><ul>${lines}</ul><p class="muted small">${where}${order.note ? `<br>Ghi chú: ${esc(order.note)}` : ""}</p></details>`;
+  return `<details class="summary"><summary>Đơn ${esc(order.code)} · ${money(order.total)} · ${esc(MODE_LABELS[order.mode] || "")}</summary><ul>${lines}</ul><p class="muted small">${where}${order.note ? `<br>Ghi chú: ${esc(order.note)}` : ""}</p></details>`;
 }
 
 function progressHtml(order, view) {
   const steps = progressSteps(order);
   const index = steps.findIndex(([key]) => key === view.status);
-  return `<ol class="progress">${steps.map(([key, label], i) => `<li class="${i < index ? "done" : i === index ? "now" : ""}">${label}${enLine(STEP_EN[key])}</li>`).join("")}</ol>`;
+  return `<ol class="progress">${steps.map(([key, label], i) => `<li class="${i < index ? "done" : i === index ? "now" : ""}">${label}</li>`).join("")}</ol>`;
 }
 
 function renderTrack() {
@@ -834,7 +832,6 @@ function renderTrack() {
   const order = state.order;
   const view = orderView(order, serverNow());
   const text = STATUS_TEXT[view.status] || STATUS_TEXT.new;
-  const en = STATUS_EN[view.status] || STATUS_EN.new;
   let extra = "";
   if (view.status === STATUS.AWAITING_PAYMENT) {
     extra = `<p class="countdown-line">Thời gian còn lại <b id="countdown">${countdownText(view.remainingMs ?? 0)}</b></p>${paymentHtml(order)}<p class="pay-warning">⚠️ Lưu ý: sau khi quán nhận tiền, đơn được chuyển cho bếp nên <b>không sửa hoặc huỷ vì đổi ý</b> được. Nếu quán không thực hiện được đơn, giao thiếu/sai món hoặc món có lỗi, quán sẽ <b>hoàn tiền</b> (xem <a href="chinh-sach#hoan-tien" target="_blank" rel="noopener">chính sách đổi trả, hoàn tiền</a>).</p>`;
@@ -848,7 +845,7 @@ function renderTrack() {
     ? `<button type="button" class="primary" data-act2="reorder">Đặt lại đơn này</button>`
     : view.isFinal ? `<button type="button" class="primary" data-act2="new">Đặt đơn mới</button>` : "");
   const showProgress = ![STATUS.REJECTED, STATUS.EXPIRED, STATUS.CANCELLED].includes(view.status);
-  body.innerHTML = `${chips}<div class="status-card s-${view.status}">${spinner}<p class="eyebrow">Mã đơn <span class="en-inline" lang="en">/ Order code</span> <b class="code">${esc(order.code)}</b></p><h2>${esc(text.title)}${enLine(en[0])}</h2>${text.hint ? `<p class="muted">${esc(text.hint)}${enLine(en[1])}</p>` : ""}${showProgress ? progressHtml(order, view) : ""}${extra}${actions}</div>${summaryHtml(order)}${phone}`;
+  body.innerHTML = `${chips}<div class="status-card s-${view.status}">${spinner}<p class="eyebrow">Mã đơn <b class="code">${esc(order.code)}</b></p><h2>${esc(text.title)}</h2>${text.hint ? `<p class="muted">${esc(text.hint)}</p>` : ""}${showProgress ? progressHtml(order, view) : ""}${extra}${actions}</div>${summaryHtml(order)}${phone}`;
 }
 
 /** Banner "đơn đang theo dõi" chỉ cho đơn CHƯA kết thúc. Đơn đã xong/từ chối/hết hạn chuyển sang Lịch sử. */

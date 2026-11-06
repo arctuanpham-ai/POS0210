@@ -1,4 +1,5 @@
 // KPI và dự đoán doanh thu "hôm nay" trên tab Bàn. Hàm thuần: không Firebase, không DOM.
+import { BOSS_POOLS } from "./kpi-boss-lines.js?v=20261106-14";
 // Căn cứ: doanh thu đã chốt + tạm tính bàn đang mở ("khi thu đủ"), nhịp bill theo khung giờ và doanh thu cùng thứ tuần trước.
 
 const OPEN_H = 7, CLOSE_H = 21; // giờ mở/đóng mặc định khi chưa có phân bố giờ của tuần trước
@@ -104,16 +105,18 @@ const POOLS = {
 };
 
 /** Câu động viên theo KPI: đổi theo từng 15 phút (cùng một lúc thì cùng câu), không lặp câu của lần trước. */
-export function cheerLine(f, { day = "", hour = 12, minute = 0, previous = "" } = {}) {
+export function cheerLine(f, { day = "", hour = 12, minute = 0, previous = "", boss = false } = {}) {
   if (!f || !f.hasTarget) return "";
   const late = f.frac >= 0.97 || hour >= 21;
   const early = f.frac < 0.08 && f.status !== "reached";
   const key = late ? (f.status === "reached" ? "lateReached" : "lateMissed") : early ? "early" : f.status;
-  const pool = POOLS[key];
   let h = 0;
-  const seed = `${day}|${hour}|${Math.floor(minute / 15)}|${key}`;
+  const seed = `${day}|${hour}|${Math.floor(minute / 15)}|${key}${boss ? "|b" : ""}`;
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  let i = h % pool.length;
+  let pool = (boss ? BOSS_POOLS : POOLS)[key];
+  // Chế độ sếp: cứ khoảng 1/3 lượt đổi câu (khi chưa đạt KPI) chen một mẹo bán hàng.
+  if (boss && !["reached", "lateReached", "lateMissed"].includes(key) && h % 3 === 0) pool = BOSS_POOLS.tips;
+  let i = (h >>> 3) % pool.length;
   if (pool[i] === previous) i = (i + 1) % pool.length;
   return pool[i];
 }

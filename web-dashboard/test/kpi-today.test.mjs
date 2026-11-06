@@ -42,3 +42,15 @@ test("câu động viên ổn định trong 15 phút và không lặp câu trư�
   assert.notEqual(a, cheerLine(f, { day: "2026-11-06", hour: 13, minute: 2, previous: a }));
   assert.equal(cheerLine({ hasTarget: false }), "");
 });
+
+import { BOSS_POOLS } from "../kpi-boss-lines.js";
+test("chế độ sếp: đủ câu mỗi nhóm, đổi theo boss và không lặp câu trước", () => {
+  for (const k of ["early","ahead","on","close","behind","reached","lateReached","lateMissed","tips"]) assert.ok(BOSS_POOLS[k].length >= 6, k);
+  const f = { hasTarget: true, frac: 0.5, status: "behind" };
+  const g = { day: "2026-11-06", hour: 13, minute: 2 };
+  const b = cheerLine(f, { ...g, boss: true });
+  assert.ok([...BOSS_POOLS.behind, ...BOSS_POOLS.tips].includes(b));
+  assert.notEqual(b, cheerLine(f, { ...g, boss: true, previous: b }));
+  const r = cheerLine({ hasTarget: true, frac: 0.6, status: "reached" }, { ...g, boss: true });
+  assert.ok(BOSS_POOLS.reached.includes(r));
+});

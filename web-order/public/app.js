@@ -22,6 +22,7 @@ import {
   notifyPayload, HOME_VIEW, menuLayout, menuViews, offerMessage, comboSaving, onlineDiscountPercent, onlinePrice, phoneLinksHtml, setNote, toMillis, validateCheckout,
 } from "./order-core.js";
 import { vietQrPayload } from "./vietqr.js";
+import { pixelTrack, startPixel } from "./fb-pixel.js";
 import { STATS_COLLECTION, decide, dwellKey, keysFor, vnDayKey } from "./stats-core.js";
 import { qrSvg, qrPngDataUrl } from "./qr.js";
 import { openStatus } from "./hours-core.js";
@@ -95,6 +96,7 @@ function track(event) {
     try { sessionStorage.setItem(STATS_SESSION_KEY, JSON.stringify(result.session)); } catch { /* bỏ qua */ }
     store.set("pos0210o.stats.device", result.device);
     if (!result.count) return;
+    pixelTrack(event, event === "submit" ? priceNow(currentLines()).total : 0);
     const patch = {};
     for (const key of keysFor(event, now)) patch[key] = increment(1);
     authPromise.then((uid) => { if (uid) return setDoc(ref(STATS_COLLECTION, vnDayKey(now)), patch, { merge: true }); return null; }).catch(() => { /* đếm lỗi: bỏ qua */ });
@@ -166,6 +168,7 @@ onAuthStateChanged(auth, (user) => { if (user) { state.uid = user.uid; authReady
 signInAnonymously(auth).catch((error) => { state.authError = error; authReady(null); });
 let currentTouch = null; // nguồn của lượt vào hiện tại (chỉ theo URL/nơi giới thiệu của lần mở trang này); phải khai báo trước khi gọi captureSource
 captureSource();
+startPixel();
 track("visit"); track("device");
 /* Nguồn khách (UTM / nơi giới thiệu): nhớ 7 ngày trên máy khách, chỉ là dữ liệu bổ sung, lỗi gì cũng bỏ qua, không ảnh hưởng đặt món. */
 function captureSource() {

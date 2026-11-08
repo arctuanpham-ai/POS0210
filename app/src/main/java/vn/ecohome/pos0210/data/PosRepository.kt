@@ -11,7 +11,11 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.withLock
 
+
+/** Khoá dùng chung mọi PosRepository trong tiến trình cho thao tác ghi/dọn bill đơn online. */
+private val onlineSaleLock=kotlinx.coroutines.sync.Mutex()
 
 class PosRepository(private val db:PosDatabase){
     private val dao=db.dao()
@@ -338,8 +342,9 @@ class PosRepository(private val db:PosDatabase){
      * (đánh dấu bằng audit ONLINE_ORDER/BILL_RECORDED). Dùng đúng đường openSession -> createBatch -> completePayment của POS,
      * bàn ảo "ONLINE", lô món ghi sẵn là đã giao nên không vào hàng chờ bếp. Trả về mã bill, hoặc null nếu đã ghi rồi.
      */
-    suspend fun recordOnlineSale(code:String,lines:Map<String,Int>,notes:Map<String,String>,cashierId:String,surcharge:Long=0L,discount:Long=0L):String? {
-        if(dao.onlineBillRecorded(code)>0) return null
+    suspend fun recordOnlineSale(code:String,lines:Map<String,Int>,notes:Map<String,String>,cashierId:String,surcharge:Long=0L,discount:Long=0L):String? = onlineSaleLock.withLock {
+        // Khoá dùng chung cả tiến trình + kiểm tra cả audit lẫn payment ON-<mã>: tránh ghi trùng khi nhiều luồng cùng thấy một đơn hoàn thành.
+        if(dao.onlineBillRecorded(code)>0||dao.paymentsWithReference("ON-$code")>0) return@withLock null
         require(lines.isNotEmpty()) { "EMPTY_ORDER" }
         val session=openSession("ONLINE",cashierId,"LIVE","prepaid")
         val items=prepareCart(lines,notes).map{it.copy(deliveredQty=it.qty)}
@@ -353,7 +358,19 @@ class PosRepository(private val db:PosDatabase){
         val payable=(total+sur-dis).coerceAtLeast(0L)
         val result=completePayment(fresh,PricingPreview(total,sur,dis,payable,emptyList(),null),"TRANSFER",cashierId,"ON-$code")
         dao.audit(AuditEventEntity(UUID.randomUUID().toString(),"ONLINE_ORDER",code,"BILL_RECORDED",cashierId,null,System.currentTimeMillis(),"bill=${result.bill.billNo},subtotal=$total,surcharge=$sur,discount=$dis,total=$payable"))
-        return result.bill.billNo
+        result.bill.billNo
+    }
+
+    /** Dọn bill đơn online bị ghi trùng (cùng mã ON-<mã>, còn PAID): giữ bill đầu tiên, các bill còn lại chuyển REFUNDED (không tính doanh thu) và ghi audit. Trả về số bill đã dọn. */
+    suspend fun voidDuplicateOnlineBills(actorId:String):Int = onlineSaleLock.withLock {
+        var n=0
+        dao.paidOnlineBills().groupBy{it.billNo}.forEach{(no,list)->
+            list.drop(1).forEach{b->
+                if(dao.markBillRefunded(b.id)>0){n++
+                    dao.audit(AuditEventEntity(UUID.randomUUID().toString(),"ONLINE_ORDER",no.removePrefix("ON-"),"DUPLICATE_BILL_VOIDED",actorId,null,System.currentTimeMillis(),"billId=${b.id},total=${b.total},kept=${list.first().id}"))}
+            }
+        }
+        n
     }
 
     /**

@@ -408,6 +408,20 @@ fun restoreFirebaseBackup(){
   }.onFailure{cloudMessage.value="Khôi phục lỗi: ${it.message}"}
  }
 }
+val onlineState=MutableStateFlow(OnlineState());val onlineMessage=MutableStateFlow("");val onlineAlert=MutableStateFlow(0);private var onlineJob:Job?=null;private val onlineSeen=HashSet<String>();private var onlineFirstDone=false;private val onlineBusy=HashSet<String>()
+fun observeOnlineOrders(){if(onlineJob?.isActive==true)return;onlineJob=viewModelScope.launch{OnlineOrdersCloud.observe(getApplication()).collect{st->
+  val fresh=OnlineOrderLogic.newCodes(st.orders,onlineSeen)
+  if(st.error==null&&onlineFirstDone&&fresh.isNotEmpty())onlineAlert.value=onlineAlert.value+1
+  if(st.error==null){onlineSeen.addAll(st.orders.map{it.id});onlineFirstDone=true}
+  onlineState.value=st}}}
+fun onlineAction(order:OnlineOrder,action:OnlineAction,reason:String=""){
+  if(!onlineBusy.add(order.id))return
+  viewModelScope.launch{
+   val who=currentEmployee.value?.name.orEmpty()
+   OnlineOrdersCloud.apply(getApplication(),order.id,action,who,reason).onSuccess{onlineMessage.value=""}.onFailure{onlineMessage.value="Không cập nhật được đơn ${order.code}: ${it.message}"}
+   onlineBusy.remove(order.id)
+  }
+}
 fun observeCloudDashboard(){cloudDashboardJob?.cancel();cloudDashboardJob=viewModelScope.launch{FirebaseCloudSync.dashboard(getApplication()).collect{cloudDashboard.value=it}}}
 fun attachStorageRoot(uri:String,allowWrites:Boolean){
  val e=currentEmployee.value?:return

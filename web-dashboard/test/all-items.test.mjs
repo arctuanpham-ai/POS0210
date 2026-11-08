@@ -8,7 +8,7 @@ const storeDocs = { "2026-11-04": { paidBills: 3, items: [{ name: "Cơm gà chi�
 const online = [
   { id: "a", status: "done", mode: "pickup", paidAt: at("2026-11-05", 9), items: [{ name: "Bạc xỉu", qty: 1, price: 30000 }, { name: "cơm gà  chiên mắm", qty: 2, price: 59000 }] },
   { id: "b", status: "cancelled", paidAt: at("2026-11-05", 9), items: [{ name: "Bạc xỉu", qty: 9 }] },
-  { id: "c", status: "paid", mode: "delivery", paidAt: at("2026-11-04", 9), items: [{ name: "COMBO A [1 × Bạc xỉu + 1 × Trà đào]", qty: 2 }] },
+  { id: "c", status: "done", mode: "delivery", paidAt: at("2026-11-04", 9), items: [{ name: "COMBO A [1 × Bạc xỉu + 1 × Trà đào]", qty: 2 }] },
 ];
 const ledger = [
   { app: "GRAB", code: "G1", saleDay: "2026-11-04", status: "OK", items: [{ name: "Cơm gà chiên mắm", qty: 1 }] },

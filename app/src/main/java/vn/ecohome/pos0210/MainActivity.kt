@@ -43,6 +43,10 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import coil.compose.AsyncImage
 import vn.ecohome.pos0210.data.*
+import vn.ecohome.pos0210.cloud.OnlineAction
+import vn.ecohome.pos0210.cloud.OnlineOrder
+import vn.ecohome.pos0210.cloud.OnlineOrderLogic
+import vn.ecohome.pos0210.cloud.OnlineStatus
 import vn.ecohome.pos0210.printing.PrinterText
 import vn.ecohome.pos0210.printing.BluetoothPrinter
 import vn.ecohome.pos0210.payment.VietQrOffline
@@ -97,6 +101,14 @@ fun App(vm: PosViewModel = viewModel()) {
     val sc by vm.screen.collectAsState()
     val t by vm.currentTable.collectAsState()
     val s by vm.currentSession.collectAsState()
+    val onlineAlert by vm.onlineAlert.collectAsState()
+    LaunchedEffect(onlineAlert) {
+        if (onlineAlert > 0) runCatching {
+            val tone = android.media.ToneGenerator(android.media.AudioManager.STREAM_ALARM, 100)
+            tone.startTone(android.media.ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 700)
+            kotlinx.coroutines.delay(900); tone.release()
+        }
+    }
     when (sc) {
         "LOGIN" -> Login(vm)
         "TABLES" -> Tables(vm)
@@ -109,6 +121,7 @@ fun App(vm: PosViewModel = viewModel()) {
         "COMBO" -> ComboManager(vm)
         "PRICING" -> PricingManager(vm)
         "DELIVERY" -> DeliveryQueue(vm)
+        "ONLINE" -> OnlineOrdersScreen(vm)
         "CUSTOMERS" -> Customers(vm)
         "LOYALTY_CONFIG" -> LoyaltyConfig(vm)
         "FINANCE_PEOPLE" -> FinancePeopleManager(vm)
@@ -190,6 +203,10 @@ fun Tables(vm: PosViewModel) {
         }
     }
     val current by vm.currentEmployee.collectAsState()
+    val onlineSt by vm.onlineState.collectAsState()
+    LaunchedEffect(Unit) { vm.observeOnlineOrders() }
+    val onlineAttention = OnlineOrderLogic.attention(onlineSt.orders, timerNow)
+    val onlineActive = onlineSt.orders.count { it.status in setOf("new", "awaiting_payment", "paid", "delivering") }
     var assignmentTarget by remember { mutableStateOf("KITCHEN") }
     val canReport = current?.role == "ADMIN" || current?.canViewReport == true
     val waitingOrdered = waiting.sortedWith(compareBy<OrderBatchEntity> { it.serviceNo }.thenBy { it.createdAt })
@@ -224,6 +241,11 @@ fun Tables(vm: PosViewModel) {
         }
         ResponsiveTableGrid(tableCards,Modifier.weight(1f).fillMaxWidth().padding(horizontal=12.dp,vertical=8.dp)){id->ts.firstOrNull{it.id==id}?.let(vm::selectTable)}
 
+        Button(
+            onClick = { vm.screen.value = "ONLINE" },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+            colors = if (onlineAttention > 0) ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828)) else ButtonDefaults.buttonColors()
+        ) { Text(if (onlineAttention > 0) "ĐƠN ONLINE · $onlineAttention ĐƠN MỚI" else if (onlineActive > 0) "ĐƠN ONLINE · $onlineActive ĐANG XỬ LÝ" else "ĐƠN ONLINE") }
         if (waiting.isNotEmpty()) {
             Button(
                 onClick = { vm.screen.value = "DELIVERY" },
@@ -3798,6 +3820,90 @@ fun BankNotificationTest(vm:PosViewModel){
             Button(onClick={BankPaymentAnnouncer.announce(context,127000,"Bàn 05",false,true)},modifier=Modifier.fillMaxWidth().padding(top=12.dp)){Text("TEST TTS")}
             OutlinedButton(onClick={vm.clearBankNotificationLog()},modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text("XÓA LOG TEST")}
             Text("Log chỉ lưu cục bộ tối đa 20 notification ngân hàng gần nhất và có thể xóa tại đây.",Modifier.padding(top=10.dp),fontSize=11.sp)
+        }
+    }
+}
+
+@Composable
+fun OnlineOrdersScreen(vm: PosViewModel) {
+    val st by vm.onlineState.collectAsState()
+    val message by vm.onlineMessage.collectAsState()
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) { vm.observeOnlineOrders(); while (true) { kotlinx.coroutines.delay(15_000); now = System.currentTimeMillis() } }
+    var rejecting by remember { mutableStateOf<OnlineOrder?>(null) }
+    val dayStart = Calendar.getInstance().apply { timeInMillis = now; set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis
+    val (revenue, doneCount) = OnlineOrderLogic.revenue(st.orders, dayStart, dayStart + 86_400_000L)
+    val byTime = compareBy<OnlineOrder> { it.createdAt }
+    val needAction = st.orders.filter { it.status == OnlineStatus.NEW }.sortedWith(byTime)
+    val awaiting = st.orders.filter { it.status == OnlineStatus.AWAITING_PAYMENT }.sortedWith(byTime)
+    val making = st.orders.filter { it.status == OnlineStatus.PAID || it.status == OnlineStatus.DELIVERING }.sortedWith(byTime)
+    val recent = st.orders.filter { it.status in setOf(OnlineStatus.DONE, OnlineStatus.REJECTED, OnlineStatus.EXPIRED, OnlineStatus.CANCELLED) && it.createdAt >= dayStart }.sortedWith(byTime.reversed())
+    Column(Modifier.fillMaxSize()) {
+        Header("Đơn online", back = { vm.screen.value = "TABLES" })
+        Card(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
+            Column(Modifier.padding(12.dp)) {
+                Text("Doanh thu online hôm nay (ghi khi bấm Hoàn thành)", fontSize = 12.sp)
+                Text("${money(revenue)} · $doneCount đơn", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text("Tách riêng với bill tại quán, không cộng vào bill POS.", fontSize = 11.sp)
+            }
+        }
+        if (message.isNotBlank()) Text(message, Modifier.padding(horizontal = 14.dp), color = Color(0xFFC62828), fontSize = 13.sp)
+        st.error?.let { Text(it, Modifier.padding(14.dp), color = Color(0xFFC62828)) }
+        if (!st.loaded && st.error == null) Text("Đang tải đơn online…", Modifier.padding(14.dp))
+        LazyColumn(Modifier.weight(1f).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            fun section(title: String, list: List<OnlineOrder>) {
+                if (list.isEmpty()) return
+                item(key = "h_$title") { Text("$title · ${list.size}", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp)) }
+                items(list, key = { it.id }) { o -> OnlineOrderCard(o, now, onAction = { a -> if (a == OnlineAction.REJECT) rejecting = o else vm.onlineAction(o, a) }) }
+            }
+            section("CẦN XÁC NHẬN", needAction)
+            section("CHỜ KHÁCH THANH TOÁN", awaiting)
+            section("ĐANG LÀM / ĐANG GIAO", making)
+            section("HÔM NAY ĐÃ XONG", recent)
+            if (st.loaded && st.error == null && st.orders.none { it.status in setOf("new", "awaiting_payment", "paid", "delivering") } && recent.isEmpty())
+                item { Text("Chưa có đơn online nào.", Modifier.padding(top = 16.dp)) }
+        }
+    }
+    rejecting?.let { o ->
+        AlertDialog(
+            onDismissRequest = { rejecting = null },
+            title = { Text("Từ chối đơn ${o.code}: chọn lý do (khách sẽ thấy)") },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { OnlineStatus.REJECT_REASONS.forEach { r -> OutlinedButton({ vm.onlineAction(o, OnlineAction.REJECT, r); rejecting = null }, Modifier.fillMaxWidth()) { Text(r) } } } },
+            confirmButton = {},
+            dismissButton = { TextButton({ rejecting = null }) { Text("Đóng") } }
+        )
+    }
+}
+
+@Composable
+private fun OnlineOrderCard(o: OnlineOrder, now: Long, onAction: (OnlineAction) -> Unit) {
+    val hm = SimpleDateFormat("HH:mm", Locale("vi", "VN"))
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("#${o.code}", fontWeight = FontWeight.Black, fontSize = 18.sp)
+                Spacer(Modifier.weight(1f))
+                Text(if (OnlineOrderLogic.isOverdue(o, now)) "Quá hạn thanh toán" else OnlineStatus.label(o.status), fontWeight = FontWeight.Bold, color = if (OnlineOrderLogic.isOverdue(o, now)) Color(0xFFC62828) else Color.Unspecified)
+            }
+            Text("${o.name} · ${o.phone} · ${OnlineStatus.modeLabel(o.mode)} · đặt lúc ${hm.format(Date(o.createdAt))}", fontSize = 13.sp)
+            if (o.mode == "delivery" && o.address.isNotBlank()) Text("Giao đến: ${o.address}", fontSize = 13.sp)
+            if (o.mode == "dinein" && o.table.isNotBlank()) Text("Bàn: ${o.table}", fontSize = 13.sp)
+            o.items.forEach { l -> Text("${l.qty}× ${l.name}${if (l.note.isNotBlank()) " (${l.note})" else ""}  ${money(l.price * l.qty)}", fontSize = 14.sp) }
+            if (o.note.isNotBlank()) Text("Ghi chú: ${o.note}", fontSize = 13.sp)
+            if (o.discount > 0) Text("Đã giảm ${money(o.discount)}", fontSize = 12.sp)
+            Text("Tổng: ${money(o.total)}", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            if (o.status == OnlineStatus.AWAITING_PAYMENT && o.expiresAt != null) {
+                val left = ((o.expiresAt - now) / 60_000).coerceAtLeast(0)
+                Text("Nội dung chuyển khoản: DM${o.code} · còn $left phút", fontSize = 12.sp)
+            }
+            if (o.status == OnlineStatus.REJECTED && o.rejectReason.isNotBlank()) Text("Lý do: ${o.rejectReason}", fontSize = 12.sp)
+            val buttons = OnlineOrderLogic.buttons(o, now)
+            if (buttons.isNotEmpty()) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                buttons.forEach { b ->
+                    if (b.primary) Button({ onAction(b.action) }, Modifier.weight(1f)) { Text(b.label, textAlign = TextAlign.Center) }
+                    else OutlinedButton({ onAction(b.action) }, Modifier.weight(1f)) { Text(b.label, textAlign = TextAlign.Center, fontSize = 12.sp) }
+                }
+            }
         }
     }
 }

@@ -1,7 +1,7 @@
 // Gộp doanh thu và bill của mọi kênh bán: tại quán (POS), đặt món online, GrabFood, ShopeeFood. Hàm thuần: không Firebase, không DOM.
 // Không cộng trùng: POS không đọc đơn online, và bill app food đã có trong sổ app food được lọc khỏi doanh thu tại quán bằng cách
 // chỉ lấy snapshot dashboardDaily (doanh thu tại quán, không gồm app food) cho kênh "Tại quán".
-import { OO_LABELS, ooToMillis } from "./online-orders.js?v=20261106-15";
+import { OO_LABELS, ooToMillis } from "./online-orders.js?v=20261108-1";
 
 export const CHANNELS = Object.freeze([
   { key: "STORE", label: "Tại quán" },
@@ -28,8 +28,9 @@ export const enumerateDays = (from, to) => {
 };
 
 /** Đơn online tính doanh thu: đã nhận tiền (đang làm / đang giao / hoàn thành). Đơn chờ, từ chối, hết hạn, khách huỷ thì không. */
-export const isOnlineRevenue = (o) => o?.status === "paid" || o?.status === "delivering" || o?.status === "done";
-export const onlineMs = (o) => ooToMillis(o?.paidAt) ?? ooToMillis(o?.createdAt) ?? 0;
+/** Doanh thu online ghi khi nhân viên bấm "Hoàn thành" (trên POS hoặc web), theo ngày bấm; đơn cũ thiếu doneAt dùng paidAt. */
+export const isOnlineRevenue = (o) => o?.status === "done";
+export const onlineMs = (o) => ooToMillis(o?.doneAt) ?? ooToMillis(o?.paidAt) ?? ooToMillis(o?.createdAt) ?? 0;
 export const onlineDay = (o) => dayOfMs(onlineMs(o));
 
 /** Dòng sổ app food tính doanh thu: bỏ đơn "cần xem lại" (huỷ / hoàn), vì chưa chắc đã bán được. */
@@ -94,7 +95,7 @@ export function unifiedBills({ days, storeBills = [], storeDay = "", onlineOrder
       if (!isOnlineRevenue(o) || (onlineMode !== "ALL" && o.mode !== onlineMode)) continue;
       const day = onlineDay(o);
       if (!set.has(day)) continue;
-      out.push({ id: `ONLINE_${o.id || o.code}`, channel: "ONLINE", day, at: onlineMs(o), title: `${o.code || o.id} · ${o.name || "Khách"}`, sub: `${{ delivery: "Giao tận nơi", pickup: "Mang đi", dinein: "Tại quán" }[o.mode] || o.mode || ""} · ${OO_LABELS[o.status] || o.status}`, amount: money0(o.total), tag: "Đã nhận tiền", tagKind: "", refund: false });
+      out.push({ id: `ONLINE_${o.id || o.code}`, channel: "ONLINE", day, at: onlineMs(o), title: `${o.code || o.id} · ${o.name || "Khách"}`, sub: `${{ delivery: "Giao tận nơi", pickup: "Mang đi", dinein: "Tại quán" }[o.mode] || o.mode || ""} · ${OO_LABELS[o.status] || o.status}`, amount: money0(o.total), tag: "Đã hoàn thành", tagKind: "", refund: false });
     }
   }
   for (const app of APP_KEYS) {

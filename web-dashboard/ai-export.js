@@ -69,7 +69,7 @@ Quy tắc đọc dữ liệu:
 - Doanh thu có hai nguồn: **số POS tự cộng** (snapshot, ghi tại một thời điểm, POS ghi lại tối đa ~10 phút/lần) và **từng bill**. Bill đóng SAU lúc POS ghi số tổng chưa nằm trong số tổng: đó là chênh lệch thời điểm, KHÔNG phải mất tiền. Mục "Đối chiếu doanh thu" đã tách sẵn phần này; chỉ cảnh báo lệch tiền với phần "chưa giải thích được" hoặc bill bị đánh dấu cần kiểm tra.
 - tam_tinh là tổng giá món trước giảm giá; tong là số khách trả. giam_gia = tam_tinh − tong (giảm theo chương trình khuyến mãi / thẻ thành viên áp ở máy POS).
 - **Nhiều kênh bán**: tại quán (POS), đặt món online (web riêng, KHÔNG nằm trong bill POS), GrabFood, ShopeeFood, Xanh Ngon. Doanh thu app food ở mục 2c/3b/5b là **tiền thực nhận về tài khoản** (đã trừ chiết khấu app, phí, quảng cáo ngoài đơn nếu có ghi riêng, thuế VAT/TNCN app giữ hộ); số liệu khấu trừ nằm ở mục 2b. Đơn app có trạng thái cần xem lại (chờ báo cáo hoặc huỷ/hoàn) KHÔNG tính vào doanh thu.
-- Cột "dong_tien_rong" ở mục 2 = doanh thu tại quán + app food thực nhận + đơn online đã thanh toán − chi phí. Các tháng đã chốt sổ cổ đông (mục 8) giữ số tại thời điểm chốt. Tổng doanh thu mọi kênh thực nhận nằm ở cột "tong_thuc_nhan" mục 2c.
+- Cột "dong_tien_rong" ở mục 2 = doanh thu tại quán + app food thực nhận + đơn online đã hoàn thành − chi phí. Các tháng đã chốt sổ cổ đông (mục 8) giữ số tại thời điểm chốt. Tổng doanh thu mọi kênh thực nhận nằm ở cột "tong_thuc_nhan" mục 2c.
 - Món trên app có thể đặt tên khác quán; hệ thống đã quy đổi các tên đã biết (ví dụ "Bún gà Tô lớn" = "Bún gà 50"). Nghi ngờ tên lạ thì nêu ở phần cảnh báo dữ liệu.
 - Nếu cần thêm dữ liệu để kết luận, hãy nói rõ cần gì.
 `;

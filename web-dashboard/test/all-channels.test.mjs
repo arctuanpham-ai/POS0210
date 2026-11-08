@@ -6,8 +6,9 @@ const days = ["2026-11-04", "2026-11-05"];
 const at = (d, h) => Date.parse(`${d}T${String(h).padStart(2, "0")}:00:00+07:00`);
 const storeDocs = { "2026-11-04": { revenue: 1000, paidBills: 10 }, "2026-11-05": null };
 const online = [
-  { id: "a", code: "A1", name: "An", status: "done", mode: "delivery", total: 200, paidAt: at("2026-11-04", 9) },
-  { id: "b", code: "B1", name: "Bình", status: "paid", mode: "pickup", total: 100, paidAt: at("2026-11-05", 9) },
+  { id: "a", code: "A1", name: "An", status: "done", mode: "delivery", total: 200, paidAt: at("2026-11-04", 9), doneAt: at("2026-11-04", 10) },
+  { id: "b", code: "B1", name: "Bình", status: "done", mode: "pickup", total: 100, paidAt: at("2026-11-05", 9) },
+  { id: "p", code: "P1", name: "Phúc", status: "paid", mode: "pickup", total: 777, paidAt: at("2026-11-05", 9) },
   { id: "c", code: "C1", status: "cancelled", mode: "pickup", total: 999, createdAt: at("2026-11-05", 9) },
   { id: "d", code: "D1", status: "rejected", mode: "pickup", total: 999, createdAt: at("2026-11-05", 9) },
 ];
@@ -31,6 +32,10 @@ test("gộp doanh thu mọi kênh, không tính đơn chưa trả / huỷ / cầ
   assert.equal(r.count, 10 + 2 + 1 + 1);
   assert.deepEqual(r.storeMissing, ["2026-11-05"]);
   assert.deepEqual(r.review, { count: 1, value: 50 });
+});
+test("đơn đã nhận tiền nhưng chưa Hoàn thành chưa tính doanh thu; tính theo ngày bấm Hoàn thành", () => {
+  const r = revenueByDay({ days, storeDocs, onlineOrders: [{ id: "x", status: "done", total: 50, paidAt: at("2026-11-04", 23), doneAt: at("2026-11-05", 1) }, { id: "y", status: "delivering", total: 60, paidAt: at("2026-11-04", 9) }], ledgerRows: [], channels: ["ONLINE"] });
+  assert.equal(r.totals.ONLINE.revenue, 50);
 });
 test("lọc kênh và hình thức online", () => {
   assert.equal(revenueByDay({ days, storeDocs, onlineOrders: online, ledgerRows: ledger, channels: ["GRAB", "SHOPEE"] }).total, 250);

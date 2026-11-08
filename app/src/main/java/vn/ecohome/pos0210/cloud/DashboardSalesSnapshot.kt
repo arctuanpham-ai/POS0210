@@ -41,7 +41,10 @@ data class DailySalesSnapshot(
     val items: List<DailyItemSnapshot>,
     val finalized: Boolean,
     /** Số bill theo giờ MỞ bill (0–23), để web vẽ giờ cao điểm. */
-    val hourlyBills: List<Int> = List(24) { 0 }
+    val hourlyBills: List<Int> = List(24) { 0 },
+    /** Phần doanh thu / số bill của đơn đặt món online (bàn ảo ONLINE) nằm TRONG revenue / paidBills; web trừ ra khỏi "Tại quán" và hiện thành dòng Online riêng. */
+    val onlineRevenue: Long = 0L,
+    val onlineBills: Int = 0
 ) {
     /** updatedAt do nơi ghi thêm vào; không nằm trong fingerprint. */
     fun toMap(updatedAt: Long): Map<String, Any?> = mapOf(
@@ -53,6 +56,8 @@ data class DailySalesSnapshot(
         "items" to items.map { it.toMap() },
         "finalized" to finalized,
         "hourlyBills" to hourlyBills,
+        "onlineRevenue" to onlineRevenue,
+        "onlineBills" to onlineBills,
         "schemaVersion" to 1
     )
 }
@@ -125,7 +130,8 @@ object DashboardSalesSnapshot {
         bills: List<BillEntity>,
         batches: List<OrderBatchEntity>,
         items: List<OrderItemEntity>,
-        zone: ZoneId = ZoneId.systemDefault()
+        zone: ZoneId = ZoneId.systemDefault(),
+        onlineSessionIds: Set<String> = emptySet()
     ): DailySalesSnapshot {
         dailyDocumentId(dateKey)
         val day = LocalDate.parse(dateKey)
@@ -133,6 +139,7 @@ object DashboardSalesSnapshot {
         val to = day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
         val paid = bills.filter { it.status == "PAID" && it.dataScope == "LIVE" && it.closedAt != null && it.openedAt in from until to }
         val revenue = paid.sumOf { it.total }
+        val online = paid.filter { it.sessionId in onlineSessionIds }
         // Một phiên chỉ được tính món một lần dù có nhiều bill.
         val sessionIds = paid.map { it.sessionId }.toSet()
         val batchIds = batches.filter { it.sessionId in sessionIds && it.status != "CANCELLED" }.map { it.id }.toSet()
@@ -154,7 +161,9 @@ object DashboardSalesSnapshot {
             averageBill = if (paid.isEmpty()) 0L else revenue / paid.size,
             items = rows,
             finalized = dateKey < todayKey,
-            hourlyBills = List(24) { h -> paid.count { java.time.Instant.ofEpochMilli(it.openedAt).atZone(zone).hour == h } }
+            hourlyBills = List(24) { h -> paid.count { java.time.Instant.ofEpochMilli(it.openedAt).atZone(zone).hour == h } },
+            onlineRevenue = online.sumOf { it.total },
+            onlineBills = online.size
         )
     }
 

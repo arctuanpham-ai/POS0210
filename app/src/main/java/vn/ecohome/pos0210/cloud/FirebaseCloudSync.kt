@@ -172,7 +172,7 @@ object FirebaseCloudSync {
         val dashboardOperation=java.util.UUID.randomUUID().toString()
         val liveSnapshot=DashboardSalesSnapshot.composeCurrent(tables,sessions,batches,orderItems)
         stage("DASHBOARD",60_000L){writeDashboard(root.collection("dashboard").document("current"),financialDashboard(dao,bills,payments,now)+mapOf("openTables" to open.size,"openTableNames" to tables.filter{openByTable.containsKey(it.id)}.map{it.name},"revenueToday" to paidToday.sumOf{it.total},"paidBillsToday" to paidToday.size,"provisionalOpenTotal" to liveSnapshot.provisionalOpenTotal,"liveTables" to liveSnapshot.liveTables.map{it.toMap()},"lastUpdatedAt" to now),dashboardOperation)}
-        publishDailySnapshots(fs,root,bills,batches,orderItems,now,dashboardOperation)
+        publishDailySnapshots(fs,root,bills,batches,orderItems,now,dashboardOperation,sessions.filter{it.tableId=="ONLINE"}.map{it.id}.toSet())
         publishMonthlySnapshots(fs,root,bills,now,dashboardOperation)
         publishFoodApp(fs,root,dao,bills,payments,now,dashboardOperation)
         writeMaps(fs,root.collection("tableStatus"),tables.map{t->
@@ -277,7 +277,7 @@ object FirebaseCloudSync {
         val dashboardOperation=java.util.UUID.randomUUID().toString()
         val liveSnapshot=DashboardSalesSnapshot.composeCurrent(tables,sessions,batches,items)
         stage("DASHBOARD_WRITE",60_000L){writeDashboard(root.collection("dashboard").document("current"),financialDashboard(dao,bills,dao.cloudPaymentsSnapshot(),now)+mapOf("openTables" to open.size,"openTableNames" to tables.filter{openByTable.containsKey(it.id)}.map{it.name},"revenueToday" to paidToday.sumOf{it.total},"paidBillsToday" to paidToday.size,"provisionalOpenTotal" to liveSnapshot.provisionalOpenTotal,"liveTables" to liveSnapshot.liveTables.map{it.toMap()},"lastUpdatedAt" to now),dashboardOperation)}
-        publishDailySnapshots(fs,root,bills,batches,items,now,dashboardOperation)
+        publishDailySnapshots(fs,root,bills,batches,items,now,dashboardOperation,sessions.filter{it.tableId=="ONLINE"}.map{it.id}.toSet())
         publishMonthlySnapshots(fs,root,bills,now,dashboardOperation)
         publishFoodApp(fs,root,dao,bills,dao.cloudPaymentsSnapshot(),now,dashboardOperation)
         // Cùng nội dung với syncNow (có currentTotal, serviceStatus) để hai đường ghi không đè lẫn nhau.
@@ -594,7 +594,7 @@ object FirebaseCloudSync {
     @Volatile private var dailyAckVerified=false
     @Volatile private var monthlyAckVerified=false
 
-    private suspend fun publishDailySnapshots(fs:FirebaseFirestore,root:com.google.firebase.firestore.DocumentReference,bills:List<vn.ecohome.pos0210.data.BillEntity>,batches:List<vn.ecohome.pos0210.data.OrderBatchEntity>,items:List<vn.ecohome.pos0210.data.OrderItemEntity>,now:Long,operation:String){
+    private suspend fun publishDailySnapshots(fs:FirebaseFirestore,root:com.google.firebase.firestore.DocumentReference,bills:List<vn.ecohome.pos0210.data.BillEntity>,batches:List<vn.ecohome.pos0210.data.OrderBatchEntity>,items:List<vn.ecohome.pos0210.data.OrderItemEntity>,now:Long,operation:String,onlineSessionIds:Set<String> = emptySet()){
         try{
             val prefs=fs.app.applicationContext.getSharedPreferences("pos0210_cloud_ack_v1",Context.MODE_PRIVATE)
             val project=fs.app.options.projectId.orEmpty()
@@ -606,7 +606,7 @@ object FirebaseCloudSync {
             val trustAck=dailyAckVerified
             val gateOpen=!trustAck||now-prefs.getLong(gateKey,0L)>=DASHBOARD_DAILY_MIN_INTERVAL_MS
             val changed=DashboardSalesSnapshot.lastDateKeys(todayKey,14).mapNotNull{key->
-                val snapshot=DashboardSalesSnapshot.composeDaily(key,todayKey,bills,batches,items,zone)
+                val snapshot=DashboardSalesSnapshot.composeDaily(key,todayKey,bills,batches,items,zone,onlineSessionIds)
                 val fingerprint=DashboardSalesSnapshot.fingerprint(snapshot)
                 if(trustAck&&prefs.getString("$project/${root.path}/dashboardDaily/$key",null)==fingerprint)null else Triple(key,snapshot,fingerprint)
             }

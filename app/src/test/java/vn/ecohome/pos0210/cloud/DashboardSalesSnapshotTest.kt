@@ -89,6 +89,18 @@ class DashboardSalesSnapshotTest {
         assertTrue(!daily.finalized)
     }
 
+    @Test fun dailySplitsOnlineBillsInsideTotals() {
+        val day = at(2026, 10, 13, 12, 0)
+        val bills = listOf(bill("a", "s1", 100_000L, day), bill("b", "sOn", 80_100L, day))
+        val daily = DashboardSalesSnapshot.composeDaily("2026-10-13", "2026-10-13", bills, emptyList(), emptyList(), zone, setOf("sOn"))
+        assertEquals(180_100L, daily.revenue)
+        assertEquals(2, daily.paidBills)
+        assertEquals(80_100L, daily.onlineRevenue)
+        assertEquals(1, daily.onlineBills)
+        val none = DashboardSalesSnapshot.composeDaily("2026-10-13", "2026-10-13", bills, emptyList(), emptyList(), zone)
+        assertEquals(0L, none.onlineRevenue)
+    }
+
     @Test fun dailyItemsAreGroupedPaidOnlyAndSortedByRevenue() {
         val day = at(2026, 10, 13, 12, 0)
         val bills = listOf(bill("a", "s1", 90_000L, day), bill("b", "s2", 20_000L, day))

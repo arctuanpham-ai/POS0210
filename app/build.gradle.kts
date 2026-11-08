@@ -12,8 +12,8 @@ android {
         applicationId = "vn.ecohome.pos0210"
         minSdk = 26
         targetSdk = 35
-        versionCode = 208
-        versionName = "1.0.0-alpha176-kitchen-print-toggle"
+        versionCode = 209
+        versionName = "1.0.0-alpha177-online-split"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {

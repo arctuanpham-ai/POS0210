@@ -1,7 +1,7 @@
 // Gộp doanh thu và bill của mọi kênh bán: tại quán (POS), đặt món online, GrabFood, ShopeeFood. Hàm thuần: không Firebase, không DOM.
-// Không cộng trùng: POS không đọc đơn online, và bill app food đã có trong sổ app food được lọc khỏi doanh thu tại quán bằng cách
+// Không cộng trùng: bill đơn online do POS ghi (bản 209 tách onlineRevenue/onlineBills trong doanh thu ngày) và bill app food đã có trong sổ app food được lọc khỏi doanh thu tại quán bằng cách
 // chỉ lấy snapshot dashboardDaily (doanh thu tại quán, không gồm app food) cho kênh "Tại quán".
-import { OO_LABELS, ooToMillis } from "./online-orders.js?v=20261108-1";
+import { OO_LABELS, ooToMillis } from "./online-orders.js?v=20261108-2";
 
 export const CHANNELS = Object.freeze([
   { key: "STORE", label: "Tại quán" },
@@ -54,12 +54,18 @@ export function revenueByDay({ days, storeDocs = {}, onlineOrders = [], ledgerRo
     const d = storeDocs?.[day];
     if (!d || !want.has("STORE")) continue;
     const r = rows.get(day), revenue = Number(d.revenue || 0), count = Number(d.paidBills || 0);
-    r.STORE = { revenue, count }; totals.STORE.revenue += revenue; totals.STORE.count += count;
+    // POS từ bản 209 ghi onlineRevenue/onlineBills: phần đơn online nằm TRONG revenue/paidBills của ngày, tách ra thành kênh Online riêng, không cộng trùng.
+    // Ngày cũ chưa có hai trường này: giữ nguyên, không cộng thêm đơn online vì POS bản trước đã ghi chúng vào doanh thu tại quán.
+    const hasSplit = typeof d.onlineRevenue === "number";
+    const onRev = hasSplit ? Math.min(revenue, Math.max(0, d.onlineRevenue)) : 0, onCnt = hasSplit ? Math.min(count, Math.max(0, Number(d.onlineBills || 0))) : 0;
+    r.STORE = { revenue: revenue - onRev, count: count - onCnt }; totals.STORE.revenue += revenue - onRev; totals.STORE.count += count - onCnt;
+    if (hasSplit && want.has("ONLINE") && onlineMode === "ALL") { r.ONLINE = { revenue: onRev, count: onCnt }; totals.ONLINE.revenue += onRev; totals.ONLINE.count += onCnt; }
   }
+  // Ngày chưa có doc doanh thu của POS: lấy đơn online hoàn thành trực tiếp (ngày có doc thì online đã nằm trong doc, không cộng lại).
   for (const o of onlineOrders || []) {
     if (!isOnlineRevenue(o) || (onlineMode !== "ALL" && o.mode !== onlineMode)) continue;
     const day = onlineDay(o);
-    if (set.has(day)) add(day, "ONLINE", Number(o.total || 0));
+    if (set.has(day) && !storeDocs?.[day]) add(day, "ONLINE", Number(o.total || 0));
   }
   for (const r of ledgerRows || []) {
     if (!set.has(r?.saleDay) || !APP_KEYS.includes(r.app)) continue;
@@ -87,6 +93,7 @@ export function unifiedBills({ days, storeBills = [], storeDay = "", onlineOrder
   if (!appOnly && (channel === "ALL" || channel === "STORE")) {
     for (const b of storeBills || []) {
       if (!set.has(storeDay)) break;
+      if (String(b.reference || "").startsWith("ON-")) continue; // bill POS của đơn online: đã hiện ở kênh Đặt món online
       out.push({ id: `STORE_${b.id}`, ref: b.id, channel: "STORE", day: storeDay, at: money0(b.closedAt), title: `${b.tableName} · #${b.billNo}`, sub: b.paymentMissing ? "Chưa rõ" : String(b.method || ""), amount: money0(b.total), tag: b.refund ? "Đã hoàn" : b.flow === "prepaid" ? "Trả trước" : "Trả sau", tagKind: b.refund ? "warn" : b.flow === "prepaid" ? "" : "postpaid", refund: Boolean(b.refund) });
     }
   }

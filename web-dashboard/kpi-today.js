@@ -1,5 +1,5 @@
 // KPI và dự đoán doanh thu "hôm nay" trên tab Bàn. Hàm thuần: không Firebase, không DOM.
-import { BOSS_POOLS } from "./kpi-boss-lines.js?v=20261108-1";
+import { BOSS_POOLS } from "./kpi-boss-lines.js?v=20261108-2";
 // Căn cứ: doanh thu đã chốt + tạm tính bàn đang mở ("khi thu đủ"), nhịp bill theo khung giờ và doanh thu cùng thứ tuần trước.
 
 const OPEN_H = 7, CLOSE_H = 21; // giờ mở/đóng mặc định khi chưa có phân bố giờ của tuần trước

@@ -24,12 +24,12 @@ test("dayOfMs theo giờ Việt Nam", () => assert.equal(dayOfMs(Date.parse("202
 test("gộp doanh thu mọi kênh, không tính đơn chưa trả / huỷ / cần xem lại", () => {
   const r = revenueByDay({ days, storeDocs, onlineOrders: online, ledgerRows: ledger });
   assert.equal(r.totals.STORE.revenue, 1000);
-  assert.equal(r.totals.ONLINE.revenue, 300);
+  assert.equal(r.totals.ONLINE.revenue, 100); // ngày 04 có doc POS (bản cũ, không tách): đơn A đã nằm trong doanh thu tại quán, không cộng lại
   assert.equal(r.totals.GRAB.revenue, 200);
   assert.equal(r.totals.SHOPEE.revenue, 50);
   assert.deepEqual(r.unpaid, { count: 1, value: 50 });
-  assert.equal(r.total, 1550);
-  assert.equal(r.count, 10 + 2 + 1 + 1);
+  assert.equal(r.total, 1350);
+  assert.equal(r.count, 10 + 1 + 1 + 1);
   assert.deepEqual(r.storeMissing, ["2026-11-05"]);
   assert.deepEqual(r.review, { count: 1, value: 50 });
 });
@@ -37,9 +37,23 @@ test("đơn đã nhận tiền nhưng chưa Hoàn thành chưa tính doanh thu; 
   const r = revenueByDay({ days, storeDocs, onlineOrders: [{ id: "x", status: "done", total: 50, paidAt: at("2026-11-04", 23), doneAt: at("2026-11-05", 1) }, { id: "y", status: "delivering", total: 60, paidAt: at("2026-11-04", 9) }], ledgerRows: [], channels: ["ONLINE"] });
   assert.equal(r.totals.ONLINE.revenue, 50);
 });
+test("POS bản 209 tách onlineRevenue: Tại quán trừ phần online, Online lấy từ doc, tổng không đổi", () => {
+  const docs = { "2026-11-04": { revenue: 1000, paidBills: 10, onlineRevenue: 300, onlineBills: 2 }, "2026-11-05": null };
+  const r = revenueByDay({ days, storeDocs: docs, onlineOrders: online, ledgerRows: [] });
+  assert.equal(r.totals.STORE.revenue, 700);
+  assert.equal(r.totals.STORE.count, 8);
+  assert.equal(r.totals.ONLINE.revenue, 300 + 100); // 300 từ doc ngày 04; 100 đơn B ngày 05 chưa có doc
+  assert.equal(r.total, 1100);
+  const none = revenueByDay({ days, storeDocs: docs, onlineOrders: online, ledgerRows: [], channels: ["STORE"] });
+  assert.equal(none.totals.STORE.revenue, 700);
+});
+test("bill POS tham chiếu ON- không lặp trong danh sách bill gộp", () => {
+  const u = unifiedBills({ days, storeBills: [{ id: "z", tableName: "ONLINE", billNo: 1, closedAt: at("2026-11-05", 11), total: 80, reference: "ON-B1" }], storeDay: "2026-11-05", onlineOrders: [], ledgerRows: [] });
+  assert.equal(u.rows.length, 0);
+});
 test("lọc kênh và hình thức online", () => {
   assert.equal(revenueByDay({ days, storeDocs, onlineOrders: online, ledgerRows: ledger, channels: ["GRAB", "SHOPEE"] }).total, 250);
-  const o = revenueByDay({ days, storeDocs, onlineOrders: online, ledgerRows: ledger, channels: ["ONLINE"], onlineMode: "delivery" });
+  const o = revenueByDay({ days, storeDocs: {}, onlineOrders: online, ledgerRows: ledger, channels: ["ONLINE"], onlineMode: "delivery" });
   assert.equal(o.total, 200);
   assert.deepEqual(o.storeMissing, []);
 });

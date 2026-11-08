@@ -1,8 +1,8 @@
 // Thống kê món bán ra gộp mọi kênh: tại quán (snapshot POS), đặt món online, GrabFood, ShopeeFood, Xanh Ngon. Hàm thuần.
 // Số phần = sản lượng thực làm: combo được tách thành món lẻ (như thống kê tại quán).
-import { expandComboName } from "./demo-receipts.js?v=20261108-2";
-import { outputRows } from "./item-output.js?v=20261108-2";
-import { isOnlineRevenue, onlineDay } from "./all-channels.js?v=20261108-2";
+import { expandComboName } from "./demo-receipts.js?v=20261108-3";
+import { outputRows } from "./item-output.js?v=20261108-3";
+import { isOnlineRevenue, onlineDay } from "./all-channels.js?v=20261108-3";
 
 export const ITEM_CHANNELS = Object.freeze(["STORE", "ONLINE", "GRAB", "SHOPEE", "XANHNGON"]);
 /** "Mang đi" = mọi kênh không phải khách ngồi tại quán: đặt món online và các app giao đồ ăn. */
@@ -44,6 +44,7 @@ export function itemsByChannel({ days, storeDocs = {}, onlineOrders = [], ledger
   for (const day of days) if (storeDocs?.[day]) orders.STORE += Number(storeDocs[day].paidBills || 0);
   for (const o of onlineOrders || []) {
     if (!isOnlineRevenue(o) || !set.has(onlineDay(o)) || (onlineMode !== "ALL" && o.mode !== onlineMode)) continue;
+    if (storeDocs?.[onlineDay(o)]) continue; // ngày có doc POS: món đơn online đã nằm trong món tại quán (bill bàn ONLINE), không đếm lại
     if (Array.isArray(o.items) && o.items.length) { orders.ONLINE += 1; addLines("ONLINE", o.items); } else noItems.ONLINE += 1;
   }
   for (const r of ledgerRows || []) {

@@ -8,7 +8,7 @@ const storeDocs = { "2026-11-04": { paidBills: 3, items: [{ name: "Cơm gà chi�
 const online = [
   { id: "a", status: "done", mode: "pickup", paidAt: at("2026-11-05", 9), items: [{ name: "Bạc xỉu", qty: 1, price: 30000 }, { name: "cơm gà  chiên mắm", qty: 2, price: 59000 }] },
   { id: "b", status: "cancelled", paidAt: at("2026-11-05", 9), items: [{ name: "Bạc xỉu", qty: 9 }] },
-  { id: "c", status: "done", mode: "delivery", paidAt: at("2026-11-04", 9), items: [{ name: "COMBO A [1 × Bạc xỉu + 1 × Trà đào]", qty: 2 }] },
+  { id: "c", status: "done", mode: "delivery", paidAt: at("2026-11-05", 10), items: [{ name: "COMBO A [1 × Bạc xỉu + 1 × Trà đào]", qty: 2 }] },
 ];
 const ledger = [
   { app: "GRAB", code: "G1", saleDay: "2026-11-04", status: "OK", items: [{ name: "Cơm gà chiên mắm", qty: 1 }] },
@@ -45,4 +45,11 @@ test("tên món trên app được quy đổi về tên POS", async () => {
   assert.equal(it.qty.STORE, 2);
   assert.equal(it.qty.SHOPEE, 1);
   assert.equal(r.items.has("bún gà tô lớn"), false);
+});
+
+test("ngày đã có doc POS: món đơn online không đếm lại ở kênh Online (đã nằm trong món tại quán)", () => {
+  const docs = { "2026-11-04": { paidBills: 1, items: [{ name: "Bạc xỉu", qty: 2 }] } };
+  const r = itemsByChannel({ days: ["2026-11-04"], storeDocs: docs, onlineOrders: [{ id: "z", status: "done", paidAt: Date.parse("2026-11-04T09:00:00+07:00"), items: [{ name: "Bạc xỉu", qty: 2 }] }], ledgerRows: [] });
+  const bac = r.items.get("bạc xỉu");
+  assert.deepEqual([bac.qty.STORE, bac.qty.ONLINE], [2, 0]);
 });

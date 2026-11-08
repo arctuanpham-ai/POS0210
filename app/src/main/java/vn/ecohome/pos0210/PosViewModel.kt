@@ -1477,14 +1477,14 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
   }
  }
  private val onlineBillMutex=kotlinx.coroutines.sync.Mutex()
- /** Đơn online đã thu tiền -> bill thật trong POS (vào báo cáo). Quét lại mỗi khi danh sách đơn đổi; mỗi mã chỉ ghi một lần. */
+ /** Đơn online ĐÃ HOÀN THÀNH -> bill thật trong POS (vào báo cáo). Quét lại mỗi khi danh sách đơn đổi; mỗi mã chỉ ghi một lần. */
  fun watchOnlineBilling(){
   viewModelScope.launch(Dispatchers.IO){
    kotlinx.coroutines.flow.combine(vn.ecohome.pos0210.cloud.OnlineOrderService.orders,currentEmployee){l,e->l to e}.collect{(list,me0)->
     val me=me0?:return@collect
     onlineBillMutex.withLock{
      for(o in list){
-      if(o.status !in listOf("paid","delivering","done"))continue
+      if(o.status!="done")continue // chỉ ghi doanh thu khi bấm Hoàn thành
       if(o.items.isEmpty())continue
       val lines=LinkedHashMap<String,Int>();val notes=HashMap<String,String>()
       for(l in o.items){val id=if(l.id.startsWith("c_"))"combo:"+l.id.removePrefix("c_") else l.id;if(id.isBlank())continue;lines[id]=(lines[id]?:0)+l.qty;if(l.note.isNotBlank())notes[id]=l.note}

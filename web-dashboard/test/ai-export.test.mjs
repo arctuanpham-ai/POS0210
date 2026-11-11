@@ -50,3 +50,15 @@ test("gói AI có đủ các kênh online và app food, món theo kênh", () => 
   assert.match(text, /SHOPEE,05116-1,100000,77832,22168,,CHUA_VE/);
   assert.match(text, /Kênh bán/);
 });
+test("bill hoàn đánh dấu DA_HOAN, tóm tắt tách bill hiệu lực và dòng hoàn, online tính trong POS", () => {
+  const b = (billNo, total, refund = null) => ({ billNo, openedAt: now - 3600000, closedAt: now - 1800000, tableName: "Bàn 1", subtotal: total, total, method: "TRANSFER", flow: "prepaid", refund });
+  const text = buildAiPack({
+    now, scope: scopeRange("month", { now }), lastClose: null,
+    bills: [b("A1", 100), b("ON-X1", 80), b("ON-X1", 80, { amount: 80, status: "DONE" })],
+  });
+  assert.match(text, /180đ · 2 bill còn hiệu lực \(đã loại 1 bill hoàn toàn bộ, tổng 80đ; bảng bill mục 5 có 3 dòng = 2 \+ 1\)/);
+  assert.match(text, /đơn online ghi vào POS: 1 bill, 80đ/);
+  assert.match(text, /A1,.*,HIEU_LUC,,/);
+  assert.match(text, /ON-X1,.*,DA_HOAN,80,/);
+  assert.match(text, /POS ĐÃ GỒM đơn online/);
+});

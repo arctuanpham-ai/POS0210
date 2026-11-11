@@ -1,7 +1,7 @@
 // Gộp doanh thu và bill của mọi kênh bán: tại quán (POS), đặt món online, GrabFood, ShopeeFood. Hàm thuần: không Firebase, không DOM.
 // Không cộng trùng: bill đơn online do POS ghi (bản 209 tách onlineRevenue/onlineBills trong doanh thu ngày) và bill app food đã có trong sổ app food được lọc khỏi doanh thu tại quán bằng cách
 // chỉ lấy snapshot dashboardDaily (doanh thu tại quán, không gồm app food) cho kênh "Tại quán".
-import { OO_LABELS, ooToMillis } from "./online-orders.js?v=20261108-3";
+import { OO_LABELS, ooToMillis } from "./online-orders.js?v=20261108-4";
 
 export const CHANNELS = Object.freeze([
   { key: "STORE", label: "Tại quán" },

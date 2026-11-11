@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { bookingDate, closedMonthEditProblem, shiftNote, withShiftNote } from "../month-close.js";
+import { bookingDate, closedFundMonths, closedMonthEditProblem, shiftNote, withShiftNote } from "../month-close.js";
 
 const at = (y, m, d, h = 10) => new Date(y, m - 1, d, h).getTime();
 const now = at(2026, 10, 16, 9);
@@ -28,4 +28,15 @@ test("phiếu thuộc tháng đã chốt: chặn sửa tiền / đổi ngày / h
   assert.match(closedMonthEditProblem(r, { ...r, purchaseDate: at(2026, 10, 1) }, ["2026-09"]), /đã chốt/);
   assert.match(closedMonthEditProblem(r, { ...r, status: "CANCELLED" }, ["2026-09"]), /đã chốt/);
   assert.equal(closedMonthEditProblem(r, { ...r, total: 120 }, ["2026-08"]), "");
+});
+
+test("đối soát quỹ lưu giữa tháng chưa phải chốt; lưu sau khi hết tháng mới là chốt", () => {
+  const rows = [
+    { monthKey: "2026-10", savedAt: at(2026, 10, 30, 14) }, // lưu trước khi hết tháng: nháp
+    { monthKey: "2026-09", savedAt: at(2026, 10, 2, 9) },   // lưu sau khi hết tháng: đã chốt
+    { id: "2026-11", savedAt: at(2026, 11, 20) },           // tháng đang chạy: không tính
+    { monthKey: "2026-08" },                                 // không có savedAt: không tính
+  ];
+  assert.deepEqual(closedFundMonths(rows, at(2026, 11, 11)), ["2026-09"]);
+  assert.deepEqual(closedFundMonths(null, now), []);
 });

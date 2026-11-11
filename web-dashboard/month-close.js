@@ -37,3 +37,20 @@ export const closedMonthEditProblem = (original, next, closedKeys) => {
   const changed = !next || cancelled || Number(next.total) !== Number(original.total) || monthKey(next.purchaseDate) !== key;
   return changed ? `Phiếu thuộc tháng ${monthLabel(key)} đã chốt chia cổ đông: không sửa số tiền, đổi ngày hay huỷ được. Thiếu thì nhập phiếu bổ sung (sẽ tính vào tháng chưa chốt); thừa thì chốt lại tháng đó trên app.` : "";
 };
+
+/**
+ * Các tháng đã chốt từ đối soát quỹ (fundClosings): chỉ tính khi tháng đã kết thúc VÀ đối soát được lưu sau khi hết tháng đó.
+ * Đối soát lưu giữa tháng (khi tháng chưa hết) chỉ là bản nháp, chưa phải chốt chia cổ đông, nên vẫn nhập bù được vào tháng đó.
+ */
+export const closedFundMonths = (rows, now = Date.now()) => {
+  const cur = monthKey(now);
+  const out = [];
+  for (const r of Array.isArray(rows) ? rows : []) {
+    const key = String(r?.monthKey || r?.id || "");
+    if (!/^\d{4}-\d{2}$/.test(key) || key >= cur) continue;
+    const [y, m] = key.split("-").map(Number);
+    const monthEnd = new Date(y, m, 1, 0, 0, 0, 0).getTime(); // 00:00 ngày 1 tháng sau
+    if (Number(r?.savedAt || 0) >= monthEnd) out.push(key);
+  }
+  return out;
+};

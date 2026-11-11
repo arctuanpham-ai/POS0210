@@ -38,14 +38,14 @@ export const csv = (header, rows) => [header.join(","), ...rows.map((r) => r.map
 const block = (title, note, header, rows) => `### ${title}\n${note ? `${note}\n` : ""}\n\`\`\`csv\n${csv(header, rows)}\n\`\`\`\n`;
 
 /** Lời nhắc mặc định: người dùng chỉ cần gửi file này cho AI. */
-export function aiPrompt({ shopName, nowText, scopeLabel, lastCloseText }) {
+export function aiPrompt({ shopName, nowText, scopeLabel, lastCloseText, draftClose = null }) {
   return `## HƯỚNG DẪN CHO AI (đọc trước)
 
 Bạn là cố vấn vận hành và chiến lược cho **${shopName}**, một quán cà phê nhỏ ở Việt Nam do 2 cổ đông góp vốn chia đôi lợi nhuận. Dưới đây là dữ liệu xuất từ hệ thống bán hàng POS0210.
 
 - Thời điểm xuất dữ liệu: **${nowText}** (giờ Việt Nam). Coi đây là "hiện tại".
 - Phạm vi dữ liệu: **${scopeLabel}**.
-- Lần chốt sổ chia tiền cổ đông gần nhất: **${lastCloseText}**.
+- Lần chốt sổ chia tiền cổ đông gần nhất: **${lastCloseText}**.${draftClose ? `\n- Bản đối soát quỹ LƯU NHÁP (chưa phải chốt sổ, chưa chia cổ đông): tháng ${draftClose.monthKey}, lưu lúc ${stamp(draftClose.savedAt)}${Number.isFinite(draftClose.distributable) ? `, có thể chia theo bản nháp ${draftClose.distributable}đ` : ""}. Số này có thể đã cũ vì sau đó còn bổ sung phiếu; đừng coi là số chốt.` : ""}
 
 Hãy phân tích và trả lời bằng tiếng Việt, ngắn gọn, có số liệu cụ thể, theo thứ tự:
 
@@ -94,10 +94,10 @@ export function buildAiPack(input) {
   const {
     now = Date.now(), shopName = "Quán 0210", scope, lastClose = null,
     months = [], daily = [], items = [], bills = [], receipts = [], otherCosts = [], movements = [],
-    closings = [], payback = null, menu = [], partners = [], notes = [], reconcile = null, foodDays = [], foodNote = "", channelMonths = [], channelDays = [], channelItems = [], channelOrders = [], channelNote = "",
+    closings = [], draftClose = null, payback = null, menu = [], partners = [], notes = [], reconcile = null, foodDays = [], foodNote = "", channelMonths = [], channelDays = [], channelItems = [], channelOrders = [], channelNote = "",
   } = input;
   const nowText = `${stamp(now)} (${WEEKDAYS[new Date(now).getDay()]})`;
-  const lastCloseText = lastClose ? `tháng ${lastClose.monthKey}${lastClose.savedAt ? `, lưu lúc ${stamp(lastClose.savedAt)}` : ""}${Number.isFinite(lastClose.distributable) ? `, có thể chia ${lastClose.distributable}đ` : ""}` : "chưa chốt tháng nào";
+  const lastCloseText = lastClose ? `tháng ${lastClose.monthKey}${lastClose.savedAt ? `, lưu lúc ${stamp(lastClose.savedAt)}` : ""}${Number.isFinite(lastClose.distributable) ? `, có thể chia ${lastClose.distributable}đ` : ""}` : "chưa chốt tháng nào (chưa có tháng nào được chốt chia cổ đông)";
   const liveBills = bills.filter((b) => !b.refund);
   const refundedBills = bills.filter((b) => b.refund);
   const billRevenue = liveBills.reduce((t, b) => t + Number(b.total || 0), 0);
@@ -110,7 +110,7 @@ export function buildAiPack(input) {
   const spend = approved.reduce((t, r) => t + Number(r.total || 0), 0) + otherCosts.reduce((t, c) => t + Number(c.amount || 0), 0);
   const parts = [
     `# Dữ liệu ${shopName} cho AI phân tích\n\nXuất lúc ${nowText} · phạm vi: ${scope.label} (${stamp(scope.from)} → ${stamp(scope.to)}) · nguồn: POS0210 web quản lý.\n`,
-    aiPrompt({ shopName, nowText, scopeLabel: `${scope.label} (${dayKey(scope.from)} → ${dayKey(scope.to)})`, lastCloseText }),
+    aiPrompt({ shopName, nowText, scopeLabel: `${scope.label} (${dayKey(scope.from)} → ${dayKey(scope.to)})`, lastCloseText, draftClose }),
     DICTIONARY,
     reconcile ? `## 0. ĐỐI CHIẾU DOANH THU ${reconcile.monthKey} (số POS ↔ từng bill)\n\n- Số POS cộng: ${reconcile.snapRevenue ?? "chưa có"}đ · ${reconcile.snapBills ?? ""} bill, ghi lúc ${stamp(reconcile.snapAt)}\n- Cộng từng bill trên cloud: ${reconcile.cloudRevenue}đ · ${reconcile.cloudBills} bill\n- Chênh (bill − POS): ${reconcile.diff ?? ""}đ · ${reconcile.diffBills ?? ""} bill\n- Trong đó do bill đóng sau lúc POS ghi số tổng (bình thường): ${reconcile.explained}đ · ${reconcile.explainedBills} bill\n- **Chưa giải thích được: ${reconcile.unexplained ?? ""}đ · ${reconcile.unexplainedBills ?? ""} bill**\n${reconcile.suspects.length ? `\n\`\`\`csv\n${csv(["so_bill", "tong", "loai", "ly_do"], reconcile.suspects.map((x) => [x.billNo, x.total, x.kind, x.reason]))}\n\`\`\`\n(loai: late = đóng sau lúc POS ghi số; warn = cần kiểm tra; excluded = không tính; info = ghi chú)\n` : ""}` : "",
     `## 1. TÓM TẮT PHẠM VI\n\n- Doanh thu (snapshot ngày): ${daily.length ? `${dayRevenue}đ · ${dayBills} bill · ${daily.length} ngày có dữ liệu` : "không có snapshot ngày"}\n- Doanh thu theo bill đọc được: ${bills.length ? `${billRevenue}đ · ${liveBills.length} bill còn hiệu lực (đã loại ${refundedBills.length} bill hoàn toàn bộ, tổng ${refundedTotal}đ; bảng bill mục 5 có ${bills.length} dòng = ${liveBills.length} + ${refundedBills.length}). Trong đó đơn online ghi vào POS: ${onlineBillRows.length} bill, ${onlineBillTotal}đ (mã ON-…)` : "không đọc bill"}\n- Chi phí đã duyệt (phiếu chi + thu chi khác): ${spend}đ · ${approved.length} phiếu duyệt, ${receipts.length - approved.length} phiếu chưa duyệt\n${notes.map((n) => `- ${n}`).join("\n")}\n`,
@@ -135,8 +135,8 @@ export function buildAiPack(input) {
       receipts.slice().sort((a, b) => a.at - b.at).map((r) => [stamp(r.at), r.code, r.kind, r.payer, r.fund, r.review, r.reimb, r.total, r.content])),
     block("7a. Chi phí nhập ở Thu chi khác / máy POS", "", ["ngay", "loai", "nguoi_chi", "so_tien", "ghi_chu"], otherCosts.slice().sort((a, b) => a.at - b.at).map((c) => [stamp(c.at), c.category, c.payer, c.amount, [c.supplierName, c.note].filter(Boolean).join(" · ")])),
     block("7b. Dòng tiền khác (không phải chi phí)", "PAYER_REIMBURSEMENT = thủ quỹ hoàn tiền cho người ứng (đã nằm trong phiếu chi, đừng cộng thêm vào chi phí).", ["ngay", "loai", "doi_tuong", "so_tien", "ghi_chu"], movements.slice().sort((a, b) => a.at - b.at).map((m) => [stamp(m.at), m.type, m.who, m.amount, m.note])),
-    block("8. Đối soát quỹ & chia cổ đông đã lưu", partners.length ? `Cổ đông: ${partners.map((p) => `${p.name} ${p.percent}%`).join(", ")}.` : "", ["thang", "doanh_thu", "chi_van_hanh", "dau_tu", "dong_tien_rong", "quy_phai_co", "thuc_te", "chenh_lech", "co_the_chia", "luu_luc"],
-      closings.slice().sort((a, b) => String(a.monthKey).localeCompare(String(b.monthKey))).map((c) => [c.monthKey, c.revenue, c.operating, c.investment, c.net, c.expected, c.actual, c.diff, c.distributable, stamp(c.savedAt)])),
+    block("8. Đối soát quỹ & chia cổ đông đã lưu", `${partners.length ? "" : ""}chot = DA_CHOT khi tháng đã chốt thật (lưu sau khi hết tháng hoặc đã chốt chia cổ đông); NHAP = bản đối soát lưu nháp trong tháng, chưa chốt, số có thể đã cũ. ` + (partners.length ? `Cổ đông: ${partners.map((p) => `${p.name} ${p.percent}%`).join(", ")}.` : ""), ["thang", "doanh_thu", "chi_van_hanh", "dau_tu", "dong_tien_rong", "quy_phai_co", "thuc_te", "chenh_lech", "co_the_chia", "luu_luc", "chot"],
+      closings.slice().sort((a, b) => String(a.monthKey).localeCompare(String(b.monthKey))).map((c) => [c.monthKey, c.revenue, c.operating, c.investment, c.net, c.expected, c.actual, c.diff, c.distributable, stamp(c.savedAt), c.closed ? "DA_CHOT" : "NHAP"])),
     payback ? `### 9. Vốn & hoàn vốn\n\n- Vốn đầu tư ban đầu: ${payback.set ? `${payback.initial}đ` : "chưa nhập"}\n- Đã thu hồi (luỹ kế dòng tiền ròng): ${payback.recovered}đ\n- Còn phải thu hồi: ${payback.set ? `${payback.remaining}đ` : ""}\n- Tiến độ: ${payback.set ? `${payback.percent.toFixed(1)}%` : ""}\n` : "",
     menu.length ? block("10. Menu & giá vốn", "gia_von theo công thức và giá nhập gần nhất; trống = chưa đủ dữ liệu.", ["mon", "nhom", "gia_ban", "gia_von", "ti_le_gia_von"], menu.map((m) => [m.name, m.category, m.price, m.cost, m.cost && m.price ? (m.cost / m.price).toFixed(3) : null])) : "",
   ];

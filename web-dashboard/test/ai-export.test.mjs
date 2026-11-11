@@ -62,3 +62,13 @@ test("bill hoàn đánh dấu DA_HOAN, tóm tắt tách bill hiệu lực và d�
   assert.match(text, /ON-X1,.*,DA_HOAN,80,/);
   assert.match(text, /POS ĐÃ GỒM đơn online/);
 });
+test("bản đối soát lưu nháp không bị gọi là chốt sổ", () => {
+  const text = buildAiPack({
+    now, scope: scopeRange("month", { now }), lastClose: null,
+    draftClose: { monthKey: "2026-10", savedAt: now - 86400000, distributable: 500 },
+    closings: [{ monthKey: "2026-10", revenue: 1, savedAt: now - 86400000, closed: false }],
+  });
+  assert.match(text, /chưa chốt tháng nào/);
+  assert.match(text, /LƯU NHÁP \(chưa phải chốt sổ/);
+  assert.match(text, /2026-10,1,.*,NHAP/);
+});

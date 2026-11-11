@@ -26,3 +26,9 @@ test("thu hồi đủ thì còn lại 0, 100%", () => {
   const p = paybackStatus({ initial: 50, closings: [{ monthKey: "2026-10", net: 60 }] });
   assert.equal(p.remaining, 0); assert.equal(p.percent, 100); assert.equal(p.monthsLeft, 0);
 });
+test("tháng nháp (draft) tính theo số mới, không coi là đã lưu, vẫn vào trung bình", () => {
+  const p = paybackStatus({ initial: 1000, closings: [{ monthKey: "2026-09", net: 100 }, { monthKey: "2026-10", net: 300, draft: true }], current: { monthKey: "2026-11", net: 50 } });
+  assert.equal(p.recovered, 450);
+  assert.equal(p.months.find((m) => m.monthKey === "2026-10").saved, false);
+  assert.equal(p.avg, 200);
+});

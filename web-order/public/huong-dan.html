@@ -129,6 +129,13 @@
     .help .ic { display: grid; place-items: center; width: 11cqw; height: 11cqw; border-radius: 50%; color: #fff; flex: none; }
     .help .ic svg { width: 6cqw; height: 6cqw; }
     .help b { display: block; font-size: 3.8cqw; }
+    .help.alt { top: 47cqw; gap: 5cqw; }
+    .help.alt a { padding: 5cqw 4.4cqw; }
+    .help.alt .ic { width: 15cqw; height: 15cqw; }
+    .help.alt .ic svg { width: 8cqw; height: 8cqw; }
+    .help.alt b { font-size: 4.4cqw; }
+    .help.alt .big { font-size: 5.6cqw; font-weight: 800; color: var(--ink); margin: .6cqw 0; letter-spacing: .01em; }
+    .help.alt span { font-size: 3.1cqw; }
     .help span { display: block; font-size: 2.9cqw; color: #4d4a42; line-height: 1.35; }
 
     /* xuất ảnh: mỗi thẻ rộng đúng 1080px */
@@ -243,6 +250,19 @@
         <div class="s-foot"><b>0210</b><span>datmon0210.web.app</span></div>
       </section>
 
+
+      <!-- Cách khác -->
+      <section class="slide" aria-label="Đặt món cách khác">
+        <div class="s-head">
+          <div class="s-step"><i>+</i> CÁCH KHÁC</div>
+          <h2 class="s-title">Ngoài ra, bạn có thể đặt món qua điện thoại hoặc nhắn tin qua fanpage</h2>
+        </div>
+        <div class="help alt">
+          <a href="tel:0968563539"><span class="ic" style="background:#2f6b3f"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.600 10.800a15.100 15.100 0 0 0 6.600 6.600l2.200-2.200a1 1 0 0 1 1-.25c1.100.37 2.300.57 3.600.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C10.600 21 3 13.400 3 4a1 1 0 0 1 1-1h3.500a1 1 0 0 1 1 1c0 1.300.2 2.500.57 3.600a1 1 0 0 1-.25 1z"/></svg></span><p style="margin:0"><b>Gọi điện đặt món</b><span class="big">0968 563 539</span><span>Quán nghe máy và ghi đơn cho bạn</span></p></a>
+          <a href="https://m.me/0210coffee" target="_blank" rel="noopener"><span class="ic" style="background:#0866ff"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.5 2 2 6.2 2 11.5c0 2.9 1.3 5.4 3.4 7.1V22l3.1-1.7c1 .3 2.4.5 3.5.5 5.5 0 10-4.2 10-9.3S17.500 2 12 2zm1 12.500-2.500-2.700L5.700 14.500l5.300-5.600 2.600 2.700 4.700-2.700z"/></svg></span><p style="margin:0"><b>Nhắn tin qua fanpage</b><span class="big">m.me/0210coffee</span><span>Nhắn món bạn muốn, quán sẽ phản hồi</span></p></a>
+        </div>
+        <div class="s-foot"><b>0210</b><span>datmon0210.web.app</span></div>
+      </section>
     </div>
     <p class="hint">Vuốt ngang để xem các bước tiếp theo →</p>
 
@@ -272,7 +292,7 @@
   <script>
     (function () {
       var ul = document.getElementById("downloads"); if (!ul) return;
-      var names = ["Bìa", "Bước 1 · Chọn món", "Bước 2 · Nhập thông tin", "Bước 2 · Gửi đơn", "Bước 3 · Quán xác nhận", "Bước 4 · Thanh toán", "Bước 5 · Nhận món", "Cần hỗ trợ"];
+      var names = ["Bìa", "Bước 1 · Chọn món", "Bước 2 · Nhập thông tin", "Bước 2 · Gửi đơn", "Bước 3 · Quán xác nhận", "Bước 4 · Thanh toán", "Bước 5 · Nhận món", "Cần hỗ trợ", "Đặt món cách khác"];
       ul.innerHTML = names.map(function (t, i) { return '<li><a href="assets/guide/huong-dan-' + i + '.png" target="_blank" rel="noopener">' + t + '</a></li>'; }).join("");
     })();
   </script>

@@ -490,6 +490,7 @@ function persistCart() { store.set(KEYS.cart, state.cart); }
 function renderCartBar() {
   const lines = currentLines();
   const bar = $("#cartbar");
+  $("#chat-fab").href = MESSENGER_URL;
   const closed = state.shop.orderingEnabled === false;
   bar.hidden = !lines.length || !$("#screen-track").hidden;
   $("#cart-count").textContent = `${linesCount(lines)} món`;
@@ -1029,6 +1030,7 @@ $("#track-body").addEventListener("click", async (event) => {
   }
   const chatLink = event.target.closest("[data-chat]");
   if (chatLink) { try { navigator.clipboard?.writeText(`Mình cần hỗ trợ đơn #${chatLink.dataset.chat}`).catch(() => {}); } catch { /* không sao chép được thì khách tự gõ mã */ } return; }
+  if (event.target.closest("#chat-fab")) { try { navigator.clipboard?.writeText(`Mình cần hỗ trợ${state.code ? ` đơn #${state.code}` : ""}`).catch(() => {}); } catch { /* khách tự gõ */ } return; }
   const sw = event.target.closest("[data-switch]");
   if (sw) { watchOrder(sw.dataset.switch); return; }
   const act = event.target.closest("[data-act2]")?.dataset.act2;

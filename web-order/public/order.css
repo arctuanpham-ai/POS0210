@@ -471,3 +471,7 @@ body.has-cart .legal-foot { margin-bottom: 96px; }
 @media (max-width: 370px) { .shop-addr { font-size: 11px; } }
 
 .chat-link { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; margin: 12px 0 4px; padding: 10px 16px; border-radius: 12px; border: 1.5px solid currentColor; font-weight: 600; text-decoration: none; color: inherit; }
+
+.chat-fab { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 25; display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 16px; border-radius: 999px; background: #0a7cff; color: #fff; font-weight: 600; font-size: 14px; text-decoration: none; box-shadow: 0 4px 14px #00000040; }
+body.has-cart .chat-fab { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+@media (max-width: 380px) { .chat-fab span { display: none; } .chat-fab { padding: 0 13px; } }

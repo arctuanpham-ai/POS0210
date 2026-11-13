@@ -1167,4 +1167,22 @@ syncClock();
 loadShop();
 loadMenu();
 restoreOrder();
+/* Gợi ý lần đầu: làm mờ nền, nổi cụm 3 nút hỗ trợ; chạm vào nền (hoặc bấm một nút) để tắt, chỉ hiện một lần */
+(() => {
+  const KEY = "oo-fab-tip";
+  const seen = () => { try { return localStorage.getItem(KEY) === "1" || sessionStorage.getItem(KEY) === "1"; } catch { return false; } };
+  const remember = () => { try { localStorage.setItem(KEY, "1"); } catch { try { sessionStorage.setItem(KEY, "1"); } catch { /* không lưu được thì thôi */ } } };
+  if (seen()) return;
+  const overlay = $("#fab-overlay"), tip = $("#fab-tip"), stack = $("#fab-stack");
+  if (!overlay || !tip || !stack) return;
+  const close = () => { document.body.classList.remove("fab-spot"); overlay.hidden = true; tip.hidden = true; remember(); document.removeEventListener("keydown", onKey); };
+  const onKey = (e) => { if (e.key === "Escape") close(); };
+  setTimeout(() => {
+    if (seen()) return;
+    document.body.classList.add("fab-spot"); overlay.hidden = false; tip.hidden = false;
+    overlay.addEventListener("click", close);
+    stack.addEventListener("click", (e) => { if (e.target.closest("a")) close(); }, true);
+    document.addEventListener("keydown", onKey);
+  }, 900);
+})();
 window.__orderReady = true;

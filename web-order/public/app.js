@@ -867,13 +867,13 @@ function renderTrack() {
   const text = STATUS_TEXT[view.status] || STATUS_TEXT.new;
   let extra = "";
   if (view.status === STATUS.AWAITING_PAYMENT) {
-    extra = `${view.isDelivery ? '<p class="muted small">🛵 Phí giao hàng bạn trả trực tiếp cho tài xế khi nhận hàng, không nằm trong số tiền chuyển khoản bên dưới.</p>' : ""}<p class="countdown-line">Thời gian còn lại <b id="countdown">${countdownText(view.remainingMs ?? 0)}</b></p>${paymentHtml(order)}<p class="pay-warning">⚠️ Lưu ý: sau khi quán nhận tiền, đơn được chuyển cho bếp nên <b>không sửa hoặc huỷ vì đổi ý</b> được. Nếu quán không thực hiện được đơn, giao thiếu/sai món hoặc món có lỗi, quán sẽ <b>hoàn tiền</b> (xem <a href="chinh-sach#hoan-tien" target="_blank" rel="noopener">chính sách đổi trả, hoàn tiền</a>).</p>`;
+    extra = `${view.isDelivery ? '<p class="muted small">🛵 Phí giao hàng bạn trả trực tiếp cho tài xế khi nhận hàng, không nằm trong số tiền chuyển khoản bên dưới.</p>' : ""}<p class="countdown-line">Thời gian còn lại <b id="countdown">${countdownText(view.remainingMs ?? 0)}</b></p>${paymentHtml(order)}<p class="pay-warning">⚠️ Lưu ý: quán làm món ngay khi xác nhận đơn, nên <b>muốn sửa hoặc huỷ đơn bạn cần liên hệ quán và được quán đồng ý</b>. Nếu quán không thực hiện được đơn, giao thiếu/sai món hoặc món có lỗi, quán sẽ <b>hoàn tiền</b> (xem <a href="chinh-sach#hoan-tien" target="_blank" rel="noopener">chính sách đổi trả, hoàn tiền</a>).</p>`;
   }
   if (view.status === STATUS.REJECTED) extra = `<p class="reject-reason"><b>Lý do:</b> ${esc(order.rejectReason || "Quán chưa nhận được đơn lúc này.")}</p>`;
   const spinner = view.status === STATUS.NEW ? '<div class="spinner" aria-hidden="true"></div>' : "";
   const phone = state.shop.phone ? `<p class="muted small">Cần hỗ trợ? Gọi quán ${phoneLinksHtml(state.shop.phone, esc)}</p>` : "";
-  const canEdit = view.status === STATUS.NEW || view.status === STATUS.AWAITING_PAYMENT;
-  const editRow = canEdit ? `<div class="cancel-row"><button type="button" class="secondary" data-act2="edit">✏️ Sửa đơn</button><button type="button" class="danger-link" data-act2="cancel">Huỷ đơn</button></div><p class="muted small">Bạn chỉ sửa hoặc huỷ đơn được khi chưa thanh toán.</p>` : "";
+  const canEdit = view.status === STATUS.NEW;
+  const editRow = canEdit ? `<div class="cancel-row"><button type="button" class="secondary" data-act2="edit">✏️ Sửa đơn</button><button type="button" class="danger-link" data-act2="cancel">Huỷ đơn</button></div><p class="muted small">Bạn tự sửa hoặc huỷ được khi quán chưa xác nhận đơn.</p>` : "";
   const actions = editRow + (view.status === STATUS.EXPIRED
     ? `<button type="button" class="primary" data-act2="reorder">Đặt lại đơn này</button>`
     : view.isFinal ? `<button type="button" class="primary" data-act2="new">Đặt đơn mới</button>` : "");

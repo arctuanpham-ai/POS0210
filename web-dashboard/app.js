@@ -38,7 +38,7 @@ import { buildCancelRequest, buildCancelledReceipt, buildEditedReceipt, pendingC
 import { shouldMarkSnapshotStale } from "./dashboard-snapshot.js?v=20261113-2";
 import { FUNNEL, buildStats, dayKeyVN, dayLabel, dwellSummary, funnelSteps, pct } from "./stats-view.js?v=20261113-2";
 import { buildSourceReport, engagementReport } from "./source-report.js?v=20261113-2";
-import { SNAPSHOT_DOC, THUMB_DOC_PREFIX, TOP_REFRESH_MS, buildSnapshot, remoteSalesDocs, topSellerIds, usableSnapshot } from "./menu-snapshot.js?v=20261113-2";
+import { SNAPSHOT_DOC, THUMB_DOC_PREFIX, TOP_REFRESH_MS, buildSnapshot, remoteSalesDocs, topSellerIds, usableSnapshot } from "./menu-snapshot.js?v=20261113-3";
 import { approvedKeys, vagueKey, vagueMaterials } from "./vague-materials.js?v=20261113-2";
 import { normalizeMaterial, materialMatches, materialRank, filterMaterialOptions, searchMaterials } from "./material-search.js?v=20261113-2";
 import { currentFlow, flowLabel, frozenRefunds, historyRows, summarizeRefunds } from "./payment-flow-view.js?v=20261113-2";
@@ -4056,7 +4056,7 @@ async function rebuildOnlineSnapshot({ withThumbs = false, withTop = false } = {
   }
   const menuRows = rows(itemSnap);
   const hidden = Array.isArray(hiddenDoc.data()?.hidden) ? hiddenDoc.data().hidden : [];
-  // Món bán chạy: tính từ đơn online đã hoàn thành + đơn GrabFood/ShopeeFood (không dùng doanh số tại quán). Chỉ đọc khi bấm nút, hoặc khi bản cũ quá 12 giờ / chưa có.
+  // Món bán chạy: tính từ đơn online đã hoàn thành + đơn GrabFood/ShopeeFood (không dùng doanh số tại quán). Chỉ đọc khi bấm nút, hoặc khi bản cũ quá 7 ngày / chưa có.
   let top = null;
   if (withTop || !usableSnapshot(existing) || Date.now() - Number(existing.topAt || 0) > TOP_REFRESH_MS) {
     const [ledgerSnap, onlineSnap] = await Promise.all([getDocs(collection(db, ...root, "foodAppLedger")), getDocs(collection(db, ...root, "online_orders"))]);

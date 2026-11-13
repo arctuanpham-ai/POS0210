@@ -29,9 +29,9 @@ test("planRebuild: chưa có bản chụp hoặc --force thì dựng đủ", () 
   assert.equal(planRebuild({ existing: existing(), hash: existing().hash, shopThumbsVer: 5, now: NOW, force: true }).write, true);
 });
 
-test("planRebuild: thống kê bán chạy chỉ đọc lại sau 12 giờ", () => {
-  const e = { ...existing(), topAt: NOW - 13 * 3_600_000 };
+test("planRebuild: thống kê bán chạy chỉ đọc lại sau 7 ngày", () => {
+  const e = { ...existing(), topAt: NOW - 8 * 86_400_000 };
   const p = planRebuild({ existing: e, hash: e.hash, shopThumbsVer: 5, now: NOW });
   assert.deepEqual({ write: p.write, top: p.top, thumbs: p.thumbs }, { write: true, top: true, thumbs: false });
-  assert.equal(planRebuild({ existing: { ...e, topAt: NOW - 3_600_000 }, hash: e.hash, shopThumbsVer: 5, now: NOW }).write, false);
+  assert.equal(planRebuild({ existing: { ...e, topAt: NOW - 3 * 86_400_000 }, hash: e.hash, shopThumbsVer: 5, now: NOW }).write, false);
 });

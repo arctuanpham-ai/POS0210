@@ -51,7 +51,7 @@ export const menuContent = ({ items, cats, combos, hidden }) => ({
 export const menuHash = (content) => fnv(stableJson(content));
 
 const nameKey = (v) => String(v || "").toLocaleLowerCase("vi").normalize("NFC").replace(/\s+/g, " ").trim();
-export const TOP_REFRESH_MS = 12 * 3_600_000;
+export const TOP_REFRESH_MS = 7 * 24 * 3_600_000;
 
 /**
  * Món bán chạy: cộng số phần bán của MỌI ngày có snapshot (dashboardDaily: items [{name, qty}]), tính cả phần nằm trong combo

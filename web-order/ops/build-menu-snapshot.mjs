@@ -34,7 +34,7 @@ export function encodeValue(v) {
 }
 export const encodeFields = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, encodeValue(v)]));
 
-/** Có cần dựng lại không; có cần đọc lại ảnh / thống kê bán hàng không? (thống kê chỉ đọc lại sau 12 giờ để tiết kiệm lượt đọc) */
+/** Có cần dựng lại không; có cần đọc lại ảnh / thống kê bán hàng không? (thống kê chỉ đọc lại sau 7 ngày để tiết kiệm lượt đọc) */
 export function planRebuild({ existing, hash, shopThumbsVer, now, force = false }) {
   if (force || !usableSnapshot(existing)) return { write: true, thumbs: true, top: true, why: force ? "bắt buộc" : "chưa có bản chụp / sai phiên bản" };
   const thumbsStale = Number(existing.thumbsVer || 0) < Number(shopThumbsVer || 0) || !Number(existing.thumbsParts) || now - Number(existing.thumbsBuiltAt || 0) > THUMB_MAX_AGE_MS;

@@ -469,3 +469,5 @@ body.has-cart .legal-foot { margin-bottom: 96px; }
 .shop-addr svg { flex: none; color: #8a6a4c; }
 .open-status { margin-top: 6px; }
 @media (max-width: 370px) { .shop-addr { font-size: 11px; } }
+
+.chat-link { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; margin: 12px 0 4px; padding: 10px 16px; border-radius: 12px; border: 1.5px solid currentColor; font-weight: 600; text-decoration: none; color: inherit; }

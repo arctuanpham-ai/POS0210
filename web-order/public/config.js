@@ -35,5 +35,7 @@ export const DEFAULT_SHOP = {
 
 // Kênh ntfy báo đơn mới về điện thoại chủ quán và nhân viên (cài app ntfy, đăng ký đúng tên kênh này). Để trống = tắt.
 // Tên kênh dài và ngẫu nhiên đóng vai mật khẩu: ai biết tên mới đọc / gửi được. Đổi tên là hết quyền của các máy cũ.
+/** Chat hỗ trợ qua Messenger của fanpage quán. */
+export const MESSENGER_URL = "https://m.me/0210coffee";
 export const NOTIFY_TOPIC = "don0210-cd13b817a7538883";
 export const NOTIFY_CLICK = "https://pos0210-17ce4.web.app/#donline";

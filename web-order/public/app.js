@@ -15,7 +15,7 @@ import {
   where,
   writeBatch,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { APP_CHECK_SITE_KEY, DEFAULT_SHOP, NOTIFY_CLICK, NOTIFY_TOPIC, STORE_ID, STORE_OWNER_UID, firebaseConfig } from "./config.js";
+import { APP_CHECK_SITE_KEY, DEFAULT_SHOP, MESSENGER_URL, NOTIFY_CLICK, NOTIFY_TOPIC, STORE_ID, STORE_OWNER_UID, firebaseConfig } from "./config.js";
 import {
   FINAL_STATUSES, LIMITS, comboTools, pricingFor, MODE_LABELS, STATUS, STATUS_TEXT, buildOrderDoc, cartFromOrder, cartLines, changeQty, countdownText, isOrderable,
   limitKeyForPhone, limitKeyForUid, linesCount, linesTotal, makeOrderCode, menuSections, money, orderView, pendingBase, progressSteps, rememberCode,
@@ -871,7 +871,8 @@ function renderTrack() {
   }
   if (view.status === STATUS.REJECTED) extra = `<p class="reject-reason"><b>Lý do:</b> ${esc(order.rejectReason || "Quán chưa nhận được đơn lúc này.")}</p>`;
   const spinner = view.status === STATUS.NEW ? '<div class="spinner" aria-hidden="true"></div>' : "";
-  const phone = state.shop.phone ? `<p class="muted small">Cần hỗ trợ? Gọi quán ${phoneLinksHtml(state.shop.phone, esc)}</p>` : "";
+  const chat = `<a class="chat-link" href="${MESSENGER_URL}" target="_blank" rel="noopener" data-chat="${esc(order.code)}">💬 Chat với quán qua Messenger</a><p class="muted small">Muốn sửa hoặc huỷ đơn, hỏi thêm về đơn? Bấm nút trên, dán nội dung đã sao chép (có sẵn mã đơn) rồi gửi cho quán.</p>`;
+  const phone = chat + (state.shop.phone ? `<p class="muted small">Cần hỗ trợ? Gọi quán ${phoneLinksHtml(state.shop.phone, esc)}</p>` : "");
   const canEdit = view.status === STATUS.NEW;
   const editRow = canEdit ? `<div class="cancel-row"><button type="button" class="secondary" data-act2="edit">✏️ Sửa đơn</button><button type="button" class="danger-link" data-act2="cancel">Huỷ đơn</button></div><p class="muted small">Bạn tự sửa hoặc huỷ được khi quán chưa xác nhận đơn.</p>` : "";
   const actions = editRow + (view.status === STATUS.EXPIRED
@@ -1026,6 +1027,8 @@ $("#track-body").addEventListener("click", async (event) => {
     setTimeout(() => { copy.textContent = label; }, 1800);
     return;
   }
+  const chatLink = event.target.closest("[data-chat]");
+  if (chatLink) { try { navigator.clipboard?.writeText(`Mình cần hỗ trợ đơn #${chatLink.dataset.chat}`).catch(() => {}); } catch { /* không sao chép được thì khách tự gõ mã */ } return; }
   const sw = event.target.closest("[data-switch]");
   if (sw) { watchOrder(sw.dataset.switch); return; }
   const act = event.target.closest("[data-act2]")?.dataset.act2;

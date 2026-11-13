@@ -484,3 +484,9 @@ body.has-cart .call-fab { bottom: calc(148px + env(safe-area-inset-bottom, 0px))
 .track-banner.pay-now { background: #e8590c; color: #fff; border-color: #b8430a; animation: banner-pulse 1s ease-in-out infinite; }
 @keyframes banner-pulse { 0%, 100% { box-shadow: 0 0 0 0 #e8590c99, 0 4px 14px #00000026; transform: scale(1); } 50% { box-shadow: 0 0 0 9px #e8590c00, 0 4px 14px #00000026; transform: scale(1.015); } }
 @media (prefers-reduced-motion: reduce) { .track-banner, .track-banner.pay-now { animation: none; } }
+
+.chat-fab { max-width: min(78vw, 320px); line-height: 1.25; text-align: left; padding-top: 8px; padding-bottom: 8px; }
+.chat-fab span { display: inline; }
+@media (max-width: 380px) { .chat-fab span { display: inline; } .chat-fab { padding: 8px 14px; } }
+.call-fab { bottom: calc(86px + env(safe-area-inset-bottom, 0px)); }
+body.has-cart .call-fab { bottom: calc(158px + env(safe-area-inset-bottom, 0px)); }

@@ -687,6 +687,10 @@ const chatUrl = (code) => (code ? `${MESSENGER_URL}?ref=${encodeURIComponent(`do
 const openChat = (anchor) => {
   const code = state.code || "";
   anchor.href = chatUrl(code);
+  const label = anchor.querySelector("span") || anchor;
+  const old = label.textContent;
+  label.textContent = "Đang mở Messenger…";
+  setTimeout(() => { label.textContent = old; }, 5000);
   try { navigator.clipboard?.writeText(code ? `Mình cần hỗ trợ đơn #${code}` : "Mình cần hỗ trợ").catch(() => {}); } catch { /* không sao chép được thì bỏ qua */ }
 };
 
@@ -880,7 +884,7 @@ function renderTrack() {
   }
   if (view.status === STATUS.REJECTED) extra = `<p class="reject-reason"><b>Lý do:</b> ${esc(order.rejectReason || "Quán chưa nhận được đơn lúc này.")}</p>`;
   const spinner = view.status === STATUS.NEW ? '<div class="spinner" aria-hidden="true"></div>' : "";
-  const chat = `<a class="chat-link" href="${esc(chatUrl(order.code))}" target="_blank" rel="noopener" data-chat="${esc(order.code)}">💬 Chat với fanpage qua Messenger</a>`;
+  const chat = `<a class="chat-link" href="${esc(chatUrl(order.code))}" target="_blank" rel="noopener" data-chat="${esc(order.code)}">💬 Cần hỗ trợ thêm về đơn #${esc(order.code)} · chat ngay</a>`;
   const phone = chat + (state.shop.phone ? `<p class="muted small">Cần hỗ trợ? Gọi quán ${phoneLinksHtml(state.shop.phone, esc)}</p>` : "");
   const canEdit = view.status === STATUS.NEW;
   const editRow = canEdit ? `<div class="cancel-row"><button type="button" class="secondary" data-act2="edit">✏️ Sửa đơn</button><button type="button" class="danger-link" data-act2="cancel">Huỷ đơn</button></div><p class="muted small">Bạn tự sửa hoặc huỷ được khi quán chưa xác nhận đơn.</p>` : "";
@@ -894,6 +898,8 @@ function renderTrack() {
 /** Banner "đơn đang theo dõi" chỉ cho đơn CHƯA kết thúc. Đơn đã xong/từ chối/hết hạn chuyển sang Lịch sử. */
 function updateBanner(name = !$("#screen-menu").hidden ? "menu" : "") {
   const active = state.code && !(state.order && orderView(state.order, serverNow()).isFinal);
+  const fabText = $("#chat-fab span");
+  if (fabText) fabText.textContent = active && state.code ? `Cần hỗ trợ thêm về đơn #${state.code} · chat ngay` : "Cần hỗ trợ? Chat ngay";
   const banner = $("#track-banner");
   banner.hidden = !(name === "menu" && active);
   if (!banner.hidden) {

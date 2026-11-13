@@ -2,7 +2,7 @@
 // Chạy trong GitHub Actions sau khi gcloud đã đăng nhập (dùng token quản trị chỉ để XOÁ các tài liệu thử vừa tạo).
 import { execSync } from "node:child_process";
 import { firebaseConfig, STORE_OWNER_UID, STORE_ID } from "../public/config.js";
-import { buildOrderDoc, normalizePhone, makeOrderCode, limitKeyForUid, limitKeyForPhone } from "../public/order-core.js";
+import { buildOrderDoc, pricingFor, normalizePhone, makeOrderCode, limitKeyForUid, limitKeyForPhone } from "../public/order-core.js";
 
 const project = firebaseConfig.projectId;
 const db = `projects/${project}/databases/(default)/documents`;
@@ -66,6 +66,10 @@ for (const m of (menu.documents || []).filter((d) => d !== plain && d.fields.act
       push("8 dòng, mỗi dòng số lượng 5 (nhánh đơn dài)", { multi: longList.slice(0, 8).map((x) => ({ ...x, qty: 5 })) });
     }
     if (plainsS.length >= 3) push("3 dòng, mỗi dòng số lượng 20", { multi: plainsS.slice(0, 3).map((x) => ({ ...x, qty: 20 })) });
+    // Đơn như khách thật: giao tận nơi, giảm 10% đặt online, ghi chú, nguồn Messenger; thử từng combo đang bán.
+    const MSG = { source: "messenger", medium: "chat", campaign: "tinnhan_datmon", at: Date.now(), first: { source: "messenger", campaign: "tinnhan_datmon", at: Date.now() } };
+    for (const cb of combosS) push("như khách thật: giao tận nơi, giảm 10%, nguồn Messenger", { ...cb, pct: 10, mode: "delivery", address: "210 đào nhuận kênh dương lê chân", note: "Cafe nhiều sữa", src: MSG });
+    if (combosS.length >= 2) push("như khách thật: 2 combo, giảm 10%", { multi: combosS.slice(0, 2), pct: 10, mode: "delivery", address: "210 đào nhuận kênh dương lê chân", note: "Cafe nhiều sữa", src: MSG });
     push("nguồn có khoá lạ (phải bị chặn)", { src: { ...SRC, hack: "x" }, expectDeny: true });
     push("nguồn quá dài 41 ký tự (phải bị chặn)", { src: { ...SRC, campaign: "a".repeat(41) }, expectDeny: true });
     push("nguồn thiếu source (phải bị chặn)", { src: { medium: "paid_social" }, expectDeny: true });
@@ -78,7 +82,7 @@ for (const [i, c] of cases.entries()) {
   const code = makeOrderCode();
   const lines = (c.multi || [c]).map((x) => ({ id: x.id, name: x.name, qty: x.qty || 1, note: "", price: x.price }));
   const phoneVal = c.rawPhone ? normalizePhone(c.rawPhone) : phone;
-  const order = buildOrderDoc({ code, uid, value: { name: "KIEM THU TU DONG", phone: phoneVal, mode: c.mode || "pickup", address: c.address || "", table: "", note: c.note || "" }, lines, src: c.src || null });
+  const order = buildOrderDoc({ code, uid, value: { name: "KIEM THU TU DONG", phone: phoneVal, mode: c.mode || "pickup", address: c.address || "", table: "", note: c.note || "" }, lines, pricing: c.pct ? pricingFor(lines, { rules: [] }, new Date(), { onlinePercent: c.pct }) : undefined, src: c.src || null });
   const { createdAt, ...rest } = order;
   const keyU = limitKeyForUid(uid), keyP = limitKeyForPhone(phoneVal);
   const body = {

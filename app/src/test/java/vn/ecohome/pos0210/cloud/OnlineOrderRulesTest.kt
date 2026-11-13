@@ -15,7 +15,7 @@ class OnlineOrderRulesTest {
         val t = OnlineOrderRules.transition(order("new"), "accept", 1_000_000L, "Lan")
         assertEquals("awaiting_payment", t.patch["status"])
         assertEquals("DMAB12CD", t.patch["transferContent"])
-        assertEquals(1_000_000L + 600_000L, t.patch["expiresAt"])
+        assertEquals(1_000_000L + 1_800_000L, t.patch["expiresAt"])
         assertEquals("Lan", t.patch["handledBy"])
         assertFalse(t.releasesLimit)
     }

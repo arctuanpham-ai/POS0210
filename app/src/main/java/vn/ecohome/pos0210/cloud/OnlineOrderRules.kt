@@ -14,7 +14,7 @@ data class OnlineOrder(
 object OnlineOrderRules {
     const val NEW = "new"; const val REJECTED = "rejected"; const val AWAITING = "awaiting_payment"; const val EXPIRED = "expired"
     const val PAID = "paid"; const val DELIVERING = "delivering"; const val DONE = "done"; const val CANCELLED = "cancelled"
-    const val PAY_MINUTES = 10
+    const val PAY_MINUTES = 30
     const val SWEEP_GRACE_MS = 3 * 60_000L
     val ACTIVE_STATUSES = listOf(NEW, AWAITING, PAID, DELIVERING)
     val REJECT_REASONS = listOf("Hết món", "Quán sắp đóng cửa", "Ngoài khu vực giao hàng", "Quán đang quá tải, xin lỗi bạn")

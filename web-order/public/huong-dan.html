@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Hướng dẫn đặt món online · 0210</title>
+  <meta name="description" content="Đặt món online tại 0210 trong 5 bước: chọn món, nhập thông tin, chờ quán xác nhận, thanh toán, nhận món." />
+  <meta name="theme-color" content="#1e1e1e" />
+  <link rel="icon" href="assets/icon.png" type="image/png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700;800&display=swap" media="print" onload="this.media='all'" />
+  <style>
+    :root { color-scheme: light; --bg: #f7f3ea; --card: #fffdfa; --line: #e0d2bb; --ink: #1e1e1e; --muted: #6b6f63; --accent: #6b4f3a; --accent-2: #836149; --soft: #fff3e3; --ok: #2f6b3f; --danger: #a33125; font-family: Montserrat, Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); line-height: 1.45; }
+    a { color: var(--accent); }
+    .page { max-width: 760px; margin: 0 auto; padding: 14px max(16px, env(safe-area-inset-left, 0px)) 40px max(16px, env(safe-area-inset-right, 0px)); }
+    .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .top img { height: 30px; width: auto; }
+    .top a { font-weight: 700; font-size: 14px; text-decoration: none; }
+    h1 { margin: 14px 0 4px; font-size: 24px; line-height: 1.2; text-wrap: balance; }
+    .lead { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
+    .rail { display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 4px 2px 14px; margin: 0 -16px; padding-left: 16px; padding-right: 16px; scrollbar-width: thin; }
+    .rail > .slide { flex: none; width: min(86vw, 420px); scroll-snap-align: center; }
+    .hint { margin: 0 0 18px; font-size: 13px; color: var(--muted); }
+    .cta { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 22px; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 0 20px; border-radius: 14px; font-weight: 800; font-size: 15px; text-decoration: none; border: 1px solid var(--accent-2); }
+    .btn.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
+    .btn.ghost { background: #fff8ee; color: var(--accent); }
+    .faq { border: 1px solid var(--line); border-radius: 16px; background: var(--card); padding: 4px 16px 12px; }
+    .faq h2 { margin: 12px 0 2px; font-size: 16px; }
+    .faq p { margin: 0 0 6px; font-size: 14px; color: #3d3a34; }
+    .foot { margin-top: 22px; font-size: 12px; color: var(--muted); }
+    .foot details { margin-top: 8px; }
+    .foot summary { cursor: pointer; font-weight: 700; color: var(--accent); }
+    .foot ul { margin: 8px 0 0; padding-left: 18px; }
+
+    /* ===== Thẻ hướng dẫn: kích thước theo bề rộng thẻ (cqw), vẽ lại sắc nét ở mọi độ rộng và xuất ảnh 1080×1350 ===== */
+    .slide { container-type: inline-size; position: relative; aspect-ratio: 4 / 5; overflow: hidden; border-radius: 4cqw; border: 1px solid var(--line); background: var(--bg); color: var(--ink); isolation: isolate; }
+    .slide::before { content: ""; position: absolute; inset: 0; z-index: -1; background: radial-gradient(120cqw 70cqw at 100% 0%, #efe2cc 0%, transparent 60%), radial-gradient(90cqw 60cqw at 0% 100%, #f1e6d3 0%, transparent 60%); }
+    .s-head { position: absolute; left: 7cqw; right: 7cqw; top: 6.5cqw; display: grid; gap: 1.6cqw; }
+    .s-step { display: flex; align-items: center; gap: 2.4cqw; font-weight: 800; font-size: 3.1cqw; letter-spacing: .14em; color: var(--accent); }
+    .s-step i { display: grid; place-items: center; width: 8cqw; height: 8cqw; border-radius: 50%; background: var(--ink); color: #fff; font-style: normal; font-size: 4.6cqw; letter-spacing: 0; }
+    .s-title { margin: 0; font-size: 6.8cqw; line-height: 1.12; font-weight: 800; text-wrap: balance; }
+    .s-sub { margin: 0; font-size: 3.3cqw; line-height: 1.38; color: #4d4a42; max-width: 80cqw; }
+    .s-foot { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-between; align-items: center; padding: 0 7cqw; height: 9cqw; background: var(--ink); color: #f3e9d9; font-size: 2.9cqw; font-weight: 700; letter-spacing: .04em; z-index: 5; }
+    .s-foot b { color: #fff; font-weight: 800; }
+    .note { position: absolute; left: 7cqw; right: 7cqw; bottom: 12.5cqw; z-index: 4; display: flex; gap: 2.8cqw; align-items: flex-start; padding: 2.8cqw 3.6cqw; border-radius: 3cqw; background: #fffaf1; border: .35cqw solid var(--accent-2); box-shadow: 0 1.6cqw 3.6cqw rgba(60, 40, 20, .16); }
+    .note svg { flex: none; width: 5.6cqw; height: 5.6cqw; color: var(--accent); margin-top: .4cqw; }
+    .note p { margin: 0; font-size: 3.2cqw; line-height: 1.36; color: #2c2a26; }
+    .note b { color: var(--accent); }
+
+    /* điện thoại (cắt ở đáy thẻ) */
+    .phone { position: absolute; left: 50%; transform: translateX(-50%); top: 40cqw; width: 62cqw; height: 61cqw; border-radius: 8cqw; border: 1.5cqw solid #1e1e1e; background: var(--bg); overflow: hidden; box-shadow: 0 3cqw 7cqw rgba(60, 40, 20, .22); }
+    .phone::before { content: ""; position: absolute; left: 50%; top: 1.3cqw; transform: translateX(-50%); width: 14cqw; height: 2.2cqw; border-radius: 2cqw; background: #1e1e1e; z-index: 3; }
+    .ph { padding: 5.4cqw 3.2cqw 0; font-size: 2.5cqw; line-height: 1.3; display: grid; gap: 1.8cqw; }
+    .ph-bar { display: flex; align-items: center; gap: 1.6cqw; }
+    .ph-bar img { height: 4.2cqw; width: auto; }
+    .ph-bar span { margin-left: auto; font-size: 2.1cqw; color: var(--muted); }
+    .ph-chips { display: flex; gap: 1.2cqw; overflow: hidden; }
+    .ph-chips b { flex: none; padding: .9cqw 2cqw; border: .25cqw solid #d1bea8; border-radius: 99cqw; background: #fffaf3; font-size: 2cqw; color: #6c5849; }
+    .ph-chips b.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+    .dish { display: grid; grid-template-columns: 9cqw 1fr auto; gap: 2cqw; align-items: center; padding: 1.8cqw; border: .25cqw solid var(--line); border-radius: 2.4cqw; background: var(--card); }
+    .dish .im { width: 9cqw; height: 9cqw; border-radius: 1.8cqw; background: linear-gradient(135deg, #ead8c7, #d9bfa3); }
+    .dish h4 { margin: 0; font-size: 2.5cqw; line-height: 1.2; }
+    .sk { display: block; height: 1.5cqw; margin-top: 1.1cqw; border-radius: 1cqw; background: #e8dcc7; }
+    .sk.w1 { width: 42%; } .sk.w2 { width: 66%; } .sk.w3 { width: 30%; } .sk.w4 { width: 85%; }
+    .add { padding: 1.2cqw 2.6cqw; border: .3cqw solid var(--accent-2); border-radius: 2cqw; background: #fff8ee; color: var(--accent); font-weight: 800; font-size: 2.3cqw; }
+    .stp { display: inline-flex; align-items: center; gap: 1cqw; font-weight: 800; font-size: 2.4cqw; }
+    .stp i { display: grid; place-items: center; width: 4.6cqw; height: 4.6cqw; border: .3cqw solid var(--accent-2); border-radius: 50%; background: #fff8ee; color: var(--accent); font-style: normal; font-size: 3cqw; }
+    .ring { outline: .8cqw solid rgba(163, 49, 37, .85); outline-offset: .8cqw; border-radius: 2.6cqw; }
+    .cartbar { position: absolute; left: 0; right: 0; bottom: 4cqw; display: flex; justify-content: space-between; align-items: center; padding: 2.4cqw 3.2cqw; background: var(--ink); color: #fff; }
+    .cartbar small { display: block; font-size: 2cqw; opacity: .85; }
+    .cartbar b { font-size: 3.2cqw; }
+    .cartbar em { font-style: normal; padding: 1.6cqw 3cqw; border-radius: 2cqw; background: #fff; color: var(--ink); font-weight: 800; font-size: 2.4cqw; }
+    .two { display: grid; grid-template-columns: 1fr 1.5fr; gap: 1.8cqw; }
+    .fld { display: grid; gap: .8cqw; font-weight: 700; font-size: 2.2cqw; color: #3d3a34; }
+    .inp { padding: 1.7cqw 2.2cqw; border: .25cqw solid #d5c2a8; border-radius: 2cqw; background: #fffdf9; font-weight: 500; font-size: 2.4cqw; color: #4d4a42; }
+    .radios { display: flex; gap: 1.6cqw; }
+    .radios span { flex: 1; padding: 1.7cqw 2cqw; border: .3cqw solid #d5c2a8; border-radius: 2cqw; background: #fffdf9; font-weight: 700; font-size: 2.2cqw; text-align: center; }
+    .radios span.on { border-color: var(--ink); background: var(--ink); color: #fff; }
+    .send { padding: 2.3cqw; border-radius: 2.4cqw; background: var(--ink); color: #fff; font-weight: 800; font-size: 2.7cqw; text-align: center; }
+    .status { padding: 2.2cqw 2.6cqw; border-radius: 2.4cqw; background: var(--soft); border: .3cqw solid #836149; color: var(--accent); font-weight: 800; font-size: 2.7cqw; line-height: 1.25; }
+    .code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .14em; font-size: 3.4cqw; font-weight: 800; text-align: center; padding: 1.4cqw; border: .3cqw dashed var(--accent-2); border-radius: 2cqw; background: #fffdfa; }
+    .prog { display: flex; align-items: center; gap: 0; margin: .6cqw 0; }
+    .prog i { width: 4cqw; height: 4cqw; border-radius: 50%; border: .4cqw solid #c9b79d; background: #fffdfa; flex: none; }
+    .prog i.on { background: var(--ok); border-color: var(--ok); }
+    .prog i.now { background: #fff; border-color: var(--accent); box-shadow: 0 0 0 .8cqw rgba(107, 79, 58, .22); }
+    .prog u { flex: 1; height: .5cqw; background: #d8c9b0; }
+    .prog u.on { background: var(--ok); }
+    .prog-l { display: flex; justify-content: space-between; font-size: 1.9cqw; color: var(--muted); font-weight: 700; }
+    .payrow { display: flex; gap: 2.4cqw; align-items: center; }
+    .paybox { display: grid; gap: 1.6cqw; flex: 1; min-width: 0; }
+    .paybox div { padding: 1.4cqw 2cqw; border: .25cqw solid var(--line); border-radius: 1.8cqw; background: #fffdfa; }
+    .paybox small { display: block; font-size: 1.9cqw; color: var(--muted); }
+    .paybox b { font-size: 2.2cqw; }
+    .qr { flex: none; width: 24cqw; height: 24cqw; margin: 0; padding: 1.6cqw; background: #fff; border: .3cqw solid var(--line); border-radius: 2cqw; }
+    .qr svg { width: 100%; height: 100%; display: block; }
+    .timer { text-align: center; font-weight: 800; font-size: 2.5cqw; color: var(--danger); }
+    .row2 { display: flex; justify-content: space-between; gap: 2cqw; padding: 1.2cqw 0; border-bottom: .25cqw solid var(--line); font-size: 2.2cqw; }
+    .row2 b { color: var(--ink); }
+
+    /* bìa */
+    .cover .brand { position: absolute; left: 7cqw; top: 7cqw; height: 11cqw; width: auto; }
+    .cover .big { position: absolute; left: 7cqw; right: 7cqw; top: 23cqw; margin: 0; font-size: 10.4cqw; line-height: 1.06; font-weight: 800; text-wrap: balance; }
+    .cover .big span { color: var(--accent); }
+    .cover .s-sub { position: absolute; left: 7cqw; top: 49cqw; font-size: 3.8cqw; max-width: 80cqw; }
+    .cover .chips { position: absolute; left: 7cqw; right: 7cqw; top: 61cqw; display: grid; grid-template-columns: 1fr 1fr; gap: 2.2cqw; }
+    .cover .chips div:last-child { grid-column: 1 / -1; }
+    .cover .chips div { display: flex; align-items: center; gap: 3cqw; padding: 2cqw 3cqw; border: .3cqw solid var(--line); border-radius: 3cqw; background: var(--card); font-weight: 700; font-size: 3.3cqw; }
+    .cover .chips i { display: grid; place-items: center; width: 7cqw; height: 7cqw; border-radius: 50%; background: var(--ink); color: #fff; font-style: normal; font-size: 3.8cqw; flex: none; }
+    .cover .photo { position: absolute; left: 0; right: 0; bottom: 9cqw; height: 12cqw; background: url("assets/banner-food.jpg") center 40% / cover; border-top: .5cqw solid var(--ink); }
+
+    /* dòng thời gian bước 5 */
+    .tl { position: absolute; left: 7cqw; right: 7cqw; top: 39cqw; display: grid; gap: 0; }
+    .tl div { display: grid; grid-template-columns: 10cqw 1fr; gap: 3.4cqw; align-items: center; position: relative; padding-bottom: 3.6cqw; }
+    .tl div:not(:last-child)::after { content: ""; position: absolute; left: 4.7cqw; top: 10cqw; bottom: -.5cqw; width: .6cqw; background: #cdbca2; }
+    .tl i { display: grid; place-items: center; width: 10cqw; height: 10cqw; border-radius: 50%; background: var(--ink); color: #fff; }
+    .tl i svg { width: 6cqw; height: 6cqw; }
+    .tl b { display: block; font-size: 3.7cqw; }
+    .tl span { display: block; font-size: 2.9cqw; color: #4d4a42; }
+
+    /* hỗ trợ */
+    .help { position: absolute; left: 7cqw; right: 7cqw; top: 46cqw; display: grid; gap: 3cqw; }
+    .help a, .help div { display: flex; align-items: center; gap: 4cqw; padding: 3cqw 3.8cqw; border-radius: 3.4cqw; border: .35cqw solid var(--line); background: var(--card); text-decoration: none; color: var(--ink); }
+    .help .ic { display: grid; place-items: center; width: 11cqw; height: 11cqw; border-radius: 50%; color: #fff; flex: none; }
+    .help .ic svg { width: 6cqw; height: 6cqw; }
+    .help b { display: block; font-size: 3.8cqw; }
+    .help span { display: block; font-size: 2.9cqw; color: #4d4a42; line-height: 1.35; }
+
+    /* xuất ảnh: mỗi thẻ rộng đúng 1080px */
+    body.export { background: #fff; }
+    body.export .page { max-width: none; padding: 0; }
+    body.export .top, body.export h1, body.export .lead, body.export .hint, body.export .cta, body.export .faq, body.export .foot { display: none; }
+    body.export .rail { display: grid; gap: 0; overflow: visible; margin: 0; padding: 0; }
+    body.export .rail > .slide { width: 1080px; border-radius: 0; border: 0; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="top">
+      <img src="assets/logo.png" alt="0210" width="72" height="30" />
+      <a href="./">← Quay lại đặt món</a>
+    </header>
+    <h1>Hướng dẫn đặt món online</h1>
+    <p class="lead">5 bước, khoảng 2 phút. Không cần cài app hay đăng nhập.</p>
+
+    <div class="rail" id="rail">
+
+      <!-- Bìa -->
+      <section class="slide cover" aria-label="Giới thiệu">
+        <img class="brand" src="assets/logo.png" alt="0210" />
+        <h2 class="big">Đặt món online <span>tại 0210</span></h2>
+        <p class="s-sub">Chỉ 5 bước, khoảng 2 phút. Không cần cài app hay đăng nhập.</p>
+        <div class="chips">
+          <div><i>1</i> Chọn món</div>
+          <div><i>2</i> Nhập thông tin</div>
+          <div><i>3</i> Quán xác nhận</div>
+          <div><i>4</i> Thanh toán</div>
+          <div><i>5</i> Nhận món</div>
+        </div>
+        <div class="photo" role="img" aria-label="Món ăn của quán"></div>
+        <div class="s-foot"><b>0210</b><span>datmon0210.web.app</span></div>
+      </section>
+
+      <!-- 1 -->
+      <section class="slide" aria-label="Bước 1: Chọn món">
+        <div class="s-head">
+          <div class="s-step"><i>1</i> BƯỚC 1/5</div>
+          <h2 class="s-title">Chọn món bạn thích</h2>
+          <p class="s-sub">Mở link đặt món, chọn nhóm món rồi bấm <b>Thêm</b> ở món muốn gọi.</p>
+        </div>
+        <div class="phone">
+          <div class="ph">
+            <div class="ph-bar"><img src="assets/logo.png" alt="" /><span>Lịch sử đơn</span></div>
+            <div class="ph-chips"><b class="on">Bán chạy</b><b>Cơm</b><b>Bún phở</b><b>Đồ uống</b></div>
+            <div class="dish"><div class="im"></div><div><h4>Cơm gà chiên mắm</h4><span class="sk w1"></span></div><span class="stp"><i>−</i>2<i>+</i></span></div>
+            <div class="dish"><div class="im"></div><div><h4>Cơm bò sốt tiêu</h4><span class="sk w1"></span></div><span class="add ring">Thêm</span></div>
+            <div class="dish"><div class="im"></div><div><h4>Trà chanh nha đam</h4><span class="sk w1"></span></div><span class="add">Thêm</span></div>
+            <div class="dish"><div class="im"></div><div><h4>Bạc xỉu</h4><span class="sk w1"></span></div><span class="add">Thêm</span></div>
+          </div>
+          <div class="cartbar"><div><small>2 món</small><b>Tạm tính</b></div><em class="ring">Xem giỏ &amp; đặt</em></div>
+        </div>
+        <div class="note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="20" r="1.3"/><circle cx="18" cy="20" r="1.3"/><path d="M3 4h3l2.4 11h10l2-8H7"/></svg><p>Chọn xong, bấm <b>Xem giỏ &amp; đặt</b> ở thanh dưới màn hình để kiểm tra lại đơn.</p></div>
+        <div class="s-foot"><b>0210</b><span>Đặt món online</span></div>
+      </section>
+
+      <!-- 2 -->
+      <section class="slide" aria-label="Bước 2: Nhập thông tin và gửi đơn">
+        <div class="s-head">
+          <div class="s-step"><i>2</i> BƯỚC 2/5</div>
+          <h2 class="s-title">Nhập thông tin &amp; gửi đơn</h2>
+          <p class="s-sub">Điền tên, số điện thoại, chọn cách nhận món rồi bấm <b>Gửi đơn</b>.</p>
+        </div>
+        <div class="phone">
+          <div class="ph">
+            <div class="two"><div class="fld">Tên của bạn<div class="inp">Lan</div></div><div class="fld">Số điện thoại<div class="inp">0912 345 678</div></div></div>
+            <div class="fld">Nhận món<div class="radios"><span>Mang đi / tại quán</span><span class="on ring">Giao tận nơi</span></div></div>
+            <div class="fld">Địa chỉ giao hàng<div class="inp">Số nhà, đường, phường/xã…</div></div>
+            <div class="send ring">Gửi đơn</div>
+          </div>
+        </div>
+        <div class="note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8v5M12 16.5v.1"/></svg><p>Chưa phải trả tiền ngay. <b>Gửi đơn</b> chỉ là báo cho quán biết bạn muốn đặt những món gì.</p></div>
+        <div class="s-foot"><b>0210</b><span>Đặt món online</span></div>
+      </section>
+
+      <!-- 3 -->
+      <section class="slide" aria-label="Bước 3: Quán xác nhận đơn">
+        <div class="s-head">
+          <div class="s-step"><i>3</i> BƯỚC 3/5</div>
+          <h2 class="s-title">Chờ quán xác nhận</h2>
+          <p class="s-sub">Quán thường xác nhận trong vòng 3 phút. Bạn không cần làm gì thêm.</p>
+        </div>
+        <div class="phone">
+          <div class="ph">
+            <div class="status">Quán đã nhận đơn của bạn</div>
+            <div class="code">#K7M2QX</div>
+            <div><div class="prog"><i class="now"></i><u></u><i></i><u></u><i></i><u></u><i></i></div><div class="prog-l"><span>Đã gửi</span><span>Thanh toán</span><span>Làm món</span><span>Giao</span></div></div>
+            <div class="row2"><span>Món</span><b>2 món</b></div>
+            <div class="row2"><span>Trạng thái</span><b>Chờ quán xác nhận</b></div>
+          </div>
+        </div>
+        <div class="note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><p>Mã thanh toán sẽ hiện <b>ngay trên trang này</b>. Nếu đã thoát, mở lại link: đơn nằm trong <b>giỏ hàng</b> và ô <b>“Bạn đang có đơn theo dõi”</b>.</p></div>
+        <div class="s-foot"><b>0210</b><span>Đặt món online</span></div>
+      </section>
+
+      <!-- 4 -->
+      <section class="slide" aria-label="Bước 4: Thanh toán">
+        <div class="s-head">
+          <div class="s-step"><i>4</i> BƯỚC 4/5</div>
+          <h2 class="s-title">Thanh toán trước khi giao</h2>
+          <p class="s-sub">Quét mã QR bằng app ngân hàng, giữ đúng số tiền và nội dung chuyển khoản.</p>
+        </div>
+        <div class="phone">
+          <div class="ph">
+            <div class="status">Mời bạn thanh toán</div>
+            <div class="timer">Còn 29:40 để thanh toán</div>
+            <div class="payrow"><div class="qr ring"><svg id="qr" viewBox="0 0 25 25" shape-rendering="crispEdges" aria-label="Mã QR minh hoạ"></svg></div><div class="paybox"><div><small>Số tiền</small><b>Đúng như đơn</b></div><div><small>Nội dung</small><b>0210 K7M2QX</b></div></div></div>
+          </div>
+        </div>
+        <div class="note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10h18M7 15h4"/></svg><p>Đơn chưa thanh toán sau <b>30 phút</b> sẽ tự hết hạn. Quán chỉ giao khi đã nhận được tiền.</p></div>
+        <div class="s-foot"><b>0210</b><span>Đặt món online</span></div>
+      </section>
+
+      <!-- 5 -->
+      <section class="slide" aria-label="Bước 5: Nhận món">
+        <div class="s-head">
+          <div class="s-step"><i>5</i> BƯỚC 5/5</div>
+          <h2 class="s-title">Nhận món &amp; trả phí ship</h2>
+          <p class="s-sub">Quán nhận tiền, làm món và giao đến bạn. Theo dõi từng bước ngay trên trang.</p>
+        </div>
+        <div class="tl">
+          <div><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.2 4.2L19 7"/></svg></i><p style="margin:0"><b>Quán đã nhận tiền</b><span>Quán bắt đầu chế biến món của bạn</span></p></div>
+          <div><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14h16a7 7 0 0 1-16 0zM8 11c0-2 1.6-3 4-3s4 1 4 3"/></svg></i><p style="margin:0"><b>Đang làm món</b><span>Món được làm ngay khi quán xác nhận</span></p></div>
+          <div><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M9 17h6l3-7h-4M15 17l-3-6H8"/></svg></i><p style="margin:0"><b>Đang giao đến bạn</b><span>Tài xế giao tận nơi theo địa chỉ bạn đã nhập</span></p></div>
+          <div><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-7 8 7v9H4zM10 20v-6h4v6"/></svg></i><p style="margin:0"><b>Nhận món</b><span>Kiểm tra món rồi thưởng thức</span></p></div>
+        </div>
+        <div class="note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M9 17h6l3-7h-4M15 17l-3-6H8"/></svg><p><b>Phí ship trả trực tiếp cho tài xế</b> khi nhận hàng, giống khi đặt qua Grab. Tiền món bạn đã thanh toán ở bước 4.</p></div>
+        <div class="s-foot"><b>0210</b><span>Đặt món online</span></div>
+      </section>
+
+      <!-- Hỗ trợ -->
+      <section class="slide" aria-label="Cần hỗ trợ">
+        <div class="s-head">
+          <div class="s-step"><i>?</i> CẦN HỖ TRỢ</div>
+          <h2 class="s-title">Cần sửa đơn hoặc hỏi quán?</h2>
+          <p class="s-sub">Quán luôn sẵn sàng hỗ trợ bạn, kể cả khi đơn đã được xác nhận.</p>
+        </div>
+        <div class="help">
+          <div><span class="ic" style="background:#0866ff"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.5 2 2 6.2 2 11.5c0 2.9 1.3 5.4 3.4 7.1V22l3.1-1.7c1 .3 2.4.5 3.5.5 5.5 0 10-4.2 10-9.3S17.500 2 12 2zm1 12.500-2.500-2.700L5.700 14.500l5.300-5.600 2.600 2.700 4.700-2.700z"/></svg></span><p style="margin:0"><b>Chat với quán qua Messenger</b><span>Bấm nút chat nổi trên trang đặt món, mã đơn được gắn sẵn</span></p></div>
+          <div><span class="ic" style="background:#2f6b3f"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.600 10.800a15.100 15.100 0 0 0 6.600 6.600l2.200-2.200a1 1 0 0 1 1-.25c1.100.37 2.300.57 3.600.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C10.600 21 3 13.400 3 4a1 1 0 0 1 1-1h3.500a1 1 0 0 1 1 1c0 1.300.2 2.500.57 3.600a1 1 0 0 1-.25 1z"/></svg></span><p style="margin:0"><b>Gọi 0968 563 539</b><span>Bấm nút gọi nổi trên trang, số đã có sẵn, bạn chỉ cần bấm gọi</span></p></div>
+          <div><span class="ic" style="background:#6b4f3a"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10-10-4-4L4 16zM13 7l4 4"/></svg></span><p style="margin:0"><b>Muốn sửa hoặc huỷ đơn?</b><span>Sau khi quán xác nhận, quán đã bắt đầu làm món. Hãy nhắn quán để được đồng ý thay đổi.</span></p></div>
+        </div>
+        
+        <div class="s-foot"><b>0210</b><span>datmon0210.web.app</span></div>
+      </section>
+    </div>
+    <p class="hint">Vuốt ngang để xem các bước tiếp theo →</p>
+
+    <div class="cta">
+      <a class="btn primary" href="./">Bắt đầu đặt món</a>
+      <a class="btn ghost" href="https://m.me/0210coffee" target="_blank" rel="noopener">Chat với quán</a>
+      <a class="btn ghost" href="tel:0968563539">Gọi 0968 563 539</a>
+    </div>
+
+    <section class="faq" aria-label="Câu hỏi thường gặp">
+      <h2>Mất bao lâu để quán xác nhận?</h2>
+      <p>Thường dưới 3 phút trong giờ mở cửa. Mã thanh toán sẽ hiện ngay trên trang theo dõi đơn.</p>
+      <h2>Tôi lỡ thoát trang thì sao?</h2>
+      <p>Mở lại link đặt món. Đơn đang theo dõi hiện ở đầu trang và trong giỏ hàng, bấm vào để tiếp tục thanh toán.</p>
+      <h2>Không thanh toán thì sao?</h2>
+      <p>Đơn tự hết hạn sau 30 phút kể từ khi quán xác nhận. Bạn có thể đặt lại đơn đó bất cứ lúc nào.</p>
+    </section>
+
+    <div class="foot">
+      <details>
+        <summary>Dành cho quán: tải bộ ảnh hướng dẫn để đăng fanpage</summary>
+        <ul id="downloads"></ul>
+      </details>
+    </div>
+  </div>
+
+  <script>
+    /* QR minh hoạ: hoa văn giả lập, không quét được */
+    (function () {
+      var svg = document.getElementById("qr"); if (!svg) return;
+      var n = 25, seed = 210, out = "";
+      function rnd() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
+      function finder(x, y) { return (x < 7 && y < 7) || (x >= n - 7 && y < 7) || (x < 7 && y >= n - 7); }
+      function fin(x, y) { var fx = x >= n - 7 ? x - (n - 7) : x, fy = y >= n - 7 ? y - (n - 7) : y; var d = Math.max(Math.abs(fx - 3), Math.abs(fy - 3)); return d === 3 || d <= 1; }
+      for (var y = 0; y < n; y++) for (var x = 0; x < n; x++) {
+        var on = finder(x, y) ? fin(x, y) : rnd() > 0.52;
+        if (on) out += '<rect x="' + x + '" y="' + y + '" width="1.02" height="1.02" fill="#1e1e1e"/>';
+      }
+      svg.innerHTML = out;
+    })();
+    (function () {
+      var ul = document.getElementById("downloads"); if (!ul) return;
+      var names = ["Bìa", "Bước 1 · Chọn món", "Bước 2 · Nhập thông tin", "Bước 3 · Quán xác nhận", "Bước 4 · Thanh toán", "Bước 5 · Nhận món", "Cần hỗ trợ"];
+      ul.innerHTML = names.map(function (t, i) { return '<li><a href="assets/guide/huong-dan-' + i + '.png" target="_blank" rel="noopener">' + t + '</a></li>'; }).join("");
+    })();
+  </script>
+</body>
+</html>

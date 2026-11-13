@@ -490,3 +490,6 @@ body.has-cart .call-fab { bottom: calc(148px + env(safe-area-inset-bottom, 0px))
 @media (max-width: 380px) { .chat-fab span { display: inline; } .chat-fab { padding: 8px 14px; } }
 .call-fab { bottom: calc(86px + env(safe-area-inset-bottom, 0px)); }
 body.has-cart .call-fab { bottom: calc(158px + env(safe-area-inset-bottom, 0px)); }
+
+#open-guide { text-decoration: none; }
+.hero-head .pill + .pill { margin-left: 0; }

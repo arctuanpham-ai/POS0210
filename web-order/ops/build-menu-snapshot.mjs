@@ -5,7 +5,7 @@
 import { execSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { STORE_ID, STORE_OWNER_UID, firebaseConfig } from "../public/config.js";
-import { SNAPSHOT_DOC, THUMB_DOC_PREFIX, TOP_REFRESH_MS, buildSnapshot, menuContent, menuHash, topSellerIds, usableSnapshot } from "../public/menu-snapshot.js";
+import { SNAPSHOT_DOC, THUMB_DOC_PREFIX, TOP_REFRESH_MS, buildSnapshot, menuContent, menuHash, remoteSalesDocs, topSellerIds, usableSnapshot } from "../public/menu-snapshot.js";
 
 export const THUMB_MAX_AGE_MS = 24 * 3_600_000;
 
@@ -84,8 +84,9 @@ async function main() {
   }
   let top = null;
   if (plan.top) {
-    const dailies = await list("dashboardDaily");
-    top = topSellerIds(dailies, items, { hidden });
+    // Món bán chạy tính theo kênh online + app food, không theo doanh số tại quán.
+    const [ledgerRows, onlineOrders] = await Promise.all([list("foodAppLedger"), list("online_orders")]);
+    top = topSellerIds(remoteSalesDocs({ ledgerRows, onlineOrders }), items, { hidden });
   }
   const built = buildSnapshot({ items, cats, combos, hidden, thumbs, thumbsVer: Number(shop?.thumbsVersion || 0), top, keep: existing, now, by: "ACTIONS" });
   const writes = [{ update: { name: `${root}/online_menu/${SNAPSHOT_DOC}`, fields: encodeFields(built.data) } }];

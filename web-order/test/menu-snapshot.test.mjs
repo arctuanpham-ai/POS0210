@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { buildSnapshot, chunkThumbs, menuContent, menuHash, mergeThumbChunks, plain, usableSnapshot, THUMB_CHUNK_BYTES } from "../public/menu-snapshot.js";
+import { buildSnapshot, remoteSalesDocs, chunkThumbs, menuContent, menuHash, mergeThumbChunks, plain, usableSnapshot, THUMB_CHUNK_BYTES } from "../public/menu-snapshot.js";
 
 const items = [{ id: "b", name: "Trà", price: 20000, categoryId: "c1", active: true, updatedAt: { toMillis: () => 5 } }, { id: "a", name: "Cà phê", price: 25000, categoryId: "c1", active: true, extra: undefined }];
 const cats = [{ id: "c1", name: "Đồ uống", sortOrder: 1, active: true }];
@@ -66,4 +66,22 @@ test("topSellerIds: cộng mọi ngày + phần trong combo, bỏ món rẻ/ẩn
   assert.deepEqual(topSellerIds(days, menu, { hidden: ["hid"], limit: 2 }), ["cf", "bm"]);
   assert.deepEqual(topSellerIds([days[1]], menu, { hidden: ["hid"], minQty: 6 }), [], "dưới 3 món đủ doanh số thì không hiện mục");
   assert.deepEqual(topSellerIds([], menu), []);
+});
+
+test("remoteSalesDocs: chỉ lấy đơn online đã hoàn thành và đơn app food OK/REVIEW, bỏ đơn huỷ", () => {
+  const docs = remoteSalesDocs({
+    ledgerRows: [{ status: "OK", items: [{ name: "Cơm gà", qty: 2 }] }, { status: "REVIEW", items: [{ name: "Cơm gà", qty: 1 }] }, { status: "CANCELLED", items: [{ name: "Cơm gà", qty: 9 }] }],
+    onlineOrders: [{ status: "done", items: [{ name: "Cơm bò", qty: 1 }] }, { status: "cancelled", items: [{ name: "Cơm bò", qty: 7 }] }, { status: "new", items: [{ name: "Cơm bò", qty: 5 }] }],
+  });
+  const sum = (n) => docs.flatMap((d) => d.items).filter((i) => i.name === n).reduce((t, i) => t + i.qty, 0);
+  assert.equal(sum("Cơm gà"), 3);
+  assert.equal(sum("Cơm bò"), 1);
+});
+
+test("món bán chạy theo kênh online/app food, không theo bán tại quán", () => {
+  const items = [{ id: "a", name: "Cơm gà", price: 59000 }, { id: "b", name: "Cafe sữa", price: 25000 }, { id: "c", name: "Bít tết", price: 99000 }, { id: "d", name: "Cơm bò", price: 75000 }];
+  const inStore = [{ items: [{ name: "Cafe sữa", qty: 500 }, { name: "Bít tết", qty: 300 }] }];
+  const remote = remoteSalesDocs({ ledgerRows: [{ status: "OK", items: [{ name: "Cơm gà", qty: 6 }, { name: "Cơm bò", qty: 4 }, { name: "Cafe sữa", qty: 3 }] }] });
+  assert.deepEqual(topSellerIds(remote, items), ["a", "d", "b"]);
+  assert.notDeepEqual(topSellerIds(inStore, items, { minItems: 2 }), ["a", "d", "b"]);
 });

@@ -85,6 +85,18 @@ export function topSellerIds(dailyDocs, items, { hidden = [], limit = 8, minQty 
   return ranked.length >= minItems ? ranked.slice(0, limit).map((x) => x.id) : [];
 }
 
+/**
+ * Nguồn tính "Món bán chạy": CHỈ các kênh bán xa quán (đơn đặt món online đã hoàn thành + đơn GrabFood/ShopeeFood đã đối soát),
+ * không dùng doanh số bán tại quán. Trả về các "ngày giả" { items: [{ name, qty }] } để dùng chung với topSellerIds.
+ */
+export function remoteSalesDocs({ ledgerRows = [], onlineOrders = [] } = {}) {
+  const docs = [];
+  const lines = (list) => (Array.isArray(list) ? list : []).map((i) => ({ name: String(i?.name || ""), qty: Number(i?.qty || 0) })).filter((i) => i.name && i.qty > 0);
+  for (const r of ledgerRows || []) if (r && (r.status === "OK" || r.status === "REVIEW")) docs.push({ items: lines(r.items) });
+  for (const o of onlineOrders || []) if (o && o.status === "done") docs.push({ items: lines(o.items) });
+  return docs;
+}
+
 /** Chia ảnh nhỏ {menu_<id>: dataUrl} thành các nhóm không vượt `maxBytes` ký tự. Ném lỗi nếu cần quá MAX_THUMB_CHUNKS nhóm. */
 export function chunkThumbs(map, maxBytes = THUMB_CHUNK_BYTES) {
   const chunks = [];

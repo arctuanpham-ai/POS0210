@@ -563,7 +563,10 @@ function showErrors(errors) {
   const first = Object.keys(errors)[0];
   const target = first && $("#order-form").elements[first];
   if (target?.focus) target.focus();
-  if (errors.cart) { $("#form-message").textContent = errors.cart; $("#form-message").className = "form-message error"; }
+  const shown = document.querySelector(`[data-error="${first}"]`) || target;
+  if (shown?.scrollIntoView) shown.scrollIntoView({ block: "center", behavior: "smooth" });
+  const list = Object.values(errors);
+  setFormMessage(errors.cart || (list.length > 1 ? `Vui lòng kiểm tra lại ${list.length} mục còn thiếu hoặc chưa đúng (đánh dấu đỏ ở trên).` : `${list[0]}.`), true);
 }
 
 /* ---------- Gửi đơn ---------- */
@@ -679,7 +682,7 @@ async function sendOrder(uid, value, lines) {
 
 let lastValue = null;
 /** Ghi nhật ký lỗi (không có tên/SĐT) để quán biết vì sao đơn bị từ chối. Lỗi ở đây không được ảnh hưởng khách. */
-async function reportOrderError(error, lines, value) {
+async function reportOrderError(eref, error, lines, value) {
   try {
     const uid = auth.currentUser?.uid || "";
     const pricing = priceNow(lines);
@@ -699,7 +702,7 @@ async function reportOrderError(error, lines, value) {
       total: pricing.total, disc: pricing.discount, sur: pricing.surcharge, lines: checks,
       uLim: await lim(limitKeyForUid(uid)), pLim: value?.phone ? await lim(limitKeyForPhone(value.phone)) : null,
     };
-    await setDoc(doc(col("online_errors")), { code: String(error?.code || "denied"), at: serverTimestamp(), info: JSON.stringify(info).slice(0, 2400) });
+    await setDoc(eref, { code: String(error?.code || "denied"), at: serverTimestamp(), info: JSON.stringify(info).slice(0, 2400) });
   } catch { /* bỏ qua */ }
 }
 
@@ -709,7 +712,9 @@ async function handleSubmitError(error, lines) {
     return;
   }
   if (isDenied(error)) {
-    reportOrderError(error, lines, lastValue);
+    const eref = doc(col("online_errors"));
+    const errNo = eref.id.slice(0, 6).toUpperCase();
+    reportOrderError(eref, error, lines, lastValue);
     // Có thể quán vừa đổi giá/tắt món: đọc lại menu từ máy chủ để báo đúng nguyên nhân.
     try {
       const [menuSnap, comboSnap] = await Promise.all([getDocs(col("menu")), getDocs(col("combos"))]);
@@ -722,7 +727,7 @@ async function handleSubmitError(error, lines) {
         return;
       }
     } catch { /* rơi xuống thông báo chung */ }
-    setFormMessage(`Quán chưa nhận được đơn. Có thể bạn đang có đơn chờ, hoặc hệ thống từ chối tạm thời. Vui lòng thử lại sau ít phút${state.shop.phone ? ` hoặc gọi ${state.shop.phone}` : ""}.`, true);
+    setFormMessage(`Rất tiếc, hệ thống chưa nhận được đơn của bạn (mã lỗi ${errNo}). Quán đã ghi nhận lỗi để xử lý. Bạn vui lòng thử lại sau ít phút${state.shop.phone ? ` hoặc gọi ${state.shop.phone} kèm mã lỗi này` : ""}.`, true);
     return;
   }
   if (error?.code === "auth") { setFormMessage("Không kết nối được hệ thống đặt món. Vui lòng tải lại trang.", true); return; }

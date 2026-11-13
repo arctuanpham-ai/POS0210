@@ -872,7 +872,7 @@ function renderTrack() {
   }
   if (view.status === STATUS.REJECTED) extra = `<p class="reject-reason"><b>Lý do:</b> ${esc(order.rejectReason || "Quán chưa nhận được đơn lúc này.")}</p>`;
   const spinner = view.status === STATUS.NEW ? '<div class="spinner" aria-hidden="true"></div>' : "";
-  const chat = `<a class="chat-link" href="${MESSENGER_URL}" target="_blank" rel="noopener" data-chat="${esc(order.code)}">💬 Chat với quán qua Messenger</a><p class="muted small">Muốn sửa hoặc huỷ đơn, hỏi thêm về đơn? Bấm nút trên, dán nội dung đã sao chép (có sẵn mã đơn) rồi gửi cho quán.</p>`;
+  const chat = `<a class="chat-link" href="${MESSENGER_URL}" target="_blank" rel="noopener" data-chat="${esc(order.code)}">💬 Chat với fanpage qua Messenger</a><p class="muted small">Muốn sửa hoặc huỷ đơn, hỏi thêm về đơn? Bấm nút trên, dán nội dung đã sao chép (có sẵn mã đơn) rồi gửi cho quán.</p>`;
   const phone = chat + (state.shop.phone ? `<p class="muted small">Cần hỗ trợ? Gọi quán ${phoneLinksHtml(state.shop.phone, esc)}</p>` : "");
   const canEdit = view.status === STATUS.NEW;
   const editRow = canEdit ? `<div class="cancel-row"><button type="button" class="secondary" data-act2="edit">✏️ Sửa đơn</button><button type="button" class="danger-link" data-act2="cancel">Huỷ đơn</button></div><p class="muted small">Bạn tự sửa hoặc huỷ được khi quán chưa xác nhận đơn.</p>` : "";

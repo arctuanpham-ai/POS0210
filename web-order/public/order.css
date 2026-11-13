@@ -475,3 +475,6 @@ body.has-cart .legal-foot { margin-bottom: 96px; }
 .chat-fab { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 25; display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 16px; border-radius: 999px; background: #0a7cff; color: #fff; font-weight: 600; font-size: 14px; text-decoration: none; box-shadow: 0 4px 14px #00000040; }
 body.has-cart .chat-fab { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
 @media (max-width: 380px) { .chat-fab span { display: none; } .chat-fab { padding: 0 13px; } }
+
+.call-fab { background: #1f9d55; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+body.has-cart .call-fab { bottom: calc(148px + env(safe-area-inset-bottom, 0px)); }

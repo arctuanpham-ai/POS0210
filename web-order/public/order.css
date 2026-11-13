@@ -493,3 +493,4 @@ body.has-cart .call-fab { bottom: calc(158px + env(safe-area-inset-bottom, 0px))
 
 #open-guide { text-decoration: none; }
 .hero-head .pill + .pill { margin-left: 0; }
+@media (max-width: 440px) { .hero-head:has(#open-history:not([hidden])) #open-guide span { display: none; } .hero-head:has(#open-history:not([hidden])) #open-guide { padding: 8px 10px; } }

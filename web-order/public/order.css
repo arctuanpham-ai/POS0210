@@ -494,3 +494,11 @@ body.has-cart .call-fab { bottom: calc(158px + env(safe-area-inset-bottom, 0px))
 #open-guide { text-decoration: none; }
 .hero-head .pill + .pill { margin-left: 0; }
 @media (max-width: 440px) { .hero-head:has(#open-history:not([hidden])) #open-guide span { display: none; } .hero-head:has(#open-history:not([hidden])) #open-guide { padding: 8px 10px; } }
+
+/* Cụm nút nổi, xếp từ dưới lên: Hướng dẫn thao tác đặt món, Chat hỗ trợ, Gọi quán */
+.guide-fab { background: #1e1e1e; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); max-width: min(78vw, 320px); }
+body.has-cart .guide-fab { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+.chat-fab:not(.call-fab):not(.guide-fab) { bottom: calc(74px + env(safe-area-inset-bottom, 0px)); }
+body.has-cart .chat-fab:not(.call-fab):not(.guide-fab) { bottom: calc(146px + env(safe-area-inset-bottom, 0px)); }
+.call-fab { bottom: calc(142px + env(safe-area-inset-bottom, 0px)); }
+body.has-cart .call-fab { bottom: calc(214px + env(safe-area-inset-bottom, 0px)); }

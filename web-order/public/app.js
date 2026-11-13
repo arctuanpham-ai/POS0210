@@ -763,6 +763,7 @@ function watchOrder(code, { quiet = false } = {}) {
       const first = state.order === null;
       const wasStatus = state.order?.status;
       state.order = { ...snap.data(), id: snap.id };
+      if (state.order.status === STATUS.DONE) window.__markFirstSuccess?.(state.order.phone);
       if (first && shouldDropOld(state.order)) { forgetCode(code); showScreen("menu"); stopWatch(); return; }
       // Mở lại link: đơn đã kết thúc thì KHÔNG bật màn theo dõi, chỉ nằm trong Lịch sử.
       if (first && quiet) {
@@ -1160,25 +1161,43 @@ setInterval(renderOpenStatus, 30_000);
 renderShop();
 renderMenu();
 { let h = store.get(KEYS.hist, []) || []; for (const c of [...(store.get(KEYS.codes, []) || [])].reverse()) h = rememberCode(h, c, 40); store.set(KEYS.hist, h); }
-{ let h = store.get(KEYS.hist, []) || []; for (const c of [...(store.get(KEYS.codes, []) || [])].reverse()) h = rememberCode(h, c, 40); store.set(KEYS.hist, h); }
 renderCartBar();
 updateBanner();
 syncClock();
 loadShop();
 loadMenu();
 restoreOrder();
-/* Gợi ý lần đầu: làm mờ nền, nổi cụm 3 nút hỗ trợ; chạm vào nền (hoặc bấm một nút) để tắt, chỉ hiện một lần */
+/* Gợi ý làm mờ nền, nổi cụm 3 nút hỗ trợ: hiện mỗi lần khách vào link cho tới khi số điện thoại của khách có đơn mua THÀNH CÔNG
+   (đơn "Hoàn thành") đầu tiên; sau đó không hiện nữa. Chạm vào nền (hoặc bấm một nút, hoặc Esc) để tắt trong lượt xem này. */
 (() => {
-  const KEY = "oo-fab-tip";
-  const seen = () => { try { return localStorage.getItem(KEY) === "1" || sessionStorage.getItem(KEY) === "1"; } catch { return false; } };
-  const remember = () => { try { localStorage.setItem(KEY, "1"); } catch { try { sessionStorage.setItem(KEY, "1"); } catch { /* không lưu được thì thôi */ } } };
-  if (seen()) return;
+  const DONE_KEY = "pos0210o.firstDone"; // danh sách số điện thoại đã có đơn thành công trên thiết bị này
+  const SESSION_KEY = "oo-fab-tip-closed";
+  const myPhone = () => String(store.get(KEYS.profile, null)?.phone || "");
+  const donePhones = () => { const v = store.get(DONE_KEY, []); return Array.isArray(v) ? v : []; };
+  const hasSucceeded = () => { const list = donePhones(); const phone = myPhone(); return phone ? list.includes(phone) : list.length > 0; };
+  const closedThisSession = () => { try { return sessionStorage.getItem(SESSION_KEY) === "1"; } catch { return false; } };
+  const markClosed = () => { try { sessionStorage.setItem(SESSION_KEY, "1"); } catch { /* không lưu được thì thôi */ } };
+  window.__markFirstSuccess = (phone) => { const p = String(phone || ""); if (!p) return; const list = donePhones(); if (!list.includes(p)) store.set(DONE_KEY, [...list, p].slice(-5)); };
+  /** Khách đã từng gửi đơn trên máy này thì kiểm tra một lần xem có đơn "Hoàn thành" của số điện thoại này chưa. */
+  async function succeededBefore() {
+    if (hasSucceeded()) return true;
+    if (!(store.get(KEYS.hist, []) || []).length) return false; // khách mới hoàn toàn: không cần đọc gì
+    try {
+      const uid = await ensureUid();
+      if (!uid) return true;
+      const snap = await getDocs(query(col("online_orders"), where("uid", "==", uid), limit(30)));
+      const phone = myPhone();
+      const ok = snap.docs.map((d) => d.data()).filter((o) => o.status === STATUS.DONE && (!phone || String(o.phone) === phone));
+      for (const o of ok) window.__markFirstSuccess(o.phone);
+      return ok.length > 0;
+    } catch { return true; } // không chắc thì không làm phiền khách
+  }
   const overlay = $("#fab-overlay"), tip = $("#fab-tip"), stack = $("#fab-stack");
-  if (!overlay || !tip || !stack) return;
-  const close = () => { document.body.classList.remove("fab-spot"); overlay.hidden = true; tip.hidden = true; remember(); document.removeEventListener("keydown", onKey); };
+  if (!overlay || !tip || !stack || closedThisSession()) return;
+  const close = () => { document.body.classList.remove("fab-spot"); overlay.hidden = true; tip.hidden = true; markClosed(); document.removeEventListener("keydown", onKey); };
   const onKey = (e) => { if (e.key === "Escape") close(); };
-  setTimeout(() => {
-    if (seen()) return;
+  setTimeout(async () => {
+    if (closedThisSession() || await succeededBefore()) return;
     document.body.classList.add("fab-spot"); overlay.hidden = false; tip.hidden = false;
     overlay.addEventListener("click", close);
     stack.addEventListener("click", (e) => { if (e.target.closest("a")) close(); }, true);

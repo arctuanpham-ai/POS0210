@@ -22,3 +22,9 @@ test("cảnh báo ngày tăng vọt và gần hạn mức", () => {
   assert.ok(t[2].flags.includes("ghi 80% hạn mức"));
   assert.ok(t[2].flags.includes("đọc 80% hạn mức"));
 });
+
+test("dayUsage cộng lượt đọc theo nguồn của mọi trình duyệt", () => {
+  const d = dayUsage({ day: "x", web: { devices: { a: { reads: 30, src: { bills: 20, payments: 10 } }, b: { reads: 5, src: { bills: 5 } } } } });
+  assert.deepEqual(d.web.src, { bills: 25, payments: 10 });
+  assert.deepEqual(dayUsage({ day: "x", web: { devices: { a: { reads: 1 } } } }).web.src, {});
+});

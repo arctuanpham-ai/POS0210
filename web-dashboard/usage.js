@@ -28,8 +28,11 @@ const metric = (used, limit) => ({ used, limit, pct: limit ? (used / limit) * 10
 
 /** Một ngày: ghi = máy POS (đếm chính xác) + web; đọc = web (máy POS đọc rất ít, chưa đếm). */
 export function dayUsage({ day, app = null, web = null }) {
-  const webSum = { reads: 0, writes: 0, deletes: 0 };
-  for (const d of Object.values(web?.devices || {})) { webSum.reads += Number(d.reads || 0); webSum.writes += Number(d.writes || 0); webSum.deletes += Number(d.deletes || 0); }
+  const webSum = { reads: 0, writes: 0, deletes: 0, src: {} };
+  for (const d of Object.values(web?.devices || {})) {
+    webSum.reads += Number(d.reads || 0); webSum.writes += Number(d.writes || 0); webSum.deletes += Number(d.deletes || 0);
+    for (const [k, v] of Object.entries(d.src || {})) webSum.src[k] = (webSum.src[k] || 0) + Number(v || 0);
+  }
   const appWrites = Number(app?.total || 0);
   const categories = Object.fromEntries(["sales", "dashboard", "catalog", "finance", "people", "backup", "media", "system"].map((k) => [k, Number(app?.[k] || 0)]));
   return {

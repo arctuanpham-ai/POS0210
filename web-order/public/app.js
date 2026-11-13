@@ -682,6 +682,14 @@ async function sendOrder(uid, value, lines) {
 }
 
 let lastValue = null;
+/** Link chat Messenger của fanpage; có đơn đang theo dõi thì gắn mã đơn (ref + nội dung điền sẵn) để quán biết khách hỏi về đơn nào. */
+const chatUrl = (code) => (code ? `${MESSENGER_URL}?ref=${encodeURIComponent(`don_${code}`)}&text=${encodeURIComponent(`Mình cần hỗ trợ đơn #${code}`)}` : MESSENGER_URL);
+const openChat = (anchor) => {
+  const code = state.code || "";
+  anchor.href = chatUrl(code);
+  try { navigator.clipboard?.writeText(code ? `Mình cần hỗ trợ đơn #${code}` : "Mình cần hỗ trợ").catch(() => {}); } catch { /* không sao chép được thì bỏ qua */ }
+};
+
 /** Ghi nhật ký lỗi (không có tên/SĐT) để quán biết vì sao đơn bị từ chối. Lỗi ở đây không được ảnh hưởng khách. */
 async function reportOrderError(eref, error, lines, value) {
   try {
@@ -872,7 +880,7 @@ function renderTrack() {
   }
   if (view.status === STATUS.REJECTED) extra = `<p class="reject-reason"><b>Lý do:</b> ${esc(order.rejectReason || "Quán chưa nhận được đơn lúc này.")}</p>`;
   const spinner = view.status === STATUS.NEW ? '<div class="spinner" aria-hidden="true"></div>' : "";
-  const chat = `<a class="chat-link" href="${MESSENGER_URL}" target="_blank" rel="noopener" data-chat="${esc(order.code)}">💬 Chat với fanpage qua Messenger</a><p class="muted small">Muốn sửa hoặc huỷ đơn, hỏi thêm về đơn? Bấm nút trên, dán nội dung đã sao chép (có sẵn mã đơn) rồi gửi cho quán.</p>`;
+  const chat = `<a class="chat-link" href="${esc(chatUrl(order.code))}" target="_blank" rel="noopener" data-chat="${esc(order.code)}">💬 Chat với fanpage qua Messenger</a>`;
   const phone = chat + (state.shop.phone ? `<p class="muted small">Cần hỗ trợ? Gọi quán ${phoneLinksHtml(state.shop.phone, esc)}</p>` : "");
   const canEdit = view.status === STATUS.NEW;
   const editRow = canEdit ? `<div class="cancel-row"><button type="button" class="secondary" data-act2="edit">✏️ Sửa đơn</button><button type="button" class="danger-link" data-act2="cancel">Huỷ đơn</button></div><p class="muted small">Bạn tự sửa hoặc huỷ được khi quán chưa xác nhận đơn.</p>` : "";
@@ -1039,9 +1047,8 @@ $("#track-body").addEventListener("click", async (event) => {
     setTimeout(() => { copy.textContent = label; }, 1800);
     return;
   }
-  const chatLink = event.target.closest("[data-chat]");
-  if (chatLink) { try { navigator.clipboard?.writeText(`Mình cần hỗ trợ đơn #${chatLink.dataset.chat}`).catch(() => {}); } catch { /* không sao chép được thì khách tự gõ mã */ } return; }
-  if (event.target.closest("#chat-fab")) { try { navigator.clipboard?.writeText(`Mình cần hỗ trợ${state.code ? ` đơn #${state.code}` : ""}`).catch(() => {}); } catch { /* khách tự gõ */ } return; }
+  const chatAnchor = event.target.closest("[data-chat], #chat-fab");
+  if (chatAnchor) { openChat(chatAnchor); return; }
   const sw = event.target.closest("[data-switch]");
   if (sw) { watchOrder(sw.dataset.switch); return; }
   const act = event.target.closest("[data-act2]")?.dataset.act2;

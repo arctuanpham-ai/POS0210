@@ -867,7 +867,7 @@ function renderTrack() {
   const text = STATUS_TEXT[view.status] || STATUS_TEXT.new;
   let extra = "";
   if (view.status === STATUS.AWAITING_PAYMENT) {
-    extra = `<p class="countdown-line">Thời gian còn lại <b id="countdown">${countdownText(view.remainingMs ?? 0)}</b></p>${paymentHtml(order)}<p class="pay-warning">⚠️ Lưu ý: sau khi quán nhận tiền, đơn được chuyển cho bếp nên <b>không sửa hoặc huỷ vì đổi ý</b> được. Nếu quán không thực hiện được đơn, giao thiếu/sai món hoặc món có lỗi, quán sẽ <b>hoàn tiền</b> (xem <a href="chinh-sach#hoan-tien" target="_blank" rel="noopener">chính sách đổi trả, hoàn tiền</a>).</p>`;
+    extra = `${view.isDelivery ? '<p class="muted small">🛵 Phí giao hàng bạn trả trực tiếp cho tài xế khi nhận hàng, không nằm trong số tiền chuyển khoản bên dưới.</p>' : ""}<p class="countdown-line">Thời gian còn lại <b id="countdown">${countdownText(view.remainingMs ?? 0)}</b></p>${paymentHtml(order)}<p class="pay-warning">⚠️ Lưu ý: sau khi quán nhận tiền, đơn được chuyển cho bếp nên <b>không sửa hoặc huỷ vì đổi ý</b> được. Nếu quán không thực hiện được đơn, giao thiếu/sai món hoặc món có lỗi, quán sẽ <b>hoàn tiền</b> (xem <a href="chinh-sach#hoan-tien" target="_blank" rel="noopener">chính sách đổi trả, hoàn tiền</a>).</p>`;
   }
   if (view.status === STATUS.REJECTED) extra = `<p class="reject-reason"><b>Lý do:</b> ${esc(order.rejectReason || "Quán chưa nhận được đơn lúc này.")}</p>`;
   const spinner = view.status === STATUS.NEW ? '<div class="spinner" aria-hidden="true"></div>' : "";

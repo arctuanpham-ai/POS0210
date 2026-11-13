@@ -29,7 +29,7 @@ export const LIMITS = Object.freeze({
   maxTotal: 5_000_000,
   maxPendingOrders: 2,
   limitWindowMinutes: 60,
-  payMinutes: 10,
+  payMinutes: 30,
 });
 
 export const ORDER_KEYS = Object.freeze([
@@ -185,9 +185,9 @@ export const orderView = (order, nowMs) => {
 };
 
 export const STATUS_TEXT = Object.freeze({
-  new: { title: "Quán đang xác nhận đơn của bạn", hint: "Vui lòng giữ trang này mở. Quán sẽ xác nhận trong ít phút." },
+  new: { title: "Quán đã nhận đơn của bạn", hint: "Quán đang xác nhận, thường dưới 3 phút, bạn không cần làm gì thêm. Quán sẽ liên hệ lại để xác nhận và mã thanh toán sẽ được gửi ngay trên trang này. Nếu bạn đã thoát ra, mã thanh toán nằm ở thanh “Bạn có đơn đang theo dõi” trên trang menu." },
   rejected: { title: "Quán chưa nhận được đơn này", hint: "" },
-  awaiting_payment: { title: "Quán đã nhận đơn, mời bạn thanh toán", hint: "Quét mã QR bằng app ngân hàng hoặc chuyển khoản đúng số tiền và nội dung bên dưới." },
+  awaiting_payment: { title: "Quán đã nhận đơn, mời bạn thanh toán", hint: "Vui lòng thanh toán trước khi quán giao hàng: quét mã QR bằng app ngân hàng hoặc chuyển khoản đúng số tiền và nội dung bên dưới." },
   expired: { title: "Đơn đã hết hạn vì chưa thanh toán", hint: "Bạn có thể đặt lại đơn này." },
   paid: { title: "Quán đã nhận tiền và đang làm món", hint: "" },
   delivering: { title: "Đơn đang trên đường giao đến bạn", hint: "" },

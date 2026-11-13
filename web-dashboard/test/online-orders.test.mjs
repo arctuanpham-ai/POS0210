@@ -11,11 +11,11 @@ test("trạng thái khớp với trang khách", () => {
   assert.deepEqual(Object.values(OO_STATUS).sort(), Object.values(CUSTOMER_STATUS).sort());
 });
 
-test("nhận đơn: chờ thanh toán 10 phút, nội dung CK DM<mã>, không trừ bộ đếm", () => {
+test("nhận đơn: chờ thanh toán 30 phút, nội dung CK DM<mã>, không trừ bộ đếm", () => {
   const t = buildTransition(order(), "accept", { now, who: "Hương" });
   assert.equal(t.patch.status, "awaiting_payment");
   assert.equal(t.patch.transferContent, "DMK7P2QX");
-  assert.equal(t.patch.expiresAt, now + 600_000);
+  assert.equal(t.patch.expiresAt, now + 1_800_000);
   assert.equal(t.patch.handledBy, "Hương");
   assert.equal(t.releasesLimit, false);
 });

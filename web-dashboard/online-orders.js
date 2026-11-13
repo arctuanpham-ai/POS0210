@@ -1,7 +1,7 @@
 /* Đơn đặt món online: logic cho nhân viên (thuần, kiểm thử được). Khớp với trang khách web-order và Firestore rules online-orders.rules. */
 
 export const OO_STATUS = Object.freeze({ NEW: "new", REJECTED: "rejected", AWAITING_PAYMENT: "awaiting_payment", EXPIRED: "expired", PAID: "paid", DELIVERING: "delivering", DONE: "done", CANCELLED: "cancelled" });
-export const OO_PAY_MINUTES = 10;
+export const OO_PAY_MINUTES = 30;
 export const OO_LABELS = Object.freeze({
   new: "Chờ quán xác nhận", rejected: "Đã từ chối", awaiting_payment: "Chờ khách thanh toán", expired: "Hết hạn",
   paid: "Đã nhận tiền · đang làm", delivering: "Đang giao", done: "Hoàn thành", cancelled: "Khách đã huỷ",

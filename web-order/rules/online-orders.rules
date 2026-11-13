@@ -336,3 +336,14 @@ match /users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/online_stats_eng/{id} {
     && engDelta('b10') && engDelta('eng') && engDelta('inapp') && engDelta('slow');
   allow delete: if isShopOwner();
 }
+
+// ---- Nhật ký lỗi gửi đơn (chẩn đoán): khi máy chủ từ chối đơn, trang đặt món ghi 1 dòng không chứa tên/SĐT. Khách chỉ tạo; chỉ chủ quán đọc/xoá. ----
+match /users/X9ln8CP7UtbOLOHfipYMCjfbb1p1/stores/0210/online_errors/{id} {
+  allow read, delete: if isShopOwner();
+  allow create: if isGuest()
+    && request.resource.data.keys().hasOnly(['code', 'at', 'info'])
+    && request.resource.data.code is string && request.resource.data.code.size() <= 60
+    && request.resource.data.at == request.time
+    && request.resource.data.info is string && request.resource.data.info.size() <= 2500;
+  allow update: if false;
+}

@@ -110,6 +110,22 @@ for (const [i, c] of cases.entries()) {
   console.log(`[bản chụp menu] khách ghi bị chặn -> HTTP ${w.status} ${w.status === 403 ? "ĐÚNG" : "SAI"}`);
   if (w.status !== 403) failed++;
 }
+// Nhật ký lỗi gửi đơn (online_errors): khách ghi được 1 dòng đúng khuôn, khoá lạ bị chặn, khách không đọc được; dọn bằng quyền chủ quán.
+{
+  const eid = `smoke${Date.now()}`;
+  const mk = (extra) => ({ writes: [{ update: { name: `${root}/online_errors/${eid}`, fields: fields({ code: "denied", info: "{}", ...extra }) }, updateTransforms: [{ fieldPath: "at", setToServerValue: "REQUEST_TIME" }], currentDocument: { exists: false } }] });
+  const send = (b) => fetch(`https://firestore.googleapis.com/v1/${db}:commit`, { method: "POST", headers: { authorization: `Bearer ${signIn.idToken}`, "content-type": "application/json" }, body: JSON.stringify(b) });
+  const bad = await send(mk({ hack: "x" }));
+  console.log(`[nhật ký lỗi] khoá lạ bị chặn -> HTTP ${bad.status} ${bad.status === 403 ? "ĐÚNG" : "SAI"}`);
+  if (bad.status !== 403) failed++;
+  const good = await send(mk({}));
+  console.log(`[nhật ký lỗi] ghi 1 dòng -> HTTP ${good.status} ${good.ok ? "ĐÚNG" : "SAI"}`);
+  if (!good.ok) failed++;
+  const rd = await fetch(`https://firestore.googleapis.com/v1/${root}/online_errors/${eid}`, { headers: { authorization: `Bearer ${signIn.idToken}` } });
+  console.log(`[nhật ký lỗi] khách đọc bị chặn -> HTTP ${rd.status} ${rd.status === 403 ? "ĐÚNG" : "SAI"}`);
+  if (rd.status !== 403) failed++;
+  await fetch(`https://firestore.googleapis.com/v1/${root}/online_errors/${eid}`, { method: "DELETE", headers: { authorization: `Bearer ${admin}` } });
+}
 // Lượt vào theo nguồn (online_stats_src): khách ẩn danh tạo / tăng đúng 1 với đúng các khoá; sai thì bị chặn. Dọn bằng quyền chủ quán.
 {
   const id = "20000101~0badf00d";

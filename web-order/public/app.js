@@ -610,6 +610,7 @@ async function submitOrder(event) {
     const uid = await ensureUid();
     if (!uid) throw Object.assign(new Error("auth"), { code: "auth" });
     track("submit");
+    lastValue = checked.value;
     const result = await sendOrder(uid, checked.value, lines);
     flushDwell(true);
     store.set(KEYS.profile, { name: checked.value.name, phone: checked.value.phone, address: form.address.value.trim(), delivery: form.receive.value === "delivery" });
@@ -676,12 +677,39 @@ async function sendOrder(uid, value, lines) {
   throw lastError;
 }
 
+let lastValue = null;
+/** Ghi nhật ký lỗi (không có tên/SĐT) để quán biết vì sao đơn bị từ chối. Lỗi ở đây không được ảnh hưởng khách. */
+async function reportOrderError(error, lines, value) {
+  try {
+    const uid = auth.currentUser?.uid || "";
+    const pricing = priceNow(lines);
+    const checks = await Promise.all(lines.slice(0, 8).map(async (l) => {
+      const isCombo = String(l.id).startsWith("c_");
+      try {
+        const s = await getDoc(ref(isCombo ? "combos" : "menu", isCombo ? String(l.id).slice(2) : String(l.id)));
+        const m = s.exists() ? s.data() : null;
+        return { id: String(l.id).slice(0, 12), n: l.name, p: l.price, q: l.qty, sv: m ? { n: m.name === l.name ? "=" : m.name, p: m.price === l.price ? "=" : m.price, a: m.active, d: m.deleted } : "KHONG_CO" };
+      } catch (e) { return { id: String(l.id).slice(0, 12), err: e?.code || "x" }; }
+    }));
+    const lim = async (key) => { try { const s = await getDoc(ref("online_limits", key)); return s.exists() ? { p: s.data().pending, at: s.data().lastAt?.toMillis?.() } : null; } catch { return "err"; } };
+    const info = {
+      err: error?.code || "", msg: String(error?.message || "").slice(0, 160), now: Date.now(), srv: serverNow(),
+      ua: navigator.userAgent.slice(0, 140), v: document.querySelector('script[src*="app.js"]')?.src.slice(-40) || "",
+      mode: value?.mode || "", addr: String(value?.address || "").length, note: String(value?.note || "").length, name: String(value?.name || "").length, phone: String(value?.phone || "").length,
+      total: pricing.total, disc: pricing.discount, sur: pricing.surcharge, lines: checks,
+      uLim: await lim(limitKeyForUid(uid)), pLim: value?.phone ? await lim(limitKeyForPhone(value.phone)) : null,
+    };
+    await setDoc(doc(col("online_errors")), { code: String(error?.code || "denied"), at: serverTimestamp(), info: JSON.stringify(info).slice(0, 2400) });
+  } catch { /* bỏ qua */ }
+}
+
 async function handleSubmitError(error, lines) {
   if (error?.code === "limit") {
     setFormMessage(`Bạn đang có ${LIMITS.maxPendingOrders} đơn chờ quán xác nhận hoặc chưa thanh toán. Vui lòng đợi các đơn đó xong rồi đặt tiếp${state.shop.phone ? `, hoặc gọi ${state.shop.phone}` : ""}.`, true);
     return;
   }
   if (isDenied(error)) {
+    reportOrderError(error, lines, lastValue);
     // Có thể quán vừa đổi giá/tắt món: đọc lại menu từ máy chủ để báo đúng nguyên nhân.
     try {
       const [menuSnap, comboSnap] = await Promise.all([getDocs(col("menu")), getDocs(col("combos"))]);

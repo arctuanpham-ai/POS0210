@@ -886,7 +886,18 @@ function renderTrack() {
 /** Banner "đơn đang theo dõi" chỉ cho đơn CHƯA kết thúc. Đơn đã xong/từ chối/hết hạn chuyển sang Lịch sử. */
 function updateBanner(name = !$("#screen-menu").hidden ? "menu" : "") {
   const active = state.code && !(state.order && orderView(state.order, serverNow()).isFinal);
-  $("#track-banner").hidden = !(name === "menu" && active);
+  const banner = $("#track-banner");
+  banner.hidden = !(name === "menu" && active);
+  if (!banner.hidden) {
+    const st = state.order ? orderView(state.order, serverNow()).status : STATUS.NEW;
+    const code = state.code ? ` #${state.code}` : "";
+    const txt = st === STATUS.AWAITING_PAYMENT ? `💳 Quán đã xác nhận đơn${code}. BẤM ĐỂ THANH TOÁN`
+      : st === STATUS.PAID ? `👨‍🍳 Quán đã nhận tiền, đang làm đơn${code}. Bấm để xem`
+      : st === STATUS.DELIVERING ? `🛵 Đơn${code} đang trên đường giao. Bấm để xem`
+      : `🔔 Bạn có đơn${code} đang theo dõi. Bấm để xem trạng thái và mã thanh toán`;
+    banner.textContent = txt;
+    banner.classList.toggle("pay-now", st === STATUS.AWAITING_PAYMENT);
+  }
   const hasHist = (store.get(KEYS.hist, []) || []).length > 0;
   $("#open-history").hidden = !hasHist;
 }

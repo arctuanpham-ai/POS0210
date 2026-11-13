@@ -478,3 +478,9 @@ body.has-cart .chat-fab { bottom: calc(88px + env(safe-area-inset-bottom, 0px));
 
 .call-fab { background: #1f9d55; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
 body.has-cart .call-fab { bottom: calc(148px + env(safe-area-inset-bottom, 0px)); }
+
+/* Banner "đơn đang theo dõi": nổi bật, nhấp nháy nhẹ để khách không bỏ sót; đơn chờ thanh toán thì đỏ cam, nhấp nháy mạnh hơn. */
+.track-banner { position: sticky; top: 8px; z-index: 15; border: 2px solid #e8590c; background: #fff0d6; color: #7a2e00; font-size: 16px; line-height: 1.35; box-shadow: 0 0 0 0 #e8590c88, 0 4px 14px #00000026; animation: banner-pulse 1.6s ease-in-out infinite; }
+.track-banner.pay-now { background: #e8590c; color: #fff; border-color: #b8430a; animation: banner-pulse 1s ease-in-out infinite; }
+@keyframes banner-pulse { 0%, 100% { box-shadow: 0 0 0 0 #e8590c99, 0 4px 14px #00000026; transform: scale(1); } 50% { box-shadow: 0 0 0 9px #e8590c00, 0 4px 14px #00000026; transform: scale(1.015); } }
+@media (prefers-reduced-motion: reduce) { .track-banner, .track-banner.pay-now { animation: none; } }

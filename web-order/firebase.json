@@ -4,6 +4,9 @@
     "public": "public",
     "ignore": ["firebase.json", ".firebaserc", "**/.*", "**/node_modules/**"],
     "cleanUrls": true,
+    "redirects": [
+      { "source": "/fb", "destination": "/?utm_source=facebook&utm_medium=messenger&utm_campaign=fanpage_inbox", "type": 302 }
+    ],
     "headers": [
       { "source": "**", "headers": [
         { "key": "X-Content-Type-Options", "value": "nosniff" },

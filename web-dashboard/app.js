@@ -4918,6 +4918,13 @@ async function ooLoadCustomer(phone) {
   renderOnline();
 }
 
+/** Nhãn nguồn khách (từ UTM gắn trên link đặt món): Facebook, Google... Đơn không rõ nguồn thì không hiện nhãn. */
+function ooSrcTag(order) {
+  const src = String(order?.src?.source || "").trim();
+  if (!src || src === "(not_set)") return "";
+  const label = src === "facebook" ? "Facebook" : src === "google" ? "Google" : src;
+  return `<span class="oo-src oo-src-${src === "facebook" ? "fb" : "other"}">${escapeHtml(label)}</span>`;
+}
 function ooCardHtml(order, now) {
   const created = ooToMillis(order.createdAt);
   const adjust = [
@@ -4937,7 +4944,7 @@ function ooCardHtml(order, now) {
   const phone = String(order.phone || "");
   const buttons = nextActions(order, now).map((a, i) => `<button type="button" class="${i === 0 ? "main" : ""}" data-oo-act="${a.key}" data-oo-id="${escapeHtml(order.id)}"${oo.busy.has(order.id) ? " disabled" : ""}>${escapeHtml(a.label)}</button>`).join("");
   return `<article class="oo-card s-${escapeHtml(order.status)}" data-oo="${escapeHtml(order.id)}">
-    <div class="oo-head"><span class="oo-code">${escapeHtml(order.code || order.id)}</span><span class="oo-status">${escapeHtml(OO_LABELS[order.status] || order.status)}</span><span class="oo-time">${escapeHtml(minutesAgoText(created, now))}</span></div>
+    <div class="oo-head"><span class="oo-code">${escapeHtml(order.code || order.id)}</span>${ooSrcTag(order)}<span class="oo-status">${escapeHtml(OO_LABELS[order.status] || order.status)}</span><span class="oo-time">${escapeHtml(minutesAgoText(created, now))}</span></div>
     <p class="oo-who"><b>${escapeHtml(order.name || "")}</b> · <a href="tel:${escapeHtml(phone)}">${escapeHtml(phone)}</a></p>
     ${ooCustHtml(order)}
     <p class="oo-mode">${escapeHtml(OO_MODE_LABELS[order.mode] || "")}${order.mode === "pickup" ? "" : ` · ${where}`}</p>

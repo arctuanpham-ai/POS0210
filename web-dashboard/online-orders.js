@@ -34,19 +34,18 @@ export const isOverdue = (order, nowMs) => order?.status === OO_STATUS.AWAITING_
 const PAY_BTNS = [{ key: "paid", method: "transfer", label: "Đã nhận chuyển khoản" }, { key: "paid", method: "cash", label: "Thu tiền mặt" }];
 const DONE_UNPAID = [{ key: "done", method: "transfer", label: "Hoàn thành (khách CK)" }, { key: "done", method: "cash", label: "Hoàn thành (tiền mặt)" }];
 const READY = { key: "ready", label: "Món đã xong" };
-const REMIND = { key: "remind", label: "Nhắc khách thanh toán" };
 
-/** Hành động nhân viên được làm với một đơn. Nút đầu là hành động chính. "remind" chỉ chép lời nhắc, không đổi đơn. */
+/** Hành động nhân viên được làm với một đơn. Nút đầu là hành động chính.  */
 export const nextActions = (order) => {
   const delivery = order?.mode === "delivery";
   const deliver = delivery ? [{ key: "deliver", label: "Đang giao" }] : [];
   switch (order?.status) {
     case OO_STATUS.NEW: return [{ key: "accept", label: "Nhận đơn" }, { key: "reject", label: "Từ chối" }];
-    case OO_STATUS.AWAITING_PAYMENT: return [...(order.readyAt ? [] : [READY]), ...deliver, ...PAY_BTNS, ...DONE_UNPAID, REMIND, { key: "expire", label: "Huỷ đơn" }];
+    case OO_STATUS.AWAITING_PAYMENT: return [...(order.readyAt ? [] : [READY]), ...deliver, ...PAY_BTNS, ...DONE_UNPAID, { key: "expire", label: "Huỷ đơn" }];
     case OO_STATUS.EXPIRED: return [{ key: "paid", method: "transfer", label: "Khách trả muộn: đã nhận CK" }, { key: "paid", method: "cash", label: "Khách trả muộn: tiền mặt" }];
     case OO_STATUS.CANCELLED: return [{ key: "paid", method: "transfer", label: "Khách đã chuyển trước khi huỷ: ghi nhận" }];
     case OO_STATUS.PAID: return [...(order.readyAt ? [] : [READY]), ...deliver, { key: "done", label: "Hoàn thành" }];
-    case OO_STATUS.DELIVERING: return isPaid(order) ? [{ key: "done", label: "Hoàn thành" }] : [...DONE_UNPAID, ...PAY_BTNS, REMIND];
+    case OO_STATUS.DELIVERING: return isPaid(order) ? [{ key: "done", label: "Hoàn thành" }] : [...DONE_UNPAID, ...PAY_BTNS];
     default: return [];
   }
 };
@@ -93,17 +92,6 @@ export const buildTransition = (order, action, { now = Date.now(), who = "", rea
       return { patch: { status: "done", doneAt: now, ...pay, ...by }, releasesLimit: release };
     }
   }
-};
-
-/** Lời nhắc gửi khách (chép vào Messenger/Zalo): số tiền, tài khoản, nội dung CK. Không nêu số tiền phí COD vì chưa có biểu phí. */
-export const remindMessage = (order, shop = {}) => {
-  const code = order?.code || "";
-  const amount = `${Math.round(Number(order?.total) || 0).toLocaleString("vi-VN")}đ`;
-  const content = order?.transferContent || transferContentFor(code);
-  const bank = shop.bank && shop.account ? `${shop.bank} ${shop.account}${shop.holder ? ` (${shop.holder})` : ""}` : "";
-  const how = bank ? `Bạn chuyển khoản giúp quán ${amount} tới ${bank}, nội dung: ${content}. ` : `Bạn chuyển khoản giúp quán ${amount}, nội dung: ${content}. `;
-  const tail = order?.mode === "delivery" ? "Chuyển khoản trước giúp bạn không bị mất thêm phí thu hộ COD. " : "";
-  return `Chào ${String(order?.name || "bạn").trim()}, quán 0210 nhắc đơn ${code} chưa thanh toán. ${how}${tail}Cảm ơn bạn!`;
 };
 
 /** Giá trị mới của một bộ đếm sau khi đóng đơn: giảm 1, không âm. */
@@ -182,5 +170,5 @@ export const cardActions = (order) => {
   const main = status === OO_STATUS.DELIVERING ? { key: "done", label: "Hoàn thành" }
     : !order.readyAt ? { key: "ready", label: "Món đã xong" }
       : delivery ? { key: "deliver", label: "Đang giao" } : { key: "done", label: "Hoàn thành" };
-  return { main, pay: isPaid(order) ? [] : [...PAY_BTNS, REMIND], more: status === OO_STATUS.AWAITING_PAYMENT ? [{ key: "expire", label: "Huỷ đơn" }] : [] };
+  return { main, pay: isPaid(order) ? [] : [...PAY_BTNS], more: status === OO_STATUS.AWAITING_PAYMENT ? [{ key: "expire", label: "Huỷ đơn" }] : [] };
 };

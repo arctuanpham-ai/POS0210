@@ -82,24 +82,6 @@ class OnlineOrderRulesTest {
         // món không còn trong menu
         assertTrue(OnlineOrderRules.priceProblems(o, mapOf("a" to 10000L), mapOf("x" to 30000L)).any { it.contains("không còn") })
     }
-}
-
-class OnlineOrderTestFilterTest {
-    @org.junit.Test fun automatedTestOrdersAreIgnored() {
-        val o = OnlineOrder("X", "X", "u", OnlineOrderRules.TEST_NAME, "0900000000", "pickup", "", "", "", emptyList(), 0, "new", "", 0L, null, null)
-        org.junit.Assert.assertTrue(OnlineOrderRules.isTest(o))
-        org.junit.Assert.assertFalse(OnlineOrderRules.isTest(o.copy(name = "An")))
-    }
-}
-
-class OnlineOrderPricingFieldsTest {
-    @org.junit.Test fun parsesDiscountAndSurcharge() {
-        val o = OnlineOrderRules.fromMap("X", mapOf("code" to "X", "status" to "paid", "total" to 54000L, "discount" to 6000L, "surcharge" to 0L), { it as? Long })
-        org.junit.Assert.assertEquals(6000L, o.discount)
-        org.junit.Assert.assertEquals(0L, o.surcharge)
-        val legacy = OnlineOrderRules.fromMap("Y", mapOf("code" to "Y", "status" to "paid", "total" to 1000L), { it as? Long })
-        org.junit.Assert.assertEquals(0L, legacy.discount)
-    }
 
     @Test fun staffAssistOrdersAreSilentAndAutoHandled() {
         val staff = order("new").copy(staffAssist = true)
@@ -117,5 +99,23 @@ class OnlineOrderPricingFieldsTest {
         assertTrue(OnlineOrderRules.fromMap("AB12CD", base + ("src" to mapOf("source" to "facebook", "medium" to "staff_assist")), { null }).staffAssist)
         assertFalse(OnlineOrderRules.fromMap("AB12CD", base + ("src" to mapOf("source" to "facebook", "medium" to "messenger")), { null }).staffAssist)
         assertFalse(OnlineOrderRules.fromMap("AB12CD", base, { null }).staffAssist)
+    }
+}
+
+class OnlineOrderTestFilterTest {
+    @org.junit.Test fun automatedTestOrdersAreIgnored() {
+        val o = OnlineOrder("X", "X", "u", OnlineOrderRules.TEST_NAME, "0900000000", "pickup", "", "", "", emptyList(), 0, "new", "", 0L, null, null)
+        org.junit.Assert.assertTrue(OnlineOrderRules.isTest(o))
+        org.junit.Assert.assertFalse(OnlineOrderRules.isTest(o.copy(name = "An")))
+    }
+}
+
+class OnlineOrderPricingFieldsTest {
+    @org.junit.Test fun parsesDiscountAndSurcharge() {
+        val o = OnlineOrderRules.fromMap("X", mapOf("code" to "X", "status" to "paid", "total" to 54000L, "discount" to 6000L, "surcharge" to 0L), { it as? Long })
+        org.junit.Assert.assertEquals(6000L, o.discount)
+        org.junit.Assert.assertEquals(0L, o.surcharge)
+        val legacy = OnlineOrderRules.fromMap("Y", mapOf("code" to "Y", "status" to "paid", "total" to 1000L), { it as? Long })
+        org.junit.Assert.assertEquals(0L, legacy.discount)
     }
 }

@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
-import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
+import { getAuth, onAuthStateChanged, signInAnonymously, signOut } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
 import {
   collection,
   doc,
@@ -55,6 +55,16 @@ const store = {
   del(key) { try { localStorage.removeItem(key); } catch { /* bỏ qua */ } },
 };
 const KEYS = { cart: "pos0210o.cart", codes: "pos0210o.codes", profile: "pos0210o.profile", menu: "pos0210o.menu5", thumbs: "pos0210o.thumbs", hist: "pos0210o.hist", attr: "pos0210o.attr" };
+/* Chế độ NHÂN VIÊN ĐẶT HỘ: nhân viên mở link /nv trên điện thoại quán, nhập món + tên/SĐT khách nhắn qua Facebook. Đơn đi đúng đường đơn online
+   (mã, giá, ưu đãi y như khách tự đặt), gắn nguồn Facebook. Không đếm lượt truy cập, không nhớ tên/SĐT của khách lên máy, không hiện gợi ý lần đầu. Thoát: ?nv=0. */
+const STAFF_KEY = "pos0210o.staff";
+const STAFF = (() => {
+  try {
+    const q = new URLSearchParams(location.search).get("nv");
+    if (q === "1") localStorage.setItem(STAFF_KEY, "1"); else if (q === "0") localStorage.removeItem(STAFF_KEY);
+    return localStorage.getItem(STAFF_KEY) === "1";
+  } catch { return false; }
+})();
 const MENU_TTL = 5 * 60_000;
 const THUMB_TTL = 24 * 3_600_000;
 
@@ -87,6 +97,7 @@ const serverNow = () => Date.now() + state.clockOffset;
 /* ---------- Đếm lượt truy cập theo cấp (phễu): lỗi hay bị chặn thì bỏ qua, không ảnh hưởng đặt món ---------- */
 const STATS_SESSION_KEY = "pos0210o.stats.session";
 function track(event) {
+  if (STAFF) return;
   try {
     const now = Date.now();
     let session = {}, device = {};
@@ -118,6 +129,7 @@ const inAppBrowser = () => /FBAN|FBAV|FB_IAB|FBIOS|Instagram|Zalo|Messenger/i.te
 const dwell = { visible: document.visibilityState !== "hidden", since: Date.now(), acc: 0 };
 const dwellSeconds = () => (dwell.acc + (dwell.visible ? Date.now() - dwell.since : 0)) / 1000;
 function flushDwell(ordered) {
+  if (STAFF) return;
   try {
     const now = Date.now(), day = vnDayKey(now);
     let flag = null;
@@ -179,8 +191,19 @@ function captureSource() {
     if (next) store.set(KEYS.attr, next); else store.del(KEYS.attr);
   } catch { /* bỏ qua */ }
 }
-const orderSource = () => { try { return attributionForOrder(readStored(store.get(KEYS.attr)), Date.now()); } catch { return null; } };
-const ensureUid = async () => (await authPromise) || state.uid;
+const orderSource = () => { if (STAFF) return { source: "facebook", medium: "staff_assist", campaign: "fanpage_inbox", at: Date.now() }; try { return attributionForOrder(readStored(store.get(KEYS.attr)), Date.now()); } catch { return null; } };
+const ensureUid = async () => { const first = await authPromise; return state.uid || first; };
+/** Nhân viên đặt hộ nhiều đơn liên tiếp trên một máy: khi máy đã đủ số đơn chờ tối đa thì đổi sang một khách ẩn danh mới (bộ đếm giới hạn tính theo máy/SĐT khách). */
+async function staffFreshUid(uid) {
+  try {
+    const l = await readLimit("online_limits", limitKeyForUid(uid));
+    if (pendingBase(l, serverNow()) < LIMITS.maxPendingOrders) return uid;
+    await signOut(auth);
+    const cred = await signInAnonymously(auth);
+    state.uid = cred.user.uid;
+    return cred.user.uid;
+  } catch { return uid; }
+}
 
 /* ---------- Thông tin quán ---------- */
 async function loadShop() {
@@ -524,10 +547,12 @@ function renderSheet() {
 function openSheet() {
   const profile = store.get(KEYS.profile, {}) || {};
   const form = $("#order-form");
-  if (!form.name.value) form.name.value = profile.name || "";
-  if (!form.phone.value) form.phone.value = profile.phone || "";
-  if (!form.address.value) form.address.value = profile.address || "";
-  if (profile.delivery) form.receive.value = "delivery";
+  if (!STAFF) {
+    if (!form.name.value) form.name.value = profile.name || "";
+    if (!form.phone.value) form.phone.value = profile.phone || "";
+    if (!form.address.value) form.address.value = profile.address || "";
+    if (profile.delivery) form.receive.value = "delivery";
+  }
   syncReceiveFields();
   clearErrors();
   state.sheetOpen = true;
@@ -611,13 +636,15 @@ async function submitOrder(event) {
   button.querySelector("span").textContent = "Đang gửi đơn…";
   const slow = setTimeout(() => setFormMessage("Mạng đang yếu, đơn vẫn đang được gửi. Vui lòng chờ, đừng bấm lại.", false), 12_000);
   try {
-    const uid = await ensureUid();
+    let uid = await ensureUid();
     if (!uid) throw Object.assign(new Error("auth"), { code: "auth" });
+    if (STAFF) uid = await staffFreshUid(uid);
     track("submit");
     lastValue = checked.value;
     const result = await sendOrder(uid, checked.value, lines);
     flushDwell(true);
-    store.set(KEYS.profile, { name: checked.value.name, phone: checked.value.phone, address: form.address.value.trim(), delivery: form.receive.value === "delivery" });
+    if (STAFF) { form.name.value = ""; form.phone.value = ""; form.address.value = ""; form.receive.value = "pickup"; }
+    else store.set(KEYS.profile, { name: checked.value.name, phone: checked.value.phone, address: form.address.value.trim(), delivery: form.receive.value === "delivery" });
     store.set(KEYS.codes, rememberCode(store.get(KEYS.codes, []), result.code));
     store.set(KEYS.hist, rememberCode(store.get(KEYS.hist, []), result.code, 40));
     state.cart = {};
@@ -883,6 +910,7 @@ function renderTrack() {
   if (view.status === STATUS.AWAITING_PAYMENT) {
     extra = `${view.isDelivery ? '<p class="muted small">🛵 Phí giao hàng bạn trả trực tiếp cho tài xế khi nhận hàng, không nằm trong số tiền chuyển khoản bên dưới.</p>' : ""}<p class="countdown-line">Thời gian còn lại <b id="countdown">${countdownText(view.remainingMs ?? 0)}</b></p>${paymentHtml(order)}<p class="pay-warning">⚠️ Lưu ý: quán làm món ngay khi xác nhận đơn, nên <b>muốn sửa hoặc huỷ đơn bạn cần liên hệ quán và được quán đồng ý</b>. Nếu quán không thực hiện được đơn, giao thiếu/sai món hoặc món có lỗi, quán sẽ <b>hoàn tiền</b> (xem <a href="chinh-sach#hoan-tien" target="_blank" rel="noopener">chính sách đổi trả, hoàn tiền</a>).</p>`;
   }
+  if (STAFF) extra = `<p class="staff-note"><b>Đặt hộ cho ${esc(order.name)} · ${esc(order.phone)} · mã ${esc(order.code)}.</b> Khi quán nhận đơn, trang này hiện mã QR thanh toán: bấm "Lưu ảnh QR" rồi gửi ảnh cho khách qua Messenger.</p>${extra}`;
   if (view.status === STATUS.REJECTED) extra = `<p class="reject-reason"><b>Lý do:</b> ${esc(order.rejectReason || "Quán chưa nhận được đơn lúc này.")}</p>`;
   const spinner = view.status === STATUS.NEW ? '<div class="spinner" aria-hidden="true"></div>' : "";
   const chat = `<a class="chat-link" href="${esc(chatUrl(order.code))}" target="_blank" rel="noopener" data-chat="${esc(order.code)}">💬 Cần hỗ trợ thêm về đơn #${esc(order.code)} · chat ngay</a>`;
@@ -1197,7 +1225,7 @@ restoreOrder();
   const close = () => { document.body.classList.remove("fab-spot"); overlay.hidden = true; tip.hidden = true; markClosed(); document.removeEventListener("keydown", onKey); };
   const onKey = (e) => { if (e.key === "Escape") close(); };
   setTimeout(async () => {
-    if (closedThisSession() || await succeededBefore()) return;
+    if (STAFF || closedThisSession() || await succeededBefore()) return;
     document.body.classList.add("fab-spot"); overlay.hidden = false; tip.hidden = false;
     overlay.addEventListener("click", close);
     stack.addEventListener("click", (e) => { if (e.target.closest("a")) close(); }, true);
@@ -1205,3 +1233,12 @@ restoreOrder();
   }, 900);
 })();
 window.__orderReady = true;
+
+/* Thanh báo chế độ nhân viên đặt hộ */
+(() => {
+  const bar = document.getElementById("staff-bar");
+  if (!bar || !STAFF) return;
+  bar.hidden = false;
+  document.body.classList.add("staff-mode");
+  bar.querySelector("[data-staff-exit]")?.addEventListener("click", () => { try { localStorage.removeItem(STAFF_KEY); } catch { /* bỏ qua */ } location.href = location.pathname; });
+})();

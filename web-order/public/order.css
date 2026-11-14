@@ -514,3 +514,9 @@ body.fab-spot .fab-stack #chat-fab { animation-delay: .25s; }
 body.fab-spot .fab-stack .guide-fab { animation-delay: .5s; }
 @keyframes fabPulse { 0%, 100% { box-shadow: 0 4px 14px #00000040, 0 0 0 0 rgba(255, 255, 255, .55); } 50% { box-shadow: 0 4px 14px #00000040, 0 0 0 9px rgba(255, 255, 255, 0); } }
 @media (prefers-reduced-motion: reduce) { body.fab-spot .fab-stack .chat-fab { animation: none; box-shadow: 0 0 0 3px #fff, 0 4px 14px #00000066; } }
+
+/* Chế độ nhân viên đặt hộ */
+.staff-bar { position: sticky; top: 0; z-index: 60; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 14px; background: #1b4fb8; color: #fff; font-size: 13px; }
+.staff-bar[hidden] { display: none; }
+.staff-bar button { border: 1px solid rgba(255,255,255,.7); background: transparent; color: #fff; border-radius: 999px; padding: 4px 12px; font-weight: 700; }
+.staff-note { background: #e7eefc; color: #17368a; border-radius: 12px; padding: 10px 12px; font-size: 14px; }

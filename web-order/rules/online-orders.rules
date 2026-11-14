@@ -251,7 +251,7 @@ function validLimitWrite(key) {
     && d.lastAt == request.time
     && d.pending is int
     && d.pending == base + 1
-    && d.pending <= 2;
+    && d.pending <= 6;
 }
 
 // Khách tự huỷ đơn của mình: chỉ đổi status -> 'cancelled' (+ cancelledAt) và chỉ khi đơn đang 'new' hoặc 'awaiting_payment'.

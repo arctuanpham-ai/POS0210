@@ -27,7 +27,7 @@ export const LIMITS = Object.freeze({
   minAddress: 8,
   maxTable: 10,
   maxTotal: 5_000_000,
-  maxPendingOrders: 2,
+  maxPendingOrders: 6,
   limitWindowMinutes: 60,
   payMinutes: 30,
 });

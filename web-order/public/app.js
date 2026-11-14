@@ -762,7 +762,7 @@ async function reportOrderError(eref, error, lines, value) {
 
 async function handleSubmitError(error, lines) {
   if (error?.code === "limit") {
-    setFormMessage(`Bạn đang có ${LIMITS.maxPendingOrders} đơn chờ quán xác nhận hoặc chưa thanh toán. Vui lòng đợi các đơn đó xong rồi đặt tiếp${state.shop.phone ? `, hoặc gọi ${state.shop.phone}` : ""}.`, true);
+    setFormMessage(`Bạn đang có ${LIMITS.maxPendingOrders} đơn đang chờ quán xác nhận. Vui lòng đợi quán nhận bớt đơn rồi đặt tiếp${state.shop.phone ? `, hoặc gọi ${state.shop.phone}` : ""}.`, true);
     return;
   }
   if (isDenied(error)) {

@@ -17,7 +17,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { APP_CHECK_SITE_KEY, DEFAULT_SHOP, MESSENGER_URL, NOTIFY_CLICK, NOTIFY_TOPIC, STORE_ID, STORE_OWNER_UID, firebaseConfig } from "./config.js";
 import {
-  FINAL_STATUSES, LIMITS, comboTools, pricingFor, MODE_LABELS, STATUS, STATUS_TEXT, buildOrderDoc, cartFromOrder, cartLines, changeQty, countdownText, isOrderable,
+  FINAL_STATUSES, LIMITS, comboTools, pricingFor, MODE_LABELS, STATUS, STATUS_TEXT, readyText, buildOrderDoc, cartFromOrder, cartLines, changeQty, countdownText, isOrderable,
   limitKeyForPhone, limitKeyForUid, linesCount, transferContentFor, linesTotal, makeOrderCode, menuSections, money, orderView, pendingBase, progressSteps, rememberCode,
   notifyPayload, HOME_VIEW, menuLayout, menuViews, offerMessage, comboSaving, onlineDiscountPercent, onlinePrice, phoneLinksHtml, setNote, toMillis, validateCheckout,
 } from "./order-core.js";
@@ -930,7 +930,7 @@ function renderTrack() {
   }
   const order = state.order;
   const view = orderView(order, serverNow());
-  const text = STATUS_TEXT[view.status] || STATUS_TEXT.new;
+  const text = view.stage === "ready" ? readyText(view.isDelivery) : (STATUS_TEXT[view.status] || STATUS_TEXT.new);
   let extra = "";
   if (view.status === STATUS.AWAITING_PAYMENT && view.remainingMs !== null) extra = `<p class="countdown-line">Đơn cũ: thời gian còn lại <b id="countdown">${countdownText(view.remainingMs ?? 0)}</b></p>`;
   const active = ![STATUS.REJECTED, STATUS.EXPIRED, STATUS.CANCELLED, STATUS.DONE].includes(view.status);
@@ -940,10 +940,10 @@ function renderTrack() {
   const pay = !active ? "" : view.paid
     ? `<section class="pay-block paid"><h3>✅ Đã thanh toán</h3><p class="muted">Quán đã nhận thanh toán cho đơn này. Cảm ơn bạn!</p></section>`
     : `<section class="pay-block"><h3>💳 Thanh toán <span class="pay-tag">Chưa thanh toán</span></h3>
-        <p class="pay-lead">Quét mã QR để <b>chuyển khoản cho quán</b>${view.isDelivery ? " <b>(không mất thêm phí ship COD)</b>" : ""}. Bạn chuyển lúc nào cũng được, quán vẫn làm món cho bạn.</p>
+        <p class="pay-lead">Quét mã QR để <b>chuyển khoản cho quán</b>${view.isDelivery ? " <b>(không mất thêm phí ship COD)</b>" : ""}. Bạn có thể chuyển ngay bây giờ hoặc khi nhận món, quán vẫn làm món bình thường.</p>
         ${view.isDelivery ? '<p class="muted small">🛵 Phí giao hàng bạn trả trực tiếp cho tài xế, không nằm trong số tiền bên dưới.</p>' : ""}
         ${paymentHtml({ ...order, transferContent: order.transferContent || transferContentFor(order.code) })}
-        <p class="muted small pay-alt">${view.isDelivery ? "Nếu cần, bạn vẫn có thể chọn <b>ship COD</b> (trả tiền mặt khi nhận hàng), khi đó <b>có thể phát sinh thêm phí thu hộ COD</b>. Hãy báo quán khi nhận đơn." : "Hoặc bạn trả tiền mặt tại quán khi nhận món."}</p></section>`;
+        <p class="muted small pay-alt">${view.isDelivery ? "Nếu cần, bạn vẫn có thể chọn <b>ship COD</b> (trả tiền mặt khi nhận hàng), khi đó <b>có thể phát sinh thêm phí thu hộ COD</b>. Hãy báo quán khi nhận đơn." : "Bạn cũng có thể trả tiền mặt tại quán khi nhận món."}</p></section>`;
   if (STAFF) extra = `<p class="staff-note"><b>Đặt hộ cho ${esc(order.name)} · ${esc(order.phone)} · mã ${esc(order.code)}.</b> Chụp màn hình hoặc bấm Lưu ảnh QR rồi gửi khách qua Messenger. Khách trả bằng QR hoặc tiền mặt khi nhận đều được.</p>${extra}`;
   if (view.status === STATUS.REJECTED) extra = `<p class="reject-reason"><b>Lý do:</b> ${esc(order.rejectReason || "Quán chưa nhận được đơn lúc này.")}</p>`;
   const spinner = view.status === STATUS.NEW ? '<div class="spinner" aria-hidden="true"></div>' : "";

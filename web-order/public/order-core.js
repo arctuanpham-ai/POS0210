@@ -183,16 +183,16 @@ export const orderView = (order, nowMs) => {
   const status = raw === STATUS.AWAITING_PAYMENT && remainingMs !== null && remainingMs <= 0 ? STATUS.EXPIRED : raw;
   // Thanh toán tách khỏi tiến độ làm món: khách trả trước (QR) hoặc sau (tiền mặt khi nhận) đều được. Đã thu = quán ghi paidAt hoặc đơn cũ ở trạng thái "paid".
   const paid = !!order?.paidAt || raw === STATUS.PAID || (status === STATUS.DONE && !!order?.payMethod);
-  return { status, rawStatus: raw, remainingMs, paid, stage: stageOf(status), isFinal: FINAL_STATUSES.includes(status), isDelivery: order?.mode === MODES.DELIVERY };
+  return { status, rawStatus: raw, remainingMs, paid, stage: stageOf(status, order?.readyAt), isFinal: FINAL_STATUSES.includes(status), isDelivery: order?.mode === MODES.DELIVERY };
 };
 
 /** Bước hiển thị trên thanh tiến độ: đơn đã nhận (chờ thu hoặc đã thu) đều là "making" (đang làm món). */
-export const stageOf = (status) => (status === STATUS.AWAITING_PAYMENT || status === STATUS.PAID ? "making" : status);
+export const stageOf = (status, readyAt = null) => (status === STATUS.AWAITING_PAYMENT || status === STATUS.PAID ? (readyAt ? "ready" : "making") : status);
 
 export const STATUS_TEXT = Object.freeze({
-  new: { title: "Đã gửi đơn đến quán", hint: "Quán đang xác nhận, thường dưới 3 phút. Bạn có thể thanh toán ngay bằng mã QR bên dưới, hoặc trả tiền mặt khi nhận hàng. Bạn không cần làm gì thêm." },
+  new: { title: "Đã gửi đơn đến quán", hint: "Quán đang xác nhận, thường dưới 3 phút. Bạn không cần làm gì thêm, có thể chuyển khoản luôn bằng mã QR bên dưới cho tiện." },
   rejected: { title: "Quán chưa nhận được đơn này", hint: "" },
-  awaiting_payment: { title: "Quán đã nhận đơn và đang làm món", hint: "Bạn thanh toán lúc nào cũng được: quét mã QR bên dưới hoặc trả tiền mặt khi nhận hàng." },
+  awaiting_payment: { title: "Quán đã nhận đơn và đang làm món", hint: "Bạn thanh toán ngay bây giờ hay khi nhận món đều được, chọn cách nào tiện nhất với bạn." },
   expired: { title: "Đơn đã hết hạn vì chưa thanh toán", hint: "Bạn có thể đặt lại đơn này." },
   paid: { title: "Đã thanh toán · quán đang làm món", hint: "" },
   delivering: { title: "Đơn đang trên đường giao đến bạn", hint: "" },
@@ -200,12 +200,17 @@ export const STATUS_TEXT = Object.freeze({
   cancelled: { title: "Bạn đã huỷ đơn này", hint: "Bạn có thể đặt lại bất cứ lúc nào." },
 });
 
+/** Khi quán bấm "Món đã xong" (readyAt): tiêu đề riêng cho khách lấy tại quán và khách chờ giao. */
+export const readyText = (isDelivery) => (isDelivery
+  ? { title: "Món đã làm xong, quán sắp giao cho bạn", hint: "Bạn giữ điện thoại để tài xế liên hệ nhé." }
+  : { title: "Món đã làm xong, mời bạn đến nhận", hint: "Bạn báo mã đơn cho nhân viên để nhận món." });
+
 /** Các bước thanh toán trên thanh tiến độ (không tính trạng thái từ chối/hết hạn). */
 export const progressSteps = (order) => {
   const delivery = order?.mode === MODES.DELIVERY;
   return delivery
-    ? [["new", "Chờ quán nhận"], ["making", "Đang làm món"], ["delivering", "Đang giao"], ["done", "Hoàn thành"]]
-    : [["new", "Chờ quán nhận"], ["making", "Đang làm món"], ["done", "Hoàn thành"]];
+    ? [["new", "Chờ quán nhận"], ["making", "Đang làm món"], ["ready", "Làm xong"], ["delivering", "Đang giao"], ["done", "Hoàn thành"]]
+    : [["new", "Chờ quán nhận"], ["making", "Đang làm món"], ["ready", "Làm xong"], ["done", "Hoàn thành"]];
 };
 
 /** Danh sách món của đơn cũ -> giỏ mới (cho nút "Đặt lại"), chỉ giữ món còn bán được. */

@@ -33,6 +33,7 @@ export const isOverdue = (order, nowMs) => order?.status === OO_STATUS.AWAITING_
 
 const PAY_BTNS = [{ key: "paid", method: "transfer", label: "Đã nhận chuyển khoản" }, { key: "paid", method: "cash", label: "Thu tiền mặt" }];
 const DONE_UNPAID = [{ key: "done", method: "transfer", label: "Hoàn thành (khách CK)" }, { key: "done", method: "cash", label: "Hoàn thành (tiền mặt)" }];
+const READY = { key: "ready", label: "Món đã xong" };
 const REMIND = { key: "remind", label: "Nhắc khách thanh toán" };
 
 /** Hành động nhân viên được làm với một đơn. Nút đầu là hành động chính. "remind" chỉ chép lời nhắc, không đổi đơn. */
@@ -41,17 +42,17 @@ export const nextActions = (order) => {
   const deliver = delivery ? [{ key: "deliver", label: "Đang giao" }] : [];
   switch (order?.status) {
     case OO_STATUS.NEW: return [{ key: "accept", label: "Nhận đơn" }, { key: "reject", label: "Từ chối" }];
-    case OO_STATUS.AWAITING_PAYMENT: return [...deliver, ...PAY_BTNS, ...DONE_UNPAID, REMIND, { key: "expire", label: "Huỷ đơn" }];
+    case OO_STATUS.AWAITING_PAYMENT: return [...(order.readyAt ? [] : [READY]), ...deliver, ...PAY_BTNS, ...DONE_UNPAID, REMIND, { key: "expire", label: "Huỷ đơn" }];
     case OO_STATUS.EXPIRED: return [{ key: "paid", method: "transfer", label: "Khách trả muộn: đã nhận CK" }, { key: "paid", method: "cash", label: "Khách trả muộn: tiền mặt" }];
     case OO_STATUS.CANCELLED: return [{ key: "paid", method: "transfer", label: "Khách đã chuyển trước khi huỷ: ghi nhận" }];
-    case OO_STATUS.PAID: return [...deliver, { key: "done", label: "Hoàn thành" }];
+    case OO_STATUS.PAID: return [...(order.readyAt ? [] : [READY]), ...deliver, { key: "done", label: "Hoàn thành" }];
     case OO_STATUS.DELIVERING: return isPaid(order) ? [{ key: "done", label: "Hoàn thành" }] : [...DONE_UNPAID, ...PAY_BTNS, REMIND];
     default: return [];
   }
 };
 
 // "paid" cũng được từ "expired"/"cancelled" (khách chuyển muộn) và từ "delivering" (thu khi giao, trạng thái giữ nguyên).
-const FROM = { accept: ["new"], reject: ["new"], paid: ["awaiting_payment", "expired", "cancelled", "delivering"], expire: ["awaiting_payment"], deliver: ["awaiting_payment", "paid"], done: ["awaiting_payment", "paid", "delivering"] };
+const FROM = { accept: ["new"], reject: ["new"], paid: ["awaiting_payment", "expired", "cancelled", "delivering"], ready: ["awaiting_payment", "paid"], expire: ["awaiting_payment"], deliver: ["awaiting_payment", "paid"], done: ["awaiting_payment", "paid", "delivering"] };
 
 const needMethod = (method) => {
   if (!PAY_METHODS[method]) throw new Error("Chọn cách thu tiền: chuyển khoản hoặc tiền mặt.");
@@ -79,6 +80,10 @@ export const buildTransition = (order, action, { now = Date.now(), who = "", rea
       if (isPaid(order) && order.status !== OO_STATUS.EXPIRED && order.status !== OO_STATUS.CANCELLED) throw new Error("Đơn này đã thu tiền rồi.");
       const keepStatus = order.status === OO_STATUS.DELIVERING;
       return { patch: { status: keepStatus ? "delivering" : "paid", paidAt: now, payMethod: needMethod(method), ...by }, releasesLimit: release };
+    }
+    case "ready": {
+      if (order.readyAt) throw new Error("Đơn này đã báo món xong rồi.");
+      return { patch: { readyAt: now, ...by }, releasesLimit: release };
     }
     case "expire": return { patch: { status: "expired", closedAt: now, ...by }, releasesLimit: release };
     case "deliver": return { patch: { status: "delivering", deliveringAt: now, ...by }, releasesLimit: release };

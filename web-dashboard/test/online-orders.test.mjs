@@ -45,11 +45,12 @@ test("chuyển trạng thái chỉ đi theo luồng hợp lệ", () => {
 
 test("nút theo trạng thái; giao hàng mới có 'Đang giao'", () => {
   assert.deepEqual(nextActions(order()).map((a) => a.key), ["accept", "reject"]);
-  assert.deepEqual(nextActions(order({ status: "paid", mode: "pickup" })).map((a) => a.key), ["done"]);
-  assert.deepEqual(nextActions(order({ status: "paid", mode: "delivery" })).map((a) => a.key), ["deliver", "done"]);
+  assert.deepEqual(nextActions(order({ status: "paid", mode: "pickup" })).map((a) => a.key), ["ready", "done"]);
+  assert.deepEqual(nextActions(order({ status: "paid", mode: "delivery" })).map((a) => a.key), ["ready", "deliver", "done"]);
+  assert.deepEqual(nextActions(order({ status: "paid", mode: "delivery", readyAt: now })).map((a) => a.key), ["deliver", "done"]);
   assert.deepEqual(nextActions(order({ status: "delivering", paidAt: now })).map((a) => a.key), ["done"]);
   assert.deepEqual(nextActions(order({ status: "done" })), []);
-  assert.deepEqual(nextActions(order({ status: "awaiting_payment", mode: "pickup" })).map((a) => a.key), ["paid", "paid", "done", "done", "remind", "expire"]);
+  assert.deepEqual(nextActions(order({ status: "awaiting_payment", mode: "pickup" })).map((a) => a.key), ["ready", "paid", "paid", "done", "done", "remind", "expire"]);
 });
 
 test("quá hạn thanh toán", () => {
@@ -161,4 +162,12 @@ test("lời nhắc thanh toán: số tiền, tài khoản, nội dung CK, không
   const msg = remindMessage(order({ name: "Lan", total: 125000, mode: "delivery" }), { bank: "MB", account: "0123", holder: "NGUYEN A" });
   assert.match(msg, /125\.000đ/); assert.match(msg, /MB 0123/); assert.match(msg, /DMK7P2QX/); assert.match(msg, /COD/);
   assert.doesNotMatch(msg, /\d+\s?đ.*phí COD|phí COD.*\d+\s?đ/);
+});
+
+test("Món đã xong: ghi readyAt, giữ nguyên trạng thái, chỉ một lần", () => {
+  const o = order({ status: "awaiting_payment" });
+  const t = buildTransition(o, "ready", { now });
+  assert.deepEqual(Object.keys(t.patch), ["readyAt"]); assert.equal(t.patch.readyAt, now);
+  assert.throws(() => buildTransition({ ...o, readyAt: now }, "ready", { now }), /đã báo/);
+  assert.throws(() => buildTransition(order({ status: "new" }), "ready", { now }), /đã đổi/);
 });

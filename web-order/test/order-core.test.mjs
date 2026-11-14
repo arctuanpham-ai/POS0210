@@ -108,6 +108,8 @@ test("orderView: hết hạn tính theo giờ, đồng hồ đếm ngược", ()
   assert.equal(orderView({ status: "paid" }, now).paid, true);
   assert.equal(orderView({ status: "new" }, now).paid, false);
   assert.equal(orderView({ status: "paid" }, now).stage, "making");
+  assert.equal(orderView({ status: "awaiting_payment", readyAt: 5 }, now).stage, "ready");
+  assert.equal(orderView({ status: "delivering", readyAt: 5 }, now).stage, "delivering");
   assert.equal(orderView({ status: "done" }, now).isFinal, true);
   assert.equal(orderView({ status: "new" }, now).isFinal, false);
   assert.equal(countdownText(-5), "00:00");
@@ -120,8 +122,8 @@ test("toMillis nhận nhiều dạng", () => {
 });
 
 test("thanh tiến độ: giao hàng có thêm bước Đang giao", () => {
-  assert.equal(progressSteps({ mode: "delivery" }).length, 4);
-  assert.equal(progressSteps({ mode: "pickup" }).length, 3);
+  assert.equal(progressSteps({ mode: "delivery" }).length, 5);
+  assert.equal(progressSteps({ mode: "pickup" }).length, 4);
 });
 
 test("đặt lại đơn: chỉ giữ món còn bán", () => {

@@ -905,14 +905,15 @@ function renderTrack() {
   }
   const order = state.order;
   const view = orderView(order, serverNow());
-  const text = STATUS_TEXT[view.status] || STATUS_TEXT.new;
+  const staffQrNow = STAFF && view.status === STATUS.NEW; // nhân viên đặt hộ: hiện mã QR ngay, không chờ quán xác nhận
+  const text = staffQrNow ? { title: "Đã gửi đơn · mã QR cho khách thanh toán", hint: "Chụp màn hình hoặc bấm Lưu ảnh QR rồi gửi khách. Quán sẽ nhận đơn trên máy POS." } : (STATUS_TEXT[view.status] || STATUS_TEXT.new);
   let extra = "";
   if (view.status === STATUS.AWAITING_PAYMENT) {
     extra = `${view.isDelivery ? '<p class="muted small">🛵 Phí giao hàng bạn trả trực tiếp cho tài xế khi nhận hàng, không nằm trong số tiền chuyển khoản bên dưới.</p>' : ""}<p class="countdown-line">Thời gian còn lại <b id="countdown">${countdownText(view.remainingMs ?? 0)}</b></p>${paymentHtml(order)}<p class="pay-warning">⚠️ Lưu ý: quán làm món ngay khi xác nhận đơn, nên <b>muốn sửa hoặc huỷ đơn bạn cần liên hệ quán và được quán đồng ý</b>. Nếu quán không thực hiện được đơn, giao thiếu/sai món hoặc món có lỗi, quán sẽ <b>hoàn tiền</b> (xem <a href="chinh-sach#hoan-tien" target="_blank" rel="noopener">chính sách đổi trả, hoàn tiền</a>).</p>`;
   }
-  if (STAFF) extra = `<p class="staff-note"><b>Đặt hộ cho ${esc(order.name)} · ${esc(order.phone)} · mã ${esc(order.code)}.</b> Khi quán nhận đơn, trang này hiện mã QR thanh toán: bấm "Lưu ảnh QR" rồi gửi ảnh cho khách qua Messenger.</p>${extra}`;
+  if (STAFF) extra = `<p class="staff-note"><b>Đặt hộ cho ${esc(order.name)} · ${esc(order.phone)} · mã ${esc(order.code)}.</b> Gửi ảnh QR dưới đây cho khách qua Messenger để khách chuyển khoản đúng số tiền và nội dung.</p>${staffQrNow ? paymentHtml({ ...order, transferContent: order.transferContent || `DM${order.code}` }) : ""}${extra}`;
   if (view.status === STATUS.REJECTED) extra = `<p class="reject-reason"><b>Lý do:</b> ${esc(order.rejectReason || "Quán chưa nhận được đơn lúc này.")}</p>`;
-  const spinner = view.status === STATUS.NEW ? '<div class="spinner" aria-hidden="true"></div>' : "";
+  const spinner = view.status === STATUS.NEW && !staffQrNow ? '<div class="spinner" aria-hidden="true"></div>' : "";
   const chat = `<a class="chat-link" href="${esc(chatUrl(order.code))}" target="_blank" rel="noopener" data-chat="${esc(order.code)}">💬 Cần hỗ trợ thêm về đơn #${esc(order.code)} · chat ngay</a>`;
   const phone = chat + (state.shop.phone ? `<p class="muted small">Cần hỗ trợ? Gọi quán ${phoneLinksHtml(state.shop.phone, esc)}</p>` : "");
   const canEdit = view.status === STATUS.NEW;

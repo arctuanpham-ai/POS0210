@@ -189,17 +189,21 @@ export const orderView = (order, nowMs) => {
 /** Bước hiển thị trên thanh tiến độ: đơn đã nhận (chờ thu hoặc đã thu) đều là "making" (đang làm món). */
 export const stageOf = (status, readyAt = null) => (status === STATUS.AWAITING_PAYMENT || status === STATUS.PAID ? (readyAt ? "ready" : "making") : status);
 
-/** Gộp thanh toán: các đơn đang chạy mà khách chưa trả (tối đa 3, mới nhất trước) -> một số tiền, một nội dung CK "DMabc DMdef". Dưới 2 đơn thì không gộp (null). */
-export const mergeUnpaid = (orders, nowMs, max = 3) => {
+/** Gộp thanh toán kiểu POS tại quán: mọi đơn đang chạy mà khách chưa trả (không giới hạn số đơn, mới nhất trước) -> một tổng tiền, một mã QR.
+ *  Nội dung CK "DMabc DMdef ..." (VietQR tối đa 50 ký tự: đơn nào không vừa thì chỉ cộng vào số tiền, quán thu gộp theo SĐT khách).
+ *  phone: chỉ gộp đơn cùng số điện thoại (máy nhân viên đặt hộ cho nhiều khách). Dưới 2 đơn thì không gộp (null). */
+export const mergeUnpaid = (orders, nowMs, { phone = "" } = {}) => {
+  const at = (o) => Number(o.createdAt?.seconds ?? o.createdAt) || 0;
   const list = (orders || [])
-    .filter((o) => o && o.code)
+    .filter((o) => o && o.code && (!phone || String(o.phone || "") === phone))
     .map((o) => ({ o, v: orderView(o, nowMs) }))
     .filter(({ v }) => !v.paid && !v.isFinal && [STATUS.NEW, STATUS.AWAITING_PAYMENT].includes(v.status))
-    .sort((a, b) => (Number(b.o.createdAt?.seconds ?? b.o.createdAt) || 0) - (Number(a.o.createdAt?.seconds ?? a.o.createdAt) || 0))
-    .slice(0, max)
+    .sort((a, b) => at(b.o) - at(a.o))
     .map(({ o }) => o);
   if (list.length < 2) return null;
-  return { orders: list, total: list.reduce((t, o) => t + (Number(o.total) || 0), 0), content: list.map((o) => transferContentFor(o.code)).join(" ") };
+  let content = "";
+  for (const o of list) { const next = content ? `${content} ${transferContentFor(o.code)}` : transferContentFor(o.code); if (next.length > 50) break; content = next; }
+  return { orders: list, total: list.reduce((t, o) => t + (Number(o.total) || 0), 0), content };
 };
 
 export const STATUS_TEXT = Object.freeze({

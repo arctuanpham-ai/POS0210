@@ -374,12 +374,17 @@ test("comboSaving: tổng món lẻ (theo SL) trừ giá combo; thiếu giá →
   assert.equal(_comboSaving(d, items), 10000);
 });
 
-test("gộp thanh toán: chỉ đơn chưa trả đang chạy, tối đa 3, nội dung CK nối mã", () => {
+test("gộp thanh toán kiểu POS: mọi đơn chưa trả, không giới hạn số đơn, lọc theo SĐT khi cần", () => {
   const now = Date.now();
-  const mk = (code, extra = {}) => ({ code, total: 100000, status: "awaiting_payment", createdAt: 1000 + code.length, ...extra });
+  const mk = (code, extra = {}) => ({ code, total: 100000, phone: "0900000001", status: "awaiting_payment", createdAt: 100, ...extra });
   assert.equal(mergeUnpaid([mk("AAAAAA")], now), null);
   assert.equal(mergeUnpaid([mk("AAAAAA"), mk("BBBBBB", { paidAt: 5 })], now), null);
   assert.equal(mergeUnpaid([mk("AAAAAA"), mk("BBBBBB", { status: "done" })], now), null);
-  const m = mergeUnpaid([mk("AAAAAA", { createdAt: 1 }), mk("BBBBBB", { createdAt: 2, total: 50000 }), mk("CCCCCC", { createdAt: 3, status: "new" }), mk("DDDDDD", { createdAt: 0 })], now);
-  assert.equal(m.orders.length, 3); assert.equal(m.total, 250000); assert.equal(m.content, "DMCCCCCC DMBBBBBB DMAAAAAA");
+  const many = ["A", "B", "C", "D", "E", "F", "G"].map((c, i) => mk(c.repeat(6), { createdAt: i }));
+  const m = mergeUnpaid(many, now);
+  assert.equal(m.orders.length, 7); assert.equal(m.total, 700000); assert.equal(m.orders[0].code, "GGGGGG");
+  assert.ok(m.content.length <= 50 && m.content.startsWith("DMGGGGGG DMFFFFFF"));
+  const two = mergeUnpaid([mk("AAAAAA"), mk("BBBBBB", { phone: "0900000002" })], now, { phone: "0900000001" });
+  assert.equal(two, null);
+  assert.equal(mergeUnpaid([mk("AAAAAA"), mk("BBBBBB")], now, { phone: "0900000001" }).orders.length, 2);
 });

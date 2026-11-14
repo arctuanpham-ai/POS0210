@@ -790,12 +790,12 @@ async function handleSubmitError(error, lines) {
 
 /* ---------- Theo dõi đơn theo thời gian thực ---------- */
 function stopWatch() { if (state.watch) { state.watch(); state.watch = null; } clearInterval(tickTimer); tickTimer = null; clearInterval(peerTimer); peerTimer = null; }
-/* Đơn khác của khách trên máy này (để gộp thanh toán). Chỉ đọc khi có từ 2 đơn trở lên: tối đa 3 đơn khác, mỗi 40 giây, dừng khi không còn đơn chưa trả. */
+/* Đơn khác của khách trên máy này (để gộp thanh toán). Chỉ đọc khi có từ 2 đơn trở lên: tối đa 8 đơn khác, mỗi 40 giây, dừng khi không còn đơn chưa trả. */
 let peerTimer = null;
 let peerBusy = false;
 async function refreshPeers() {
-  if (STAFF || peerBusy) return;
-  const others = (store.get(KEYS.codes, []) || []).filter((c) => c !== state.code).slice(0, 3);
+  if (peerBusy) return;
+  const others = (store.get(KEYS.codes, []) || []).filter((c) => c !== state.code).slice(0, 8);
   if (!others.length) { state.peers = {}; return; }
   peerBusy = true;
   try {
@@ -808,7 +808,7 @@ async function refreshPeers() {
   } finally { peerBusy = false; }
 }
 function ensurePeerTimer() {
-  if (STAFF || peerTimer) return;
+  if (peerTimer) return;
   refreshPeers();
   peerTimer = setInterval(() => { if (!document.hidden) refreshPeers(); }, 40_000);
 }
@@ -960,7 +960,7 @@ function renderTrack() {
   const policy = [STATUS.AWAITING_PAYMENT, STATUS.PAID, STATUS.DELIVERING].includes(view.status)
     ? `<p class="pay-warning">⚠️ Quán làm món ngay khi nhận đơn, nên <b>muốn sửa hoặc huỷ đơn bạn cần liên hệ quán và được quán đồng ý</b>. Nếu quán không thực hiện được đơn, giao thiếu/sai món hoặc món có lỗi, quán sẽ <b>hoàn tiền</b> (xem <a href="chinh-sach#hoan-tien" target="_blank" rel="noopener">chính sách đổi trả, hoàn tiền</a>).</p>` : "";
   // MỘT chỗ duy nhất cho thanh toán: ngay dưới tiến độ, hiện từ lúc gửi đơn (không chờ quán nhận), trả trước hay sau đều được.
-  const merged = !STAFF && active && !view.paid ? mergeUnpaid([order, ...Object.values(state.peers || {})], serverNow()) : null;
+  const merged = active && !view.paid ? mergeUnpaid([order, ...Object.values(state.peers || {})], serverNow(), { phone: STAFF ? String(order.phone || "") : "" }) : null;
   const pay = merged && merged.orders.some((o) => o.code === order.code)
     ? `<section class="pay-block"><h3>💳 Thanh toán gộp ${merged.orders.length} đơn <span class="pay-tag">Chưa thanh toán</span></h3>
         <p class="pay-lead">Bạn đang có ${merged.orders.length} đơn chưa thanh toán. Quét <b>một mã QR</b> bên dưới để trả cùng lúc, mã tự cập nhật khi có đơn được thanh toán.</p>
@@ -1007,9 +1007,9 @@ function updateBanner(name = !$("#screen-menu").hidden ? "menu" : "") {
   }
   const note = $("#merge-note");
   if (note) {
-    const unpaid = !STAFF && active && state.order && !orderView(state.order, serverNow()).paid;
+    const unpaid = active && state.order && !orderView(state.order, serverNow()).paid;
     note.hidden = !unpaid;
-    if (unpaid) note.textContent = `Bạn đang có đơn #${state.code} chưa thanh toán. Đơn mới sẽ được gộp chung một mã QR thanh toán. Muốn tách riêng, hãy thanh toán đơn trước rồi mới đặt đơn tiếp.`;
+    if (unpaid) note.textContent = `${STAFF ? "Khách này" : "Bạn"} đang có đơn #${state.code} chưa thanh toán. Đơn mới sẽ được gộp chung một mã QR thanh toán${STAFF ? " (cùng số điện thoại)" : ""}. Muốn tách riêng, hãy thanh toán đơn trước rồi mới đặt đơn tiếp.`;
   }
   const hasHist = (store.get(KEYS.hist, []) || []).length > 0;
   $("#open-history").hidden = !hasHist;

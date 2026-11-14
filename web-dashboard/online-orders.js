@@ -162,3 +162,6 @@ export const validateShopConfig = (input) => {
   if ((value.bank || value.account) && !(value.bank && value.account && value.holder)) errors.bank = "Nhập đủ ngân hàng, số tài khoản và tên tài khoản (hoặc để trống cả 3).";
   return { ok: Object.keys(errors).length === 0, errors, value };
 };
+
+/** Đơn của cùng khách (cùng SĐT) đã được quán nhận nhưng chưa thu tiền: để thu gộp một lần khi khách quét mã QR tổng. */
+export const groupUnpaid = (orders, order) => (Array.isArray(orders) ? orders : []).filter((o) => o.phone && o.phone === order?.phone && o.status === OO_STATUS.AWAITING_PAYMENT && !isPaid(o));

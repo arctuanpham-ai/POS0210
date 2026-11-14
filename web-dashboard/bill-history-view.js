@@ -144,8 +144,8 @@ export const chunk = (list, size = 30) => {
 
 /** Bộ lọc danh sách bill: hình thức (trả trước / trả sau), cách thanh toán (tiền mặt / CK), đã hoàn. "ALL" = không lọc. */
 const plain = (v) => String(v ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLowerCase();
-/** Tìm theo chữ gõ vào: số bill (vd ON-K7P2QX), mã đơn online, bàn, nội dung tham chiếu. Không phân biệt hoa thường/dấu. */
-export const billMatchesText = (r, text) => { const q = plain(text).trim(); return !q || [r.billNo, r.tableName, r.reference].some((v) => plain(v).includes(q)); };
+/** Tìm theo chữ gõ vào: số bill (vd ON-K7P2QX), tên/SĐT khách (đơn online), bàn, nội dung tham chiếu. Không phân biệt hoa thường/dấu. */
+export const billMatchesText = (r, text) => { const q = plain(text).trim(); return !q || [r.billNo, r.tableName, r.reference, r.customerName, r.customerPhone].some((v) => plain(v).includes(q)); };
 export const filterBillRows = (rows, { flow = "ALL", method = "ALL", refund = "ALL", channel = "ALL", text = "" } = {}) => (Array.isArray(rows) ? rows : []).filter((r) =>
   billMatchesText(r, text)
   && (channel === "ALL" || (channel === "ONLINE" ? /^ON-/i.test(r.billNo) : !/^ON-/i.test(r.billNo)))

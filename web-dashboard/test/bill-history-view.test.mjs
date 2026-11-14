@@ -154,4 +154,7 @@ test("lọc bill theo kênh online và tìm theo mã đơn/bàn", () => {
   assert.deepEqual(filterBillRows(rows, { text: "k7p2" }).map((r) => r.id), ["1"]);
   assert.deepEqual(filterBillRows(rows, { text: "ban 3" }).map((r) => r.id), ["2"]);
   assert.equal(filterBillRows(rows, {}).length, 2);
+  const withCust = [{ ...rows[0], customerName: "Lan", customerPhone: "0912345678" }, rows[1]];
+  assert.deepEqual(filterBillRows(withCust, { text: "0912345" }).map((r) => r.id), ["1"]);
+  assert.deepEqual(filterBillRows(withCust, { text: "lan" }).map((r) => r.id), ["1"]);
 });

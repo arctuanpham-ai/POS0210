@@ -55,7 +55,8 @@
   <div id="app">
     <!-- ===== Màn hình menu ===== -->
     <div id="screen-menu">
-      <div id="staff-bar" class="staff-bar" hidden><span><b>NHÂN VIÊN ĐẶT HỘ</b> · nhập món + tên, SĐT khách Facebook</span><button type="button" data-staff-exit>Thoát</button></div>
+      <div id="staff-bar" class="staff-bar" hidden><span><b>NHÂN VIÊN ĐẶT HỘ</b> · nhập món + tên, SĐT khách Facebook</span><button type="button" id="hold-open" hidden>Đơn treo <b>0</b></button><button type="button" data-staff-exit>Thoát</button></div>
+      <section class="hold-sheet" id="hold-sheet" aria-label="Đơn treo chưa gửi lên quán" hidden><div class="hold-panel"><div class="hold-head"><b>Đơn treo · chưa gửi lên quán</b><button type="button" id="hold-close">Đóng</button></div><p class="muted small">Gửi ảnh QR cho khách thanh toán. Đơn tự gửi lên quán khi hệ thống gửi được; bạn cũng có thể bấm Gửi lên quán ngay.</p><div id="hold-body"></div></div></section>
       <header class="hero">
         <div class="hero-head">
           <img class="logo wide" src="assets/logo.png" alt="0210 Breakfast Coffee Drinks" width="124" height="52" />

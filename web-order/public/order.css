@@ -520,3 +520,12 @@ body.fab-spot .fab-stack .guide-fab { animation-delay: .5s; }
 .staff-bar[hidden] { display: none; }
 .staff-bar button { border: 1px solid rgba(255,255,255,.7); background: transparent; color: #fff; border-radius: 999px; padding: 4px 12px; font-weight: 700; }
 .staff-note { background: #e7eefc; color: #17368a; border-radius: 12px; padding: 10px 12px; font-size: 14px; }
+.staff-bar span { flex: 1; }
+.staff-bar #hold-open { background: #fff; color: #1b4fb8; }
+.hold-sheet { position: fixed; inset: 0; z-index: 90; background: #20150ecc; overflow: auto; padding: 12px; }
+.hold-sheet[hidden] { display: none; }
+.hold-panel { background: #fff; color: #1e1e1e; border-radius: 16px; padding: 14px; max-width: 520px; margin: 0 auto; }
+.hold-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.hold-head button { border: 1px solid #ccc; background: transparent; border-radius: 999px; padding: 4px 12px; font-weight: 700; }
+.hold-card { border-top: 1px dashed #c9b9a8; padding-top: 12px; margin-top: 12px; }
+.hold-actions { display: flex; gap: 10px; align-items: center; margin-top: 8px; }

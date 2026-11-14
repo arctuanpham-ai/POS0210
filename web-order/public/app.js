@@ -58,6 +58,8 @@ const KEYS = { cart: "pos0210o.cart", codes: "pos0210o.codes", profile: "pos0210
 /* Chế độ NHÂN VIÊN ĐẶT HỘ: nhân viên mở link /nv trên điện thoại quán, nhập món + tên/SĐT khách nhắn qua Facebook. Đơn đi đúng đường đơn online
    (mã, giá, ưu đãi y như khách tự đặt), gắn nguồn Facebook. Không đếm lượt truy cập, không nhớ tên/SĐT của khách lên máy, không hiện gợi ý lần đầu. Thoát: ?nv=0. */
 const STAFF_KEY = "pos0210o.staff";
+const SHOP_CACHE_KEY = "pos0210o.shopcache";
+const HOLD_KEY = "pos0210o.staffHold"; // đơn treo: đơn nhân viên đặt hộ chưa gửi lên được (hết hạn mức, mất mạng)
 const STAFF = (() => {
   try {
     const q = new URLSearchParams(location.search).get("nv");
@@ -211,7 +213,12 @@ async function loadShop() {
     const [snap, promoSnap] = await Promise.all([getDoc(ref("online_config", "shop")), getDoc(ref("online_config", "promo")).catch(() => null)]);
     if (snap.exists()) state.shop = { ...DEFAULT_SHOP, ...snap.data() };
     state.promo = promoSnap?.exists?.() ? promoSnap.data() : null;
-  } catch { /* dùng mặc định */ }
+    if (snap.exists()) store.set(SHOP_CACHE_KEY, { shop: state.shop, promo: state.promo, at: Date.now() });
+  } catch {
+    // Không đọc được (ví dụ hết hạn mức Firebase trong ngày): dùng bản đã nhớ lần trước để vẫn ra mã QR + đúng ưu đãi.
+    const cached = store.get(SHOP_CACHE_KEY);
+    if (cached?.shop) { state.shop = { ...DEFAULT_SHOP, ...cached.shop }; state.promo = cached.promo || null; }
+  }
   renderShop();
   // Menu có thể tải xong trước cấu hình quán: nếu ảnh đã nhớ cũ hơn thumbsVersion thì tải lại.
   if (state.items.length && Number(state.shop.thumbsVersion || 0) > Number(store.get(KEYS.thumbs)?.ver || 0)) loadThumbs();
@@ -656,7 +663,14 @@ async function submitOrder(event) {
     renderMenu();
     watchOrder(result.code);
   } catch (error) {
-    handleSubmitError(error, lines);
+    if (STAFF && isQuotaError(error)) {
+      // Hết hạn mức / mất mạng: lưu "đơn treo" trên máy, vẫn ra mã QR ngay; tự gửi lên quán khi gửi được.
+      const entry = holdOrder(checked.value, lines, priceNow(lines));
+      form.name.value = ""; form.phone.value = ""; form.address.value = ""; form.receive.value = "pickup";
+      form.note.value = ""; form.table.value = ""; form.consent.checked = false;
+      state.cart = {}; persistCart(); closeSheet(); renderMenu();
+      openHold(entry.code);
+    } else handleSubmitError(error, lines);
   } finally {
     clearTimeout(slow);
     state.submitting = false;
@@ -681,18 +695,18 @@ function notifyShop(code, order) {
 }
 
 /** Ghi đơn + 2 bộ đếm giới hạn trong MỘT batch (rules bắt buộc đi cùng nhau). Thử lại 1 lần với mã mới nếu bị từ chối. */
-async function sendOrder(uid, value, lines) {
+async function sendOrder(uid, value, lines, held = null) {
   let lastError;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  for (let attempt = 0; attempt < (held ? 1 : 2); attempt += 1) {
     const now = serverNow();
     const [uLimit, pLimit] = await Promise.all([readLimit("online_limits", limitKeyForUid(uid)), readLimit("online_limits", limitKeyForPhone(value.phone))]);
     const uBase = pendingBase(uLimit, now);
     const pBase = pendingBase(pLimit, now);
     if (uBase >= LIMITS.maxPendingOrders || pBase >= LIMITS.maxPendingOrders) throw Object.assign(new Error("limit"), { code: "limit" });
-    const code = makeOrderCode();
+    const code = held ? held.code : makeOrderCode(); // đơn treo giữ nguyên mã đã in trên QR
     const batch = writeBatch(db);
     // Lần thử đầu kèm nguồn khách; nếu bị từ chối (ví dụ rules chưa cập nhật) thì lần thử lại gửi đơn KHÔNG kèm nguồn để không mất đơn.
-    const orderDoc = buildOrderDoc({ code, uid, value, lines, pricing: priceNow(lines), src: attempt === 0 ? orderSource() : null });
+    const orderDoc = buildOrderDoc({ code, uid, value, lines, pricing: held ? held.pricing : priceNow(lines), src: attempt === 0 ? orderSource() : null });
     batch.set(ref("online_orders", code), { ...orderDoc, createdAt: serverTimestamp() });
     batch.set(ref("online_limits", limitKeyForUid(uid)), { pending: uBase + 1, lastAt: serverTimestamp(), lastOrder: code });
     batch.set(ref("online_limits", limitKeyForPhone(value.phone)), { pending: pBase + 1, lastAt: serverTimestamp(), lastOrder: code });
@@ -864,12 +878,12 @@ function paymentHtml(order) {
 
 /** Lưu mã QR: bảng chia sẻ của điện thoại (có "Lưu ảnh") nếu có, không thì tải PNG. Mọi bước đồng bộ để còn trong thao tác bấm của khách. */
 async function saveQrImage(button) {
-  const img = document.querySelector("#track-body .qr-img");
+  const img = button.closest(".pay-card")?.querySelector(".qr-img") || document.querySelector("#track-body .qr-img");
   if (!img?.src.startsWith("data:image/png")) { button.textContent = "Hãy nhấn giữ vào mã QR để lưu ảnh"; setTimeout(() => { button.textContent = "Lưu ảnh QR vào máy"; }, 3000); return; }
   const label = button.textContent;
   try {
     const bytes = Uint8Array.from(atob(img.src.split(",")[1]), (ch) => ch.charCodeAt(0));
-    const file = new File([bytes], `QR-${state.code || "thanh-toan"}.png`, { type: "image/png" });
+    const file = new File([bytes], `QR-${button.dataset.code || state.code || "thanh-toan"}.png`, { type: "image/png" });
     if (navigator.canShare && navigator.canShare({ files: [file] })) await navigator.share({ files: [file] });
     else { const a = document.createElement("a"); a.href = img.src; a.download = file.name; document.body.append(a); a.click(); a.remove(); }
     button.textContent = "Đã lưu ảnh QR";
@@ -1234,6 +1248,85 @@ restoreOrder();
   }, 900);
 })();
 window.__orderReady = true;
+
+/* ---------- Đơn treo (nhân viên đặt hộ): lưu trên máy khi chưa gửi được, vẫn có QR để gửi khách ---------- */
+const holdList = () => { const v = store.get(HOLD_KEY, []); return Array.isArray(v) ? v : []; };
+const isQuotaError = (e) => e?.code === "resource-exhausted" || e?.code === "unavailable" || /quota/i.test(String(e?.message || ""));
+function holdOrder(value, lines, pricing) {
+  const entry = {
+    code: makeOrderCode(), value, createdAt: Date.now(),
+    lines: lines.map((l) => ({ id: l.id, name: l.name, qty: l.qty, note: l.note, price: l.price })),
+    pricing: { total: pricing.total, discount: pricing.discount || 0, surcharge: pricing.surcharge || 0 },
+  };
+  store.set(HOLD_KEY, [...holdList(), entry].slice(-20));
+  renderHoldBar();
+  return entry;
+}
+function renderHoldBar() {
+  const n = holdList().length;
+  const btn = document.getElementById("hold-open");
+  if (btn) { btn.hidden = !STAFF || n === 0; const c = btn.querySelector("b"); if (c) c.textContent = String(n); }
+}
+function renderHold(focusCode = "") {
+  const body = document.getElementById("hold-body");
+  if (!body) return;
+  const list = holdList();
+  body.innerHTML = list.length ? list.map((e) => {
+    const pay = paymentHtml({ total: e.pricing.total, transferContent: `DM${e.code}` }).replace("data-save-qr", `data-save-qr data-code="${esc(e.code)}"`);
+    return `<article class="hold-card" id="hold-${esc(e.code)}"><p><b class="code">${esc(e.code)}</b> · ${esc(e.value.name)} · ${esc(e.value.phone)}</p>
+      <p class="muted small">${e.lines.map((l) => `${l.qty}× ${esc(String(l.name).trim())}`).join(", ")} · <b>${money(e.pricing.total)}</b>${e.error ? ` · <span class="error">${esc(e.error)}</span>` : ""}</p>
+      ${pay}<div class="hold-actions"><button type="button" class="primary" data-hold-send="${esc(e.code)}">Gửi lên quán ngay</button><button type="button" class="danger-link" data-hold-del="${esc(e.code)}">Xoá đơn treo</button></div></article>`;
+  }).join("") : '<p class="muted">Không còn đơn treo.</p>';
+  if (focusCode) document.getElementById(`hold-${focusCode}`)?.scrollIntoView({ block: "start" });
+}
+function openHold(focusCode = "") {
+  const sheet = document.getElementById("hold-sheet");
+  if (!sheet) return;
+  renderHold(focusCode);
+  sheet.hidden = false;
+}
+let holdFlushing = false;
+/** Gửi lần lượt các đơn treo lên quán. Dừng ngay khi còn hết hạn mức/mất mạng; đơn bị từ chối vì lý do khác được đánh dấu để nhân viên xử lý. */
+async function flushHold() {
+  if (holdFlushing || !STAFF) return 0;
+  holdFlushing = true;
+  let sent = 0;
+  try {
+    for (const entry of holdList()) {
+      try {
+        let uid = await ensureUid();
+        if (!uid) break;
+        uid = await staffFreshUid(uid);
+        await sendOrder(uid, entry.value, entry.lines, entry);
+        store.set(HOLD_KEY, holdList().filter((e) => e.code !== entry.code));
+        sent += 1;
+      } catch (error) {
+        if (isQuotaError(error)) break;
+        const msg = error?.code === "limit" ? "Khách này đang có 2 đơn chờ, thử lại sau" : isDenied(error) ? "Quán từ chối đơn (menu/giá đã đổi?), hãy đặt lại" : "Chưa gửi được, sẽ thử lại";
+        store.set(HOLD_KEY, holdList().map((e) => (e.code === entry.code ? { ...e, error: msg } : e)));
+      }
+    }
+  } finally { holdFlushing = false; renderHoldBar(); if (!document.getElementById("hold-sheet")?.hidden) renderHold(); }
+  return sent;
+}
+(() => {
+  if (!STAFF) return;
+  renderHoldBar();
+  document.getElementById("hold-open")?.addEventListener("click", () => openHold());
+  document.getElementById("hold-close")?.addEventListener("click", () => { document.getElementById("hold-sheet").hidden = true; });
+  document.getElementById("hold-body")?.addEventListener("click", async (event) => {
+    const save = event.target.closest("[data-save-qr]");
+    if (save) { await saveQrImage(save); return; }
+    const copy = event.target.closest("[data-copy]");
+    if (copy) { try { await navigator.clipboard.writeText(copy.dataset.copy); copy.textContent = "Đã chép"; } catch { /* bỏ qua */ } return; }
+    const del = event.target.closest("[data-hold-del]");
+    if (del) { store.set(HOLD_KEY, holdList().filter((e) => e.code !== del.dataset.holdDel)); renderHoldBar(); renderHold(); return; }
+    const send = event.target.closest("[data-hold-send]");
+    if (send) { send.disabled = true; send.textContent = "Đang gửi…"; const n = await flushHold(); if (!n) { send.disabled = false; send.textContent = "Gửi lên quán ngay"; } }
+  });
+  setTimeout(flushHold, 4000);
+  setInterval(flushHold, 60_000);
+})();
 
 /* Thanh báo chế độ nhân viên đặt hộ */
 (() => {

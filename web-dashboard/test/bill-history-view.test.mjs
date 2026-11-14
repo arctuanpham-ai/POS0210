@@ -146,3 +146,12 @@ test("đơn app food: tính vào số bill và doanh thu, tách riêng khỏi ti
   assert.equal(s.unknown, 0);
   assert.equal(methodLabel("GRAB"), "GrabFood (app trả sau)");
 });
+
+test("lọc bill theo kênh online và tìm theo mã đơn/bàn", () => {
+  const rows = [{ id: "1", billNo: "ON-K7P2QX", tableName: "ONLINE", reference: "ON-K7P2QX" }, { id: "2", billNo: "123", tableName: "Bàn 3", reference: "" }];
+  assert.deepEqual(filterBillRows(rows, { channel: "ONLINE" }).map((r) => r.id), ["1"]);
+  assert.deepEqual(filterBillRows(rows, { channel: "STORE" }).map((r) => r.id), ["2"]);
+  assert.deepEqual(filterBillRows(rows, { text: "k7p2" }).map((r) => r.id), ["1"]);
+  assert.deepEqual(filterBillRows(rows, { text: "ban 3" }).map((r) => r.id), ["2"]);
+  assert.equal(filterBillRows(rows, {}).length, 2);
+});

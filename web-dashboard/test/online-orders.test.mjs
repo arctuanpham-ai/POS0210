@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { OO_LABELS, OO_STATUS, isPending, attentionCount, buildTransition, groupOrders, isOverdue, newOrderCodes, nextActions, overdueOrders, releasedCount, validateShopConfig, limitKeys, minutesAgoText } from "../online-orders.js";
+import { isPaid, payLabel, remindMessage, OO_LABELS, OO_STATUS, isPending, attentionCount, buildTransition, groupOrders, isOverdue, newOrderCodes, nextActions, overdueOrders, releasedCount, validateShopConfig, limitKeys, minutesAgoText } from "../online-orders.js";
 import { STATUS as CUSTOMER_STATUS } from "../../web-order/public/order-core.js";
 
 const now = 1_700_000_000_000;
@@ -11,13 +11,13 @@ test("trạng thái khớp với trang khách", () => {
   assert.deepEqual(Object.values(OO_STATUS).sort(), Object.values(CUSTOMER_STATUS).sort());
 });
 
-test("nhận đơn: chờ thanh toán 30 phút, nội dung CK DM<mã>, không trừ bộ đếm", () => {
+test("nhận đơn: không hạn thanh toán, nội dung CK DM<mã>, nhả lượt giới hạn", () => {
   const t = buildTransition(order(), "accept", { now, who: "Hương" });
   assert.equal(t.patch.status, "awaiting_payment");
   assert.equal(t.patch.transferContent, "DMK7P2QX");
-  assert.equal(t.patch.expiresAt, now + 1_800_000);
+  assert.equal(t.patch.expiresAt, null);
   assert.equal(t.patch.handledBy, "Hương");
-  assert.equal(t.releasesLimit, false);
+  assert.equal(t.releasesLimit, true);
 });
 
 test("từ chối cần lý do và trả bộ đếm", () => {
@@ -31,24 +31,25 @@ test("chuyển trạng thái chỉ đi theo luồng hợp lệ", () => {
   assert.throws(() => buildTransition(order({ status: "new" }), "paid"), /đã đổi/);
   assert.throws(() => buildTransition(order({ status: "done" }), "done"), /đã đổi/);
   assert.throws(() => buildTransition(order(), "bay"), /không hợp lệ/);
-  assert.equal(buildTransition(order({ status: "awaiting_payment" }), "paid", { now }).releasesLimit, true);
+  assert.equal(buildTransition(order({ status: "awaiting_payment" }), "paid", { now, method: "cash" }).releasesLimit, false);
+  assert.equal(buildTransition(order({ status: "awaiting_payment", expiresAt: now + 5 }), "paid", { now, method: "cash" }).releasesLimit, true, "đơn cũ có hạn vẫn giữ lượt");
   assert.equal(buildTransition(order({ status: "awaiting_payment" }), "expire", { now }).patch.status, "expired");
   assert.equal(buildTransition(order({ status: "paid" }), "deliver", { now }).patch.status, "delivering");
-  assert.equal(buildTransition(order({ status: "delivering" }), "done", { now }).patch.status, "done");
+  assert.equal(buildTransition(order({ status: "delivering" }), "done", { now, method: "cash" }).patch.status, "done");
   assert.equal(buildTransition(order({ status: "paid" }), "done", { now }).releasesLimit, false);
   // khách trả muộn sau khi đơn đã hết hạn: ghi nhận được, và không trừ bộ đếm lần nữa
-  const late = buildTransition(order({ status: "expired" }), "paid", { now });
+  const late = buildTransition(order({ status: "expired" }), "paid", { now, method: "transfer" });
   assert.equal(late.patch.status, "paid"); assert.equal(late.releasesLimit, false);
-  assert.deepEqual(nextActions(order({ status: "expired" })).map((a) => a.key), ["paid"]);
+  assert.deepEqual(nextActions(order({ status: "expired" })).map((a) => a.key), ["paid", "paid"]);
 });
 
 test("nút theo trạng thái; giao hàng mới có 'Đang giao'", () => {
   assert.deepEqual(nextActions(order()).map((a) => a.key), ["accept", "reject"]);
   assert.deepEqual(nextActions(order({ status: "paid", mode: "pickup" })).map((a) => a.key), ["done"]);
   assert.deepEqual(nextActions(order({ status: "paid", mode: "delivery" })).map((a) => a.key), ["deliver", "done"]);
-  assert.deepEqual(nextActions(order({ status: "delivering" })).map((a) => a.key), ["done"]);
+  assert.deepEqual(nextActions(order({ status: "delivering", paidAt: now })).map((a) => a.key), ["done"]);
   assert.deepEqual(nextActions(order({ status: "done" })), []);
-  assert.deepEqual(nextActions(order({ status: "awaiting_payment", expiresAt: now + 1000 }), now).map((a) => a.key), ["paid", "expire"]);
+  assert.deepEqual(nextActions(order({ status: "awaiting_payment", mode: "pickup" })).map((a) => a.key), ["paid", "paid", "done", "done", "remind", "expire"]);
 });
 
 test("quá hạn thanh toán", () => {
@@ -109,7 +110,7 @@ test("rules cho phép nhân viên (uid chủ quán) sửa đơn và bộ đếm"
 test("đơn khách đã huỷ: nhân viên chỉ ghi nhận được nếu khách đã chuyển tiền; không trừ bộ đếm lần nữa", () => {
   const order = { code: "K7P2QX", status: "cancelled", uid: "g", phone: "0912345678", mode: "pickup" };
   assert.deepEqual(nextActions(order).map((a) => a.key), ["paid"]);
-  const t = buildTransition(order, "paid", { now: 1 });
+  const t = buildTransition(order, "paid", { now: 1, method: "transfer" });
   assert.equal(t.patch.status, "paid");
   assert.equal(t.releasesLimit, false);
   assert.throws(() => buildTransition(order, "accept"));
@@ -133,4 +134,31 @@ test("form thông tin quán: giảm giá khi đặt online", () => {
     assert.equal(r.ok, false, bad);
     assert.ok(r.errors.onlineDiscountPercent, bad);
   }
+});
+
+test("thanh toán trước hoặc sau: hoàn thành khi chưa thu phải chọn cách thu", () => {
+  const unpaid = order({ status: "awaiting_payment", mode: "delivery" });
+  assert.equal(isPaid(unpaid), false); assert.equal(payLabel(unpaid), "CHƯA THU");
+  assert.throws(() => buildTransition(unpaid, "done", { now }), /Chọn cách thu/);
+  const done = buildTransition(unpaid, "done", { now, method: "cash" });
+  assert.equal(done.patch.status, "done"); assert.equal(done.patch.payMethod, "cash"); assert.equal(done.patch.paidAt, now);
+  // đã thu rồi thì hoàn thành không cần cách thu
+  const paid = buildTransition(unpaid, "paid", { now, method: "transfer" });
+  assert.equal(paid.patch.status, "paid"); assert.equal(paid.patch.payMethod, "transfer");
+  const paidOrder = { ...unpaid, ...paid.patch };
+  assert.equal(isPaid(paidOrder), true); assert.equal(payLabel(paidOrder), "Đã thu · chuyển khoản");
+  assert.equal(buildTransition(paidOrder, "done", { now }).patch.payMethod, undefined);
+  assert.throws(() => buildTransition(paidOrder, "paid", { now, method: "cash" }), /đã đổi|đã thu/);
+  // giao hàng chưa thu: giao trước, thu sau, trạng thái vẫn "đang giao"
+  const delivering = buildTransition(unpaid, "deliver", { now }).patch;
+  assert.equal(delivering.status, "delivering");
+  const collect = buildTransition({ ...unpaid, ...delivering }, "paid", { now, method: "cash" }).patch;
+  assert.equal(collect.status, "delivering"); assert.equal(collect.payMethod, "cash");
+  assert.throws(() => buildTransition(unpaid, "paid", { now }), /Chọn cách thu/);
+});
+
+test("lời nhắc thanh toán: số tiền, tài khoản, nội dung CK, không nêu số phí COD", () => {
+  const msg = remindMessage(order({ name: "Lan", total: 125000, mode: "delivery" }), { bank: "MB", account: "0123", holder: "NGUYEN A" });
+  assert.match(msg, /125\.000đ/); assert.match(msg, /MB 0123/); assert.match(msg, /DMK7P2QX/); assert.match(msg, /COD/);
+  assert.doesNotMatch(msg, /\d+\s?đ.*phí COD|phí COD.*\d+\s?đ/);
 });

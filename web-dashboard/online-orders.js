@@ -3,8 +3,8 @@
 export const OO_STATUS = Object.freeze({ NEW: "new", REJECTED: "rejected", AWAITING_PAYMENT: "awaiting_payment", EXPIRED: "expired", PAID: "paid", DELIVERING: "delivering", DONE: "done", CANCELLED: "cancelled" });
 export const OO_PAY_MINUTES = 30;
 export const OO_LABELS = Object.freeze({
-  new: "Chờ quán xác nhận", rejected: "Đã từ chối", awaiting_payment: "Chờ khách thanh toán", expired: "Hết hạn",
-  paid: "Đã nhận tiền · đang làm", delivering: "Đang giao", done: "Hoàn thành", cancelled: "Khách đã huỷ",
+  new: "Chờ quán xác nhận", rejected: "Đã từ chối", awaiting_payment: "Đã nhận đơn · đang làm", expired: "Hết hạn",
+  paid: "Đã thu tiền · đang làm", delivering: "Đang giao", done: "Hoàn thành", cancelled: "Khách đã huỷ",
 });
 export const OO_MODE_LABELS = Object.freeze({ delivery: "Giao tận nơi", pickup: "Mang đi", dinein: "Tại quán" });
 export const OO_REJECT_REASONS = Object.freeze(["Hết món", "Quán sắp đóng cửa", "Ngoài khu vực giao hàng", "Quán đang quá tải, xin lỗi bạn"]);
@@ -20,51 +20,85 @@ export const ooToMillis = (v) => {
 export const transferContentFor = (code) => `DM${code}`;
 /** Khoá bộ đếm giới hạn 2 đơn chờ (cùng định dạng với trang khách). */
 export const limitKeys = (order) => [`u_${order.uid}`, `p_${order.phone}`];
-/** Đơn đang tính vào giới hạn: chờ xác nhận hoặc chờ thanh toán. */
-export const isPending = (order) => order?.status === OO_STATUS.NEW || order?.status === OO_STATUS.AWAITING_PAYMENT;
+/** Đơn còn giữ lượt giới hạn 2 đơn chờ: chờ quán nhận, hoặc đơn cũ (quy trình trước) đang chờ thanh toán có hạn. Đơn mới: quán nhận là nhả lượt. */
+export const isPending = (order) => order?.status === OO_STATUS.NEW || (order?.status === OO_STATUS.AWAITING_PAYMENT && ooToMillis(order.expiresAt) != null);
 
-/** Quá hạn thanh toán (theo giờ của máy nhân viên) nhưng tài liệu chưa được đóng. */
+export const PAY_METHODS = Object.freeze({ transfer: "chuyển khoản", cash: "tiền mặt" });
+/** Đã thu tiền: có paidAt, hoặc đơn cũ ở trạng thái "paid", hoặc đã xong kèm cách thu. */
+export const isPaid = (order) => !!ooToMillis(order?.paidAt) || order?.status === OO_STATUS.PAID || (order?.status === OO_STATUS.DONE && !!order?.payMethod);
+export const payLabel = (order) => isPaid(order) ? `Đã thu · ${order.payMethod === "cash" ? "tiền mặt" : "chuyển khoản"}` : "CHƯA THU";
+
+/** Quá hạn thanh toán: chỉ còn với đơn cũ có expiresAt; đơn theo quy trình mới không hết hạn. */
 export const isOverdue = (order, nowMs) => order?.status === OO_STATUS.AWAITING_PAYMENT && ooToMillis(order.expiresAt) != null && ooToMillis(order.expiresAt) <= nowMs;
 
-/** Hành động nhân viên được làm với một đơn, theo trạng thái. Nút thứ nhất là hành động chính. */
-export const nextActions = (order, nowMs = Date.now()) => {
+const PAY_BTNS = [{ key: "paid", method: "transfer", label: "Đã nhận chuyển khoản" }, { key: "paid", method: "cash", label: "Thu tiền mặt" }];
+const DONE_UNPAID = [{ key: "done", method: "transfer", label: "Hoàn thành (khách CK)" }, { key: "done", method: "cash", label: "Hoàn thành (tiền mặt)" }];
+const REMIND = { key: "remind", label: "Nhắc khách thanh toán" };
+
+/** Hành động nhân viên được làm với một đơn. Nút đầu là hành động chính. "remind" chỉ chép lời nhắc, không đổi đơn. */
+export const nextActions = (order) => {
+  const delivery = order?.mode === "delivery";
+  const deliver = delivery ? [{ key: "deliver", label: "Đang giao" }] : [];
   switch (order?.status) {
     case OO_STATUS.NEW: return [{ key: "accept", label: "Nhận đơn" }, { key: "reject", label: "Từ chối" }];
-    case OO_STATUS.AWAITING_PAYMENT:
-      return isOverdue(order, nowMs)
-        ? [{ key: "paid", label: "Đã nhận tiền" }, { key: "expire", label: "Đóng đơn hết hạn" }]
-        : [{ key: "paid", label: "Đã nhận tiền" }, { key: "expire", label: "Huỷ (khách không trả)" }];
-    case OO_STATUS.EXPIRED: return [{ key: "paid", label: "Khách trả muộn: đã nhận tiền" }];
-    case OO_STATUS.CANCELLED: return [{ key: "paid", label: "Khách đã chuyển tiền trước khi huỷ: ghi nhận" }];
-    case OO_STATUS.PAID: return order.mode === "delivery" ? [{ key: "deliver", label: "Đang giao" }, { key: "done", label: "Hoàn thành" }] : [{ key: "done", label: "Hoàn thành" }];
-    case OO_STATUS.DELIVERING: return [{ key: "done", label: "Hoàn thành" }];
+    case OO_STATUS.AWAITING_PAYMENT: return [...deliver, ...PAY_BTNS, ...DONE_UNPAID, REMIND, { key: "expire", label: "Huỷ đơn" }];
+    case OO_STATUS.EXPIRED: return [{ key: "paid", method: "transfer", label: "Khách trả muộn: đã nhận CK" }, { key: "paid", method: "cash", label: "Khách trả muộn: tiền mặt" }];
+    case OO_STATUS.CANCELLED: return [{ key: "paid", method: "transfer", label: "Khách đã chuyển trước khi huỷ: ghi nhận" }];
+    case OO_STATUS.PAID: return [...deliver, { key: "done", label: "Hoàn thành" }];
+    case OO_STATUS.DELIVERING: return isPaid(order) ? [{ key: "done", label: "Hoàn thành" }] : [...DONE_UNPAID, ...PAY_BTNS, REMIND];
     default: return [];
   }
 };
 
-// "paid" cũng được từ "expired"/"cancelled": khách chuyển tiền muộn sau khi đơn đã đóng, nhân viên vẫn ghi nhận được.
-const FROM = { accept: ["new"], reject: ["new"], paid: ["awaiting_payment", "expired", "cancelled"], expire: ["awaiting_payment"], deliver: ["paid"], done: ["paid", "delivering"] };
+// "paid" cũng được từ "expired"/"cancelled" (khách chuyển muộn) và từ "delivering" (thu khi giao, trạng thái giữ nguyên).
+const FROM = { accept: ["new"], reject: ["new"], paid: ["awaiting_payment", "expired", "cancelled", "delivering"], expire: ["awaiting_payment"], deliver: ["awaiting_payment", "paid"], done: ["awaiting_payment", "paid", "delivering"] };
+
+const needMethod = (method) => {
+  if (!PAY_METHODS[method]) throw new Error("Chọn cách thu tiền: chuyển khoản hoặc tiền mặt.");
+  return method;
+};
 
 /**
  * Kết quả của một hành động: patch cho tài liệu đơn + có phải trừ bộ đếm giới hạn không.
  * Ném lỗi nếu hành động không hợp lệ với trạng thái hiện tại (ví dụ nhân viên khác vừa đổi).
+ * Đơn mới nhận không có hạn thanh toán (expiresAt null); tiền thu trước hoặc sau đều được, ghi paidAt + payMethod.
  */
-export const buildTransition = (order, action, { now = Date.now(), who = "", reason = "" } = {}) => {
+export const buildTransition = (order, action, { now = Date.now(), who = "", reason = "", method = "" } = {}) => {
   if (!FROM[action]) throw new Error(`Hành động không hợp lệ: ${action}`);
   if (!FROM[action].includes(order?.status)) throw new Error(`Đơn đã đổi sang "${OO_LABELS[order?.status] || order?.status}", hãy xem lại.`);
   const by = who ? { handledBy: who } : {};
+  const release = isPending(order);
   switch (action) {
-    case "accept": return { patch: { status: "awaiting_payment", transferContent: transferContentFor(order.code), confirmedAt: now, expiresAt: now + OO_PAY_MINUTES * 60_000, ...by }, releasesLimit: false };
+    case "accept": return { patch: { status: "awaiting_payment", transferContent: transferContentFor(order.code), confirmedAt: now, expiresAt: null, ...by }, releasesLimit: true };
     case "reject": {
       const text = String(reason || "").trim();
       if (!text) throw new Error("Cần nhập lý do từ chối để khách biết.");
       return { patch: { status: "rejected", rejectReason: text.slice(0, 200), closedAt: now, ...by }, releasesLimit: true };
     }
-    case "paid": return { patch: { status: "paid", paidAt: now, ...by }, releasesLimit: isPending(order) };
-    case "expire": return { patch: { status: "expired", closedAt: now, ...by }, releasesLimit: true };
-    case "deliver": return { patch: { status: "delivering", deliveringAt: now, ...by }, releasesLimit: false };
-    default: return { patch: { status: "done", doneAt: now, ...by }, releasesLimit: false };
+    case "paid": {
+      if (isPaid(order) && order.status !== OO_STATUS.EXPIRED && order.status !== OO_STATUS.CANCELLED) throw new Error("Đơn này đã thu tiền rồi.");
+      const keepStatus = order.status === OO_STATUS.DELIVERING;
+      return { patch: { status: keepStatus ? "delivering" : "paid", paidAt: now, payMethod: needMethod(method), ...by }, releasesLimit: release };
+    }
+    case "expire": return { patch: { status: "expired", closedAt: now, ...by }, releasesLimit: release };
+    case "deliver": return { patch: { status: "delivering", deliveringAt: now, ...by }, releasesLimit: release };
+    default: {
+      // Hoàn thành khi chưa thu: phải chọn cách thu để POS ghi bill/doanh thu đúng.
+      const pay = isPaid(order) ? {} : { paidAt: now, payMethod: needMethod(method) };
+      return { patch: { status: "done", doneAt: now, ...pay, ...by }, releasesLimit: release };
+    }
   }
+};
+
+/** Lời nhắc gửi khách (chép vào Messenger/Zalo): số tiền, tài khoản, nội dung CK. Không nêu số tiền phí COD vì chưa có biểu phí. */
+export const remindMessage = (order, shop = {}) => {
+  const code = order?.code || "";
+  const amount = `${Math.round(Number(order?.total) || 0).toLocaleString("vi-VN")}đ`;
+  const content = order?.transferContent || transferContentFor(code);
+  const bank = shop.bank && shop.account ? `${shop.bank} ${shop.account}${shop.holder ? ` (${shop.holder})` : ""}` : "";
+  const how = bank ? `Bạn chuyển khoản giúp quán ${amount} tới ${bank}, nội dung: ${content}. ` : `Bạn chuyển khoản giúp quán ${amount}, nội dung: ${content}. `;
+  const tail = order?.mode === "delivery" ? "Chuyển khoản trước giúp bạn không bị mất thêm phí thu hộ COD. " : "";
+  return `Chào ${String(order?.name || "bạn").trim()}, quán 0210 nhắc đơn ${code} chưa thanh toán. ${how}${tail}Cảm ơn bạn!`;
 };
 
 /** Giá trị mới của một bộ đếm sau khi đóng đơn: giảm 1, không âm. */

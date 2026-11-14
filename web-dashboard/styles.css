@@ -745,3 +745,7 @@ body:has(#login-view:not([hidden])), body:has(#pin-view:not([hidden])) { backgro
 .ai-row strong { white-space: nowrap; }
 .ai-note { margin-top: 10px; font-size: 12px; }
 .kpi-boss { margin-top: 6px; font-size: 12px; opacity: .75; }
+
+.oo-pay { font-size: 12px; font-weight: 800; padding: 2px 8px; border-radius: 999px; }
+.oo-pay.unpaid { background: #e8590c; color: #fff; }
+.oo-pay.paid { background: #d3f9d8; color: #1b5e20; }

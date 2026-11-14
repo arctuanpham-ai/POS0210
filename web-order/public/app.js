@@ -54,7 +54,7 @@ const store = {
   set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* đầy hoặc bị chặn: bỏ qua */ } },
   del(key) { try { localStorage.removeItem(key); } catch { /* bỏ qua */ } },
 };
-const KEYS = { cart: "pos0210o.cart", codes: "pos0210o.codes", profile: "pos0210o.profile", menu: "pos0210o.menu5", thumbs: "pos0210o.thumbs", hist: "pos0210o.hist", attr: "pos0210o.attr" };
+const KEYS = { cart: "pos0210o.cart", codes: "pos0210o.codes", profile: "pos0210o.profile", menu: "pos0210o.menu5", thumbs: "pos0210o.thumbs", hist: "pos0210o.hist", log: "pos0210o.log", attr: "pos0210o.attr" };
 /* Chế độ NHÂN VIÊN ĐẶT HỘ: nhân viên mở link /nv trên điện thoại quán, nhập món + tên/SĐT khách nhắn qua Facebook. Đơn đi đúng đường đơn online
    (mã, giá, ưu đãi y như khách tự đặt), gắn nguồn Facebook. Không đếm lượt truy cập, không nhớ tên/SĐT của khách lên máy, không hiện gợi ý lần đầu. Thoát: ?nv=0. */
 const STAFF_KEY = "pos0210o.staff";
@@ -653,7 +653,7 @@ async function submitOrder(event) {
     if (STAFF) { form.name.value = ""; form.phone.value = ""; form.address.value = ""; form.receive.value = "pickup"; }
     else store.set(KEYS.profile, { name: checked.value.name, phone: checked.value.phone, address: form.address.value.trim(), delivery: form.receive.value === "delivery" });
     store.set(KEYS.codes, rememberCode(store.get(KEYS.codes, []), result.code));
-    store.set(KEYS.hist, rememberCode(store.get(KEYS.hist, []), result.code, 40));
+    if (!STAFF) store.set(KEYS.hist, rememberCode(store.get(KEYS.hist, []), result.code, 40)); // đặt hộ: không lưu lịch sử trên máy quán
     state.cart = {};
     persistCart();
     form.note.value = "";
@@ -805,6 +805,7 @@ function watchOrder(code, { quiet = false } = {}) {
       const wasStatus = state.order?.status;
       state.order = { ...snap.data(), id: snap.id };
       if (state.order.status === STATUS.DONE) window.__markFirstSuccess?.(state.order.phone);
+      if (orderView(state.order, serverNow()).isFinal) logFinished(state.order);
       if (first && shouldDropOld(state.order)) { forgetCode(code); showScreen("menu"); stopWatch(); return; }
       // Mở lại link: đơn đã kết thúc thì KHÔNG bật màn theo dõi, chỉ nằm trong Lịch sử.
       if (first && quiet) {
@@ -827,6 +828,16 @@ const shouldDropOld = (order) => {
   const created = toMillis(order.createdAt);
   return FINAL_STATUSES.includes(order.status) && created && serverNow() - created > 2 * 3_600_000;
 };
+
+/* Lịch sử đơn lưu NGAY TRÊN MÁY KHÁCH, rất nhẹ: chỉ ghi từ dữ liệu đơn đã nhận sẵn khi theo dõi (không thêm lượt đọc/ghi Firestore),
+   tối đa LOG_MAX đơn gần nhất, mỗi đơn vài trăm byte. Máy nhân viên (đặt hộ) không lưu gì. */
+const LOG_MAX = 15;
+function logFinished(order) {
+  if (STAFF || !order?.id) return;
+  const list = (store.get(KEYS.log, []) || []).filter((e) => e.id !== order.id);
+  list.unshift({ id: order.id, code: order.code || order.id, status: order.status, total: Number(order.total) || 0, createdAt: toMillis(order.createdAt) || Date.now(), items: (order.items || []).map((l) => ({ id: l.id, name: l.name, qty: l.qty, note: l.note || "", price: l.price })) });
+  store.set(KEYS.log, list.slice(0, LOG_MAX));
+}
 
 function forgetCode(code) { store.set(KEYS.codes, (store.get(KEYS.codes, []) || []).filter((c) => c !== code)); state.code = null; state.order = null; }
 
@@ -1173,9 +1184,14 @@ async function openHistory() {
   const body = $("#history-body");
   body.innerHTML = '<p class="muted center">Đang tải lịch sử…</p>';
   try {
-    const uid = await ensureUid();
-    const snap = await getDocs(query(col("online_orders"), where("uid", "==", uid), limit(30)));
-    histOrders = snap.docs.map((d) => ({ ...d.data(), id: d.id })).sort((x, y) => (toMillis(y.createdAt) || 0) - (toMillis(x.createdAt) || 0));
+    histOrders = (store.get(KEYS.log, []) || []).slice();
+    if (!histOrders.length && (store.get(KEYS.hist, []) || []).length) {
+      // Máy có lịch sử từ phiên bản cũ nhưng chưa có bản lưu cục bộ: đọc MỘT lần rồi lưu lại, những lần sau không đọc nữa.
+      const uid = await ensureUid();
+      const snap = await getDocs(query(col("online_orders"), where("uid", "==", uid), limit(15)));
+      snap.docs.map((d) => ({ ...d.data(), id: d.id })).filter((o) => orderView(o, serverNow()).isFinal).sort((x, y) => (toMillis(x.createdAt) || 0) - (toMillis(y.createdAt) || 0)).forEach(logFinished);
+      histOrders = (store.get(KEYS.log, []) || []).slice();
+    }
   } catch { body.innerHTML = '<p class="notice error">Không tải được lịch sử. Vui lòng kiểm tra mạng.</p>'; return; }
   const list = histOrders.filter((o) => orderView(o, serverNow()).isFinal);
   if (!list.length) { body.innerHTML = '<p class="muted center">Chưa có đơn nào đã hoàn tất.</p>'; return; }
@@ -1211,7 +1227,7 @@ setInterval(renderOpenStatus, 30_000);
 /* ---------- Khởi động ---------- */
 renderShop();
 renderMenu();
-{ let h = store.get(KEYS.hist, []) || []; for (const c of [...(store.get(KEYS.codes, []) || [])].reverse()) h = rememberCode(h, c, 40); store.set(KEYS.hist, h); }
+if (!STAFF) { let h = store.get(KEYS.hist, []) || []; for (const c of [...(store.get(KEYS.codes, []) || [])].reverse()) h = rememberCode(h, c, 40); store.set(KEYS.hist, h); }
 renderCartBar();
 updateBanner();
 syncClock();
@@ -1342,5 +1358,8 @@ async function flushHold() {
   if (!bar || !STAFF) return;
   bar.hidden = false;
   document.body.classList.add("staff-mode");
-  bar.querySelector("[data-staff-exit]")?.addEventListener("click", () => { try { localStorage.removeItem(STAFF_KEY); } catch { /* bỏ qua */ } location.href = location.pathname; });
+  // Đơn đặt hộ đã vào hệ thống (POS ghi bill, doanh thu) nên máy quán không cần giữ lịch sử: dọn khi vào và khi thoát chế độ này.
+  const wipe = () => { for (const k of [KEYS.hist, KEYS.log, KEYS.profile]) store.del(k); };
+  wipe();
+  bar.querySelector("[data-staff-exit]")?.addEventListener("click", () => { wipe(); store.del(KEYS.codes); store.del(KEYS.cart); try { localStorage.removeItem(STAFF_KEY); } catch { /* bỏ qua */ } location.href = location.pathname; });
 })();

@@ -106,6 +106,7 @@ fun OnlineOrdersScreen(vm: PosViewModel) {
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun OnlineOrderCard(vm: PosViewModel, o: OnlineOrder, now: Long, onReject: () -> Unit) {
     val fmt = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
@@ -116,13 +117,15 @@ private fun OnlineOrderCard(vm: PosViewModel, o: OnlineOrder, now: Long, onRejec
         o.status == R.PAID || o.status == R.DELIVERING -> Color(0xFF41633A)
         else -> Color(0xFF9A9188)
     }
-    var confirmPaid by remember { mutableStateOf(false) }
+    var confirmPaid by remember { mutableStateOf<R.Action?>(null) }
+    val context = LocalContext.current
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White), border = BorderStroke(2.dp, accent)) {
         Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(o.code, fontSize = 26.sp, fontWeight = FontWeight.Black, color = Brown)
                     Text("${R.label(o.status)} · ${fmt.format(Date(o.createdAt))}", fontSize = 12.sp, color = accent, fontWeight = FontWeight.Bold)
+                    if (o.status in R.ACTIVE_STATUSES && o.status != R.NEW || o.status == R.DONE) Text(R.payLabel(o), fontSize = 12.sp, fontWeight = FontWeight.Black, color = if (R.isPaid(o)) Color(0xFF41633A) else Color(0xFFB3261E))
                 }
                 Text(vnd(o.total), fontSize = 22.sp, fontWeight = FontWeight.Black)
             }
@@ -135,7 +138,7 @@ private fun OnlineOrderCard(vm: PosViewModel, o: OnlineOrder, now: Long, onRejec
                 if (l.note.isNotBlank()) Text("   ${l.note}", fontSize = 12.sp, color = Color(0xFF7A4B00))
             }
             if (o.note.isNotBlank()) Text("Ghi chú: ${o.note}", Modifier.padding(top = 4.dp), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF7A4B00))
-            if (o.status == R.AWAITING && o.expiresAt != null) {
+            if (o.status == R.AWAITING && o.expiresAt != null) { // đơn cũ (quy trình trước) còn hạn thanh toán
                 val left = o.expiresAt - now
                 Text(
                     if (left > 0) "Còn ${left / 60000}:${((left / 1000) % 60).toString().padStart(2, '0')} · nội dung CK: DM${o.code}" else "Quá hạn thanh toán · nội dung CK: DM${o.code}",
@@ -145,29 +148,37 @@ private fun OnlineOrderCard(vm: PosViewModel, o: OnlineOrder, now: Long, onRejec
             if (o.status == R.REJECTED && o.rejectReason.isNotBlank()) Text("Lý do: ${o.rejectReason}", fontSize = 12.sp)
             if (o.status == R.CANCELLED) Text("Khách tự huỷ. Nếu đã nhận tiền thì ghi nhận hoặc hoàn lại cho khách.", fontSize = 12.sp)
             val actions = R.actions(o, now)
-            if (actions.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (actions.isNotEmpty()) FlowRow(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 actions.forEachIndexed { i, a ->
                     val click = {
                         when (a.key) {
                             "reject" -> onReject()
-                            "paid" -> confirmPaid = true
-                            else -> vm.onlineAction(o, a.key)
+                            "paid" -> confirmPaid = a
+                            "remind" -> {
+                                val text = R.remindMessage(o)
+                                val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, text) }
+                                context.startActivity(android.content.Intent.createChooser(send, "Gửi lời nhắc cho khách").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                            }
+                            else -> vm.onlineAction(o, a.key, method = a.method)
                         }
                     }
-                    if (i == 0) Button(onClick = { click() }, Modifier.weight(1f)) { Text(a.label, fontWeight = FontWeight.Black, fontSize = 13.sp) }
-                    else OutlinedButton(onClick = { click() }, Modifier.weight(1f)) { Text(a.label, fontWeight = FontWeight.Bold, fontSize = 13.sp) }
+                    if (i == 0) Button(onClick = { click() }) { Text(a.label, fontWeight = FontWeight.Black, fontSize = 13.sp) }
+                    else OutlinedButton(onClick = { click() }) { Text(a.label, fontWeight = FontWeight.Bold, fontSize = 13.sp) }
                 }
             }
-            if (o.status == R.PAID || o.status == R.DELIVERING) OutlinedButton(onClick = { vm.printOnlineTicket(o) }, Modifier.fillMaxWidth().padding(top = 6.dp)) { Text("🖨 IN LẠI PHIẾU BẾP", fontWeight = FontWeight.Bold) }
+            if (o.status == R.AWAITING || o.status == R.PAID || o.status == R.DELIVERING) OutlinedButton(onClick = { vm.printOnlineTicket(o) }, Modifier.fillMaxWidth().padding(top = 6.dp)) { Text("🖨 IN LẠI PHIẾU BẾP", fontWeight = FontWeight.Bold) }
         }
     }
-    if (confirmPaid) AlertDialog(
-        onDismissRequest = { confirmPaid = false },
-        title = { Text("Đã nhận ${vnd(o.total)}?") },
-        text = { Text("Kiểm tra tiền đã về tài khoản với nội dung DM${o.code}. Sau khi xác nhận sẽ in phiếu bếp.") },
-        confirmButton = { Button(onClick = { confirmPaid = false; vm.onlineAction(o, "paid") }) { Text("ĐÃ NHẬN TIỀN") } },
-        dismissButton = { TextButton(onClick = { confirmPaid = false }) { Text("CHƯA") } },
-    )
+    confirmPaid?.let { a ->
+        val cash = a.method == R.CASH
+        AlertDialog(
+            onDismissRequest = { confirmPaid = null },
+            title = { Text(if (cash) "Đã thu ${vnd(o.total)} tiền mặt?" else "Đã nhận ${vnd(o.total)} chuyển khoản?") },
+            text = { Text(if (cash) "Ghi nhận khách trả tiền mặt cho đơn ${o.code}." else "Kiểm tra tiền đã về tài khoản với nội dung DM${o.code}.") },
+            confirmButton = { Button(onClick = { confirmPaid = null; vm.onlineAction(o, "paid", method = a.method) }) { Text("XÁC NHẬN") } },
+            dismissButton = { TextButton(onClick = { confirmPaid = null }) { Text("CHƯA") } },
+        )
+    }
 }
 
 /** Hồ sơ khách ngay trên thẻ đơn: số lần mua, tổng chi, món hay gọi, ghi chú sở thích; bấm để xem lịch sử các lần mua. */

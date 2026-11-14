@@ -1463,17 +1463,17 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
  /** Đơn online: nhân viên thao tác ngay trên POS (không cần mở web). Lỗi in không chặn việc đổi trạng thái. */
  val onlineMessage=MutableStateFlow("")
  val onlineOrders=vn.ecohome.pos0210.cloud.OnlineOrderService.orders
- fun onlineAction(o:vn.ecohome.pos0210.cloud.OnlineOrder,action:String,reason:String=""){
+ fun onlineAction(o:vn.ecohome.pos0210.cloud.OnlineOrder,action:String,reason:String="",method:String=""){
   viewModelScope.launch{
    val who=currentEmployee.value?.name.orEmpty()
    if(action=="accept"){
     val problems=vn.ecohome.pos0210.cloud.OnlineOrderRules.priceProblems(o,menu.value.associate{it.id to it.price},combos.value.associate{it.id to it.price})
     if(problems.isNotEmpty()){onlineMessage.value="Đơn ${o.code} LỆCH GIÁ so với menu, không nhận được: ${problems.take(3).joinToString("; ")}. Hãy TỪ CHỐI đơn và báo khách đặt lại.";return@launch}
    }
-   val r=withContext(Dispatchers.IO){vn.ecohome.pos0210.cloud.OnlineOrderService.apply(getApplication(),o.id,action,who,reason)}
+   val r=withContext(Dispatchers.IO){vn.ecohome.pos0210.cloud.OnlineOrderService.apply(getApplication(),o.id,action,who,reason,method)}
    if(r.isFailure){onlineMessage.value="Không cập nhật được đơn ${o.code}: ${r.exceptionOrNull()?.message}";return@launch}
    onlineMessage.value=""
-   if(action=="paid")printOnlineTicket(o)
+   if(action=="accept"&&!o.staffAssist)printOnlineTicket(o) // nhận đơn là bắt đầu làm món: in phiếu bếp ngay (thanh toán trước hoặc sau đều được)
   }
  }
  /** Đơn nhân viên đặt hộ (Facebook): POS im lặng tự NHẬN đơn, và khi đã nhận tiền thì tự HOÀN THÀNH để ghi bill + doanh thu (xem watchOnlineBilling). */
@@ -1508,7 +1508,7 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
       if(o.items.isEmpty())continue
       val lines=LinkedHashMap<String,Int>();val notes=HashMap<String,String>()
       for(l in o.items){val id=if(l.id.startsWith("c_"))"combo:"+l.id.removePrefix("c_") else l.id;if(id.isBlank())continue;lines[id]=(lines[id]?:0)+l.qty;if(l.note.isNotBlank())notes[id]=l.note}
-      runCatching{repo.recordOnlineSale(o.code,lines,notes,me.id,o.surcharge,o.discount)}
+      runCatching{repo.recordOnlineSale(o.code,lines,notes,me.id,o.surcharge,o.discount,if(o.payMethod=="cash")"CASH" else "TRANSFER")}
        .onSuccess{bill->if(bill!=null)onlineMessage.value="Đã ghi đơn online ${o.code} vào doanh thu (bill $bill)"}
        .onFailure{onlineMessage.value="Chưa ghi được đơn ${o.code} vào doanh thu: ${it.message}"}
      }

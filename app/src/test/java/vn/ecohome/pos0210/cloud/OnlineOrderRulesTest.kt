@@ -11,13 +11,13 @@ class OnlineOrderRulesTest {
         "AB12CD", "AB12CD", "u1", "An", "0912345678", mode, "", "", "", listOf(OnlineLine("Cà phê", 2, "", 25000)), 50000, status, "", 1000L, expiresAt, null,
     )
 
-    @Test fun acceptSetsPaymentWindowAndTransferContent() {
+    @Test fun acceptHasNoPaymentWindowAndReleasesLimit() {
         val t = OnlineOrderRules.transition(order("new"), "accept", 1_000_000L, "Lan")
         assertEquals("awaiting_payment", t.patch["status"])
         assertEquals("DMAB12CD", t.patch["transferContent"])
-        assertEquals(1_000_000L + 1_800_000L, t.patch["expiresAt"])
+        assertTrue(t.patch["expiresAt"] === OnlineOrderRules.NULL)
         assertEquals("Lan", t.patch["handledBy"])
-        assertFalse(t.releasesLimit)
+        assertTrue(t.releasesLimit)
     }
 
     @Test fun rejectNeedsReasonAndReleasesLimit() {
@@ -26,10 +26,35 @@ class OnlineOrderRulesTest {
         assertEquals("rejected", t.patch["status"]); assertTrue(t.releasesLimit)
     }
 
-    @Test fun paidReleasesLimitOnlyWhilePending() {
-        assertTrue(OnlineOrderRules.transition(order("awaiting_payment"), "paid", 1L).releasesLimit)
-        assertFalse(OnlineOrderRules.transition(order("expired"), "paid", 1L).releasesLimit)
-        assertFalse(OnlineOrderRules.transition(order("cancelled"), "paid", 1L).releasesLimit)
+    @Test fun paidReleasesLimitOnlyForLegacyPending() {
+        assertFalse(OnlineOrderRules.transition(order("awaiting_payment"), "paid", 1L, method = "cash").releasesLimit)
+        assertTrue(OnlineOrderRules.transition(order("awaiting_payment", expiresAt = 5L), "paid", 1L, method = "cash").releasesLimit)
+        assertFalse(OnlineOrderRules.transition(order("expired"), "paid", 1L, method = "transfer").releasesLimit)
+        assertFalse(OnlineOrderRules.transition(order("cancelled"), "paid", 1L, method = "transfer").releasesLimit)
+    }
+
+    @Test fun payBeforeOrAfter_doneWhenUnpaidNeedsMethod() {
+        val unpaid = order("awaiting_payment", "delivery")
+        assertFalse(OnlineOrderRules.isPaid(unpaid)); assertEquals("CHƯA THU", OnlineOrderRules.payLabel(unpaid))
+        try { OnlineOrderRules.transition(unpaid, "done", 1L); fail() } catch (_: IllegalArgumentException) { }
+        try { OnlineOrderRules.transition(unpaid, "paid", 1L); fail() } catch (_: IllegalArgumentException) { }
+        val done = OnlineOrderRules.transition(unpaid, "done", 5L, method = "cash")
+        assertEquals("done", done.patch["status"]); assertEquals("cash", done.patch["payMethod"]); assertEquals(5L, done.patch["paidAt"])
+        val paid = OnlineOrderRules.transition(unpaid, "paid", 2L, method = "transfer")
+        assertEquals("paid", paid.patch["status"])
+        val paidOrder = unpaid.copy(status = "paid", paidAt = 2L, payMethod = "transfer")
+        assertTrue(OnlineOrderRules.isPaid(paidOrder)); assertEquals("ĐÃ THU · CHUYỂN KHOẢN", OnlineOrderRules.payLabel(paidOrder))
+        assertTrue(OnlineOrderRules.transition(paidOrder, "done", 3L).patch["payMethod"] == null)
+        try { OnlineOrderRules.transition(paidOrder, "paid", 3L, method = "cash"); fail() } catch (_: IllegalStateException) { }
+        // giao trước, thu sau: trạng thái vẫn đang giao
+        val delivering = unpaid.copy(status = "delivering")
+        assertEquals("delivering", OnlineOrderRules.transition(delivering, "paid", 4L, method = "cash").patch["status"])
+        assertEquals("deliver", OnlineOrderRules.transition(unpaid, "deliver", 4L).patch.let { "deliver" })
+    }
+
+    @Test fun remindMessageHasAmountContentAndNoCodFeeAmount() {
+        val m = OnlineOrderRules.remindMessage(order("awaiting_payment", "delivery"))
+        assertTrue(m.contains("DMAB12CD")); assertTrue(m.contains("COD")); assertTrue(m.contains("50.000"))
     }
 
     @Test fun staleStatusIsRejected() {
@@ -44,6 +69,8 @@ class OnlineOrderRulesTest {
     @Test fun actionsByStatus() {
         assertEquals(listOf("accept", "reject"), OnlineOrderRules.actions(order("new"), 0).map { it.key })
         assertEquals(listOf("deliver", "done"), OnlineOrderRules.actions(order("paid", "delivery"), 0).map { it.key })
+        assertEquals(listOf("paid", "paid", "done", "done", "remind", "expire"), OnlineOrderRules.actions(order("awaiting_payment"), 0).map { it.key })
+        assertEquals(listOf("done"), OnlineOrderRules.actions(order("delivering").copy(paidAt = 1L), 0).map { it.key })
         assertEquals(listOf("done"), OnlineOrderRules.actions(order("paid", "pickup"), 0).map { it.key })
         assertEquals(listOf("paid"), OnlineOrderRules.actions(order("cancelled"), 0).map { it.key })
         assertTrue(OnlineOrderRules.actions(order("done"), 0).isEmpty())

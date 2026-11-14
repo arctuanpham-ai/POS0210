@@ -189,7 +189,7 @@ object OnlineOrderService {
     }
 
     /** Đổi trạng thái trong MỘT transaction (đọc lại đơn để tránh hai máy bấm cùng lúc; trả lượt giới hạn khi đóng đơn). */
-    suspend fun apply(app: Application, orderId: String, action: String, who: String, reason: String = ""): Result<Unit> = runCatching {
+    suspend fun apply(app: Application, orderId: String, action: String, who: String, reason: String = "", method: String = ""): Result<Unit> = runCatching {
         if (!busy.add(orderId)) return@runCatching
         try {
             val uid = attachedUid ?: FirebaseCloudSync.currentUid(app) ?: error("Chưa đăng nhập Firebase")
@@ -200,10 +200,10 @@ object OnlineOrderService {
                 val snap = tx.get(orderRef)
                 if (!snap.exists()) throw IllegalStateException("Đơn không còn tồn tại.")
                 val current = OnlineOrderRules.fromMap(snap.id, snap.data.orEmpty(), ::ms)
-                val t = OnlineOrderRules.transition(current, action, System.currentTimeMillis(), who, reason)
+                val t = OnlineOrderRules.transition(current, action, System.currentTimeMillis(), who, reason, method)
                 val limitRefs = if (t.releasesLimit) OnlineOrderRules.limitKeys(current).map { root.collection("online_limits").document(it) } else emptyList()
                 val limitSnaps = limitRefs.map { tx.get(it) }
-                tx.update(orderRef, t.patch.mapValues { (k, v) -> if (k.endsWith("At") && v is Long) Timestamp(Date(v)) else v })
+                tx.update(orderRef, t.patch.mapValues { (k, v) -> if (v === OnlineOrderRules.NULL) null else if (k.endsWith("At") && v is Long) Timestamp(Date(v)) else v })
                 limitSnaps.forEachIndexed { i, ls -> if (ls.exists()) tx.update(limitRefs[i], "pending", OnlineOrderRules.releasedCount(ls.get("pending"))) }
                 null
             }.await()

@@ -342,7 +342,7 @@ class PosRepository(private val db:PosDatabase){
      * (đánh dấu bằng audit ONLINE_ORDER/BILL_RECORDED). Dùng đúng đường openSession -> createBatch -> completePayment của POS,
      * bàn ảo "ONLINE", lô món ghi sẵn là đã giao nên không vào hàng chờ bếp. Trả về mã bill, hoặc null nếu đã ghi rồi.
      */
-    suspend fun recordOnlineSale(code:String,lines:Map<String,Int>,notes:Map<String,String>,cashierId:String,surcharge:Long=0L,discount:Long=0L):String? = onlineSaleLock.withLock {
+    suspend fun recordOnlineSale(code:String,lines:Map<String,Int>,notes:Map<String,String>,cashierId:String,surcharge:Long=0L,discount:Long=0L,method:String="TRANSFER"):String? = onlineSaleLock.withLock {
         // Khoá dùng chung cả tiến trình + kiểm tra cả audit lẫn payment ON-<mã>: tránh ghi trùng khi nhiều luồng cùng thấy một đơn hoàn thành.
         if(dao.onlineBillRecorded(code)>0||dao.paymentsWithReference("ON-$code")>0) return@withLock null
         require(lines.isNotEmpty()) { "EMPTY_ORDER" }
@@ -356,7 +356,7 @@ class PosRepository(private val db:PosDatabase){
         // Khuyến mãi/phụ thu khách đã được tính trên trang đặt món theo chương trình tự động của POS: bill khớp đúng số tiền khách chuyển.
         val sur=surcharge.coerceAtLeast(0L); val dis=discount.coerceIn(0L,total+sur)
         val payable=(total+sur-dis).coerceAtLeast(0L)
-        val result=completePayment(fresh,PricingPreview(total,sur,dis,payable,emptyList(),null),"TRANSFER",cashierId,"ON-$code")
+        val result=completePayment(fresh,PricingPreview(total,sur,dis,payable,emptyList(),null),method,cashierId,"ON-$code")
         dao.audit(AuditEventEntity(UUID.randomUUID().toString(),"ONLINE_ORDER",code,"BILL_RECORDED",cashierId,null,System.currentTimeMillis(),"bill=${result.bill.billNo},subtotal=$total,surcharge=$sur,discount=$dis,total=$payable"))
         result.bill.billNo
     }

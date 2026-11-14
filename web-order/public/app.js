@@ -18,7 +18,7 @@ import {
 import { APP_CHECK_SITE_KEY, DEFAULT_SHOP, MESSENGER_URL, NOTIFY_CLICK, NOTIFY_TOPIC, STORE_ID, STORE_OWNER_UID, firebaseConfig } from "./config.js";
 import {
   FINAL_STATUSES, LIMITS, comboTools, pricingFor, MODE_LABELS, STATUS, STATUS_TEXT, buildOrderDoc, cartFromOrder, cartLines, changeQty, countdownText, isOrderable,
-  limitKeyForPhone, limitKeyForUid, linesCount, linesTotal, makeOrderCode, menuSections, money, orderView, pendingBase, progressSteps, rememberCode,
+  limitKeyForPhone, limitKeyForUid, linesCount, transferContentFor, linesTotal, makeOrderCode, menuSections, money, orderView, pendingBase, progressSteps, rememberCode,
   notifyPayload, HOME_VIEW, menuLayout, menuViews, offerMessage, comboSaving, onlineDiscountPercent, onlinePrice, phoneLinksHtml, setNote, toMillis, validateCheckout,
 } from "./order-core.js";
 import { vietQrPayload } from "./vietqr.js";
@@ -905,7 +905,7 @@ function summaryHtml(order) {
 
 function progressHtml(order, view) {
   const steps = progressSteps(order);
-  const index = steps.findIndex(([key]) => key === view.status);
+  const index = steps.findIndex(([key]) => key === view.stage);
   return `<ol class="progress">${steps.map(([key, label], i) => `<li class="${i < index ? "done" : i === index ? "now" : ""}">${label}</li>`).join("")}</ol>`;
 }
 
@@ -919,15 +919,23 @@ function renderTrack() {
   }
   const order = state.order;
   const view = orderView(order, serverNow());
-  const staffQrNow = STAFF && view.status === STATUS.NEW; // nhân viên đặt hộ: hiện mã QR ngay, không chờ quán xác nhận
-  const text = staffQrNow ? { title: "Đã gửi đơn · mã QR cho khách thanh toán", hint: "Chụp màn hình hoặc bấm Lưu ảnh QR rồi gửi khách. Quán sẽ nhận đơn trên máy POS." } : (STATUS_TEXT[view.status] || STATUS_TEXT.new);
+  const text = STATUS_TEXT[view.status] || STATUS_TEXT.new;
   let extra = "";
-  if (view.status === STATUS.AWAITING_PAYMENT) {
-    extra = `${view.isDelivery ? '<p class="muted small">🛵 Phí giao hàng bạn trả trực tiếp cho tài xế khi nhận hàng, không nằm trong số tiền chuyển khoản bên dưới.</p>' : ""}<p class="countdown-line">Thời gian còn lại <b id="countdown">${countdownText(view.remainingMs ?? 0)}</b></p>${paymentHtml(order)}<p class="pay-warning">⚠️ Lưu ý: quán làm món ngay khi xác nhận đơn, nên <b>muốn sửa hoặc huỷ đơn bạn cần liên hệ quán và được quán đồng ý</b>. Nếu quán không thực hiện được đơn, giao thiếu/sai món hoặc món có lỗi, quán sẽ <b>hoàn tiền</b> (xem <a href="chinh-sach#hoan-tien" target="_blank" rel="noopener">chính sách đổi trả, hoàn tiền</a>).</p>`;
-  }
-  if (STAFF) extra = `<p class="staff-note"><b>Đặt hộ cho ${esc(order.name)} · ${esc(order.phone)} · mã ${esc(order.code)}.</b> Gửi ảnh QR dưới đây cho khách qua Messenger để khách chuyển khoản đúng số tiền và nội dung.</p>${staffQrNow ? paymentHtml({ ...order, transferContent: order.transferContent || `DM${order.code}` }) : ""}${extra}`;
+  if (view.status === STATUS.AWAITING_PAYMENT && view.remainingMs !== null) extra = `<p class="countdown-line">Đơn cũ: thời gian còn lại <b id="countdown">${countdownText(view.remainingMs ?? 0)}</b></p>`;
+  const active = ![STATUS.REJECTED, STATUS.EXPIRED, STATUS.CANCELLED, STATUS.DONE].includes(view.status);
+  const policy = [STATUS.AWAITING_PAYMENT, STATUS.PAID, STATUS.DELIVERING].includes(view.status)
+    ? `<p class="pay-warning">⚠️ Quán làm món ngay khi nhận đơn, nên <b>muốn sửa hoặc huỷ đơn bạn cần liên hệ quán và được quán đồng ý</b>. Nếu quán không thực hiện được đơn, giao thiếu/sai món hoặc món có lỗi, quán sẽ <b>hoàn tiền</b> (xem <a href="chinh-sach#hoan-tien" target="_blank" rel="noopener">chính sách đổi trả, hoàn tiền</a>).</p>` : "";
+  // MỘT chỗ duy nhất cho thanh toán: ngay dưới tiến độ, hiện từ lúc gửi đơn (không chờ quán nhận), trả trước hay sau đều được.
+  const pay = !active ? "" : view.paid
+    ? `<section class="pay-block paid"><h3>✅ Đã thanh toán</h3><p class="muted">Quán đã nhận thanh toán cho đơn này. Cảm ơn bạn!</p></section>`
+    : `<section class="pay-block"><h3>💳 Thanh toán <span class="pay-tag">Chưa thanh toán</span></h3>
+        <p class="pay-lead">Quét mã QR để <b>chuyển khoản cho quán</b>${view.isDelivery ? " <b>(không mất thêm phí ship COD)</b>" : ""}. Bạn chuyển lúc nào cũng được, quán vẫn làm món cho bạn.</p>
+        ${view.isDelivery ? '<p class="muted small">🛵 Phí giao hàng bạn trả trực tiếp cho tài xế, không nằm trong số tiền bên dưới.</p>' : ""}
+        ${paymentHtml({ ...order, transferContent: order.transferContent || transferContentFor(order.code) })}
+        <p class="muted small pay-alt">${view.isDelivery ? "Nếu cần, bạn vẫn có thể chọn <b>ship COD</b> (trả tiền mặt khi nhận hàng), khi đó <b>có thể phát sinh thêm phí thu hộ COD</b>. Hãy báo quán khi nhận đơn." : "Hoặc bạn trả tiền mặt tại quán khi nhận món."}</p></section>`;
+  if (STAFF) extra = `<p class="staff-note"><b>Đặt hộ cho ${esc(order.name)} · ${esc(order.phone)} · mã ${esc(order.code)}.</b> Chụp màn hình hoặc bấm Lưu ảnh QR rồi gửi khách qua Messenger. Khách trả bằng QR hoặc tiền mặt khi nhận đều được.</p>${extra}`;
   if (view.status === STATUS.REJECTED) extra = `<p class="reject-reason"><b>Lý do:</b> ${esc(order.rejectReason || "Quán chưa nhận được đơn lúc này.")}</p>`;
-  const spinner = view.status === STATUS.NEW && !staffQrNow ? '<div class="spinner" aria-hidden="true"></div>' : "";
+  const spinner = view.status === STATUS.NEW ? '<div class="spinner" aria-hidden="true"></div>' : "";
   const chat = `<a class="chat-link" href="${esc(chatUrl(order.code))}" target="_blank" rel="noopener" data-chat="${esc(order.code)}">💬 Cần hỗ trợ thêm về đơn #${esc(order.code)} · chat ngay</a>`;
   const phone = chat + (state.shop.phone ? `<p class="muted small">Cần hỗ trợ? Gọi quán ${phoneLinksHtml(state.shop.phone, esc)}</p>` : "");
   const canEdit = view.status === STATUS.NEW;
@@ -936,7 +944,7 @@ function renderTrack() {
     ? `<button type="button" class="primary" data-act2="reorder">Đặt lại đơn này</button>`
     : view.isFinal ? `<button type="button" class="primary" data-act2="new">Đặt đơn mới</button>` : "");
   const showProgress = ![STATUS.REJECTED, STATUS.EXPIRED, STATUS.CANCELLED].includes(view.status);
-  body.innerHTML = `${chips}<div class="status-card s-${view.status}">${spinner}<p class="eyebrow">Mã đơn <b class="code">${esc(order.code)}</b></p><h2>${esc(text.title)}</h2>${text.hint ? `<p class="muted">${esc(text.hint)}</p>` : ""}${showProgress ? progressHtml(order, view) : ""}${extra}${actions}</div>${summaryHtml(order)}${phone}`;
+  body.innerHTML = `${chips}<div class="status-card s-${view.status}">${spinner}<p class="eyebrow">Mã đơn <b class="code">${esc(order.code)}</b></p><h2>${esc(text.title)}</h2>${text.hint ? `<p class="muted">${esc(text.hint)}</p>` : ""}${showProgress ? progressHtml(order, view) : ""}${pay}${extra}${policy}${actions}</div>${summaryHtml(order)}${phone}`;
 }
 
 /** Banner "đơn đang theo dõi" chỉ cho đơn CHƯA kết thúc. Đơn đã xong/từ chối/hết hạn chuyển sang Lịch sử. */
@@ -949,12 +957,12 @@ function updateBanner(name = !$("#screen-menu").hidden ? "menu" : "") {
   if (!banner.hidden) {
     const st = state.order ? orderView(state.order, serverNow()).status : STATUS.NEW;
     const code = state.code ? ` #${state.code}` : "";
-    const txt = st === STATUS.AWAITING_PAYMENT ? `💳 Quán đã xác nhận đơn${code}. BẤM ĐỂ THANH TOÁN`
-      : st === STATUS.PAID ? `👨‍🍳 Quán đã nhận tiền, đang làm đơn${code}. Bấm để xem`
-      : st === STATUS.DELIVERING ? `🛵 Đơn${code} đang trên đường giao. Bấm để xem`
-      : `🔔 Bạn có đơn${code} đang theo dõi. Bấm để xem trạng thái và mã thanh toán`;
+    const paid = state.order ? orderView(state.order, serverNow()).paid : false;
+    const txt = paid ? `✅ Đơn${code} đã thanh toán${st === STATUS.DELIVERING ? ", đang trên đường giao" : st === STATUS.NEW ? ", chờ quán nhận" : ", quán đang làm"}. Bấm để xem`
+      : st === STATUS.DELIVERING ? `🛵 Đơn${code} đang giao · chưa thanh toán. BẤM ĐỂ QUÉT QR`
+      : `💳 Đơn${code} chưa thanh toán · BẤM ĐỂ QUÉT QR (chuyển khoản, không mất phí COD)`;
     banner.textContent = txt;
-    banner.classList.toggle("pay-now", st === STATUS.AWAITING_PAYMENT);
+    banner.classList.toggle("pay-now", !paid);
   }
   const hasHist = (store.get(KEYS.hist, []) || []).length > 0;
   $("#open-history").hidden = !hasHist;

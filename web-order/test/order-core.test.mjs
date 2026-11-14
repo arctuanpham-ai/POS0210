@@ -101,6 +101,13 @@ test("orderView: hết hạn tính theo giờ, đồng hồ đếm ngược", ()
   v = orderView(order, now + 125_000);
   assert.equal(v.status, "expired"); assert.equal(v.rawStatus, "awaiting_payment"); assert.ok(v.isFinal);
   assert.equal(orderView({ status: "paid" }, now).status, "paid");
+  // Thanh toán tách khỏi tiến độ: chưa thu / đã thu (paidAt hoặc đơn cũ "paid"); đơn đã nhận không hết hạn khi không có expiresAt.
+  const accepted = orderView({ status: "awaiting_payment", expiresAt: null }, now);
+  assert.equal(accepted.status, "awaiting_payment"); assert.equal(accepted.paid, false); assert.equal(accepted.stage, "making"); assert.equal(accepted.remainingMs, null);
+  assert.equal(orderView({ status: "delivering", paidAt: 5 }, now).paid, true);
+  assert.equal(orderView({ status: "paid" }, now).paid, true);
+  assert.equal(orderView({ status: "new" }, now).paid, false);
+  assert.equal(orderView({ status: "paid" }, now).stage, "making");
   assert.equal(orderView({ status: "done" }, now).isFinal, true);
   assert.equal(orderView({ status: "new" }, now).isFinal, false);
   assert.equal(countdownText(-5), "00:00");
@@ -113,8 +120,8 @@ test("toMillis nhận nhiều dạng", () => {
 });
 
 test("thanh tiến độ: giao hàng có thêm bước Đang giao", () => {
-  assert.equal(progressSteps({ mode: "delivery" }).length, 5);
-  assert.equal(progressSteps({ mode: "pickup" }).length, 4);
+  assert.equal(progressSteps({ mode: "delivery" }).length, 4);
+  assert.equal(progressSteps({ mode: "pickup" }).length, 3);
 });
 
 test("đặt lại đơn: chỉ giữ món còn bán", () => {

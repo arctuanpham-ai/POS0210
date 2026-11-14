@@ -529,3 +529,11 @@ body.fab-spot .fab-stack .guide-fab { animation-delay: .5s; }
 .hold-head button { border: 1px solid #ccc; background: transparent; border-radius: 999px; padding: 4px 12px; font-weight: 700; }
 .hold-card { border-top: 1px dashed #c9b9a8; padding-top: 12px; margin-top: 12px; }
 .hold-actions { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
+
+/* Thanh toán: một thẻ cố định dưới tiến độ, chuyển khoản là lựa chọn chính */
+.pay-block { display: grid; gap: 8px; margin: 14px 0; padding: 14px; border: 2px solid #e8590c; border-radius: 16px; background: #fff7f0; }
+.pay-block h3 { margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pay-block.paid { border-color: #2f9e44; background: #f1faf3; }
+.pay-tag { font-size: 12px; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: #e8590c; color: #fff; }
+.pay-lead { margin: 0; font-size: 15px; }
+.pay-alt { margin: 0; }

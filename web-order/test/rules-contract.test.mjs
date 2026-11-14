@@ -164,16 +164,16 @@ test("mô hình rules: đơn giả mạo bị chặn", () => {
   assert.equal(modelValidOrder(ctx(mkOrder(), { limits: { u_g1: { lastOrder: "AAAAAA" }, p_0912345678: { lastOrder: "K7P2QX" } } })), false);
 });
 
-test("mô hình rules: bộ đếm chỉ tăng đúng 1, tối đa 2, tự reset sau 60 phút", () => {
+test("mô hình rules: bộ đếm chỉ tăng đúng 1, tối đa LIMITS.maxPendingOrders, tự reset sau 60 phút", () => {
   const now = 10_000_000;
   const base = { key: "u_g1", auth: { uid: "g1" }, now, orderAfter: { uid: "g1", phone: "0912345678" }, orderBefore: null };
   const w = (pending, extra = {}) => ({ ...base, d: { pending, lastAt: now, lastOrder: "K7P2QX" }, before: null, ...extra });
   assert.ok(modelValidLimit(w(1)));
   assert.ok(modelValidLimit(w(2, { before: { pending: 1, lastAt: now - 60_000 } })));
-  assert.equal(modelValidLimit(w(3, { before: { pending: 2, lastAt: now - 60_000 } })), false, "quá 2 đơn chờ");
+  assert.equal(modelValidLimit(w(LIMITS.maxPendingOrders + 1, { before: { pending: LIMITS.maxPendingOrders, lastAt: now - 60_000 } })), false, "quá giới hạn đơn chờ");
   assert.equal(modelValidLimit(w(1, { before: { pending: 2, lastAt: now - 60_000 } })), false, "không được giảm/giữ khi cửa sổ còn hiệu lực");
   assert.ok(modelValidLimit(w(1, { before: { pending: 2, lastAt: now - 61 * 60_000 } })), "reset sau 60 phút");
-  assert.equal(modelValidLimit(w(5)), false);
+  assert.equal(modelValidLimit(w(LIMITS.maxPendingOrders + 3)), false);
   assert.equal(modelValidLimit(w(1, { orderBefore: { exists: true } })), false, "đơn phải là đơn MỚI");
   assert.equal(modelValidLimit(w(1, { key: "u_victim" })), false, "không đụng bộ đếm uid người khác");
   assert.ok(modelValidLimit(w(1, { key: "p_0912345678" })));

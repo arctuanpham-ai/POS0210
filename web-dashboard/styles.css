@@ -749,3 +749,10 @@ body:has(#login-view:not([hidden])), body:has(#pin-view:not([hidden])) { backgro
 .oo-pay { font-size: 12px; font-weight: 800; padding: 2px 8px; border-radius: 999px; }
 .oo-pay.unpaid { background: #e8590c; color: #fff; }
 .oo-pay.paid { background: #d3f9d8; color: #1b5e20; }
+
+.oo-payrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #d8cbb8; }
+.oo-payrow button { padding: 8px 12px; border-radius: 10px; font-weight: 700; border: 1px solid #6b4f3a; background: #faf8f3; color: #6b4f3a; }
+.oo-payrow button.main { background: #1e1e1e; border-color: #1e1e1e; color: #fff; }
+.oo-ask { font-size: 13px; font-weight: 800; color: #6b4f3a; }
+.oo-foot2 { margin-top: 6px; }
+.oo-minor { padding: 6px 10px !important; font-size: 13px; font-weight: 700 !important; }

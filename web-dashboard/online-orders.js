@@ -165,3 +165,22 @@ export const validateShopConfig = (input) => {
 
 /** Đơn của cùng khách (cùng SĐT) đã được quán nhận nhưng chưa thu tiền: để thu gộp một lần khi khách quét mã QR tổng. */
 export const groupUnpaid = (orders, order) => (Array.isArray(orders) ? orders : []).filter((o) => o.phone && o.phone === order?.phone && o.status === OO_STATUS.AWAITING_PAYMENT && !isPaid(o));
+
+/**
+ * Nút trên thẻ đơn, tách hai việc để không trùng lặp:
+ *  - main: MỘT nút duy nhất cho bước làm tiếp theo (Nhận đơn → Món đã xong → Đang giao → Hoàn thành);
+ *  - pay: thu tiền (chuyển khoản / tiền mặt) + nhắc khách, chỉ hiện khi chưa thu;
+ *  - more: việc phụ (từ chối, huỷ đơn).
+ * Bấm "Hoàn thành" khi chưa thu thì giao diện hỏi cách thu ngay tại thẻ (một lần), không còn hai nút Hoàn thành riêng.
+ */
+export const cardActions = (order) => {
+  const delivery = order?.mode === "delivery";
+  const status = order?.status;
+  if (status === OO_STATUS.NEW) return { main: { key: "accept", label: "Nhận đơn" }, pay: [], more: [{ key: "reject", label: "Từ chối" }] };
+  if (status === OO_STATUS.EXPIRED || status === OO_STATUS.CANCELLED) return { main: null, pay: nextActions(order), more: [] };
+  if (![OO_STATUS.AWAITING_PAYMENT, OO_STATUS.PAID, OO_STATUS.DELIVERING].includes(status)) return { main: null, pay: [], more: [] };
+  const main = status === OO_STATUS.DELIVERING ? { key: "done", label: "Hoàn thành" }
+    : !order.readyAt ? { key: "ready", label: "Món đã xong" }
+      : delivery ? { key: "deliver", label: "Đang giao" } : { key: "done", label: "Hoàn thành" };
+  return { main, pay: isPaid(order) ? [] : [...PAY_BTNS, REMIND], more: status === OO_STATUS.AWAITING_PAYMENT ? [{ key: "expire", label: "Huỷ đơn" }] : [] };
+};

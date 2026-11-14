@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { isPaid, payLabel, remindMessage, OO_LABELS, OO_STATUS, isPending, attentionCount, buildTransition, groupOrders, isOverdue, newOrderCodes, nextActions, overdueOrders, releasedCount, validateShopConfig, limitKeys, minutesAgoText } from "../online-orders.js";
+import { cardActions, isPaid, payLabel, remindMessage, OO_LABELS, OO_STATUS, isPending, attentionCount, buildTransition, groupOrders, isOverdue, newOrderCodes, nextActions, overdueOrders, releasedCount, validateShopConfig, limitKeys, minutesAgoText } from "../online-orders.js";
 import { STATUS as CUSTOMER_STATUS } from "../../web-order/public/order-core.js";
 
 const now = 1_700_000_000_000;
@@ -170,4 +170,16 @@ test("Món đã xong: ghi readyAt, giữ nguyên trạng thái, chỉ một lầ
   assert.deepEqual(Object.keys(t.patch), ["readyAt"]); assert.equal(t.patch.readyAt, now);
   assert.throws(() => buildTransition({ ...o, readyAt: now }, "ready", { now }), /đã báo/);
   assert.throws(() => buildTransition(order({ status: "new" }), "ready", { now }), /đã đổi/);
+});
+
+test("nút thẻ đơn: một nút chính cho bước tiếp theo, thu tiền tách riêng", () => {
+  const keys = (o) => { const a = cardActions(o); return [a.main?.key, a.pay.map((x) => x.key + (x.method ? ":" + x.method : "")), a.more.map((x) => x.key)]; };
+  assert.deepEqual(keys(order({ status: "new" })), ["accept", [], ["reject"]]);
+  assert.deepEqual(keys(order({ status: "awaiting_payment", mode: "delivery" })), ["ready", ["paid:transfer", "paid:cash", "remind"], ["expire"]]);
+  assert.deepEqual(keys(order({ status: "awaiting_payment", mode: "delivery", readyAt: now })), ["deliver", ["paid:transfer", "paid:cash", "remind"], ["expire"]]);
+  assert.deepEqual(keys(order({ status: "awaiting_payment", mode: "pickup", readyAt: now })), ["done", ["paid:transfer", "paid:cash", "remind"], ["expire"]]);
+  assert.deepEqual(keys(order({ status: "paid", mode: "delivery", readyAt: now })), ["deliver", [], []]);
+  assert.deepEqual(keys(order({ status: "delivering", paidAt: now })), ["done", [], []]);
+  assert.deepEqual(keys(order({ status: "delivering" })), ["done", ["paid:transfer", "paid:cash", "remind"], []]);
+  assert.deepEqual(keys(order({ status: "done" })), [undefined, [], []]);
 });

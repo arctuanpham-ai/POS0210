@@ -537,3 +537,6 @@ body.fab-spot .fab-stack .guide-fab { animation-delay: .5s; }
 .pay-tag { font-size: 12px; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: #e8590c; color: #fff; }
 .pay-lead { margin: 0; font-size: 15px; }
 .pay-alt { margin: 0; }
+.merge-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 15px; }
+.merge-list li { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border-bottom: 1px dashed #e8c4a8; }
+details.pay-alt > summary { cursor: pointer; font-weight: 700; padding: 6px 0; }

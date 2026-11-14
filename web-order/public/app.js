@@ -17,7 +17,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { APP_CHECK_SITE_KEY, DEFAULT_SHOP, MESSENGER_URL, NOTIFY_CLICK, NOTIFY_TOPIC, STORE_ID, STORE_OWNER_UID, firebaseConfig } from "./config.js";
 import {
-  FINAL_STATUSES, LIMITS, comboTools, pricingFor, MODE_LABELS, STATUS, STATUS_TEXT, readyText, buildOrderDoc, cartFromOrder, cartLines, changeQty, countdownText, isOrderable,
+  FINAL_STATUSES, LIMITS, comboTools, pricingFor, MODE_LABELS, STATUS, STATUS_TEXT, readyText, mergeUnpaid, buildOrderDoc, cartFromOrder, cartLines, changeQty, countdownText, isOrderable,
   limitKeyForPhone, limitKeyForUid, linesCount, transferContentFor, linesTotal, makeOrderCode, menuSections, money, orderView, pendingBase, progressSteps, rememberCode,
   notifyPayload, HOME_VIEW, menuLayout, menuViews, offerMessage, comboSaving, onlineDiscountPercent, onlinePrice, phoneLinksHtml, setNote, toMillis, validateCheckout,
 } from "./order-core.js";
@@ -789,7 +789,29 @@ async function handleSubmitError(error, lines) {
 }
 
 /* ---------- Theo dõi đơn theo thời gian thực ---------- */
-function stopWatch() { if (state.watch) { state.watch(); state.watch = null; } clearInterval(tickTimer); tickTimer = null; }
+function stopWatch() { if (state.watch) { state.watch(); state.watch = null; } clearInterval(tickTimer); tickTimer = null; clearInterval(peerTimer); peerTimer = null; }
+/* Đơn khác của khách trên máy này (để gộp thanh toán). Chỉ đọc khi có từ 2 đơn trở lên: tối đa 3 đơn khác, mỗi 40 giây, dừng khi không còn đơn chưa trả. */
+let peerTimer = null;
+let peerBusy = false;
+async function refreshPeers() {
+  if (STAFF || peerBusy) return;
+  const others = (store.get(KEYS.codes, []) || []).filter((c) => c !== state.code).slice(0, 3);
+  if (!others.length) { state.peers = {}; return; }
+  peerBusy = true;
+  try {
+    const docs = await Promise.all(others.map((c) => getDoc(ref("online_orders", c)).catch(() => null)));
+    const next = {};
+    docs.forEach((d) => { if (d?.exists()) next[d.id] = { ...d.data(), id: d.id }; });
+    const changed = JSON.stringify(Object.keys(next).map((k) => [k, next[k].status, next[k].paidAt?.seconds || next[k].paidAt || 0, next[k].total])) !== JSON.stringify(Object.keys(state.peers || {}).map((k) => [k, state.peers[k].status, state.peers[k].paidAt?.seconds || state.peers[k].paidAt || 0, state.peers[k].total]));
+    state.peers = next;
+    if (changed) renderTrack();
+  } finally { peerBusy = false; }
+}
+function ensurePeerTimer() {
+  if (STAFF || peerTimer) return;
+  refreshPeers();
+  peerTimer = setInterval(() => { if (!document.hidden) refreshPeers(); }, 40_000);
+}
 let tickTimer = null;
 
 function watchOrder(code, { quiet = false } = {}) {
@@ -816,6 +838,7 @@ function watchOrder(code, { quiet = false } = {}) {
       renderTrack();
       startTick();
       updateBanner();
+      if ((store.get(KEYS.codes, []) || []).length > 1) ensurePeerTimer();
     },
     (error) => {
       if (isDenied(error)) { forgetCode(code); showScreen("menu"); stopWatch(); }
@@ -937,7 +960,15 @@ function renderTrack() {
   const policy = [STATUS.AWAITING_PAYMENT, STATUS.PAID, STATUS.DELIVERING].includes(view.status)
     ? `<p class="pay-warning">⚠️ Quán làm món ngay khi nhận đơn, nên <b>muốn sửa hoặc huỷ đơn bạn cần liên hệ quán và được quán đồng ý</b>. Nếu quán không thực hiện được đơn, giao thiếu/sai món hoặc món có lỗi, quán sẽ <b>hoàn tiền</b> (xem <a href="chinh-sach#hoan-tien" target="_blank" rel="noopener">chính sách đổi trả, hoàn tiền</a>).</p>` : "";
   // MỘT chỗ duy nhất cho thanh toán: ngay dưới tiến độ, hiện từ lúc gửi đơn (không chờ quán nhận), trả trước hay sau đều được.
-  const pay = !active ? "" : view.paid
+  const merged = !STAFF && active && !view.paid ? mergeUnpaid([order, ...Object.values(state.peers || {})], serverNow()) : null;
+  const single = (o) => paymentHtml({ ...o, transferContent: o.transferContent || transferContentFor(o.code) });
+  const pay = merged && merged.orders.some((o) => o.code === order.code)
+    ? `<section class="pay-block"><h3>💳 Thanh toán gộp ${merged.orders.length} đơn <span class="pay-tag">Chưa thanh toán</span></h3>
+        <p class="pay-lead">Bạn đang có ${merged.orders.length} đơn chưa thanh toán. Quét <b>một mã QR</b> bên dưới để trả cùng lúc, mã tự cập nhật khi có đơn được thanh toán.</p>
+        <ul class="merge-list">${merged.orders.map((o) => `<li><span>#${esc(o.code)}</span><b>${money(o.total)}</b></li>`).join("")}</ul>
+        ${paymentHtml({ total: merged.total, transferContent: merged.content, code: merged.orders[0].code })}
+        <details class="pay-alt"><summary>Chỉ trả riêng đơn #${esc(order.code)} (${money(order.total)})</summary>${single(order)}</details></section>`
+    : !active ? "" : view.paid
     ? `<section class="pay-block paid"><h3>✅ Đã thanh toán</h3><p class="muted">Quán đã nhận thanh toán cho đơn này. Cảm ơn bạn!</p></section>`
     : `<section class="pay-block"><h3>💳 Thanh toán <span class="pay-tag">Chưa thanh toán</span></h3>
         <p class="pay-lead">Quét mã QR để <b>chuyển khoản cho quán</b>${view.isDelivery ? " <b>(không mất thêm phí ship COD)</b>" : ""}. Bạn có thể chuyển ngay bây giờ hoặc khi nhận món, quán vẫn làm món bình thường.</p>

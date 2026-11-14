@@ -189,6 +189,19 @@ export const orderView = (order, nowMs) => {
 /** Bước hiển thị trên thanh tiến độ: đơn đã nhận (chờ thu hoặc đã thu) đều là "making" (đang làm món). */
 export const stageOf = (status, readyAt = null) => (status === STATUS.AWAITING_PAYMENT || status === STATUS.PAID ? (readyAt ? "ready" : "making") : status);
 
+/** Gộp thanh toán: các đơn đang chạy mà khách chưa trả (tối đa 3, mới nhất trước) -> một số tiền, một nội dung CK "DMabc DMdef". Dưới 2 đơn thì không gộp (null). */
+export const mergeUnpaid = (orders, nowMs, max = 3) => {
+  const list = (orders || [])
+    .filter((o) => o && o.code)
+    .map((o) => ({ o, v: orderView(o, nowMs) }))
+    .filter(({ v }) => !v.paid && !v.isFinal && [STATUS.NEW, STATUS.AWAITING_PAYMENT].includes(v.status))
+    .sort((a, b) => (Number(b.o.createdAt?.seconds ?? b.o.createdAt) || 0) - (Number(a.o.createdAt?.seconds ?? a.o.createdAt) || 0))
+    .slice(0, max)
+    .map(({ o }) => o);
+  if (list.length < 2) return null;
+  return { orders: list, total: list.reduce((t, o) => t + (Number(o.total) || 0), 0), content: list.map((o) => transferContentFor(o.code)).join(" ") };
+};
+
 export const STATUS_TEXT = Object.freeze({
   new: { title: "Đã gửi đơn đến quán", hint: "Quán đang xác nhận, thường dưới 3 phút. Bạn không cần làm gì thêm, có thể chuyển khoản luôn bằng mã QR bên dưới cho tiện." },
   rejected: { title: "Quán chưa nhận được đơn này", hint: "" },

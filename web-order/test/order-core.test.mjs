@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
+import { mergeUnpaid,
   notifyPayload, CODE_ALPHABET, CODE_PATTERN, LIMITS, STATUS, buildOrderDoc, cartFromOrder, cartLines, changeQty, countdownText, linesTotal, makeOrderCode, menuSections,
   normalizePhone, orderView, pendingBase, progressSteps, rememberCode, setNote, toMillis, transferContentFor, validateCheckout,
 } from "../public/order-core.js";
@@ -372,4 +372,14 @@ test("comboSaving: tổng món lẻ (theo SL) trừ giá combo; thiếu giá →
   assert.equal(_comboSaving(c, [items[0]]), null);
   const [d] = _comboItemsFrom([{ id: "2", name: "D", price: 80000, items: [{ menuItemId: "a", name: "A", qty: 3 }] }]);
   assert.equal(_comboSaving(d, items), 10000);
+});
+
+test("gộp thanh toán: chỉ đơn chưa trả đang chạy, tối đa 3, nội dung CK nối mã", () => {
+  const now = Date.now();
+  const mk = (code, extra = {}) => ({ code, total: 100000, status: "awaiting_payment", createdAt: 1000 + code.length, ...extra });
+  assert.equal(mergeUnpaid([mk("AAAAAA")], now), null);
+  assert.equal(mergeUnpaid([mk("AAAAAA"), mk("BBBBBB", { paidAt: 5 })], now), null);
+  assert.equal(mergeUnpaid([mk("AAAAAA"), mk("BBBBBB", { status: "done" })], now), null);
+  const m = mergeUnpaid([mk("AAAAAA", { createdAt: 1 }), mk("BBBBBB", { createdAt: 2, total: 50000 }), mk("CCCCCC", { createdAt: 3, status: "new" }), mk("DDDDDD", { createdAt: 0 })], now);
+  assert.equal(m.orders.length, 3); assert.equal(m.total, 250000); assert.equal(m.content, "DMCCCCCC DMBBBBBB DMAAAAAA");
 });

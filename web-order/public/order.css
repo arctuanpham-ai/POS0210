@@ -540,3 +540,4 @@ body.fab-spot .fab-stack .guide-fab { animation-delay: .5s; }
 .merge-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 15px; }
 .merge-list li { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border-bottom: 1px dashed #e8c4a8; }
 details.pay-alt > summary { cursor: pointer; font-weight: 700; padding: 6px 0; }
+.merge-note { margin: 0 0 8px; padding: 10px 12px; border-radius: 12px; background: #fff7f0; border: 1px solid #e8590c; font-size: 14px; }

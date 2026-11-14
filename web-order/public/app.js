@@ -961,13 +961,12 @@ function renderTrack() {
     ? `<p class="pay-warning">⚠️ Quán làm món ngay khi nhận đơn, nên <b>muốn sửa hoặc huỷ đơn bạn cần liên hệ quán và được quán đồng ý</b>. Nếu quán không thực hiện được đơn, giao thiếu/sai món hoặc món có lỗi, quán sẽ <b>hoàn tiền</b> (xem <a href="chinh-sach#hoan-tien" target="_blank" rel="noopener">chính sách đổi trả, hoàn tiền</a>).</p>` : "";
   // MỘT chỗ duy nhất cho thanh toán: ngay dưới tiến độ, hiện từ lúc gửi đơn (không chờ quán nhận), trả trước hay sau đều được.
   const merged = !STAFF && active && !view.paid ? mergeUnpaid([order, ...Object.values(state.peers || {})], serverNow()) : null;
-  const single = (o) => paymentHtml({ ...o, transferContent: o.transferContent || transferContentFor(o.code) });
   const pay = merged && merged.orders.some((o) => o.code === order.code)
     ? `<section class="pay-block"><h3>💳 Thanh toán gộp ${merged.orders.length} đơn <span class="pay-tag">Chưa thanh toán</span></h3>
         <p class="pay-lead">Bạn đang có ${merged.orders.length} đơn chưa thanh toán. Quét <b>một mã QR</b> bên dưới để trả cùng lúc, mã tự cập nhật khi có đơn được thanh toán.</p>
         <ul class="merge-list">${merged.orders.map((o) => `<li><span>#${esc(o.code)}</span><b>${money(o.total)}</b></li>`).join("")}</ul>
         ${paymentHtml({ total: merged.total, transferContent: merged.content, code: merged.orders[0].code })}
-        <details class="pay-alt"><summary>Chỉ trả riêng đơn #${esc(order.code)} (${money(order.total)})</summary>${single(order)}</details></section>`
+        <p class="muted small pay-alt">Muốn tách riêng từng đơn: bạn thanh toán đơn trước, quán xác nhận xong rồi hãy đặt đơn tiếp theo.</p></section>`
     : !active ? "" : view.paid
     ? `<section class="pay-block paid"><h3>✅ Đã thanh toán</h3><p class="muted">Quán đã nhận thanh toán cho đơn này. Cảm ơn bạn!</p></section>`
     : `<section class="pay-block"><h3>💳 Thanh toán <span class="pay-tag">Chưa thanh toán</span></h3>
@@ -1005,6 +1004,12 @@ function updateBanner(name = !$("#screen-menu").hidden ? "menu" : "") {
       : `💳 Đơn${code} chưa thanh toán · BẤM ĐỂ QUÉT QR (chuyển khoản, không mất phí COD)`;
     banner.textContent = txt;
     banner.classList.toggle("pay-now", !paid);
+  }
+  const note = $("#merge-note");
+  if (note) {
+    const unpaid = !STAFF && active && state.order && !orderView(state.order, serverNow()).paid;
+    note.hidden = !unpaid;
+    if (unpaid) note.textContent = `Bạn đang có đơn #${state.code} chưa thanh toán. Đơn mới sẽ được gộp chung một mã QR thanh toán. Muốn tách riêng, hãy thanh toán đơn trước rồi mới đặt đơn tiếp.`;
   }
   const hasHist = (store.get(KEYS.hist, []) || []).length > 0;
   $("#open-history").hidden = !hasHist;

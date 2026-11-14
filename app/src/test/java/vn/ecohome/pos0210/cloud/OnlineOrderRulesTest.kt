@@ -100,4 +100,22 @@ class OnlineOrderPricingFieldsTest {
         val legacy = OnlineOrderRules.fromMap("Y", mapOf("code" to "Y", "status" to "paid", "total" to 1000L), { it as? Long })
         org.junit.Assert.assertEquals(0L, legacy.discount)
     }
+
+    @Test fun staffAssistOrdersAreSilentAndAutoHandled() {
+        val staff = order("new").copy(staffAssist = true)
+        val web = order("new")
+        assertTrue(OnlineOrderRules.unseenNew(listOf(staff), emptySet()).isEmpty())
+        assertEquals(1, OnlineOrderRules.unseenNew(listOf(web), emptySet()).size)
+        assertEquals(0, OnlineOrderRules.attention(listOf(staff), 0L))
+        assertEquals(listOf(staff), OnlineOrderRules.staffToAccept(listOf(staff, web)))
+        val paid = staff.copy(status = "paid")
+        assertEquals(listOf(paid), OnlineOrderRules.staffToFinish(listOf(paid, web.copy(status = "paid"))))
+    }
+
+    @Test fun fromMapReadsStaffMedium() {
+        val base = mapOf<String, Any?>("code" to "AB12CD", "status" to "new", "total" to 1000L)
+        assertTrue(OnlineOrderRules.fromMap("AB12CD", base + ("src" to mapOf("source" to "facebook", "medium" to "staff_assist")), { null }).staffAssist)
+        assertFalse(OnlineOrderRules.fromMap("AB12CD", base + ("src" to mapOf("source" to "facebook", "medium" to "messenger")), { null }).staffAssist)
+        assertFalse(OnlineOrderRules.fromMap("AB12CD", base, { null }).staffAssist)
+    }
 }

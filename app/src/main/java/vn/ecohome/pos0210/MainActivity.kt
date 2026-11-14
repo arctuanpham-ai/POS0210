@@ -130,7 +130,7 @@ fun App(vm: PosViewModel = viewModel()) {
     val t by vm.currentTable.collectAsState()
     val s by vm.currentSession.collectAsState()
     val locked by vm.locked.collectAsState()
-    LaunchedEffect(Unit) { vm.watchOnlineBilling() }
+    LaunchedEffect(Unit) { vm.watchOnlineBilling(); vm.watchStaffOrders() }
     LaunchedEffect(Unit) {
         var tick = 0
         vm.autoCloseIfStale()
@@ -321,7 +321,7 @@ fun Tables(vm: PosViewModel) {
         KitchenWarningBanner(vm)
         run {
             val online by vm.onlineOrders.collectAsState()
-            val need = online.count { it.status == vn.ecohome.pos0210.cloud.OnlineOrderRules.NEW }
+            val need = online.count { it.status == vn.ecohome.pos0210.cloud.OnlineOrderRules.NEW && !it.staffAssist }
             val overdue = vn.ecohome.pos0210.cloud.OnlineOrderRules.attention(online, timerNow) - need
             val flashT by androidx.compose.animation.core.rememberInfiniteTransition(label = "online-flash").animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(500), androidx.compose.animation.core.RepeatMode.Reverse), label = "t")
             val flash = androidx.compose.ui.graphics.lerp(Color(0xFFB3261E), Color(0xFFFF6A00), flashT)

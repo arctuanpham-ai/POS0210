@@ -9,12 +9,15 @@ data class OnlineOrder(
     val items: List<OnlineLine>, val total: Long, val status: String, val rejectReason: String,
     val createdAt: Long, val expiresAt: Long?, val paidAt: Long?,
     val discount: Long = 0L, val surcharge: Long = 0L,
+    /** Đơn do nhân viên đặt hộ khách Facebook trên link /nv (src.medium = staff_assist): POS không chuông, tự nhận đơn, chỉ ghi bill + doanh thu. */
+    val staffAssist: Boolean = false,
 )
 
 object OnlineOrderRules {
     const val NEW = "new"; const val REJECTED = "rejected"; const val AWAITING = "awaiting_payment"; const val EXPIRED = "expired"
     const val PAID = "paid"; const val DELIVERING = "delivering"; const val DONE = "done"; const val CANCELLED = "cancelled"
     const val PAY_MINUTES = 30
+    const val STAFF_MEDIUM = "staff_assist"
     const val SWEEP_GRACE_MS = 3 * 60_000L
     val ACTIVE_STATUSES = listOf(NEW, AWAITING, PAID, DELIVERING)
     val REJECT_REASONS = listOf("Hết món", "Quán sắp đóng cửa", "Ngoài khu vực giao hàng", "Quán đang quá tải, xin lỗi bạn")
@@ -77,10 +80,14 @@ object OnlineOrderRules {
     fun overdueToClose(orders: List<OnlineOrder>, now: Long) = orders.filter { isOverdue(it, now - SWEEP_GRACE_MS) }
 
     /** Số đơn cần nhân viên để ý ngay: đơn mới + đơn quá hạn chờ đóng. */
-    fun attention(orders: List<OnlineOrder>, now: Long) = orders.count { it.status == NEW || isOverdue(it, now) }
+    fun attention(orders: List<OnlineOrder>, now: Long) = orders.count { (it.status == NEW && !it.staffAssist) || isOverdue(it, now) }
 
     /** Đơn MỚI chưa từng báo. */
-    fun unseenNew(orders: List<OnlineOrder>, seen: Set<String>) = orders.filter { it.status == NEW && it.id !in seen }
+    fun unseenNew(orders: List<OnlineOrder>, seen: Set<String>) = orders.filter { it.status == NEW && !it.staffAssist && it.id !in seen }
+
+    /** Đơn nhân viên đặt hộ cần POS tự nhận (im lặng) / tự hoàn thành khi đã nhận tiền để ghi bill. */
+    fun staffToAccept(orders: List<OnlineOrder>) = orders.filter { it.staffAssist && it.status == NEW }
+    fun staffToFinish(orders: List<OnlineOrder>) = orders.filter { it.staffAssist && it.status == PAID }
 
     /**
      * Đối chiếu đơn với menu/combo THẬT của quán. Đơn từ 4 dòng trở lên không được máy chủ kiểm giá từng dòng (giới hạn của Firestore Rules),
@@ -115,6 +122,7 @@ object OnlineOrderRules {
         fun s(k: String) = d[k]?.toString().orEmpty()
         return OnlineOrder(id, s("code").ifBlank { id }, s("uid"), s("name"), s("phone"), s("mode"), s("address"), s("table"), s("note"), items,
             (d["total"] as? Number)?.toLong() ?: 0L, s("status"), s("rejectReason"), ms(d["createdAt"]) ?: 0L, ms(d["expiresAt"]), ms(d["paidAt"]),
-            (d["discount"] as? Number)?.toLong() ?: 0L, (d["surcharge"] as? Number)?.toLong() ?: 0L)
+            (d["discount"] as? Number)?.toLong() ?: 0L, (d["surcharge"] as? Number)?.toLong() ?: 0L,
+            ((d["src"] as? Map<*, *>)?.get("medium")?.toString() == STAFF_MEDIUM))
     }
 }

@@ -1476,6 +1476,22 @@ fun attachStorageRoot(uri:String,allowWrites:Boolean){
    if(action=="paid")printOnlineTicket(o)
   }
  }
+ /** Đơn nhân viên đặt hộ (Facebook): POS im lặng tự NHẬN đơn, và khi đã nhận tiền thì tự HOÀN THÀNH để ghi bill + doanh thu (xem watchOnlineBilling). */
+ private var staffOrdersJob:kotlinx.coroutines.Job?=null
+ fun watchStaffOrders(){
+  if(staffOrdersJob?.isActive==true)return
+  staffOrdersJob=viewModelScope.launch(Dispatchers.IO){
+   val accepted=HashSet<String>();val finished=HashSet<String>()
+   kotlinx.coroutines.flow.combine(vn.ecohome.pos0210.cloud.OnlineOrderService.orders,currentEmployee){l,e->l to e}.collect{(list,me)->
+    if(me==null)return@collect
+    for(o in vn.ecohome.pos0210.cloud.OnlineOrderRules.staffToAccept(list)) if(accepted.add(o.id)) withContext(Dispatchers.Main){onlineAction(o,"accept")}
+    for(o in vn.ecohome.pos0210.cloud.OnlineOrderRules.staffToFinish(list)) if(finished.add(o.id)){
+     val r=vn.ecohome.pos0210.cloud.OnlineOrderService.apply(getApplication(),o.id,"done",me.name)
+     if(r.isFailure)finished.remove(o.id)
+    }
+   }
+  }
+ }
  private val onlineBillMutex=kotlinx.coroutines.sync.Mutex()
  /** Đơn online ĐÃ HOÀN THÀNH -> bill thật trong POS (vào báo cáo). Quét lại mỗi khi danh sách đơn đổi; mỗi mã chỉ ghi một lần. */
  private var onlineBillingJob:kotlinx.coroutines.Job?=null

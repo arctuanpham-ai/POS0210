@@ -103,7 +103,7 @@ object OnlineOrderService {
                 // Nháy kiểu SOS (… --- …) bằng đèn pin và toàn màn hình, im lặng, tới khi mọi đơn mới được nhận/từ chối.
                 var idx = 0
                 while (isActive) {
-                    val waiting = _orders.value.any { it.status == OnlineOrderRules.NEW }
+                    val waiting = _orders.value.any { it.status == OnlineOrderRules.NEW && !it.staffAssist }
                     if (waiting && lightOn(app)) {
                         val on = idx % 2 == 0
                         setTorch(app, on); _flash.value = on
@@ -164,7 +164,7 @@ object OnlineOrderService {
     private fun remindAndSweep(app: Application) {
         val now = System.currentTimeMillis()
         val list = _orders.value
-        val waiting = list.filter { it.status == OnlineOrderRules.NEW }
+        val waiting = list.filter { it.status == OnlineOrderRules.NEW && !it.staffAssist }
         if (waiting.isNotEmpty() && now - lastAnnounce >= REPEAT_MS) {
             lastAnnounce = now
             DeliveryAnnouncer.announce(app, "Còn ${waiting.size} đơn online chưa nhận.", soundOn(app), vibrate = true, beep = soundOn(app))

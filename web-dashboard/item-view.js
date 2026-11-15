@@ -1,5 +1,5 @@
 // Khối giao diện phụ của trang phân tích món: chuỗi HTML thuần, nhận hàm định dạng từ app.js (h). Không đọc Firebase.
-import { lineChart } from "./item-chart.js?v=20261115-5";
+import { lineChart } from "./item-chart.js?v=20261115-6";
 
 const empty = (text) => `<p class="muted empty-state">${text}</p>`;
 const card = (title, body, sub = "") => `<section class="item-card"><h4>${title}</h4>${sub ? `<p class="item-sub">${sub}</p>` : ""}${body}</section>`;
@@ -38,7 +38,7 @@ export const hoursView = (stats, h) => {
 };
 
 export const channelView = ({ rows, stats, price, cost, note }, h) => {
-  if (cost == null) return empty("Chưa tính được lãi theo kênh vì món chưa có công thức hoặc còn thiếu giá vật tư. Bổ sung ở tab Giá vốn.");
+  if (cost == null) return empty("Chưa tính được lãi theo kênh vì món chưa có công thức hoặc còn thiếu giá vật tư. Bổ sung ở Vật tư & giá vốn › Giá vốn.");
   const cell = (r, f) => (r.ok === false && r.margin === undefined ? "—" : f(r));
   const head = rows.map((r) => `<th>${r.label}${r.assumed ? "<small class=\"asm\">giả định</small>" : ""}</th>`).join("");
   const line = (label, f) => `<tr><td>${label}</td>${rows.map((r) => `<td>${cell(r, f)}</td>`).join("")}</tr>`;

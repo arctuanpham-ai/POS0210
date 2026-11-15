@@ -756,3 +756,6 @@ body:has(#login-view:not([hidden])), body:has(#pin-view:not([hidden])) { backgro
 .oo-ask { font-size: 13px; font-weight: 800; color: #6b4f3a; }
 .oo-foot2 { margin-top: 6px; }
 .oo-minor { padding: 6px 10px !important; font-size: 13px; font-weight: 700 !important; }
+
+/* Khu thủ quỹ ở chế độ chỉ xem: ẩn mọi nút thao tác */
+#reimb-treasurer-zone.readonly button, #reimb-treasurer-zone.readonly .tool-row { display: none !important; }

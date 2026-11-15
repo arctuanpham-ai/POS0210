@@ -1,7 +1,7 @@
 // Gộp doanh thu và bill của mọi kênh bán: tại quán (POS), đặt món online, GrabFood, ShopeeFood. Hàm thuần: không Firebase, không DOM.
 // Không cộng trùng: bill đơn online do POS ghi (bản 209 tách onlineRevenue/onlineBills trong doanh thu ngày) và bill app food đã có trong sổ app food được lọc khỏi doanh thu tại quán bằng cách
 // chỉ lấy snapshot dashboardDaily (doanh thu tại quán, không gồm app food) cho kênh "Tại quán".
-import { OO_LABELS, ooToMillis } from "./online-orders.js?v=20261115-1";
+import { OO_LABELS, ooToMillis } from "./online-orders.js?v=20261115-2";
 
 export const CHANNELS = Object.freeze([
   { key: "STORE", label: "Tại quán" },
@@ -93,7 +93,7 @@ export function unifiedBills({ days, storeBills = [], storeDay = "", onlineOrder
   if (!appOnly && (channel === "ALL" || channel === "STORE")) {
     for (const b of storeBills || []) {
       if (!set.has(storeDay)) break;
-      if (String(b.reference || "").startsWith("ON-")) continue; // bill POS của đơn online: đã hiện ở kênh Đặt món online
+      if (/^ON-/i.test(String(b.reference || "")) || /^ON-/i.test(String(b.billNo || ""))) continue; // bill POS của đơn online (mã ON-… nằm ở billNo hoặc reference): đã hiện ở kênh Đặt món online
       out.push({ id: `STORE_${b.id}`, ref: b.id, channel: "STORE", day: storeDay, at: money0(b.closedAt), title: `${b.tableName} · #${b.billNo}`, sub: b.paymentMissing ? "Chưa rõ" : String(b.method || ""), amount: money0(b.total), tag: b.refund ? "Đã hoàn" : b.flow === "prepaid" ? "Trả trước" : "Trả sau", tagKind: b.refund ? "warn" : b.flow === "prepaid" ? "" : "postpaid", refund: Boolean(b.refund) });
     }
   }

@@ -51,6 +51,11 @@ test("bill POS tham chiếu ON- không lặp trong danh sách bill gộp", () =>
   const u = unifiedBills({ days, storeBills: [{ id: "z", tableName: "ONLINE", billNo: 1, closedAt: at("2026-11-05", 11), total: 80, reference: "ON-B1" }], storeDay: "2026-11-05", onlineOrders: [], ledgerRows: [] });
   assert.equal(u.rows.length, 0);
 });
+test("bill POS có billNo ON- (reference rỗng) cũng không lặp", () => {
+  const u = unifiedBills({ days, storeBills: [{ id: "y", tableName: "Bàn ?", billNo: "ON-EG5M2M", closedAt: at("2026-11-05", 11), total: 80, reference: "" }], storeDay: "2026-11-05", onlineOrders: [], ledgerRows: [] });
+  assert.equal(u.rows.length, 0);
+});
+
 test("lọc kênh và hình thức online", () => {
   assert.equal(revenueByDay({ days, storeDocs, onlineOrders: online, ledgerRows: ledger, channels: ["GRAB", "SHOPEE"] }).total, 250);
   const o = revenueByDay({ days, storeDocs: {}, onlineOrders: online, ledgerRows: ledger, channels: ["ONLINE"], onlineMode: "delivery" });

@@ -772,9 +772,10 @@ body:has(#login-view:not([hidden])), body:has(#pin-view:not([hidden])) { backgro
   .topbar .heading-actions { flex-wrap: nowrap; justify-content: stretch; gap: 6px; }
   .topbar .heading-actions .btn { flex: 1 1 0; min-width: 0; min-height: 34px; padding: 6px 4px; font-size: 12px; border-radius: 10px; white-space: nowrap; }
   .sync-status { margin: 8px 0 10px; font-size: 12px; }
-  /* Thanh tab: xuống dòng thay vì kéo ngang */
-  .tabbar { position: static; flex-wrap: wrap; overflow-x: visible; margin: 0 0 8px; padding: 8px 0; gap: 5px; backdrop-filter: none; background: transparent; }
-  .tabbar a { padding: 6px 11px; font-size: 12.5px; }
+  /* Thanh tab: luôn ghim đầu trang, 2 hàng x 4 cột gọn */
+  .tabbar { position: sticky; top: 0; z-index: 30; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; overflow: visible; margin: 0 -12px 8px; padding: 6px 12px; background: #f5f3ed; backdrop-filter: none; box-shadow: 0 2px 6px #1e1e1e14; }
+  .tabbar a { padding: 6px 2px; font-size: 12px; text-align: center; letter-spacing: 0; }
+  .tabbar a .lg, .topbar .heading-actions .lg { display: none; }
   .section-heading { margin: 20px 0 9px; }
   h2 { font-size: 17px; }
   h4 { font-size: 14px; }
@@ -809,4 +810,27 @@ body:has(#login-view:not([hidden])), body:has(#pin-view:not([hidden])) { backgro
   .filter-row { flex-wrap: wrap; overflow-x: visible; padding-bottom: 8px; }
   .item-tabs { flex-wrap: wrap; overflow-x: visible; }
   .btn { min-height: 36px; padding: 7px 12px; font-size: 13px; }
+}
+
+@media (max-width: 560px) {
+  /* Bộ lọc: 2 cột, nhãn nhỏ phía trên, ô chọn thấp */
+  .panel:has(> .field-row) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 8px; padding: 9px 10px; }
+  .panel:has(> .field-row) > * { min-width: 0; }
+  .panel:has(> .field-row) > p, .panel:has(> .field-row) > .panel-total, .panel:has(> .field-row) > h3 { grid-column: 1 / -1; margin: 0; }
+  .field-row { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .field-row label { font-size: 10.5px; color: #6b6f63; }
+  .field-row select, .field-row input { padding: 6px 8px; font-size: 13px; border-radius: 9px; }
+  .field-row .secondary, .field-row .btn { width: 100%; min-height: 32px; padding: 5px 8px; font-size: 12.5px; }
+  .panel-total { font-size: 12px; }
+  .filter { padding: 6px 10px; font-size: 12px; }
+  .filter-row { gap: 5px; padding-bottom: 6px; }
+  /* Bảng nhiều cột -> mỗi dòng một thẻ vuông, không kéo ngang */
+  table.rt, table.rt tbody, table.rt tfoot { display: block; width: 100%; }
+  table.rt thead { display: none; }
+  table.rt tr { display: grid; grid-template-columns: repeat(auto-fit, minmax(82px, 1fr)); gap: 3px 8px; padding: 7px 9px; margin: 0 0 5px; border: 1px solid #e2d6c2; border-radius: 10px; background: #fcfbf8; }
+  table.rt td, table.rt th { display: block; min-width: 0; padding: 0; border: 0; text-align: left !important; overflow-wrap: anywhere; font-size: 12px; white-space: normal; }
+  table.rt td::before { content: attr(data-label); display: block; font-size: 9px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #6b6f63; }
+  table.rt td:first-child, table.rt td:not([data-label]) { grid-column: 1 / -1; font-weight: 800; font-size: 12.5px; }
+  table.rt td:first-child::before, table.rt td:not([data-label])::before { display: none; }
+  .table-wrap, .st-scroll, .cmp-wrap { overflow-x: visible; padding: 0; }
 }

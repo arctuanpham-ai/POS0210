@@ -763,3 +763,50 @@ body:has(#login-view:not([hidden])), body:has(#pin-view:not([hidden])) { backgro
 /* Mục con trong một tab (Báo cáo, Tài chính, Vật tư, Thiết lập) */
 .subtabs { padding: 4px 0; margin: 0 0 12px; flex-wrap: wrap; }
 .subpage[hidden] { display: none; }
+
+/* ===== Điện thoại: chữ nhỏ gọn, biểu đồ/báo cáo vừa khung, hạn chế kéo ngang ===== */
+@media (max-width: 560px) {
+  .shell { padding: 14px 12px 36px; }
+  .topbar { flex-direction: column; align-items: stretch; gap: 8px; padding-bottom: 10px; }
+  .topbar h1 { font-size: 21px; margin-bottom: 2px; }
+  .topbar .heading-actions { flex-wrap: nowrap; justify-content: stretch; gap: 6px; }
+  .topbar .heading-actions .btn { flex: 1 1 0; min-width: 0; min-height: 34px; padding: 6px 4px; font-size: 12px; border-radius: 10px; white-space: nowrap; }
+  .sync-status { margin: 8px 0 10px; font-size: 12px; }
+  /* Thanh tab: xuống dòng thay vì kéo ngang */
+  .tabbar { position: static; flex-wrap: wrap; overflow-x: visible; margin: 0 0 8px; padding: 8px 0; gap: 5px; backdrop-filter: none; background: transparent; }
+  .tabbar a { padding: 6px 11px; font-size: 12.5px; }
+  .section-heading { margin: 20px 0 9px; }
+  h2 { font-size: 17px; }
+  h4 { font-size: 14px; }
+  .muted { font-size: 12.5px; }
+  /* Thẻ số liệu */
+  .summary-grid, .live-strip { gap: 7px; }
+  .metric { min-height: 0; padding: 10px 11px; border-radius: 10px; }
+  .metric p { margin-bottom: 4px; font-size: 11px; }
+  .metric strong { font-size: clamp(15px, 4.6vw, 18px); }
+  .metric small { font-size: 10.5px; }
+  .live-strip article { padding: 9px 11px; }
+  .live-strip span { font-size: 11px; }
+  .live-strip strong { font-size: 17px; }
+  .kpi-card { padding: 12px; }
+  .kpi-head strong { font-size: 19px; }
+  .kpi-row b { font-size: 14px; }
+  /* Biểu đồ cột: vừa khung, không kéo ngang tới 16 cột; nhiều hơn thì bỏ số trên cột và thưa nhãn */
+  .sales-chart { gap: 2px; padding: 10px 6px 8px; border-radius: 12px; }
+  .sales-chart .bar-area { height: 96px; }
+  .sales-chart .bar-value { font-size: 8px; letter-spacing: -.04em; font-weight: 700; }
+  .sales-chart small { font-size: 7.5px; letter-spacing: -.03em; white-space: nowrap; }
+  .sales-chart .bar { border-radius: 4px 4px 2px 2px; }
+  .sales-chart.dense, .page[data-page="appfood"] .sales-chart { grid-auto-columns: minmax(0, 1fr); overflow-x: visible; }
+  .sales-chart:has(.bar-col:nth-child(17)) { gap: 1px; }
+  .sales-chart:has(.bar-col:nth-child(17)) .bar-value { display: none; }
+  .sales-chart:has(.bar-col:nth-child(17)) .bar-col:nth-child(even) small { visibility: hidden; }
+  .sales-chart:has(.bar-col:nth-child(33)) .bar-col:not(:nth-child(4n+1)) small { visibility: hidden; }
+  /* Bảng: chữ nhỏ, đệm hẹp để vừa chiều ngang */
+  .table-wrap table, .st-table, .cmp-wrap table, .item-tbl, .fund-table, .receipt-view table { font-size: 11.5px; }
+  .table-wrap th, .table-wrap td, .st-table th, .st-table td, .cmp-wrap th, .cmp-wrap td, .item-tbl th, .item-tbl td { padding: 6px 4px; }
+  .paylist-row { padding: 8px 10px; font-size: 13px; }
+  .filter-row { flex-wrap: wrap; overflow-x: visible; padding-bottom: 8px; }
+  .item-tabs { flex-wrap: wrap; overflow-x: visible; }
+  .btn { min-height: 36px; padding: 7px 12px; font-size: 13px; }
+}

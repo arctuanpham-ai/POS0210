@@ -1,7 +1,7 @@
 // Gộp doanh thu và bill của mọi kênh bán: tại quán (POS), đặt món online, GrabFood, ShopeeFood. Hàm thuần: không Firebase, không DOM.
 // Không cộng trùng: bill đơn online do POS ghi (bản 209 tách onlineRevenue/onlineBills trong doanh thu ngày) và bill app food đã có trong sổ app food được lọc khỏi doanh thu tại quán bằng cách
 // chỉ lấy snapshot dashboardDaily (doanh thu tại quán, không gồm app food) cho kênh "Tại quán".
-import { OO_LABELS, ooToMillis } from "./online-orders.js?v=20261115-7";
+import { OO_LABELS, ooToMillis } from "./online-orders.js?v=20261115-8";
 
 export const CHANNELS = Object.freeze([
   { key: "STORE", label: "Tại quán" },
@@ -49,7 +49,7 @@ export function revenueByDay({ days, storeDocs = {}, onlineOrders = [], ledgerRo
   const totals = { STORE: blank(), ONLINE: blank(), GRAB: blank(), SHOPEE: blank(), XANHNGON: blank() };
   let review = { count: 0, value: 0 };
   const unpaid = { count: 0, value: 0 }; // đã bán, thực nhận đã tính nhưng app chưa chuyển về tài khoản
-  const add = (day, key, amount) => { const r = rows.get(day); if (!r || !want.has(key)) return; r[key].revenue += amount; r[key].count += 1; totals[key].revenue += amount; totals[key].count += 1; };
+  const add = (day, key, amount, counted = true) => { const r = rows.get(day); if (!r || !want.has(key)) return; const n = counted ? 1 : 0; r[key].revenue += amount; r[key].count += n; totals[key].revenue += amount; totals[key].count += n; };
   for (const day of days) {
     const d = storeDocs?.[day];
     if (!d || !want.has("STORE")) continue;
@@ -71,8 +71,9 @@ export function revenueByDay({ days, storeDocs = {}, onlineOrders = [], ledgerRo
     if (!set.has(r?.saleDay) || !APP_KEYS.includes(r.app)) continue;
     if (!want.has(r.app)) continue;
     if (!ledgerCounts(r)) { review.count += 1; review.value += Number(r.orderValue || 0); continue; }
-    add(r.saleDay, r.app, Number(r.received || 0)); // app food: chỉ tính tiền thực nhận sau chiết khấu, thuế, phí
-    if (!r.payoutDay) { unpaid.count += 1; unpaid.value += Number(r.received || 0); }
+    const adjust = r.kind === "ADJUST"; // phí quảng cáo...: trừ vào thực nhận, không phải đơn
+    add(r.saleDay, r.app, Number(r.received || 0), !adjust); // app food: chỉ tính tiền thực nhận sau chiết khấu, thuế, phí
+    if (!r.payoutDay && !adjust) { unpaid.count += 1; unpaid.value += Number(r.received || 0); }
   }
   const list = [...rows.values()];
   for (const r of list) { r.total = CHANNELS.reduce((t, c) => t + r[c.key].revenue, 0); r.count = CHANNELS.reduce((t, c) => t + r[c.key].count, 0); }
@@ -108,7 +109,7 @@ export function unifiedBills({ days, storeBills = [], storeDay = "", onlineOrder
   for (const app of APP_KEYS) {
     if (channel !== "ALL" && channel !== app) continue;
     for (const r of ledgerRows || []) {
-      if (r.app !== app || !set.has(r.saleDay)) continue;
+      if (r.app !== app || !set.has(r.saleDay) || r.kind === "ADJUST") continue;
       const review = !ledgerCounts(r);
       const st = review ? "REVIEW" : r.payoutDay ? "PAID" : "WAIT";
       if (appOnly && st !== status) continue;

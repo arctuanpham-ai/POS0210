@@ -76,7 +76,7 @@ export function summarizeSales(rows, fromDay, toDay) {
     if (r.status === "REVIEW") { out.review += 1; out.reviewAmount += r.orderValue; return; }
     const d = (out.byDay[r.saleDay] ||= { day: r.saleDay, orders: 0, gross: 0, commission: 0, vat: 0, pit: 0, other: 0, received: 0 });
     for (const k of ["gross", "commission", "vat", "pit", "other", "received"]) { const v = k === "gross" ? r.orderValue : r[k]; d[k] += v; out[k] += v; }
-    d.orders += 1; out.orders += 1;
+    if (r.kind !== "ADJUST") { d.orders += 1; out.orders += 1; } // dòng điều chỉnh (phí quảng cáo...) chỉ cộng tiền, không tính là đơn
   });
   out.days = Object.values(out.byDay).sort((a, b) => (a.day < b.day ? 1 : -1));
   return out;

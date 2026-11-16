@@ -108,3 +108,16 @@ test("app food theo tháng: doanh thu và phí theo ngày bán, tiền về theo
   assert.equal(sep.cashIn, 0);
   assert.equal(foodMonth(rows, "2026-12").gross, 0);
 });
+
+import { summarizeSales as _sum } from "../food-ledger.js";
+import { revenueByDay as _rev } from "../all-channels.js";
+test("dòng điều chỉnh (phí quảng cáo) trừ thực nhận nhưng không tính là đơn", () => {
+  const rows = [
+    { app: "GRAB", code: "GF-1", saleDay: "2026-11-06", orderValue: 75000, commission: 14726, vat: 2250, pit: 1125, other: 0, received: 56899, status: "OK", payoutDay: "2026-11-07" },
+    { app: "GRAB", code: "ADS-20261106", kind: "ADJUST", saleDay: "2026-11-06", orderValue: 0, commission: 0, vat: 0, pit: 0, other: 81000, received: -81000, status: "OK", payoutDay: "" },
+  ];
+  const s = _sum(rows, "2026-11-01", "2026-12-01");
+  assert.equal(s.orders, 1); assert.equal(s.gross, 75000); assert.equal(s.received, 56899 - 81000); assert.equal(s.other, 81000);
+  const r = _rev({ days: ["2026-11-06"], ledgerRows: rows });
+  assert.equal(r.totals.GRAB.revenue, 56899 - 81000); assert.equal(r.totals.GRAB.count, 1); assert.equal(r.unpaid.count, 0);
+});

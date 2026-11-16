@@ -794,7 +794,7 @@ body:has(#login-view:not([hidden])), body:has(#pin-view:not([hidden])) { backgro
   /* Biểu đồ cột: vừa khung, không kéo ngang tới 16 cột; nhiều hơn thì bỏ số trên cột và thưa nhãn */
   .sales-chart { gap: 2px; padding: 10px 6px 8px; border-radius: 12px; }
   .sales-chart .bar-area { height: 96px; }
-  .sales-chart .bar-value { font-size: 8px; letter-spacing: -.04em; font-weight: 700; }
+  .sales-chart .bar-value { font-size: 9px; font-weight: 700; writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; line-height: 1; min-height: 28px; }
   .sales-chart small { font-size: 7.5px; letter-spacing: -.03em; white-space: nowrap; }
   .sales-chart .bar { border-radius: 4px 4px 2px 2px; }
   .sales-chart.dense, .page[data-page="appfood"] .sales-chart { grid-auto-columns: minmax(0, 1fr); overflow-x: visible; }

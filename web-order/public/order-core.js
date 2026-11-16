@@ -298,6 +298,54 @@ export const comboSaving = (combo, items) => {
   const saving = sum - Number(combo.price);
   return saving > 0 ? Math.round(saving) : null;
 };
+/**
+ * Khách không để ý combo mà đặt riêng lẻ: tự ghép các món lẻ trong giỏ thành combo khi đủ thành phần VÀ giá combo rẻ hơn mua lẻ
+ * (so theo giá các dòng thực tế trong giỏ). Combo nào tiết kiệm nhiều nhất được ghép trước; mỗi món chỉ dùng một lần.
+ * Dòng combo ghép có merged = { sets (số combo ghép thêm), saving (tổng tiết kiệm), parts (thành phần của MỘT combo) }.
+ * Ghi chú của món lẻ bị ghép hết được dồn vào ghi chú combo; món còn lẻ giữ nguyên.
+ */
+export const mergeCombos = (lines, items, categoryById = {}) => {
+  const list = Array.isArray(lines) ? lines : [];
+  const retail = new Map();
+  for (const l of list) if (!String(l.id).startsWith(COMBO_ID_PREFIX)) retail.set(l.id, { line: l, left: l.qty });
+  const candidates = [];
+  for (const c of items || []) {
+    if (!c || !String(c.id).startsWith(COMBO_ID_PREFIX) || !c.lines?.length || !isOrderable(c, categoryById[c.categoryId])) continue;
+    let sum = 0, ok = true;
+    for (const p of c.lines) { const r = retail.get(p.id); if (!r) { ok = false; break; } sum += r.line.price * p.qty; }
+    const saving = sum - Number(c.price);
+    if (ok && saving > 0) candidates.push({ combo: c, saving });
+  }
+  candidates.sort((a, b) => b.saving - a.saving);
+  const made = new Map();
+  for (const { combo, saving } of candidates) {
+    const sets = Math.min(...combo.lines.map((p) => Math.floor((retail.get(p.id)?.left || 0) / p.qty)));
+    if (!(sets >= 1)) continue;
+    const notes = [];
+    for (const p of combo.lines) {
+      const r = retail.get(p.id);
+      r.left -= sets * p.qty;
+      if (r.left === 0 && r.line.note) notes.push(`${String(r.line.name).trim()}: ${r.line.note}`);
+    }
+    made.set(combo.id, { combo, sets, saving: saving * sets, notes });
+  }
+  if (!made.size) return list;
+  const out = [];
+  for (const l of list) {
+    if (String(l.id).startsWith(COMBO_ID_PREFIX)) {
+      const m = made.get(l.id);
+      if (m) { out.push({ ...l, qty: clampQty(l.qty + m.sets), merged: { sets: m.sets, saving: m.saving, parts: m.combo.lines } }); made.delete(l.id); }
+      else out.push(l);
+    } else {
+      const r = retail.get(l.id);
+      if (r.left > 0) out.push({ ...l, qty: r.left });
+    }
+  }
+  for (const m of made.values()) {
+    out.push({ id: m.combo.id, name: m.combo.name, qty: clampQty(m.sets), note: m.notes.join("; ").slice(0, LIMITS.maxLineNote), price: Math.round(Number(m.combo.price)), merged: { sets: m.sets, saving: m.saving, parts: m.combo.lines } });
+  }
+  return out;
+};
 export const comboTools = Object.freeze({ COMBO_CATEGORY, comboItemsFrom });
 
 /* ---------- Khuyến mãi / phụ thu tự động của POS (online_config/promo do máy POS đẩy lên) ---------- */

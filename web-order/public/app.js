@@ -17,7 +17,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { APP_CHECK_SITE_KEY, DEFAULT_SHOP, MESSENGER_URL, NOTIFY_CLICK, NOTIFY_TOPIC, STORE_ID, STORE_OWNER_UID, firebaseConfig } from "./config.js";
 import {
-  FINAL_STATUSES, LIMITS, comboTools, pricingFor, MODE_LABELS, STATUS, STATUS_TEXT, readyText, mergeUnpaid, buildOrderDoc, cartFromOrder, cartLines, changeQty, countdownText, isOrderable,
+  FINAL_STATUSES, LIMITS, comboTools, pricingFor, MODE_LABELS, STATUS, STATUS_TEXT, readyText, mergeUnpaid, buildOrderDoc, cartFromOrder, cartLines, mergeCombos, changeQty, countdownText, isOrderable,
   limitKeyForPhone, limitKeyForUid, linesCount, transferContentFor, linesTotal, makeOrderCode, menuSections, money, orderView, pendingBase, progressSteps, rememberCode,
   notifyPayload, HOME_VIEW, menuLayout, menuViews, offerMessage, comboSaving, onlineDiscountPercent, onlinePrice, phoneLinksHtml, setNote, toMillis, validateCheckout,
 } from "./order-core.js";
@@ -158,7 +158,8 @@ document.addEventListener("visibilitychange", () => {
 addEventListener("pagehide", () => flushDwell(false));
 const menuById = () => Object.fromEntries(state.items.map((m) => [m.id, m]));
 const catById = () => Object.fromEntries(state.cats.map((c) => [c.id, c]));
-const currentLines = () => cartLines(state.cart, menuById(), catById());
+/** Dòng đơn thật sự: món lẻ khách chọn đủ bộ combo thì tự ghép thành combo (giá rẻ hơn) trước khi tính tiền và gửi đơn. */
+const currentLines = () => mergeCombos(cartLines(state.cart, menuById(), catById()), state.items, catById());
 /** Giảm giá khi đặt online (%), mọi chỗ tính tiền dùng chung để menu, giỏ, đơn gửi lên và nhãn trên ảnh luôn khớp nhau. */
 const onlinePct = () => onlineDiscountPercent(state.shop);
 const priceNow = (lines) => pricingFor(lines, state.promo, new Date(), { onlinePercent: onlinePct() });
@@ -531,7 +532,7 @@ function renderCartBar() {
 }
 
 function sheetLinesHtml(lines) {
-  return lines.map((l) => `<li><div><b>${esc(l.name.trim())}</b>${l.note ? `<small>${esc(l.note)}</small>` : ""}</div><div class="stepper small"><button type="button" data-sheet="dec" data-id="${esc(l.id)}" aria-label="Bớt 1">−</button><b>${l.qty}</b><button type="button" data-sheet="inc" data-id="${esc(l.id)}" aria-label="Thêm 1">+</button></div><span class="line-amount">${money(l.price * l.qty)}</span></li>`).join("");
+  return lines.map((l) => `<li><div><b>${esc(l.name.trim())}</b>${l.merged?.saving > 0 ? `<small class="merge-note">Đã tự ghép combo, tiết kiệm ${money(l.merged.saving)}</small>` : ""}${l.note ? `<small>${esc(l.note)}</small>` : ""}</div><div class="stepper small"><button type="button" data-sheet="dec" data-id="${esc(l.id)}" aria-label="Bớt 1">−</button><b>${l.qty}</b><button type="button" data-sheet="inc" data-id="${esc(l.id)}" aria-label="Thêm 1">+</button></div><span class="line-amount">${money(l.price * l.qty)}</span></li>`).join("");
 }
 
 function renderSheet() {
@@ -1131,10 +1132,17 @@ $("#sheet-close").addEventListener("click", closeSheet);
 $("#sheet-lines").addEventListener("click", (event) => {
   const button = event.target.closest("[data-sheet]");
   if (!button) return;
-  state.cart = changeQty(state.cart, button.dataset.id, button.dataset.sheet === "inc" ? 1 : -1);
+  const id = button.dataset.id;
+  const dec = button.dataset.sheet !== "inc";
+  const merged = dec ? currentLines().find((l) => l.id === id)?.merged : null;
+  const touched = [id];
+  if (merged && !(state.cart[id]?.qty > 0)) {
+    // Dòng combo do web tự ghép từ món lẻ: bớt 1 combo = bớt một bộ món thành phần trong giỏ.
+    for (const p of merged.parts) { state.cart = changeQty(state.cart, p.id, -p.qty); touched.push(p.id); }
+  } else state.cart = changeQty(state.cart, id, dec ? -1 : 1);
   persistCart();
   renderSheet();
-  refreshDish(button.dataset.id);
+  touched.forEach(refreshDish);
   renderCartBar();
 });
 $("#order-form").addEventListener("change", (event) => { if (event.target.name === "receive") syncReceiveFields(); });

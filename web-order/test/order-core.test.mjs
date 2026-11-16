@@ -388,3 +388,33 @@ test("gộp thanh toán kiểu POS: mọi đơn chưa trả, không giới hạn
   assert.equal(two, null);
   assert.equal(mergeUnpaid([mk("AAAAAA"), mk("BBBBBB")], now, { phone: "0900000001" }).orders.length, 2);
 });
+
+import { mergeCombos as _mergeCombos, comboItemsFrom as _comboFrom, COMBO_CATEGORY as _COMBO_CAT } from "../public/order-core.js";
+const mcLine = (id, name, qty, price, note = "") => ({ id, name, qty, price, note });
+const mcCombos = _comboFrom([
+  { id: "k1", name: "Combo Cơm + Cà phê", price: 55000, items: [{ menuItemId: "rice", name: "Cơm", qty: 1 }, { menuItemId: "cf", name: "Cà phê", qty: 1 }] },
+  { id: "k2", name: "Combo đắt", price: 99000, items: [{ menuItemId: "rice", name: "Cơm", qty: 1 }, { menuItemId: "cf", name: "Cà phê", qty: 1 }] },
+]);
+const mcItems = [...mcCombos.filter((c) => c.id === "c_k1")];
+test("mergeCombos: đặt lẻ đủ bộ thì ghép thành combo giá rẻ hơn, món dư giữ lẻ", () => {
+  const out = _mergeCombos([mcLine("rice", "Cơm", 3, 40000), mcLine("cf", "Cà phê", 2, 25000, "ít đá")], mcItems);
+  assert.deepEqual(out.map((l) => [l.id, l.qty]), [["rice", 1], ["c_k1", 2]]);
+  const c = out.find((l) => l.id === "c_k1");
+  assert.equal(c.price, 55000);
+  assert.equal(c.merged.saving, 20000);
+  assert.equal(c.note, "Cà phê: ít đá");
+  assert.equal(linesTotal(out), 40000 + 110000);
+});
+test("mergeCombos: thiếu thành phần, combo không rẻ hơn hoặc không có combo thì giữ nguyên", () => {
+  const only = [mcLine("rice", "Cơm", 2, 40000)];
+  assert.equal(_mergeCombos(only, mcItems), only);
+  const cheap = [mcLine("rice", "Cơm", 1, 20000), mcLine("cf", "Cà phê", 1, 25000)];
+  assert.equal(_mergeCombos(cheap, mcItems), cheap);
+  assert.equal(_mergeCombos(only, []), only);
+});
+test("mergeCombos: đã có sẵn dòng combo thì cộng dồn, không tạo dòng trùng id", () => {
+  const out = _mergeCombos([mcLine("c_k1", "Combo Cơm + Cà phê", 1, 55000), mcLine("rice", "Cơm", 1, 40000), mcLine("cf", "Cà phê", 1, 25000)], mcItems);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].qty, 2);
+  assert.equal(out[0].merged.sets, 1);
+});
